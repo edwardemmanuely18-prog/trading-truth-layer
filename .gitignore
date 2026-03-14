@@ -1,0 +1,10 @@
+﻿project_review_snapshot/
+project_review_clean/
+backend/.venv/
+frontend/node_modules/
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.local
