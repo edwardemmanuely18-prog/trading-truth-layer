@@ -1,2 +1,2 @@
 [build]
-  command = "if [ -d frontend ]; then cd frontend; fi && npm run build"
+  command = "npm --prefix frontend install && npm --prefix frontend run build"
