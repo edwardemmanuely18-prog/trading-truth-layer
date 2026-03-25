@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ClaimSchema } from "../lib/api";
+import { useAuth } from "./AuthProvider";
 import EditClaimDraftModal from "./EditClaimDraftModal";
 
 type Props = {
@@ -11,8 +12,16 @@ type Props = {
 
 export default function EditClaimDraftButton({ claim, onSaved }: Props) {
   const [open, setOpen] = useState(false);
+  const { getWorkspaceRole } = useAuth();
 
-  if (claim.status !== "draft") {
+  const workspaceRole = getWorkspaceRole(claim.workspace_id);
+
+  const canEditDraft = useMemo(() => {
+    if (claim.status !== "draft") return false;
+    return workspaceRole === "owner" || workspaceRole === "operator";
+  }, [claim.status, workspaceRole]);
+
+  if (!canEditDraft) {
     return null;
   }
 
@@ -21,7 +30,7 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+        className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
       >
         Edit Draft
       </button>

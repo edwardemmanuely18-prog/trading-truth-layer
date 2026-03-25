@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useSearchParams } from "next/navigation";
 import Navbar from "../../../../components/Navbar";
 import DownloadEvidenceButton from "../../../../components/DownloadEvidenceButton";
 import EvidenceCard from "../../../../components/EvidenceCard";
+import { useAuth } from "../../../../components/AuthProvider";
 import {
   api,
   type AuditEvent,
@@ -43,8 +44,18 @@ function tryParseJson(value?: string | null) {
   }
 }
 
+function normalizeText(value?: string | null) {
+  return String(value || "").toLowerCase().trim();
+}
+
+function truncateMiddle(value?: string | null, start = 12, end = 10) {
+  if (!value) return "—";
+  if (value.length <= start + end + 3) return value;
+  return `${value.slice(0, start)}...${value.slice(-end)}`;
+}
+
 function StatusBadge({ status }: { status?: string | null }) {
-  const normalized = (status || "").toLowerCase();
+  const normalized = normalizeText(status);
 
   const className =
     normalized === "locked"
@@ -58,6 +69,23 @@ function StatusBadge({ status }: { status?: string | null }) {
   return (
     <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
       {status || "unknown"}
+    </span>
+  );
+}
+
+function VisibilityBadge({ visibility }: { visibility?: string | null }) {
+  const normalized = normalizeText(visibility);
+
+  const className =
+    normalized === "public"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : normalized === "unlisted"
+        ? "border-violet-200 bg-violet-50 text-violet-800"
+        : "border-slate-200 bg-slate-100 text-slate-800";
+
+  return (
+    <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
+      visibility: {visibility || "unknown"}
     </span>
   );
 }
@@ -86,15 +114,126 @@ function IntegrityBadge({ integrity }: { integrity?: ClaimIntegrityResult | null
   );
 }
 
+function RoleBadge({ role }: { role?: string | null }) {
+  const normalized = normalizeText(role);
+
+  const className =
+    normalized === "owner"
+      ? "border-green-200 bg-green-100 text-green-800"
+      : normalized === "operator"
+        ? "border-blue-200 bg-blue-100 text-blue-800"
+        : normalized === "auditor"
+          ? "border-purple-200 bg-purple-100 text-purple-800"
+          : "border-slate-200 bg-slate-100 text-slate-800";
+
+  return (
+    <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
+      role: {role || "unknown"}
+    </span>
+  );
+}
+
+function CopyButton({
+  value,
+  label,
+}: {
+  value?: string | null;
+  label: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void handleCopy()}
+      disabled={!value}
+      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {copied ? "Copied" : label}
+    </button>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-2xl border bg-white p-5 shadow-sm">
+      <div className="text-sm text-slate-500">{label}</div>
+      <div className="mt-2 text-2xl font-semibold">{value}</div>
+      {hint ? <div className="mt-2 text-xs text-slate-500">{hint}</div> : null}
+    </div>
+  );
+}
+
+function PageNavButton({
+  href,
+  label,
+  active,
+  disabled = false,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+  disabled?: boolean;
+}) {
+  if (disabled) {
+    return (
+      <span className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-400">
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+        active
+          ? "bg-slate-900 text-white"
+          : "border border-slate-300 text-slate-700 hover:bg-slate-50"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+}
+
 export default function WorkspaceEvidencePage() {
   const params = useParams();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { user, workspaces, getWorkspaceRole, loading: authLoading } = useAuth();
 
   const workspaceId = useMemo(() => {
     const raw = Array.isArray(params?.workspaceId) ? params.workspaceId[0] : params?.workspaceId;
     const parsed = Number(raw);
     return Number.isNaN(parsed) ? null : parsed;
   }, [params]);
+
+  const workspaceMembership = useMemo(() => {
+    if (!workspaceId) return null;
+    return workspaces.find((w) => w.workspace_id === workspaceId) ?? null;
+  }, [workspaceId, workspaces]);
+
+  const workspaceRole = workspaceId ? getWorkspaceRole(workspaceId) : null;
 
   const claimIdFromQuery = searchParams.get("claimId");
 
@@ -116,6 +255,8 @@ export default function WorkspaceEvidencePage() {
 
   useEffect(() => {
     const load = async () => {
+      if (!workspaceId || !workspaceMembership) return;
+
       setLoading(true);
       setError(null);
 
@@ -123,13 +264,26 @@ export default function WorkspaceEvidencePage() {
         let targetClaimId = resolvedClaimId;
 
         if (!targetClaimId) {
-          const latest = await api.getLatestClaimSchema();
-          targetClaimId = latest.id;
+          const workspaceClaims = await api.getWorkspaceClaims(workspaceId);
+          const latestWorkspaceClaim =
+            Array.isArray(workspaceClaims) && workspaceClaims.length > 0
+              ? [...workspaceClaims].sort((a, b) => b.claim_schema_id - a.claim_schema_id)[0]
+              : null;
+
+          if (!latestWorkspaceClaim) {
+            throw new Error("No claims found in this workspace.");
+          }
+
+          targetClaimId = latestWorkspaceClaim.claim_schema_id;
+        }
+
+        const claimRes = await api.getClaimSchema(targetClaimId);
+
+        if (claimRes.workspace_id !== workspaceId) {
+          throw new Error("Claim does not belong to the selected workspace.");
         }
 
         setClaimId(targetClaimId);
-
-        const claimRes = await api.getClaimSchema(targetClaimId);
         setClaim(claimRes);
 
         const [evidenceRes, bundleRes, auditRes] = await Promise.all([
@@ -166,11 +320,37 @@ export default function WorkspaceEvidencePage() {
       }
     };
 
-    void load();
-  }, [resolvedClaimId]);
+    if (!authLoading && workspaceMembership) {
+      void load();
+    } else if (!authLoading && !workspaceMembership) {
+      setLoading(false);
+    }
+  }, [resolvedClaimId, workspaceId, workspaceMembership, authLoading]);
 
   if (!workspaceId) {
     return <div className="p-6 text-red-600">Invalid workspace id.</div>;
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <Navbar workspaceId={workspaceId} />
+        <div className="p-6">Loading evidence pack...</div>
+      </div>
+    );
+  }
+
+  if (!user || !workspaceMembership) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <Navbar workspaceId={workspaceId} />
+        <div className="p-6">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+            You do not have access to this workspace evidence page.
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (loading) {
@@ -187,7 +367,9 @@ export default function WorkspaceEvidencePage() {
       <div className="min-h-screen bg-slate-50 text-slate-900">
         <Navbar workspaceId={workspaceId} />
         <div className="p-6">
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+            {error}
+          </div>
         </div>
       </div>
     );
@@ -212,85 +394,132 @@ export default function WorkspaceEvidencePage() {
     locked_trade_set_hash: claim.locked_trade_set_hash,
   };
 
+  const publicRouteReady = Boolean(
+    publicClaim &&
+      claim.visibility === "public" &&
+      (claim.status === "published" || claim.status === "locked")
+  );
+
+  const unlistedRouteReady = Boolean(
+    claim.visibility === "unlisted" &&
+      claim.claim_hash &&
+      (claim.status === "published" || claim.status === "locked")
+  );
+
+  const internalHref = `/workspace/${workspaceId}/claim/${claimId}`;
+  const evidenceHref = `/workspace/${workspaceId}/evidence?claimId=${claimId}`;
+  const publicHref = claim.claim_hash ? `/verify/${claim.claim_hash}` : null;
+
+  const isInternalActive = pathname === internalHref;
+  const isEvidenceActive = pathname === `/workspace/${workspaceId}/evidence`;
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <Navbar workspaceId={workspaceId} />
 
-      <main className="mx-auto max-w-[1400px] space-y-6 px-6 py-10">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="mb-2 text-sm text-slate-500">
-              <Link href={`/workspace/${workspaceId}/claims`} className="hover:underline">
-                Claims
-              </Link>
-              <span className="mx-2">/</span>
-              <Link href={`/workspace/${workspaceId}/claim/${claimId}`} className="hover:underline">
-                Claim #{claimId}
-              </Link>
-              <span className="mx-2">/</span>
-              <span>Evidence</span>
+      <main className="mx-auto max-w-[1500px] space-y-6 px-6 py-10">
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-4xl">
+              <div className="mb-2 text-sm text-slate-500">
+                <Link href={`/workspace/${workspaceId}/claims`} className="hover:underline">
+                  Claims
+                </Link>
+                <span className="mx-2">/</span>
+                <Link href={`/workspace/${workspaceId}/claim/${claimId}`} className="hover:underline">
+                  Claim #{claimId}
+                </Link>
+                <span className="mx-2">/</span>
+                <span>Evidence</span>
+              </div>
+
+              <h1 className="text-3xl font-semibold tracking-tight">Evidence Center</h1>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <StatusBadge status={claim.status} />
+                <VisibilityBadge visibility={claim.visibility} />
+                <IntegrityBadge integrity={integrity} />
+                <RoleBadge role={workspaceRole} />
+              </div>
+
+              <div className="mt-3 text-slate-600">{claim.name}</div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm text-slate-500">Claim fingerprint</div>
+                  <div className="mt-2 font-mono text-sm text-slate-800">
+                    {truncateMiddle(evidencePack.claim_hash || claim.claim_hash || "—")}
+                  </div>
+                  <div className="mt-3">
+                    <CopyButton
+                      value={evidencePack.claim_hash || claim.claim_hash}
+                      label="Copy Claim Hash"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm text-slate-500">Trade-set fingerprint</div>
+                  <div className="mt-2 font-mono text-sm text-slate-800">
+                    {truncateMiddle(
+                      evidencePack.trade_set_hash || claim.locked_trade_set_hash || "—"
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <CopyButton
+                      value={evidencePack.trade_set_hash || claim.locked_trade_set_hash}
+                      label="Copy Trade Set Hash"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm text-slate-500">Exposure posture</div>
+                  <div className="mt-2 text-lg font-semibold text-slate-900">
+                    {claim.visibility === "private"
+                      ? "Internal only"
+                      : claim.visibility === "unlisted"
+                        ? "Direct-route verification"
+                        : "Publicly routable"}
+                  </div>
+                  <div className="mt-2 text-sm text-slate-600">
+                    {claim.visibility === "private"
+                      ? "Evidence remains internal."
+                      : claim.visibility === "unlisted"
+                        ? "External verification uses the claim hash path."
+                        : "External users can reach the public trust surface when lifecycle permits."}
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <h1 className="text-3xl font-semibold tracking-tight">Evidence Center</h1>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <StatusBadge status={claim.status} />
-              <IntegrityBadge integrity={integrity} />
-            </div>
-
-            <div className="mt-2 text-slate-600">{claim.name}</div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <DownloadEvidenceButton
-              claimSchemaId={claimId}
-              claimHash={evidencePack.claim_hash}
-              payload={evidencePack}
-            />
-
-            <Link
-              href={`/workspace/${workspaceId}/claim/${claimId}`}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-            >
-              Open Claim
-            </Link>
-
-            {publicClaim?.claim_hash ? (
-              <Link
-                href={`/verify/${publicClaim.claim_hash}`}
-                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-              >
-                Open Public Verify
-              </Link>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-4">
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Claim ID</div>
-            <div className="mt-2 text-2xl font-semibold">{claimId}</div>
-          </div>
-
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Trade Count</div>
-            <div className="mt-2 text-2xl font-semibold">
-              {typeof metricsSnapshot.trade_count === "number" ? metricsSnapshot.trade_count : "—"}
+            <div className="flex flex-wrap gap-2">
+              <PageNavButton href={internalHref} label="Internal View" active={isInternalActive} />
+              <PageNavButton href={evidenceHref} label="Evidence" active={isEvidenceActive} />
+              {publicHref ? (
+                <PageNavButton href={publicHref} label="Public Verify" active={false} />
+              ) : (
+                <PageNavButton href="#" label="Public Verify Unavailable" active={false} disabled />
+              )}
             </div>
           </div>
+        </section>
 
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Net PnL</div>
-            <div className="mt-2 text-2xl font-semibold">{formatNumber(metricsSnapshot.net_pnl, 2)}</div>
-          </div>
+        <DownloadEvidenceButton
+          claimSchemaId={claimId}
+          claimHash={evidencePack.claim_hash}
+          payload={evidencePack}
+        />
 
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Profit Factor</div>
-            <div className="mt-2 text-2xl font-semibold">
-              {formatNumber(metricsSnapshot.profit_factor, 4)}
-            </div>
-          </div>
-        </div>
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Claim ID" value={String(claimId)} />
+          <StatCard
+            label="Trade Count"
+            value={typeof metricsSnapshot.trade_count === "number" ? String(metricsSnapshot.trade_count) : "—"}
+          />
+          <StatCard label="Net PnL" value={formatNumber(metricsSnapshot.net_pnl, 2)} />
+          <StatCard label="Profit Factor" value={formatNumber(metricsSnapshot.profit_factor, 4)} />
+        </section>
 
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
@@ -323,7 +552,7 @@ export default function WorkspaceEvidencePage() {
 
               <div>
                 <div className="text-sm text-slate-500">Methodology Notes</div>
-                <div className="mt-1 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+                <div className="mt-1 rounded-xl bg-slate-50 p-3 text-sm whitespace-pre-wrap text-slate-700">
                   {evidencePack.methodology_notes || "—"}
                 </div>
               </div>
@@ -384,7 +613,7 @@ export default function WorkspaceEvidencePage() {
                 </div>
               </div>
             ) : (
-              <div className="mt-4 text-sm text-slate-500">
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                 Integrity result is available after lock state verification.
               </div>
             )}
@@ -402,7 +631,10 @@ export default function WorkspaceEvidencePage() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <h2 className="text-xl font-semibold">Audit Timeline Preview</h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold">Audit Timeline Preview</h2>
+              <div className="text-sm text-slate-500">{auditEvents.length} event(s)</div>
+            </div>
 
             {auditEvents.length === 0 ? (
               <div className="mt-4 text-sm text-slate-500">No audit events found for this claim.</div>
@@ -449,7 +681,7 @@ export default function WorkspaceEvidencePage() {
                   <div>
                     <div className="text-sm text-slate-500">Public Route Ready</div>
                     <div className="mt-1 font-medium">
-                      {publicClaim.is_publicly_accessible ? "yes" : "yes"}
+                      {publicRouteReady ? "yes" : unlistedRouteReady ? "unlisted route only" : "no"}
                     </div>
                   </div>
                 </div>

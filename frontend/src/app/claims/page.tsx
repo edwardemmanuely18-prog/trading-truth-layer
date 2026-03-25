@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Navbar from "../../components/Navbar";
+import ClaimVerificationSignature from "../../components/ClaimVerificationSignature";
 import { api, type PublicClaimDirectoryItem } from "../../lib/api";
 
 type PageProps = {
@@ -25,8 +26,19 @@ function formatNumber(value?: number | null, digits = 2) {
   return Number(value).toFixed(digits);
 }
 
+function formatPercent(value?: number | null, digits = 2) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return `${(Number(value) * 100).toFixed(digits)}%`;
+}
+
 function normalizeText(value: unknown) {
   return String(value ?? "").toLowerCase().trim();
+}
+
+function truncateMiddle(value?: string | null, start = 12, end = 10) {
+  if (!value) return "—";
+  if (value.length <= start + end + 3) return value;
+  return `${value.slice(0, start)}...${value.slice(-end)}`;
 }
 
 function safeLeaderboard(claim: PublicClaimDirectoryItem) {
@@ -73,20 +85,54 @@ function StatusBadge({ status }: { status?: string | null }) {
   );
 }
 
-function IntegrityBadge({ claim }: { claim: PublicClaimDirectoryItem }) {
-  const lifecycle = safeLifecycle(claim);
-  const isLocked = normalizeText(lifecycle.status) === "locked";
+function VisibilityBadge({ visibility }: { visibility?: string | null }) {
+  const normalized = normalizeText(visibility);
+
+  const className =
+    normalized === "public"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : normalized === "unlisted"
+        ? "border-violet-200 bg-violet-50 text-violet-800"
+        : "border-slate-200 bg-slate-100 text-slate-800";
+
+  return (
+    <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
+      visibility: {visibility || "—"}
+    </span>
+  );
+}
+
+function ExposureBadge({ claim }: { claim: PublicClaimDirectoryItem }) {
+  const isPubliclyAccessible = Boolean(claim.is_publicly_accessible);
 
   return (
     <span
       className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${
-        isLocked
+        isPubliclyAccessible
           ? "border-green-200 bg-green-50 text-green-700"
           : "border-slate-200 bg-slate-50 text-slate-700"
       }`}
     >
-      {isLocked ? "integrity lock-ready" : "published claim"}
+      {isPubliclyAccessible ? "verification route active" : "route inactive"}
     </span>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+}) {
+  return (
+    <div className="rounded-2xl bg-slate-50 p-4">
+      <div className="text-sm text-slate-500">{label}</div>
+      <div className="mt-1 text-2xl font-semibold">{value}</div>
+      <div className="mt-2 text-xs text-slate-500">{hint}</div>
+    </div>
   );
 }
 
@@ -130,7 +176,8 @@ function filterClaims(
       normalizeText(claim.claim_schema_id).includes(query) ||
       normalizeText(scope.methodology_notes).includes(query) ||
       normalizeText(scope.period_start).includes(query) ||
-      normalizeText(scope.period_end).includes(query);
+      normalizeText(scope.period_end).includes(query) ||
+      normalizeText(scope.included_symbols.join(",")).includes(query);
 
     const matchesStatus =
       status === "all" || normalizeText(claim.verification_status) === normalizeText(status);
@@ -170,23 +217,30 @@ function ClaimCard({ claim }: { claim: PublicClaimDirectoryItem }) {
   const lifecycle = safeLifecycle(claim);
   const leaderboard = safeLeaderboard(claim);
 
+  const topMember = leaderboard[0] ?? null;
+  const isLocked = normalizeText(claim.verification_status) === "locked";
+
   return (
-    <div className="rounded-2xl border bg-white p-6 shadow-sm">
+    <div className="rounded-3xl border bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="max-w-4xl">
           <div className="mb-2 text-sm text-slate-500">Public Verified Claim</div>
-          <h2 className="text-2xl font-semibold">{claim.name}</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">{claim.name}</h2>
 
           <div className="mt-3 flex flex-wrap gap-2">
             <StatusBadge status={claim.verification_status} />
-            <IntegrityBadge claim={claim} />
-            <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-              visibility: {scope.visibility || "—"}
-            </span>
+            <VisibilityBadge visibility={scope.visibility || "—"} />
+            <ExposureBadge claim={claim} />
             <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
               claim #{claim.claim_schema_id}
             </span>
           </div>
+
+          <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600">
+            Public trust surface for lifecycle-governed trading performance with claim
+            fingerprinting, trade-set fingerprinting, methodology scope, and verification-ready
+            metric snapshots.
+          </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -199,57 +253,90 @@ function ClaimCard({ claim }: { claim: PublicClaimDirectoryItem }) {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-4">
-        <div className="rounded-xl bg-slate-50 p-4">
-          <div className="text-sm text-slate-500">Trade Count</div>
-          <div className="mt-1 text-2xl font-semibold">{claim.trade_count ?? 0}</div>
-        </div>
-
-        <div className="rounded-xl bg-slate-50 p-4">
-          <div className="text-sm text-slate-500">Net PnL</div>
-          <div className="mt-1 text-2xl font-semibold">{formatNumber(claim.net_pnl)}</div>
-        </div>
-
-        <div className="rounded-xl bg-slate-50 p-4">
-          <div className="text-sm text-slate-500">Profit Factor</div>
-          <div className="mt-1 text-2xl font-semibold">{formatNumber(claim.profit_factor, 4)}</div>
-        </div>
-
-        <div className="rounded-xl bg-slate-50 p-4">
-          <div className="text-sm text-slate-500">Win Rate</div>
-          <div className="mt-1 text-2xl font-semibold">{formatNumber(claim.win_rate, 4)}</div>
-        </div>
+      <div className="mt-6">
+        <ClaimVerificationSignature
+          compact
+          status={claim.verification_status}
+          integrityStatus={isLocked ? "valid" : "not checked"}
+          claimHash={claim.claim_hash}
+          tradeSetHash={claim.trade_set_hash}
+          verifiedAt={lifecycle.verified_at}
+          lockedAt={lifecycle.locked_at}
+        />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[2fr_1fr]">
+      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard
+          label="Trade Count"
+          value={String(claim.trade_count ?? 0)}
+          hint="In-scope evidence rows"
+        />
+        <SummaryCard
+          label="Net PnL"
+          value={formatNumber(claim.net_pnl)}
+          hint="Aggregate net performance"
+        />
+        <SummaryCard
+          label="Profit Factor"
+          value={formatNumber(claim.profit_factor, 4)}
+          hint="Gross profit ÷ gross loss"
+        />
+        <SummaryCard
+          label="Win Rate"
+          value={formatPercent(claim.win_rate, 2)}
+          hint="Winning trades as percentage"
+        />
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
         <div>
-          <div className="text-sm text-slate-500">Period</div>
+          <div className="text-sm text-slate-500">Verification Period</div>
           <div className="mt-1 font-medium">
             {scope.period_start || "—"} → {scope.period_end || "—"}
           </div>
 
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl bg-slate-50 p-3">
+              <div className="text-sm text-slate-500">Verified At</div>
+              <div className="mt-1 font-medium">{formatDateTime(lifecycle.verified_at)}</div>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 p-3">
+              <div className="text-sm text-slate-500">Locked At</div>
+              <div className="mt-1 font-medium">{formatDateTime(lifecycle.locked_at)}</div>
+            </div>
+          </div>
+
           <div className="mt-4 text-sm text-slate-500">Methodology</div>
-          <div className="mt-1 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+          <div className="mt-1 rounded-xl bg-slate-50 p-3 text-sm whitespace-pre-wrap text-slate-700">
             {scope.methodology_notes || "—"}
           </div>
         </div>
 
-        <div>
-          <div className="text-sm text-slate-500">Lifecycle</div>
-          <div className="mt-1 space-y-1 text-sm">
-            <div>verified: {formatDateTime(lifecycle.verified_at)}</div>
-            <div>published: {formatDateTime(lifecycle.published_at)}</div>
-            <div>locked: {formatDateTime(lifecycle.locked_at)}</div>
+        <div className="space-y-4">
+          <div className="rounded-xl bg-slate-50 p-3">
+            <div className="text-sm text-slate-500">Top leaderboard entry</div>
+            <div className="mt-1 font-medium">
+              {topMember ? `${topMember.member} · ${formatNumber(topMember.net_pnl)}` : "—"}
+            </div>
           </div>
 
-          <div className="mt-4 text-sm text-slate-500">Claim Hash</div>
-          <div className="mt-1 break-all rounded-xl bg-slate-50 p-3 font-mono text-xs text-slate-700">
-            {claim.claim_hash || "—"}
+          <div>
+            <div className="text-sm text-slate-500">Claim Hash</div>
+            <div className="mt-1 rounded-xl bg-slate-50 p-3 font-mono text-xs break-all text-slate-700">
+              {claim.claim_hash || "—"}
+            </div>
+            <div className="mt-1 text-xs text-slate-500">{truncateMiddle(claim.claim_hash)}</div>
           </div>
 
-          <div className="mt-4 text-sm text-slate-500">Trade Set Hash</div>
-          <div className="mt-1 break-all rounded-xl bg-slate-50 p-3 font-mono text-xs text-slate-700">
-            {claim.trade_set_hash || "—"}
+          <div>
+            <div className="text-sm text-slate-500">Trade Set Hash</div>
+            <div className="mt-1 rounded-xl bg-slate-50 p-3 font-mono text-xs break-all text-slate-700">
+              {claim.trade_set_hash || "—"}
+            </div>
+            <div className="mt-1 text-xs text-slate-500">
+              {truncateMiddle(claim.trade_set_hash)}
+            </div>
           </div>
         </div>
       </div>
@@ -277,7 +364,7 @@ function ClaimCard({ claim }: { claim: PublicClaimDirectoryItem }) {
                     <td className="px-3 py-2">{row.rank}</td>
                     <td className="px-3 py-2">{row.member}</td>
                     <td className="px-3 py-2">{formatNumber(row.net_pnl)}</td>
-                    <td className="px-3 py-2">{formatNumber(row.win_rate, 4)}</td>
+                    <td className="px-3 py-2">{formatPercent(row.win_rate, 2)}</td>
                     <td className="px-3 py-2">{formatNumber(row.profit_factor, 4)}</td>
                   </tr>
                 ))}
@@ -300,6 +387,14 @@ export default async function PublicClaimsPage({ searchParams }: PageProps) {
   const claims = await api.getPublicClaims();
   const filtered = sortClaims(filterClaims(claims, q, status, visibility), sort);
 
+  const lockedCount = claims.filter(
+    (claim) => normalizeText(claim.verification_status) === "locked"
+  ).length;
+  const publishedCount = claims.filter(
+    (claim) => normalizeText(claim.verification_status) === "published"
+  ).length;
+  const totalTrades = claims.reduce((sum, claim) => sum + (claim.trade_count ?? 0), 0);
+
   const qs = (next: { q?: string; sort?: string; status?: string; visibility?: string }) => {
     const params = new URLSearchParams({
       q: next.q ?? q,
@@ -315,13 +410,37 @@ export default async function PublicClaimsPage({ searchParams }: PageProps) {
       <Navbar />
 
       <main className="mx-auto max-w-[1400px] px-6 py-10">
-        <div className="mb-8">
+        <div className="mb-8 rounded-3xl border bg-white p-6 shadow-sm">
           <div className="text-sm text-slate-500">Trading Truth Layer · Public Claim Directory</div>
-          <h1 className="mt-2 text-4xl font-bold">Verified Claims</h1>
+          <h1 className="mt-2 text-4xl font-bold tracking-tight">Verified Claims</h1>
           <p className="mt-3 max-w-3xl text-slate-600">
             Public registry of lifecycle-governed, hash-verifiable trading claims that are
-            published or locked and eligible for public verification.
+            published or locked and eligible for external credibility, verification, and evidence
+            review.
           </p>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard
+              label="Public claims"
+              value={String(claims.length)}
+              hint="Claims shown in this public directory"
+            />
+            <SummaryCard
+              label="Locked"
+              value={String(lockedCount)}
+              hint="Finalized claims with locked trade-set state"
+            />
+            <SummaryCard
+              label="Published"
+              value={String(publishedCount)}
+              hint="Externally visible but not yet locked"
+            />
+            <SummaryCard
+              label="In-scope trades"
+              value={String(totalTrades)}
+              hint="Aggregate public trade evidence count"
+            />
+          </div>
         </div>
 
         <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
@@ -333,7 +452,7 @@ export default async function PublicClaimsPage({ searchParams }: PageProps) {
                   type="text"
                   name="q"
                   defaultValue={q}
-                  placeholder="Search by name, hash, notes..."
+                  placeholder="Search by name, hash, notes, symbols..."
                   className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
                 />
               </div>
@@ -436,7 +555,10 @@ export default async function PublicClaimsPage({ searchParams }: PageProps) {
 
         {filtered.length === 0 ? (
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="text-slate-600">No public claims match the selected filters.</div>
+            <div className="text-slate-900 font-medium">No public claims match the selected filters.</div>
+            <div className="mt-2 text-slate-600">
+              Try resetting filters or broadening the search terms.
+            </div>
           </div>
         ) : (
           <div className="space-y-6">

@@ -1,7 +1,60 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 
 export const API_BASE_URL = API_BASE;
-const DEV_USER_ID = 1;
+const DEV_USER_ID: number | null = null;
+const TOKEN_STORAGE_KEY = "ttl_access_token";
+
+export function getStoredAccessToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(TOKEN_STORAGE_KEY);
+}
+
+export function setStoredAccessToken(token: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+}
+
+export function clearStoredAccessToken() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+}
+
+export type AuthUser = {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+};
+
+export type AuthWorkspace = {
+  workspace_id: number;
+  workspace_name: string;
+  workspace_role: string;
+};
+
+export type AuthResponse = {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
+  workspaces: AuthWorkspace[];
+};
+
+export type MeResponse = {
+  user: AuthUser;
+  workspaces: AuthWorkspace[];
+};
+
+export type RegisterPayload = {
+  email: string;
+  name: string;
+  password: string;
+  workspace_name?: string;
+};
+
+export type LoginPayload = {
+  email: string;
+  password: string;
+};
 
 export type Trade = {
   id: number;
@@ -50,6 +103,214 @@ export type DashboardResponse = {
   trade_count: number;
   claim_count: number;
 };
+
+export type PlanBilling = {
+  monthly_price_usd?: number | null;
+  annual_price_usd?: number | null;
+  currency?: string | null;
+  billing_interval?: string | null;
+};
+
+export type WorkspacePlanDetail = {
+  code: string;
+  name: string;
+  description: string;
+  recommended_for: string[];
+  billing?: PlanBilling;
+};
+
+export type WorkspaceSettings = {
+  workspace_id: number;
+  name: string;
+  description?: string | null;
+  billing_email?: string | null;
+  plan_code: string;
+  billing_status: string;
+  billing_provider?: string | null;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  paddle_customer_id?: string | null;
+  paddle_subscription_id?: string | null;
+  paddle_transaction_id?: string | null;
+  paddle_price_id?: string | null;
+  subscription_current_period_end?: string | null;
+  limits: {
+    claim_limit: number;
+    trade_limit: number;
+    member_limit: number;
+    storage_limit_mb: number;
+  };
+  plan_detail?: WorkspacePlanDetail;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type WorkspaceSettingsUpdatePayload = {
+  name: string;
+  description?: string | null;
+  billing_email?: string | null;
+};
+
+export type UsageDimension = {
+  used: number;
+  limit: number;
+  ratio?: number | null;
+  status?: "ok" | "near_limit" | "at_limit" | "over_limit" | "unlimited";
+};
+
+export type PlanCatalogItem = {
+  code: string;
+  name: string;
+  description: string;
+  limits: {
+    claim_limit: number;
+    trade_limit: number;
+    member_limit: number;
+    storage_limit_mb: number;
+  };
+  recommended_for: string[];
+  public_price_hint?: string;
+  billing?: PlanBilling;
+};
+
+export type UpgradeRecommendation = {
+  current_plan_code: string;
+  recommended_plan_code: string;
+  recommended_plan_name: string;
+  upgrade_required_now: boolean;
+  upgrade_recommended_soon: boolean;
+  breached_dimensions: string[];
+  near_limit_dimensions: string[];
+};
+
+export type WorkspaceGovernance = {
+  has_any_over_limit: boolean;
+  has_any_at_limit: boolean;
+  has_any_near_limit: boolean;
+  upgrade_required_now: boolean;
+  upgrade_recommended_soon: boolean;
+};
+
+export type WorkspaceStripeReadiness = {
+  has_customer_id: boolean;
+  has_subscription_id: boolean;
+  integration_status: string;
+};
+
+export type WorkspaceUsageSummary = {
+  workspace_id: number;
+  plan_code: string;
+  billing_status: string;
+  usage: {
+    members: UsageDimension;
+    trades: UsageDimension;
+    claims: UsageDimension;
+    storage_mb: UsageDimension;
+  };
+  stripe_ready: WorkspaceStripeReadiness;
+  governance?: WorkspaceGovernance;
+  upgrade_recommendation?: UpgradeRecommendation;
+  plan_catalog?: PlanCatalogItem[];
+};
+
+export type BillingDiagnostics = {
+  stripe_package_installed?: boolean;
+  billing_enabled?: boolean;
+  secret_key_configured?: boolean;
+  price_lookup_key?: string;
+  paddle_enabled?: boolean;
+  api_key_configured?: boolean;
+  paddle_price_id?: string;
+  manual_billing_enabled?: boolean;
+};
+
+export type ManualPaymentDetails = {
+  enabled?: boolean;
+  payment_method?: string | null;
+  account_name?: string | null;
+  account_number?: string | null;
+  bank_name?: string | null;
+  phone_number?: string | null;
+  notes?: string | null;
+};
+
+export type BillingCheckoutResponse = {
+  mode: string;
+  workspace_id: number;
+  url?: string | null;
+  checkout_url?: string | null;
+  session_id?: string | null;
+  transaction_id?: string | null;
+  current_plan_code?: string;
+  target_plan_code?: string;
+  billing_cycle?: string;
+  message?: string | null;
+  stripe_customer_id?: string | null;
+  stripe_price_id?: string | null;
+  stripe_price_lookup_key?: string | null;
+  paddle_price_id?: string | null;
+  manual_payment_details?: ManualPaymentDetails;
+  diagnostics?: BillingDiagnostics;
+};
+
+export type BillingPortalResponse = {
+  workspace_id: number;
+  mode?: string;
+  url?: string | null;
+  portal_url?: string | null;
+  message?: string | null;
+  created_at?: string | null;
+  manual_payment_details?: ManualPaymentDetails;
+};
+
+export type WorkspaceBillingFoundation = {
+  workspace_id: number;
+  plan_code: string;
+  plan_name: string;
+  billing_status: string;
+  billing_email?: string | null;
+  billing_provider?: string | null;
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  paddle_customer_id?: string | null;
+  paddle_subscription_id?: string | null;
+  paddle_transaction_id?: string | null;
+  paddle_price_id?: string | null;
+  subscription_current_period_end?: string | null;
+  prices: {
+    monthly_price_usd?: number | null;
+    annual_price_usd?: number | null;
+  };
+  stripe_ready: {
+    has_customer_id: boolean;
+    has_subscription_id: boolean;
+    integration_status: string;
+    billing_enabled?: boolean;
+    secret_key_configured?: boolean;
+    package_installed?: boolean;
+  };
+  paddle_ready?: {
+    enabled: boolean;
+    api_key_configured: boolean;
+    webhook_secret_configured: boolean;
+    has_customer_id: boolean;
+    has_subscription_id: boolean;
+    price_catalog_count: number;
+  };
+  manual_billing?: {
+    enabled: boolean;
+    ready: boolean;
+    payment_method?: string | null;
+  };
+  manual_payment_details?: ManualPaymentDetails;
+  checkout_state: {
+    can_start_checkout: boolean;
+    mode: string;
+    portal_available: boolean;
+  };
+};
+
+export type WorkspaceMemberRole = "owner" | "operator" | "member" | "auditor";
 
 export type WorkspaceMember = {
   workspace_id: number;
@@ -375,8 +636,19 @@ export type ClaimIntegrityResult = {
   verified_at: string;
 };
 
+function getAuthHeaders(headers?: HeadersInit) {
+  const merged = new Headers(headers || {});
+  const token = getStoredAccessToken();
+
+  if (token && !merged.has("Authorization")) {
+    merged.set("Authorization", `Bearer ${token}`);
+  }
+
+  return merged;
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const headers = new Headers(options?.headers || {});
+  const headers = getAuthHeaders(options?.headers);
 
   if (!(options?.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -396,6 +668,11 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 function withDevUser(path: string) {
+  const token = typeof window !== "undefined" ? getStoredAccessToken() : null;
+  if (token) return path;
+
+  if (DEV_USER_ID === null) return path;
+
   const separator = path.includes("?") ? "&" : "?";
   return `${path}${separator}user_id=${DEV_USER_ID}`;
 }
@@ -404,6 +681,68 @@ function ensureLeaderboard<T extends { leaderboard?: unknown }>(row: T) {
   return {
     ...row,
     leaderboard: Array.isArray(row.leaderboard) ? row.leaderboard : [],
+  };
+}
+
+function ensurePlanBilling(row?: Partial<PlanBilling> | null): PlanBilling {
+  return {
+    monthly_price_usd:
+      typeof row?.monthly_price_usd === "number" ? row.monthly_price_usd : row?.monthly_price_usd ?? null,
+    annual_price_usd:
+      typeof row?.annual_price_usd === "number" ? row.annual_price_usd : row?.annual_price_usd ?? null,
+    currency: row?.currency ?? "USD",
+    billing_interval: row?.billing_interval ?? "monthly",
+  };
+}
+
+function ensureWorkspacePlanDetail(
+  row?: Partial<WorkspacePlanDetail> | null
+): WorkspacePlanDetail | undefined {
+  if (!row) return undefined;
+
+  return {
+    code: String(row.code ?? ""),
+    name: String(row.name ?? ""),
+    description: String(row.description ?? ""),
+    recommended_for: Array.isArray(row.recommended_for) ? row.recommended_for.map(String) : [],
+    billing: ensurePlanBilling(row.billing),
+  };
+}
+
+function ensurePlanCatalogItem(row: Partial<PlanCatalogItem>): PlanCatalogItem {
+  return {
+    code: String(row.code ?? ""),
+    name: String(row.name ?? ""),
+    description: String(row.description ?? ""),
+    limits: {
+      claim_limit: Number(row.limits?.claim_limit ?? 0),
+      trade_limit: Number(row.limits?.trade_limit ?? 0),
+      member_limit: Number(row.limits?.member_limit ?? 0),
+      storage_limit_mb: Number(row.limits?.storage_limit_mb ?? 0),
+    },
+    recommended_for: Array.isArray(row.recommended_for) ? row.recommended_for.map(String) : [],
+    public_price_hint: row.public_price_hint ?? undefined,
+    billing: ensurePlanBilling(row.billing),
+  };
+}
+
+function ensureWorkspaceSettings(row: WorkspaceSettings): WorkspaceSettings {
+  return {
+    ...row,
+    billing_provider: row?.billing_provider ?? null,
+    stripe_customer_id: row?.stripe_customer_id ?? null,
+    stripe_subscription_id: row?.stripe_subscription_id ?? null,
+    paddle_customer_id: row?.paddle_customer_id ?? null,
+    paddle_subscription_id: row?.paddle_subscription_id ?? null,
+    paddle_transaction_id: row?.paddle_transaction_id ?? null,
+    paddle_price_id: row?.paddle_price_id ?? null,
+    limits: {
+      claim_limit: Number(row?.limits?.claim_limit ?? 0),
+      trade_limit: Number(row?.limits?.trade_limit ?? 0),
+      member_limit: Number(row?.limits?.member_limit ?? 0),
+      storage_limit_mb: Number(row?.limits?.storage_limit_mb ?? 0),
+    },
+    plan_detail: ensureWorkspacePlanDetail(row?.plan_detail),
   };
 }
 
@@ -430,45 +769,341 @@ function ensurePublicClaim(row: PublicClaimDirectoryItem): PublicClaimDirectoryI
   };
 }
 
+function ensureUsageDimension(row?: Partial<UsageDimension> | null): UsageDimension {
+  return {
+    used: Number(row?.used ?? 0),
+    limit: Number(row?.limit ?? 0),
+    ratio: typeof row?.ratio === "number" ? row.ratio : row?.ratio ?? null,
+    status: row?.status ?? "ok",
+  };
+}
+
+function ensureWorkspaceUsageSummary(row: WorkspaceUsageSummary): WorkspaceUsageSummary {
+  return {
+    ...row,
+    usage: {
+      members: ensureUsageDimension(row?.usage?.members),
+      trades: ensureUsageDimension(row?.usage?.trades),
+      claims: ensureUsageDimension(row?.usage?.claims),
+      storage_mb: ensureUsageDimension(row?.usage?.storage_mb),
+    },
+    stripe_ready: {
+      has_customer_id: Boolean(row?.stripe_ready?.has_customer_id),
+      has_subscription_id: Boolean(row?.stripe_ready?.has_subscription_id),
+      integration_status: row?.stripe_ready?.integration_status || "ready_for_stripe_foundation",
+    },
+    governance: row?.governance
+      ? {
+          has_any_over_limit: Boolean(row.governance.has_any_over_limit),
+          has_any_at_limit: Boolean(row.governance.has_any_at_limit),
+          has_any_near_limit: Boolean(row.governance.has_any_near_limit),
+          upgrade_required_now: Boolean(row.governance.upgrade_required_now),
+          upgrade_recommended_soon: Boolean(row.governance.upgrade_recommended_soon),
+        }
+      : undefined,
+    upgrade_recommendation: row?.upgrade_recommendation
+      ? {
+          current_plan_code: row.upgrade_recommendation.current_plan_code,
+          recommended_plan_code: row.upgrade_recommendation.recommended_plan_code,
+          recommended_plan_name: row.upgrade_recommendation.recommended_plan_name,
+          upgrade_required_now: Boolean(row.upgrade_recommendation.upgrade_required_now),
+          upgrade_recommended_soon: Boolean(row.upgrade_recommendation.upgrade_recommended_soon),
+          breached_dimensions: Array.isArray(row.upgrade_recommendation.breached_dimensions)
+            ? row.upgrade_recommendation.breached_dimensions
+            : [],
+          near_limit_dimensions: Array.isArray(row.upgrade_recommendation.near_limit_dimensions)
+            ? row.upgrade_recommendation.near_limit_dimensions
+            : [],
+        }
+      : undefined,
+    plan_catalog: Array.isArray(row?.plan_catalog)
+      ? row.plan_catalog.map((item) => ensurePlanCatalogItem(item))
+      : [],
+  };
+}
+
+function ensureManualPaymentDetails(row?: Partial<ManualPaymentDetails> | null): ManualPaymentDetails | undefined {
+  if (!row) return undefined;
+  return {
+    enabled: Boolean(row.enabled),
+    payment_method: row.payment_method ?? null,
+    account_name: row.account_name ?? null,
+    account_number: row.account_number ?? null,
+    bank_name: row.bank_name ?? null,
+    phone_number: row.phone_number ?? null,
+    notes: row.notes ?? null,
+  };
+}
+
+function ensureWorkspaceBillingFoundation(
+  row: WorkspaceBillingFoundation
+): WorkspaceBillingFoundation {
+  return {
+    ...row,
+    billing_provider: row?.billing_provider ?? null,
+    stripe_customer_id: row?.stripe_customer_id ?? null,
+    stripe_subscription_id: row?.stripe_subscription_id ?? null,
+    paddle_customer_id: row?.paddle_customer_id ?? null,
+    paddle_subscription_id: row?.paddle_subscription_id ?? null,
+    paddle_transaction_id: row?.paddle_transaction_id ?? null,
+    paddle_price_id: row?.paddle_price_id ?? null,
+    prices: {
+      monthly_price_usd: row?.prices?.monthly_price_usd ?? null,
+      annual_price_usd: row?.prices?.annual_price_usd ?? null,
+    },
+    stripe_ready: {
+      has_customer_id: Boolean(row?.stripe_ready?.has_customer_id),
+      has_subscription_id: Boolean(row?.stripe_ready?.has_subscription_id),
+      integration_status: row?.stripe_ready?.integration_status || "ready_for_stripe_foundation",
+      billing_enabled: Boolean(row?.stripe_ready?.billing_enabled),
+      secret_key_configured: Boolean(row?.stripe_ready?.secret_key_configured),
+      package_installed: Boolean(row?.stripe_ready?.package_installed),
+    },
+    paddle_ready: row?.paddle_ready
+      ? {
+          enabled: Boolean(row.paddle_ready.enabled),
+          api_key_configured: Boolean(row.paddle_ready.api_key_configured),
+          webhook_secret_configured: Boolean(row.paddle_ready.webhook_secret_configured),
+          has_customer_id: Boolean(row.paddle_ready.has_customer_id),
+          has_subscription_id: Boolean(row.paddle_ready.has_subscription_id),
+          price_catalog_count: Number(row.paddle_ready.price_catalog_count ?? 0),
+        }
+      : undefined,
+    manual_billing: row?.manual_billing
+      ? {
+          enabled: Boolean(row.manual_billing.enabled),
+          ready: Boolean(row.manual_billing.ready),
+          payment_method: row.manual_billing.payment_method ?? null,
+        }
+      : undefined,
+    manual_payment_details: ensureManualPaymentDetails(row?.manual_payment_details),
+    checkout_state: {
+      can_start_checkout: Boolean(row?.checkout_state?.can_start_checkout),
+      mode: row?.checkout_state?.mode || "placeholder_until_checkout",
+      portal_available: Boolean(row?.checkout_state?.portal_available),
+    },
+  };
+}
+
+function ensureWorkspaceMember(row: WorkspaceMember): WorkspaceMember {
+  return {
+    workspace_id: Number(row.workspace_id ?? 0),
+    user_id: Number(row.user_id ?? 0),
+    email: String(row.email ?? ""),
+    name: String(row.name ?? ""),
+    global_role: String(row.global_role ?? "member"),
+    workspace_role: String(row.workspace_role ?? "member"),
+  };
+}
+
+function ensureWorkspaceInvite(row: WorkspaceInvite): WorkspaceInvite {
+  return {
+    id: Number(row.id ?? 0),
+    workspace_id: Number(row.workspace_id ?? 0),
+    email: String(row.email ?? ""),
+    role: String(row.role ?? "member"),
+    token: String(row.token ?? ""),
+    status: String(row.status ?? "pending"),
+    invited_by_user_id:
+      typeof row.invited_by_user_id === "number" ? row.invited_by_user_id : row.invited_by_user_id ?? null,
+    accepted_by_user_id:
+      typeof row.accepted_by_user_id === "number" ? row.accepted_by_user_id : row.accepted_by_user_id ?? null,
+    created_at: row.created_at ?? null,
+    expires_at: row.expires_at ?? null,
+    accepted_at: row.accepted_at ?? null,
+  };
+}
+
 export const api = {
+  register: async (payload: RegisterPayload): Promise<AuthResponse> => {
+    const result = await apiFetch<AuthResponse>(`/auth/register`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    if (result.access_token) {
+      setStoredAccessToken(result.access_token);
+    }
+
+    return result;
+  },
+
+  login: async (payload: LoginPayload): Promise<AuthResponse> => {
+    const result = await apiFetch<AuthResponse>(`/auth/login`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    if (result.access_token) {
+      setStoredAccessToken(result.access_token);
+    }
+
+    return result;
+  },
+
+  logout: () => {
+    clearStoredAccessToken();
+  },
+
+  getMe: async (): Promise<MeResponse> => {
+    return apiFetch<MeResponse>(withDevUser(`/auth/me`), {
+      cache: "no-store",
+    });
+  },
+
+  getMyWorkspaces: async (): Promise<AuthWorkspace[]> => {
+    return apiFetch<AuthWorkspace[]>(withDevUser(`/workspaces`), {
+      cache: "no-store",
+    });
+  },
+
   getDashboard: async (workspaceId: number): Promise<DashboardResponse> => {
-  return apiFetch<DashboardResponse>(withDevUser(`/workspaces/${workspaceId}/dashboard`), {
-    cache: "no-store",
-  });
-},
+    return apiFetch<DashboardResponse>(withDevUser(`/workspaces/${workspaceId}/dashboard`), {
+      cache: "no-store",
+    });
+  },
 
-getTrades: async (workspaceId: number): Promise<Trade[]> => {
-  return apiFetch<Trade[]>(withDevUser(`/workspaces/${workspaceId}/trades`), {
-    cache: "no-store",
-  });
-},
+  getWorkspaceSettings: async (workspaceId: number): Promise<WorkspaceSettings> => {
+    const row = await apiFetch<WorkspaceSettings>(withDevUser(`/workspaces/${workspaceId}/settings`), {
+      cache: "no-store",
+    });
 
-getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
-  return apiFetch<ImportBatch[]>(withDevUser(`/workspaces/${workspaceId}/imports`), {
-    cache: "no-store",
-  });
-},
+    return ensureWorkspaceSettings(row);
+  },
+
+  updateWorkspaceSettings: async (
+    workspaceId: number,
+    payload: WorkspaceSettingsUpdatePayload
+  ): Promise<WorkspaceSettings> => {
+    const row = await apiFetch<WorkspaceSettings>(withDevUser(`/workspaces/${workspaceId}/settings`), {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+
+    return ensureWorkspaceSettings(row);
+  },
+
+  getWorkspaceUsage: async (workspaceId: number): Promise<WorkspaceUsageSummary> => {
+    const row = await apiFetch<WorkspaceUsageSummary>(withDevUser(`/workspaces/${workspaceId}/usage`), {
+      cache: "no-store",
+    });
+
+    return ensureWorkspaceUsageSummary(row);
+  },
+
+  getWorkspaceBillingFoundation: async (
+    workspaceId: number
+  ): Promise<WorkspaceBillingFoundation> => {
+    const row = await apiFetch<WorkspaceBillingFoundation>(
+      withDevUser(`/workspaces/${workspaceId}/billing-foundation`),
+      {
+        cache: "no-store",
+      }
+    );
+
+    return ensureWorkspaceBillingFoundation(row);
+  },
+
+  createBillingCheckoutSession: async (
+    workspaceId: number,
+    payload: { plan_code: string; billing_cycle: string }
+  ): Promise<BillingCheckoutResponse> => {
+    const row = await apiFetch<any>(withDevUser(`/workspaces/${workspaceId}/billing/checkout`), {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    return {
+      ...row,
+      url: row?.checkout_url ?? row?.url ?? null,
+      checkout_url: row?.checkout_url ?? row?.url ?? null,
+      manual_payment_details: ensureManualPaymentDetails(row?.manual_payment_details),
+    };
+  },
+
+  createBillingPortalSession: async (workspaceId: number): Promise<BillingPortalResponse> => {
+    const row = await apiFetch<any>(withDevUser(`/workspaces/${workspaceId}/billing/portal`), {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+
+    return {
+      ...row,
+      url: row?.portal_url ?? row?.url ?? null,
+      portal_url: row?.portal_url ?? row?.url ?? null,
+      manual_payment_details: ensureManualPaymentDetails(row?.manual_payment_details),
+    };
+  },
+
+  getTrades: async (workspaceId: number): Promise<Trade[]> => {
+    return apiFetch<Trade[]>(withDevUser(`/workspaces/${workspaceId}/trades`), {
+      cache: "no-store",
+    });
+  },
+
+  getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
+    return apiFetch<ImportBatch[]>(withDevUser(`/workspaces/${workspaceId}/imports`), {
+      cache: "no-store",
+    });
+  },
 
   getWorkspaceMembers: async (workspaceId: number): Promise<WorkspaceMember[]> => {
-    return apiFetch<WorkspaceMember[]>(withDevUser(`/workspaces/${workspaceId}/members`), {
+    const rows = await apiFetch<WorkspaceMember[]>(withDevUser(`/workspaces/${workspaceId}/members`), {
       cache: "no-store",
+    });
+    return Array.isArray(rows) ? rows.map(ensureWorkspaceMember) : [];
+  },
+
+  updateWorkspaceMemberRole: async (
+    workspaceId: number,
+    userId: number,
+    payload: { role: WorkspaceMemberRole }
+  ): Promise<WorkspaceMember> => {
+    const row = await apiFetch<WorkspaceMember>(
+      withDevUser(`/workspaces/${workspaceId}/members/${userId}`),
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      }
+    );
+    return ensureWorkspaceMember(row);
+  },
+
+  removeWorkspaceMember: async (
+    workspaceId: number,
+    userId: number
+  ): Promise<{ removed: boolean; workspace_id: number; user_id: number }> => {
+    return apiFetch(withDevUser(`/workspaces/${workspaceId}/members/${userId}`), {
+      method: "DELETE",
     });
   },
 
   getWorkspaceInvites: async (workspaceId: number): Promise<WorkspaceInvite[]> => {
-    return apiFetch<WorkspaceInvite[]>(withDevUser(`/workspaces/${workspaceId}/invites`), {
+    const rows = await apiFetch<WorkspaceInvite[]>(withDevUser(`/workspaces/${workspaceId}/invites`), {
       cache: "no-store",
     });
+    return Array.isArray(rows) ? rows.map(ensureWorkspaceInvite) : [];
   },
 
   createWorkspaceInvite: async (
     workspaceId: number,
-    payload: { email: string; role: string }
+    payload: { email: string; role: WorkspaceMemberRole | "member" | "operator" | "auditor" }
   ): Promise<WorkspaceInvite> => {
-    return apiFetch<WorkspaceInvite>(withDevUser(`/workspaces/${workspaceId}/invites`), {
+    const row = await apiFetch<WorkspaceInvite>(withDevUser(`/workspaces/${workspaceId}/invites`), {
       method: "POST",
       body: JSON.stringify(payload),
     });
+    return ensureWorkspaceInvite(row);
+  },
+
+  revokeWorkspaceInvite: async (workspaceId: number, inviteId: number): Promise<WorkspaceInvite> => {
+    const row = await apiFetch<WorkspaceInvite>(
+      withDevUser(`/workspaces/${workspaceId}/invites/${inviteId}/revoke`),
+      {
+        method: "POST",
+      }
+    );
+    return ensureWorkspaceInvite(row);
   },
 
   acceptWorkspaceInvite: async (token: string) => {
@@ -479,7 +1114,7 @@ getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
   },
 
   getLatestClaimSchema: async (): Promise<ClaimSchema> => {
-    return apiFetch<ClaimSchema>(`/claim-schemas/latest`, {
+    return apiFetch<ClaimSchema>(withDevUser(`/claim-schemas/latest`), {
       cache: "no-store",
     });
   },
@@ -496,7 +1131,7 @@ getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
   },
 
   getClaimSchema: async (claimSchemaId: number): Promise<ClaimSchema> => {
-    return apiFetch<ClaimSchema>(`/claim-schemas/${claimSchemaId}`, {
+    return apiFetch<ClaimSchema>(withDevUser(`/claim-schemas/${claimSchemaId}`), {
       cache: "no-store",
     });
   },
@@ -512,7 +1147,7 @@ getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
   },
 
   createTrade: async (workspaceId: number, payload: unknown): Promise<Trade> => {
-    return apiFetch<Trade>(`/workspaces/${workspaceId}/trades`, {
+    return apiFetch<Trade>(withDevUser(`/workspaces/${workspaceId}/trades`), {
       method: "POST",
       body: JSON.stringify(payload),
     });
@@ -522,8 +1157,11 @@ getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
     const formData = new FormData();
     formData.append("file", file);
 
-    const res = await fetch(`${API_BASE}/workspaces/${workspaceId}/trades/import-csv`, {
+    const headers = getAuthHeaders();
+
+    const res = await fetch(`${API_BASE}${withDevUser(`/workspaces/${workspaceId}/trades/import-csv`)}`, {
       method: "POST",
+      headers,
       body: formData,
     });
 
@@ -549,7 +1187,7 @@ getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
   },
 
   getClaimVersions: async (claimSchemaId: number): Promise<ClaimVersion[]> => {
-    return apiFetch<ClaimVersion[]>(`/claim-schemas/${claimSchemaId}/versions`, {
+    return apiFetch<ClaimVersion[]>(withDevUser(`/claim-schemas/${claimSchemaId}/versions`), {
       cache: "no-store",
     });
   },
@@ -573,7 +1211,7 @@ getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
   },
 
   getClaimPreview: async (claimSchemaId: number): Promise<ClaimSchemaPreview> => {
-    const row = await apiFetch<ClaimSchemaPreview>(`/claim-schemas/${claimSchemaId}/preview`, {
+    const row = await apiFetch<ClaimSchemaPreview>(withDevUser(`/claim-schemas/${claimSchemaId}/preview`), {
       cache: "no-store",
     });
 
@@ -581,7 +1219,7 @@ getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
   },
 
   getClaimEquityCurve: async (claimSchemaId: number): Promise<ClaimEquityCurve> => {
-    const row = await apiFetch<ClaimEquityCurve>(`/claim-schemas/${claimSchemaId}/equity-curve`, {
+    const row = await apiFetch<ClaimEquityCurve>(withDevUser(`/claim-schemas/${claimSchemaId}/equity-curve`), {
       cache: "no-store",
     });
 
@@ -592,7 +1230,7 @@ getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
   },
 
   getClaimTrades: async (claimSchemaId: number): Promise<ClaimTradeEvidence> => {
-    const row = await apiFetch<ClaimTradeEvidence>(`/claim-schemas/${claimSchemaId}/trades`, {
+    const row = await apiFetch<ClaimTradeEvidence>(withDevUser(`/claim-schemas/${claimSchemaId}/trades`), {
       cache: "no-store",
     });
 
@@ -603,13 +1241,13 @@ getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
   },
 
   getEvidencePack: async (claimSchemaId: number): Promise<EvidencePack> => {
-    return apiFetch<EvidencePack>(`/claim-schemas/${claimSchemaId}/evidence-pack`, {
+    return apiFetch<EvidencePack>(withDevUser(`/claim-schemas/${claimSchemaId}/evidence-pack`), {
       cache: "no-store",
     });
   },
 
   getEvidenceBundle: async (claimSchemaId: number): Promise<EvidenceBundle> => {
-    return apiFetch<EvidenceBundle>(`/claim-schemas/${claimSchemaId}/evidence-bundle`, {
+    return apiFetch<EvidenceBundle>(withDevUser(`/claim-schemas/${claimSchemaId}/evidence-bundle`), {
       cache: "no-store",
     });
   },
@@ -657,13 +1295,13 @@ getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
   },
 
   getClaimIntegrity: async (claimSchemaId: number): Promise<ClaimIntegrityResult> => {
-    return apiFetch<ClaimIntegrityResult>(`/claim-schemas/${claimSchemaId}/verify-integrity`, {
+    return apiFetch<ClaimIntegrityResult>(withDevUser(`/claim-schemas/${claimSchemaId}/verify-integrity`), {
       cache: "no-store",
     });
   },
 
   getLatestAuditEvents: async (limit = 20): Promise<AuditEvent[]> => {
-    return apiFetch<AuditEvent[]>(`/audit-events/latest?limit=${limit}`, {
+    return apiFetch<AuditEvent[]>(withDevUser(`/audit-events/latest?limit=${limit}`), {
       cache: "no-store",
     });
   },
@@ -672,7 +1310,7 @@ getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
     entityType: string,
     entityId: string | number
   ): Promise<AuditEvent[]> => {
-    return apiFetch<AuditEvent[]>(`/audit-events/entity/${entityType}/${entityId}`, {
+    return apiFetch<AuditEvent[]>(withDevUser(`/audit-events/entity/${entityType}/${entityId}`), {
       cache: "no-store",
     });
   },
@@ -681,7 +1319,7 @@ getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
     workspaceId: string | number,
     limit = 50
   ): Promise<AuditEvent[]> => {
-    return apiFetch<AuditEvent[]>(`/audit-events/workspace/${workspaceId}?limit=${limit}`, {
+    return apiFetch<AuditEvent[]>(withDevUser(`/audit-events/workspace/${workspaceId}?limit=${limit}`), {
       cache: "no-store",
     });
   },

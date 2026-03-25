@@ -1,18 +1,11 @@
-import Link from "next/link";
-import Navbar from "../../../../components/Navbar";
-import { api, type PublicClaimDirectoryItem } from "../../../../lib/api";
+"use client";
 
-type PageProps = {
-  params: Promise<{
-    workspaceId: string;
-  }>;
-  searchParams?: Promise<{
-    q?: string;
-    sort?: string;
-    status?: string;
-    visibility?: string;
-  }>;
-};
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import Navbar from "../../../../components/Navbar";
+import { useAuth } from "../../../../components/AuthProvider";
+import { api, type PublicClaimDirectoryItem } from "../../../../lib/api";
 
 function formatDateTime(value?: string | null) {
   if (!value) return "—";
@@ -67,14 +60,94 @@ function StatusBadge({ status }: { status?: string | null }) {
         ? "bg-blue-100 text-blue-800 border-blue-200"
         : normalized === "verified"
           ? "bg-amber-100 text-amber-800 border-amber-200"
-          : normalized === "draft"
-            ? "bg-slate-100 text-slate-800 border-slate-200"
-            : "bg-slate-100 text-slate-800 border-slate-200";
+          : "bg-slate-100 text-slate-800 border-slate-200";
 
   return (
     <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
       {status || "unknown"}
     </span>
+  );
+}
+
+function VisibilityBadge({ visibility }: { visibility?: string | null }) {
+  const normalized = normalizeText(visibility);
+
+  const className =
+    normalized === "public"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : normalized === "unlisted"
+        ? "border-violet-200 bg-violet-50 text-violet-800"
+        : "border-slate-200 bg-slate-100 text-slate-700";
+
+  return (
+    <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
+      {visibility || "unknown"}
+    </span>
+  );
+}
+
+function ExposureBadge({ accessible }: { accessible: boolean }) {
+  return (
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${
+        accessible
+          ? "border-green-200 bg-green-50 text-green-700"
+          : "border-slate-200 bg-slate-50 text-slate-700"
+      }`}
+    >
+      {accessible ? "public route ready" : "internal only"}
+    </span>
+  );
+}
+
+function FilterChip({
+  onClick,
+  label,
+  active,
+}: {
+  onClick: () => void;
+  label: string;
+  active: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex rounded-full border px-4 py-2 text-sm transition ${
+        active
+          ? "border-slate-900 bg-slate-900 text-white"
+          : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function ActionLink({
+  href,
+  label,
+  tone = "neutral",
+}: {
+  href: string;
+  label: string;
+  tone?: "neutral" | "disabled";
+}) {
+  if (tone === "disabled") {
+    return (
+      <span className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-400">
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <Link
+      href={href}
+      className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+    >
+      {label}
+    </Link>
   );
 }
 
@@ -130,26 +203,21 @@ function filterClaims(
   });
 }
 
-function FilterChip({
-  href,
+function SummaryCard({
   label,
-  active,
+  value,
+  hint,
 }: {
-  href: string;
   label: string;
-  active: boolean;
+  value: string | number;
+  hint?: string;
 }) {
   return (
-    <Link
-      href={href}
-      className={`inline-flex rounded-full border px-4 py-2 text-sm transition ${
-        active
-          ? "border-slate-900 bg-slate-900 text-white"
-          : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
-      }`}
-    >
-      {label}
-    </Link>
+    <div className="rounded-2xl border bg-white p-5 shadow-sm">
+      <div className="text-sm text-slate-500">{label}</div>
+      <div className="mt-2 text-2xl font-semibold">{value}</div>
+      {hint ? <div className="mt-2 text-xs text-slate-500">{hint}</div> : null}
+    </div>
   );
 }
 
@@ -163,62 +231,46 @@ function ClaimCard({
   const scope = safeScope(claim);
   const lifecycle = safeLifecycle(claim);
   const leaderboard = safeLeaderboard(claim);
-  const isPublic = Boolean(claim.is_publicly_accessible);
+  const isPubliclyAccessible = Boolean(claim.is_publicly_accessible);
 
   return (
-    <div className="rounded-2xl border bg-white p-6 shadow-sm">
+    <div className="rounded-3xl border bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="max-w-3xl">
           <div className="mb-2 text-sm text-slate-500">Workspace Claim Record</div>
-          <h2 className="text-2xl font-semibold">{claim.name}</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">{claim.name}</h2>
 
           <div className="mt-3 flex flex-wrap gap-2">
             <StatusBadge status={claim.verification_status} />
-            <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-              visibility: {scope.visibility || "—"}
-            </span>
+            <VisibilityBadge visibility={scope.visibility} />
             <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
               claim #{claim.claim_schema_id}
             </span>
-            <span
-              className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${
-                isPublic
-                  ? "border-green-200 bg-green-50 text-green-700"
-                  : "border-slate-200 bg-slate-50 text-slate-700"
-              }`}
-            >
-              {isPublic ? "publicly accessible" : "internal only"}
-            </span>
+            <ExposureBadge accessible={isPubliclyAccessible} />
+          </div>
+
+          <div className="mt-4 text-sm text-slate-600">
+            Internal registry view for lifecycle-governed claim inspection, evidence routing,
+            lineage-aware review, and public exposure control.
           </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {isPublic ? (
-            <Link
-              href={`/verify/${claim.claim_hash}`}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-            >
-              Public Verify
-            </Link>
+          {isPubliclyAccessible ? (
+            <ActionLink href={`/verify/${claim.claim_hash}`} label="Public Verify" />
           ) : (
-            <span className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-400">
-              Public Verify Unavailable
-            </span>
+            <ActionLink href="#" label="Public Verify Unavailable" tone="disabled" />
           )}
 
-          <Link
+          <ActionLink
             href={`/workspace/${workspaceId}/claim/${claim.claim_schema_id}`}
-            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-          >
-            Internal View
-          </Link>
+            label="Internal View"
+          />
 
-          <Link
+          <ActionLink
             href={`/workspace/${workspaceId}/evidence?claimId=${claim.claim_schema_id}`}
-            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-          >
-            Evidence
-          </Link>
+            label="Evidence"
+          />
         </div>
       </div>
 
@@ -235,7 +287,9 @@ function ClaimCard({
 
         <div className="rounded-xl bg-slate-50 p-4">
           <div className="text-sm text-slate-500">Profit Factor</div>
-          <div className="mt-1 text-2xl font-semibold">{formatNumber(claim.profit_factor, 4)}</div>
+          <div className="mt-1 text-2xl font-semibold">
+            {formatNumber(claim.profit_factor, 4)}
+          </div>
         </div>
 
         <div className="rounded-xl bg-slate-50 p-4">
@@ -246,20 +300,40 @@ function ClaimCard({
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div>
-          <div className="text-sm text-slate-500">Period</div>
+          <div className="text-sm text-slate-500">Verification Scope</div>
           <div className="mt-1 font-medium">
             {scope.period_start || "—"} → {scope.period_end || "—"}
           </div>
 
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl bg-slate-50 p-4">
+              <div className="text-sm text-slate-500">Included Members</div>
+              <div className="mt-1 text-sm font-medium">
+                {Array.isArray(scope.included_members) && scope.included_members.length > 0
+                  ? scope.included_members.join(", ")
+                  : "All in scope"}
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 p-4">
+              <div className="text-sm text-slate-500">Included Symbols</div>
+              <div className="mt-1 text-sm font-medium">
+                {Array.isArray(scope.included_symbols) && scope.included_symbols.length > 0
+                  ? scope.included_symbols.join(", ")
+                  : "All in scope"}
+              </div>
+            </div>
+          </div>
+
           <div className="mt-4 text-sm text-slate-500">Methodology</div>
-          <div className="mt-1 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+          <div className="mt-1 rounded-xl bg-slate-50 p-3 text-sm whitespace-pre-wrap text-slate-700">
             {scope.methodology_notes || "—"}
           </div>
         </div>
 
         <div>
           <div className="text-sm text-slate-500">Lifecycle</div>
-          <div className="mt-1 space-y-1 text-sm">
+          <div className="mt-2 space-y-2 rounded-xl bg-slate-50 p-4 text-sm">
             <div>verified: {formatDateTime(lifecycle.verified_at)}</div>
             <div>published: {formatDateTime(lifecycle.published_at)}</div>
             <div>locked: {formatDateTime(lifecycle.locked_at)}</div>
@@ -277,7 +351,7 @@ function ClaimCard({
         </div>
       </div>
 
-      {leaderboard.length > 0 && (
+      {leaderboard.length > 0 ? (
         <div className="mt-6">
           <div className="mb-2 text-sm font-medium text-slate-700">Top Leaderboard Entries</div>
           <div className="overflow-x-auto">
@@ -308,37 +382,146 @@ function ClaimCard({
             </table>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
 
-export default async function WorkspaceClaimsPage({ params, searchParams }: PageProps) {
-  const resolvedParams = await params;
-  const workspaceId = Number(resolvedParams.workspaceId);
+export default function WorkspaceClaimsPage() {
+  const params = useParams();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user, workspaces, loading: authLoading } = useAuth();
 
-  if (Number.isNaN(workspaceId)) {
-    return <div className="p-6 text-red-600">Invalid workspace id.</div>;
-  }
+  const workspaceId = useMemo(() => {
+    const raw = Array.isArray(params?.workspaceId) ? params.workspaceId[0] : params?.workspaceId;
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? null : parsed;
+  }, [params]);
 
-  const resolvedSearch = (await searchParams) || {};
-  const q = resolvedSearch.q || "";
-  const sort = resolvedSearch.sort || "newest";
-  const status = resolvedSearch.status || "all";
-  const visibility = resolvedSearch.visibility || "all";
+  const workspaceMembership = useMemo(() => {
+    if (!workspaceId) return null;
+    return workspaces.find((w) => w.workspace_id === workspaceId) ?? null;
+  }, [workspaceId, workspaces]);
 
-  const claims = await api.getWorkspaceClaims(workspaceId);
-  const filtered = sortClaims(filterClaims(claims, q, status, visibility), sort);
+  const [claims, setClaims] = useState<PublicClaimDirectoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const qs = (next: { q?: string; sort?: string; status?: string; visibility?: string }) => {
-    const params = new URLSearchParams({
+  const q = searchParams.get("q") || "";
+  const sort = searchParams.get("sort") || "newest";
+  const status = searchParams.get("status") || "all";
+  const visibility = searchParams.get("visibility") || "all";
+
+  useEffect(() => {
+    async function loadClaims() {
+      if (!workspaceId || !workspaceMembership) return;
+
+      try {
+        setLoading(true);
+        setError(null);
+        const rows = await api.getWorkspaceClaims(workspaceId);
+        setClaims(Array.isArray(rows) ? rows : []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load workspace claims.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (!authLoading && workspaceMembership) {
+      void loadClaims();
+    } else if (!authLoading && !workspaceMembership) {
+      setLoading(false);
+    }
+  }, [workspaceId, workspaceMembership, authLoading]);
+
+  const filtered = useMemo(() => {
+    return sortClaims(filterClaims(claims, q, status, visibility), sort);
+  }, [claims, q, sort, status, visibility]);
+
+  const draftCount = claims.filter((claim) => normalizeText(claim.verification_status) === "draft").length;
+  const verifiedCount = claims.filter((claim) => normalizeText(claim.verification_status) === "verified").length;
+  const publishedOrLockedCount = claims.filter((claim) => {
+    const statusText = normalizeText(claim.verification_status);
+    return statusText === "published" || statusText === "locked";
+  }).length;
+  const publicRouteReadyCount = claims.filter((claim) => Boolean(claim.is_publicly_accessible)).length;
+
+  function setFilters(next: {
+    q?: string;
+    sort?: string;
+    status?: string;
+    visibility?: string;
+  }) {
+    if (!workspaceId) return;
+
+    const query = new URLSearchParams({
       q: next.q ?? q,
       sort: next.sort ?? sort,
       status: next.status ?? status,
       visibility: next.visibility ?? visibility,
     });
-    return `/workspace/${workspaceId}/claims?${params.toString()}`;
-  };
+
+    router.push(`/workspace/${workspaceId}/claims?${query.toString()}`);
+  }
+
+  function resetFilters() {
+    if (!workspaceId) return;
+    router.push(`/workspace/${workspaceId}/claims?q=&sort=newest&status=all&visibility=all`);
+  }
+
+  if (!workspaceId) {
+    return <div className="p-6 text-red-600">Invalid workspace id.</div>;
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <Navbar workspaceId={workspaceId} />
+        <main className="mx-auto max-w-[1400px] px-6 py-10">
+          <div className="rounded-2xl border bg-white p-6 shadow-sm">Loading claims...</div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!user || !workspaceMembership) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <Navbar workspaceId={workspaceId} />
+        <main className="mx-auto max-w-[1400px] px-6 py-10">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700">
+            You do not have access to this workspace claims registry.
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <Navbar workspaceId={workspaceId} />
+        <main className="mx-auto max-w-[1400px] px-6 py-10">
+          <div className="rounded-2xl border bg-white p-6 shadow-sm">Loading claims...</div>
+        </main>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <Navbar workspaceId={workspaceId} />
+        <main className="mx-auto max-w-[1400px] px-6 py-10">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700">
+            {error}
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -347,15 +530,46 @@ export default async function WorkspaceClaimsPage({ params, searchParams }: Page
       <main className="mx-auto max-w-[1400px] px-6 py-10">
         <div className="mb-8">
           <div className="text-sm text-slate-500">Trading Truth Layer · Workspace Registry</div>
-          <h1 className="mt-2 text-4xl font-bold">Workspace Claims</h1>
+          <h1 className="mt-2 text-4xl font-bold tracking-tight">Workspace Claims</h1>
           <p className="mt-3 max-w-3xl text-slate-600">
-            Internal registry for verification-ready claims in workspace {workspaceId}, with
-            lifecycle visibility, evidence access, and public verification routing.
+            Internal registry for lifecycle-governed claim records in workspace {workspaceId}, with
+            evidence access, public exposure status, and operator-grade verification routing.
           </p>
         </div>
 
-        <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
-          <form action={`/workspace/${workspaceId}/claims`} method="get" className="space-y-4">
+        <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <SummaryCard label="Total Claims" value={claims.length} hint="All records in this workspace" />
+          <SummaryCard
+            label="Draft / Verified"
+            value={`${draftCount} / ${verifiedCount}`}
+            hint="Pre-public lifecycle inventory"
+          />
+          <SummaryCard
+            label="Published / Locked"
+            value={publishedOrLockedCount}
+            hint="Externally presentable records"
+          />
+          <SummaryCard
+            label="Public Route Ready"
+            value={publicRouteReadyCount}
+            hint="Public or unlisted + lifecycle-gated"
+          />
+        </div>
+
+        <div className="mb-8 rounded-3xl border bg-white p-5 shadow-sm">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              setFilters({
+                q: String(form.get("q") || ""),
+                sort: String(form.get("sort") || "newest"),
+                status: String(form.get("status") || "all"),
+                visibility: String(form.get("visibility") || "all"),
+              });
+            }}
+            className="space-y-4"
+          >
             <div className="grid gap-4 lg:grid-cols-4">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">Search</label>
@@ -423,11 +637,19 @@ export default async function WorkspaceClaimsPage({ params, searchParams }: Page
                 Apply Filters
               </button>
 
-              <Link
-                href={`/workspace/${workspaceId}/claims?q=&sort=newest&status=all&visibility=all`}
+              <button
+                type="button"
+                onClick={resetFilters}
                 className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
               >
                 Reset
+              </button>
+
+              <Link
+                href={`/workspace/${workspaceId}/schema`}
+                className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
+              >
+                Create Draft Claim
               </Link>
 
               <div className="text-sm text-slate-500">
@@ -438,31 +660,40 @@ export default async function WorkspaceClaimsPage({ params, searchParams }: Page
           </form>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <FilterChip href={qs({ sort: "newest" })} label="Newest" active={sort === "newest"} />
             <FilterChip
-              href={qs({ sort: "net_pnl_desc" })}
+              onClick={() => setFilters({ sort: "newest" })}
+              label="Newest"
+              active={sort === "newest"}
+            />
+            <FilterChip
+              onClick={() => setFilters({ sort: "net_pnl_desc" })}
               label="Best Net PnL"
               active={sort === "net_pnl_desc"}
             />
             <FilterChip
-              href={qs({ sort: "profit_factor_desc" })}
+              onClick={() => setFilters({ sort: "profit_factor_desc" })}
               label="Best Profit Factor"
               active={sort === "profit_factor_desc"}
             />
             <FilterChip
-              href={qs({ sort: "win_rate_desc" })}
+              onClick={() => setFilters({ sort: "win_rate_desc" })}
               label="Best Win Rate"
               active={sort === "win_rate_desc"}
             />
             <FilterChip
-              href={qs({ status: "locked" })}
+              onClick={() => setFilters({ status: "locked" })}
               label="Locked Only"
               active={status === "locked"}
             />
             <FilterChip
-              href={qs({ visibility: "public" })}
+              onClick={() => setFilters({ visibility: "public" })}
               label="Public Only"
               active={visibility === "public"}
+            />
+            <FilterChip
+              onClick={() => setFilters({ visibility: "private" })}
+              label="Private Only"
+              active={visibility === "private"}
             />
           </div>
         </div>
@@ -474,7 +705,11 @@ export default async function WorkspaceClaimsPage({ params, searchParams }: Page
         ) : (
           <div className="space-y-6">
             {filtered.map((claim) => (
-              <ClaimCard key={`${claim.claim_schema_id}-${claim.claim_hash}`} claim={claim} workspaceId={workspaceId} />
+              <ClaimCard
+                key={`${claim.claim_schema_id}-${claim.claim_hash}`}
+                claim={claim}
+                workspaceId={workspaceId}
+              />
             ))}
           </div>
         )}

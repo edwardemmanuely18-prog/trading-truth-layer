@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { api, type ClaimSchemaCreatePayload } from "../lib/api";
+import { useEffect, useMemo, useState } from "react";
+import { api, type ClaimSchemaCreatePayload, type WorkspaceUsageSummary } from "../lib/api";
 
 type Props = {
   workspaceId?: number;
@@ -62,8 +62,40 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
   const [visibility, setVisibility] = useState("private");
 
   const [loading, setLoading] = useState(false);
+  const [usageLoading, setUsageLoading] = useState(true);
+  const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadUsage() {
+      try {
+        setUsageLoading(true);
+        const result = await api.getWorkspaceUsage(workspaceId);
+        if (!active) return;
+        setUsage(result);
+      } catch {
+        if (!active) return;
+        setUsage(null);
+      } finally {
+        if (!active) return;
+        setUsageLoading(false);
+      }
+    }
+
+    void loadUsage();
+
+    return () => {
+      active = false;
+    };
+  }, [workspaceId]);
+
+  const claimUsage = usage?.usage?.claims;
+  const claimLimitReached =
+    (claimUsage?.limit ?? 0) > 0 &&
+    (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
 
   const helperSummary = useMemo(() => {
     const members = includedMembers.trim() ? includedMembers : "All workspace members";
@@ -191,6 +223,25 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
         </div>
       </div>
 
+      {usageLoading ? (
+        <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+          Loading claim usage...
+        </div>
+      ) : claimLimitReached ? (
+        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="font-medium">
+            Current claim usage: {claimUsage?.used ?? 0} / {claimUsage?.limit ?? 0}
+          </div>
+          <div className="mt-1">
+            Utilization: {typeof claimUsage?.ratio === "number" ? `${(claimUsage.ratio * 100).toFixed(1)}%` : "—"}
+          </div>
+          <div className="mt-2">
+            Claim creation is blocked by plan policy in production, but this local UI keeps the form
+            available for workflow testing.
+          </div>
+        </div>
+      ) : null}
+
       <form onSubmit={handleSubmit} className="mt-6 space-y-6">
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <div className="space-y-6">
@@ -202,9 +253,7 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
                 className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
                 placeholder="March Verification Window"
               />
-              {errors.name ? (
-                <div className="mt-2 text-sm text-red-600">{errors.name}</div>
-              ) : null}
+              {errors.name ? <div className="mt-2 text-sm text-red-600">{errors.name}</div> : null}
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">

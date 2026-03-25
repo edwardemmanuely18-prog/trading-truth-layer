@@ -1,13 +1,17 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import Navbar from "../../../../components/Navbar";
 import TradeTable from "../../../../components/TradeTable";
-import { api } from "../../../../lib/api";
-
-type PageProps = {
-  params: Promise<{
-    workspaceId: string;
-  }>;
-};
+import { useAuth } from "../../../../components/AuthProvider";
+import {
+  api,
+  type AuditEvent,
+  type Trade,
+  type WorkspaceUsageSummary,
+} from "../../../../lib/api";
 
 function formatDateTime(value?: string | null) {
   if (!value) return "—";
@@ -16,6 +20,11 @@ function formatDateTime(value?: string | null) {
   } catch {
     return value;
   }
+}
+
+function formatPercent(value?: number | null) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return `${(Number(value) * 100).toFixed(1)}%`;
 }
 
 function summarizeJson(value?: string | null) {
@@ -38,33 +47,265 @@ function summarizeJson(value?: string | null) {
   }
 }
 
-export default async function WorkspaceLedgerPage({ params }: PageProps) {
-  const resolved = await params;
-  const workspaceId = Number(resolved.workspaceId);
+export default function WorkspaceLedgerPage() {
+  const params = useParams();
+  const { user, workspaces, loading: authLoading } = useAuth();
 
-  if (Number.isNaN(workspaceId)) {
+  const workspaceId = useMemo(() => {
+    const raw = Array.isArray(params?.workspaceId) ? params.workspaceId[0] : params?.workspaceId;
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? null : parsed;
+  }, [params]);
+
+  const workspaceMembership = useMemo(() => {
+    if (!workspaceId) return null;
+    return workspaces.find((w) => w.workspace_id === workspaceId) ?? null;
+  }, [workspaceId, workspaces]);
+
+  const workspaceRole = workspaceMembership?.workspace_role ?? null;
+  const canWriteTrades = workspaceRole === "owner" || workspaceRole === "operator";
+
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [latestAuditEvents, setLatestAuditEvents] = useState<AuditEvent[]>([]);
+  const [workspaceAuditEvents, setWorkspaceAuditEvents] = useState<AuditEvent[]>([]);
+  const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [usageLoading, setUsageLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const tradeUsage = usage?.usage?.trades;
+  const tradeLimitReached =
+    (tradeUsage?.limit ?? 0) > 0 && (tradeUsage?.used ?? 0) >= (tradeUsage?.limit ?? 0);
+
+  useEffect(() => {
+    if (!workspaceId || !workspaceMembership) return;
+
+    let active = true;
+    const resolvedWorkspaceId = workspaceId;
+
+    async function load() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const [tradesRes, latestAuditRes, workspaceAuditRes] = await Promise.all([
+          api.getTrades(resolvedWorkspaceId),
+          api.getLatestAuditEvents(20),
+          api.getAuditEventsForWorkspace(resolvedWorkspaceId, 50),
+        ]);
+
+        if (!active) return;
+
+        setTrades(Array.isArray(tradesRes) ? tradesRes : []);
+        setLatestAuditEvents(Array.isArray(latestAuditRes) ? latestAuditRes : []);
+        setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Failed to load ledger");
+      } finally {
+        if (!active) return;
+        setLoading(false);
+      }
+    }
+
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, [workspaceId, workspaceMembership]);
+
+  useEffect(() => {
+    if (!workspaceId || !workspaceMembership) {
+      setUsage(null);
+      setUsageLoading(false);
+      return;
+    }
+
+    const resolvedWorkspaceId = workspaceId;
+    let active = true;
+
+    async function loadUsage() {
+      try {
+        setUsageLoading(true);
+        const result = await api.getWorkspaceUsage(resolvedWorkspaceId);
+        if (!active) return;
+        setUsage(result);
+      } catch {
+        if (!active) return;
+        setUsage(null);
+      } finally {
+        if (!active) return;
+        setUsageLoading(false);
+      }
+    }
+
+    void loadUsage();
+
+    return () => {
+      active = false;
+    };
+  }, [workspaceId, workspaceMembership]);
+
+  if (!workspaceId) {
     return <div className="p-6 text-red-600">Invalid workspace id.</div>;
   }
 
-  const [trades, latestAuditEvents, workspaceAuditEvents] = await Promise.all([
-    api.getTrades(workspaceId),
-    api.getLatestAuditEvents(20),
-    api.getAuditEventsForWorkspace(workspaceId, 50),
-  ]);
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <Navbar workspaceId={workspaceId} />
+        <div className="p-6">Loading ledger...</div>
+      </div>
+    );
+  }
+
+  if (!user || !workspaceMembership) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <Navbar workspaceId={workspaceId} />
+        <main className="mx-auto max-w-[1400px] px-6 py-10">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700">
+            You do not have access to this workspace ledger.
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <Navbar workspaceId={workspaceId} />
+        <div className="p-6">Loading ledger...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <Navbar workspaceId={workspaceId} />
+        <div className="p-6">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <Navbar workspaceId={workspaceId} />
 
       <main className="mx-auto max-w-[1400px] px-6 py-10">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold">Canonical Ledger</h1>
-          <p className="mt-2 text-slate-600">
-            Normalized trade records, audit history, and governance events for workspace {workspaceId}.
-          </p>
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="text-sm text-slate-500">
+              Trading Truth Layer · Canonical Record Surface
+            </div>
+            <h1 className="mt-2 text-3xl font-bold">Canonical Ledger</h1>
+            <p className="mt-2 text-slate-600">
+              Normalized trade records, audit history, and governance events for workspace{" "}
+              {workspaceId}.
+            </p>
+          </div>
+
+          <div className="rounded-xl border bg-white px-4 py-3 text-sm shadow-sm">
+            <div className="text-slate-500">Workspace Role</div>
+            <div className="mt-1 font-semibold">{workspaceRole}</div>
+          </div>
         </div>
 
-        <div className="mb-8 grid gap-4 md:grid-cols-3">
+        {!canWriteTrades ? (
+          <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900 shadow-sm">
+            <h2 className="text-xl font-semibold">Read-only ledger access</h2>
+            <p className="mt-2 text-sm">
+              Your current workspace role is <span className="font-semibold">{workspaceRole}</span>.
+              You can review ledger records and audit history, but trade import remains restricted
+              to owner/operator roles.
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href={`/workspace/${workspaceId}/claims`}
+                className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-medium hover:bg-amber-100"
+              >
+                Open Claims Registry
+              </Link>
+              <Link
+                href={`/workspace/${workspaceId}/evidence`}
+                className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-medium hover:bg-amber-100"
+              >
+                Open Evidence Center
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
+        {usageLoading ? (
+          <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
+            Loading workspace usage...
+          </div>
+        ) : tradeUsage ? (
+          <div
+            className={`mb-8 rounded-2xl border p-5 shadow-sm ${
+              tradeLimitReached ? "border-amber-200 bg-amber-50" : "bg-white"
+            }`}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold">Trade Capacity</h2>
+                <div className="mt-2 text-sm text-slate-600">
+                  Current workspace trade usage against plan allowance.
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                {canWriteTrades && !tradeLimitReached ? (
+                  <Link
+                    href={`/workspace/${workspaceId}/import`}
+                    className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+                  >
+                    Import Trades
+                  </Link>
+                ) : null}
+
+                {tradeLimitReached ? (
+                  <Link
+                    href={`/workspace/${workspaceId}/settings`}
+                    className="rounded-xl border border-amber-300 px-4 py-2 text-sm font-medium hover:bg-amber-100"
+                  >
+                    Review Plan & Billing
+                  </Link>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <div className="rounded-xl bg-white/70 p-4">
+                <div className="text-sm text-slate-500">Used</div>
+                <div className="mt-1 text-2xl font-semibold">{tradeUsage.used}</div>
+              </div>
+              <div className="rounded-xl bg-white/70 p-4">
+                <div className="text-sm text-slate-500">Limit</div>
+                <div className="mt-1 text-2xl font-semibold">{tradeUsage.limit}</div>
+              </div>
+              <div className="rounded-xl bg-white/70 p-4">
+                <div className="text-sm text-slate-500">Utilization</div>
+                <div className="mt-1 text-2xl font-semibold">{formatPercent(tradeUsage.ratio)}</div>
+              </div>
+            </div>
+
+            {tradeLimitReached ? (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-100 px-4 py-3 text-sm text-amber-900">
+                Trade limit reached. Additional trade intake should be blocked until the workspace
+                is upgraded or usage is reduced.
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="mb-8 grid gap-4 md:grid-cols-4">
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
             <div className="text-sm text-slate-500">Workspace</div>
             <div className="mt-2 text-2xl font-semibold">{workspaceId}</div>
@@ -76,8 +317,15 @@ export default async function WorkspaceLedgerPage({ params }: PageProps) {
           </div>
 
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Audit Events Loaded</div>
+            <div className="text-sm text-slate-500">Workspace Audit Events</div>
             <div className="mt-2 text-2xl font-semibold">{workspaceAuditEvents.length}</div>
+          </div>
+
+          <div className="rounded-2xl border bg-white p-5 shadow-sm">
+            <div className="text-sm text-slate-500">Trade Write Access</div>
+            <div className="mt-2 text-2xl font-semibold">
+              {canWriteTrades ? "enabled" : "read-only"}
+            </div>
           </div>
         </div>
 
@@ -144,20 +392,26 @@ export default async function WorkspaceLedgerPage({ params }: PageProps) {
                       <td className="px-3 py-2">
                         <div>{event.entity_type}</div>
                         <div className="text-xs text-slate-500">{event.entity_id}</div>
-                        {event.entity_type === "claim_schema" && (
+                        {event.entity_type === "claim_schema" ? (
                           <div className="mt-2">
                             <Link
-                              href={`/claim/${event.entity_id}`}
+                              href={`/workspace/${workspaceId}/claim/${event.entity_id}`}
                               className="text-xs text-blue-600 hover:underline"
                             >
                               Open claim
                             </Link>
                           </div>
-                        )}
+                        ) : null}
                       </td>
-                      <td className="px-3 py-2 text-xs text-slate-700">{summarizeJson(event.old_state)}</td>
-                      <td className="px-3 py-2 text-xs text-slate-700">{summarizeJson(event.new_state)}</td>
-                      <td className="px-3 py-2 text-xs text-slate-700">{summarizeJson(event.metadata_json)}</td>
+                      <td className="px-3 py-2 text-xs text-slate-700">
+                        {summarizeJson(event.old_state)}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-slate-700">
+                        {summarizeJson(event.new_state)}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-slate-700">
+                        {summarizeJson(event.metadata_json)}
+                      </td>
                       <td className="px-3 py-2">{formatDateTime(event.created_at)}</td>
                     </tr>
                   ))}
@@ -168,10 +422,29 @@ export default async function WorkspaceLedgerPage({ params }: PageProps) {
         </div>
 
         <div className="rounded-2xl border bg-white p-5 shadow-sm">
-          <h2 className="text-xl font-semibold">Trade Ledger</h2>
-          <div className="mt-4">
-            <TradeTable trades={trades} />
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold">Trade Ledger</h2>
+
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/workspace/${workspaceId}/claims`}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+              >
+                Open Claims
+              </Link>
+
+              {canWriteTrades ? (
+                <Link
+                  href={`/workspace/${workspaceId}/import`}
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+                >
+                  Import Trades
+                </Link>
+              ) : null}
+            </div>
           </div>
+
+          <TradeTable trades={trades} />
         </div>
       </main>
     </div>
