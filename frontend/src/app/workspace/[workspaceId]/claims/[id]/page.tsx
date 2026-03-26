@@ -375,7 +375,11 @@ export default function WorkspaceClaimDetailPage() {
               )}
 
               <div className="mt-5">
-                <ClaimLifecycleActions claimSchemaId={claim.id} status={claim.status} />
+                <ClaimLifecycleActions
+                  claimSchemaId={claim.id}
+                  workspaceId={claim.workspace_id}
+                  status={claim.status}
+                />
               </div>
             </div>
 
