@@ -1,12 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "../../lib/api";
 import { useAuth } from "../../components/AuthProvider";
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { refresh, user, workspaces, loading: authLoading, isAuthenticated } = useAuth();
@@ -150,11 +150,7 @@ export default function LoginPage() {
         <div className="mt-6 border-t pt-4 text-sm text-slate-600">
           Need an account?{" "}
           <Link
-            href={
-              inviteToken
-                ? `/register?token=${encodeURIComponent(inviteToken)}`
-                : "/register"
-            }
+            href={inviteToken ? `/register?token=${encodeURIComponent(inviteToken)}` : "/register"}
             className="font-medium text-slate-900 hover:underline"
           >
             Create one
@@ -162,5 +158,21 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-50 px-6 py-16 text-slate-900">
+          <div className="mx-auto max-w-md rounded-2xl border bg-white p-8 shadow-sm">
+            Loading login page...
+          </div>
+        </main>
+      }
+    >
+      <LoginPageInner />
+    </Suspense>
   );
 }
