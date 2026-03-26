@@ -1,15 +1,33 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.core.db import get_db
-from app.models.workspace import Workspace
-from app.models.trade import Trade
-from app.models.claim_schema import ClaimSchema
-from app.models.user import User
-from app.models.workspace_membership import WorkspaceMembership
 from app.api.deps import get_current_user
+from app.core.db import get_db
+from app.models.claim_schema import ClaimSchema
+from app.models.trade import Trade
+from app.models.user import User
+from app.models.workspace import Workspace
+from app.models.workspace_membership import WorkspaceMembership
+from app.services.audit_service import log_audit_event
 
 router = APIRouter()
+
+
+class CreateWorkspacePayload(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class UpdateWorkspaceSettingsPayload(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=1000)
+    billing_email: str | None = Field(default=None, max_length=255)
+
+
+class UpdateWorkspaceMemberRolePayload(BaseModel):
+    role: str = Field(min_length=1, max_length=50)
 
 
 def require_workspace_member(workspace_id: int, current_user: User, db: Session):
@@ -28,6 +46,13 @@ def require_workspace_member(workspace_id: int, current_user: User, db: Session)
     return membership
 
 
+def require_workspace_owner(workspace_id: int, current_user: User, db: Session):
+    membership = require_workspace_member(workspace_id, current_user, db)
+    if membership.role != "owner":
+        raise HTTPException(status_code=403, detail="Owner role required for this workspace")
+    return membership
+
+
 def serialize_workspace_member(membership: WorkspaceMembership, user: User):
     return {
         "workspace_id": membership.workspace_id,
@@ -36,6 +61,285 @@ def serialize_workspace_member(membership: WorkspaceMembership, user: User):
         "name": user.name,
         "global_role": user.role,
         "workspace_role": membership.role,
+    }
+
+
+def normalize_plan_code(plan_code: str | None) -> str:
+    allowed = {"starter", "pro", "growth", "business"}
+    value = str(plan_code or "").strip().lower()
+    return value if value in allowed else "starter"
+
+
+def normalize_billing_status(status: str | None) -> str:
+    allowed = {"inactive", "active", "trialing", "past_due", "canceled", "unpaid"}
+    value = str(status or "").strip().lower()
+    return value if value in allowed else "inactive"
+
+
+def normalize_workspace_role(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    allowed_roles = {"owner", "operator", "member", "auditor"}
+    return normalized if normalized in allowed_roles else "member"
+
+
+def get_plan_order() -> list[str]:
+    return ["starter", "pro", "growth", "business"]
+
+
+def get_plan_catalog():
+    return [
+        {
+            "code": "starter",
+            "name": "Starter",
+            "description": "Entry plan for early operators validating claim workflows.",
+            "limits": {
+                "claim_limit": 5,
+                "trade_limit": 1000,
+                "member_limit": 3,
+                "storage_limit_mb": 500,
+            },
+            "recommended_for": [
+                "solo traders",
+                "small verification pilots",
+                "early workspace setup",
+            ],
+            "billing": {
+                "monthly_price_usd": 19,
+                "annual_price_usd": 190,
+                "currency": "USD",
+                "billing_interval": "monthly_or_annual",
+                "stripe_price_lookup_key_monthly": "ttl_starter_monthly",
+                "stripe_price_lookup_key_annual": "ttl_starter_annual",
+            },
+            "public_price_hint": "starter_placeholder",
+        },
+        {
+            "code": "pro",
+            "name": "Pro",
+            "description": "Higher limits for serious traders and small commercial operators.",
+            "limits": {
+                "claim_limit": 25,
+                "trade_limit": 10000,
+                "member_limit": 10,
+                "storage_limit_mb": 5000,
+            },
+            "recommended_for": [
+                "serious traders",
+                "educators",
+                "small paid communities",
+            ],
+            "billing": {
+                "monthly_price_usd": 79,
+                "annual_price_usd": 790,
+                "currency": "USD",
+                "billing_interval": "monthly_or_annual",
+                "stripe_price_lookup_key_monthly": "ttl_pro_monthly",
+                "stripe_price_lookup_key_annual": "ttl_pro_annual",
+            },
+            "public_price_hint": "pro_placeholder",
+        },
+        {
+            "code": "growth",
+            "name": "Growth",
+            "description": "Operational tier for teams running multiple verification surfaces.",
+            "limits": {
+                "claim_limit": 100,
+                "trade_limit": 100000,
+                "member_limit": 50,
+                "storage_limit_mb": 25000,
+            },
+            "recommended_for": [
+                "signal groups",
+                "prop-style operators",
+                "growing businesses",
+            ],
+            "billing": {
+                "monthly_price_usd": 249,
+                "annual_price_usd": 2490,
+                "currency": "USD",
+                "billing_interval": "monthly_or_annual",
+                "stripe_price_lookup_key_monthly": "ttl_growth_monthly",
+                "stripe_price_lookup_key_annual": "ttl_growth_annual",
+            },
+            "public_price_hint": "growth_placeholder",
+        },
+        {
+            "code": "business",
+            "name": "Business",
+            "description": "High-capacity tier for institutional and infrastructure use cases.",
+            "limits": {
+                "claim_limit": 500,
+                "trade_limit": 1000000,
+                "member_limit": 250,
+                "storage_limit_mb": 100000,
+            },
+            "recommended_for": [
+                "funds",
+                "institutions",
+                "B2B verification operations",
+            ],
+            "billing": {
+                "monthly_price_usd": 999,
+                "annual_price_usd": 9990,
+                "currency": "USD",
+                "billing_interval": "monthly_or_annual",
+                "stripe_price_lookup_key_monthly": "ttl_business_monthly",
+                "stripe_price_lookup_key_annual": "ttl_business_annual",
+            },
+            "public_price_hint": "business_placeholder",
+        },
+    ]
+
+
+def get_plan_definition(plan_code: str | None):
+    normalized = normalize_plan_code(plan_code)
+    for plan in get_plan_catalog():
+        if plan["code"] == normalized:
+            return plan
+    return get_plan_catalog()[0]
+
+
+def workspace_limit_snapshot(workspace: Workspace):
+    plan_definition = get_plan_definition(workspace.plan_code)
+
+    return {
+        "claim_limit": plan_definition["limits"]["claim_limit"],
+        "trade_limit": plan_definition["limits"]["trade_limit"],
+        "member_limit": plan_definition["limits"]["member_limit"],
+        "storage_limit_mb": plan_definition["limits"]["storage_limit_mb"],
+    }
+
+
+def serialize_workspace_settings(workspace: Workspace):
+    normalized_plan = normalize_plan_code(workspace.plan_code)
+    normalized_billing = normalize_billing_status(workspace.billing_status)
+    limits = workspace_limit_snapshot(workspace)
+    plan_definition = get_plan_definition(normalized_plan)
+
+    return {
+        "workspace_id": workspace.id,
+        "name": workspace.name,
+        "description": workspace.description,
+        "billing_email": workspace.billing_email,
+        "plan_code": normalized_plan,
+        "billing_status": normalized_billing,
+        "stripe_customer_id": workspace.stripe_customer_id,
+        "stripe_subscription_id": workspace.stripe_subscription_id,
+        "subscription_current_period_end": (
+            workspace.subscription_current_period_end.isoformat()
+            if workspace.subscription_current_period_end
+            else None
+        ),
+        "limits": limits,
+        "plan_detail": {
+            "code": plan_definition["code"],
+            "name": plan_definition["name"],
+            "description": plan_definition["description"],
+            "recommended_for": plan_definition["recommended_for"],
+            "billing": plan_definition["billing"],
+        },
+        "created_at": workspace.created_at.isoformat() if workspace.created_at else None,
+        "updated_at": workspace.updated_at.isoformat() if workspace.updated_at else None,
+    }
+
+
+def build_upgrade_recommendation(current_plan_code: str, usage_summary: dict):
+    current_order = get_plan_order()
+    current_normalized = normalize_plan_code(current_plan_code)
+    current_index = current_order.index(current_normalized)
+
+    breached_dimensions = []
+    near_limit_dimensions = []
+
+    for key, row in usage_summary.items():
+        used = row["used"]
+        limit = row["limit"]
+        ratio = row["ratio"]
+
+        if limit and limit > 0 and used > limit:
+            breached_dimensions.append(key)
+        elif limit and limit > 0 and ratio is not None and ratio >= 0.8:
+            near_limit_dimensions.append(key)
+
+    has_breaches = len(breached_dimensions) > 0
+    has_near_limits = len(near_limit_dimensions) > 0
+
+    if has_breaches or has_near_limits:
+        recommended_index = min(current_index + 1, len(current_order) - 1)
+    else:
+        recommended_index = current_index
+
+    recommended_plan_code = current_order[recommended_index]
+    recommended_plan = get_plan_definition(recommended_plan_code)
+    has_distinct_recommendation = recommended_plan_code != current_normalized
+
+    return {
+        "current_plan_code": current_normalized,
+        "recommended_plan_code": recommended_plan_code,
+        "recommended_plan_name": recommended_plan["name"],
+        "recommended_plan_is_distinct": has_distinct_recommendation,
+        "upgrade_required_now": has_breaches and has_distinct_recommendation,
+        "upgrade_recommended_soon": (not has_breaches) and has_near_limits and has_distinct_recommendation,
+        "breached_dimensions": breached_dimensions,
+        "near_limit_dimensions": near_limit_dimensions,
+    }
+
+
+@router.get("/workspaces")
+def list_my_workspaces(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rows = (
+        db.query(WorkspaceMembership, Workspace)
+        .join(Workspace, Workspace.id == WorkspaceMembership.workspace_id)
+        .filter(WorkspaceMembership.user_id == current_user.id)
+        .order_by(Workspace.id.asc())
+        .all()
+    )
+
+    return [
+        {
+            "workspace_id": workspace.id,
+            "workspace_name": workspace.name,
+            "workspace_role": membership.role,
+        }
+        for membership, workspace in rows
+    ]
+
+
+@router.post("/workspaces")
+def create_workspace(
+    payload: CreateWorkspacePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = Workspace(
+        name=payload.name.strip(),
+        plan_code="starter",
+        billing_status="inactive",
+        claim_limit=5,
+        trade_limit=1000,
+        member_limit=3,
+        storage_limit_mb=500,
+    )
+    db.add(workspace)
+    db.flush()
+
+    membership = WorkspaceMembership(
+        workspace_id=workspace.id,
+        user_id=current_user.id,
+        role="owner",
+    )
+    db.add(membership)
+
+    db.commit()
+    db.refresh(workspace)
+
+    return {
+        "workspace_id": workspace.id,
+        "workspace_name": workspace.name,
+        "workspace_role": "owner",
     }
 
 
@@ -64,6 +368,136 @@ def get_workspace_dashboard(
     }
 
 
+@router.get("/workspaces/{workspace_id}/settings")
+def get_workspace_settings(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    require_workspace_member(workspace_id, current_user, db)
+    return serialize_workspace_settings(workspace)
+
+
+@router.patch("/workspaces/{workspace_id}/settings")
+def update_workspace_settings(
+    workspace_id: int,
+    payload: UpdateWorkspaceSettingsPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    require_workspace_owner(workspace_id, current_user, db)
+
+    workspace.name = payload.name.strip()
+    workspace.description = (payload.description or "").strip() or None
+    workspace.billing_email = (payload.billing_email or "").strip() or None
+    workspace.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(workspace)
+
+    return serialize_workspace_settings(workspace)
+
+
+@router.get("/workspaces/{workspace_id}/usage")
+def get_workspace_usage(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    require_workspace_member(workspace_id, current_user, db)
+
+    limits = workspace_limit_snapshot(workspace)
+
+    member_count = (
+        db.query(WorkspaceMembership)
+        .filter(WorkspaceMembership.workspace_id == workspace_id)
+        .count()
+    )
+    trade_count = db.query(Trade).filter(Trade.workspace_id == workspace_id).count()
+    claim_count = db.query(ClaimSchema).filter(ClaimSchema.workspace_id == workspace_id).count()
+
+    storage_used_mb = 0
+
+    def ratio(used: int, limit: int):
+        if not limit or limit <= 0:
+            return None
+        return round(used / limit, 4)
+
+    def status(used: int, limit: int):
+        if not limit or limit <= 0:
+            return "unlimited"
+        if used > limit:
+            return "over_limit"
+        if used == limit:
+            return "at_limit"
+        utilization = used / limit
+        if utilization >= 0.8:
+            return "near_limit"
+        return "ok"
+
+    usage = {
+        "members": {
+            "used": member_count,
+            "limit": limits["member_limit"],
+            "ratio": ratio(member_count, limits["member_limit"]),
+            "status": status(member_count, limits["member_limit"]),
+        },
+        "trades": {
+            "used": trade_count,
+            "limit": limits["trade_limit"],
+            "ratio": ratio(trade_count, limits["trade_limit"]),
+            "status": status(trade_count, limits["trade_limit"]),
+        },
+        "claims": {
+            "used": claim_count,
+            "limit": limits["claim_limit"],
+            "ratio": ratio(claim_count, limits["claim_limit"]),
+            "status": status(claim_count, limits["claim_limit"]),
+        },
+        "storage_mb": {
+            "used": storage_used_mb,
+            "limit": limits["storage_limit_mb"],
+            "ratio": ratio(storage_used_mb, limits["storage_limit_mb"]),
+            "status": status(storage_used_mb, limits["storage_limit_mb"]),
+        },
+    }
+
+    upgrade = build_upgrade_recommendation(workspace.plan_code, usage)
+
+    return {
+        "workspace_id": workspace.id,
+        "plan_code": normalize_plan_code(workspace.plan_code),
+        "billing_status": normalize_billing_status(workspace.billing_status),
+        "usage": usage,
+        "stripe_ready": {
+            "has_customer_id": bool(workspace.stripe_customer_id),
+            "has_subscription_id": bool(workspace.stripe_subscription_id),
+            "integration_status": "ready_for_stripe_foundation",
+        },
+        "governance": {
+            "has_any_over_limit": any(row["status"] == "over_limit" for row in usage.values()),
+            "has_any_at_limit": any(row["status"] == "at_limit" for row in usage.values()),
+            "has_any_near_limit": any(row["status"] == "near_limit" for row in usage.values()),
+            "upgrade_required_now": upgrade["upgrade_required_now"],
+            "upgrade_recommended_soon": upgrade["upgrade_recommended_soon"],
+        },
+        "upgrade_recommendation": upgrade,
+        "plan_catalog": get_plan_catalog(),
+    }
+
+
 @router.get("/workspaces/{workspace_id}/members")
 def list_workspace_members(
     workspace_id: int,
@@ -85,3 +519,145 @@ def list_workspace_members(
     )
 
     return [serialize_workspace_member(membership, user) for membership, user in rows]
+
+
+@router.patch("/workspaces/{workspace_id}/members/{user_id}")
+def update_workspace_member_role(
+    workspace_id: int,
+    user_id: int,
+    payload: UpdateWorkspaceMemberRolePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    require_workspace_owner(workspace_id, current_user, db)
+
+    membership = (
+        db.query(WorkspaceMembership)
+        .filter(
+            WorkspaceMembership.workspace_id == workspace_id,
+            WorkspaceMembership.user_id == user_id,
+        )
+        .first()
+    )
+    if not membership:
+        raise HTTPException(status_code=404, detail="Workspace membership not found")
+
+    target_role = normalize_workspace_role(payload.role)
+
+    if membership.user_id == current_user.id and target_role != "owner":
+        raise HTTPException(status_code=400, detail="Owner cannot demote themselves")
+
+    if membership.role == "owner" and target_role != "owner":
+        owner_count = (
+            db.query(WorkspaceMembership)
+            .filter(
+                WorkspaceMembership.workspace_id == workspace_id,
+                WorkspaceMembership.role == "owner",
+            )
+            .count()
+        )
+        if owner_count <= 1:
+            raise HTTPException(status_code=400, detail="Workspace must retain at least one owner")
+
+    old_role = membership.role
+    membership.role = target_role
+    db.commit()
+    db.refresh(membership)
+
+    log_audit_event(
+        db,
+        event_type="workspace_membership_role_updated",
+        entity_type="workspace_membership",
+        entity_id=membership.id,
+        workspace_id=workspace_id,
+        old_state={"role": old_role},
+        new_state={"role": membership.role},
+        metadata={
+            "source": "workspaces.update_workspace_member_role",
+            "actor_user_id": current_user.id,
+            "target_user_id": user_id,
+        },
+    )
+
+    user = db.query(User).filter(User.id == membership.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return serialize_workspace_member(membership, user)
+
+
+@router.delete("/workspaces/{workspace_id}/members/{user_id}")
+def remove_workspace_member(
+    workspace_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    require_workspace_owner(workspace_id, current_user, db)
+
+    membership = (
+        db.query(WorkspaceMembership)
+        .filter(
+            WorkspaceMembership.workspace_id == workspace_id,
+            WorkspaceMembership.user_id == user_id,
+        )
+        .first()
+    )
+    if not membership:
+        raise HTTPException(status_code=404, detail="Workspace membership not found")
+
+    if membership.user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Owner cannot remove themselves from the workspace")
+
+    if membership.role == "owner":
+        owner_count = (
+            db.query(WorkspaceMembership)
+            .filter(
+                WorkspaceMembership.workspace_id == workspace_id,
+                WorkspaceMembership.role == "owner",
+            )
+            .count()
+        )
+        if owner_count <= 1:
+            raise HTTPException(status_code=400, detail="Workspace must retain at least one owner")
+
+    user = db.query(User).filter(User.id == membership.user_id).first()
+    old_state = {
+        "workspace_id": membership.workspace_id,
+        "user_id": membership.user_id,
+        "role": membership.role,
+    }
+
+    membership_id = membership.id
+    db.delete(membership)
+    db.commit()
+
+    log_audit_event(
+        db,
+        event_type="workspace_member_removed",
+        entity_type="workspace_membership",
+        entity_id=membership_id,
+        workspace_id=workspace_id,
+        old_state=old_state,
+        new_state=None,
+        metadata={
+            "source": "workspaces.remove_workspace_member",
+            "actor_user_id": current_user.id,
+            "target_user_id": user_id,
+            "target_email": user.email if user else None,
+        },
+    )
+
+    return {
+        "removed": True,
+        "workspace_id": workspace_id,
+        "user_id": user_id,
+    }

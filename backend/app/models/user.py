@@ -13,5 +13,6 @@ class User(Base):
     name = Column(String, nullable=False)
 
     role = Column(String, default="member")
+    password_hash = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)

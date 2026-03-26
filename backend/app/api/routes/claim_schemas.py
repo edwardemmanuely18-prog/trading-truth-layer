@@ -2,24 +2,33 @@ from datetime import datetime, timedelta
 from io import BytesIO
 import hashlib
 import json
+import os
 import re
 import zipfile
+from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
+from reportlab.lib.utils import simpleSplit
 from reportlab.pdfgen import canvas
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import (
+    get_current_user,
+    require_workspace_member,
+    require_workspace_operator_or_owner,
+    require_workspace_owner,
+)
 from app.core.db import get_db
 from app.models.audit_event import AuditEvent
 from app.models.claim_schema import ClaimSchema
 from app.models.trade import Trade
 from app.models.user import User
-from app.models.workspace_membership import WorkspaceMembership
+from app.models.workspace import Workspace
 from app.services.audit_service import log_audit_event
 from app.services.claim_service import compute_claim_hash
 
@@ -90,6 +99,75 @@ def normalize_int_list(values: List[int] | None) -> list[int]:
         normalized.append(int_value)
 
     return normalized
+
+
+def get_workspace_or_404(workspace_id: int, db: Session) -> Workspace:
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    return workspace
+
+
+def parse_bool_like(value: str | None) -> bool:
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def read_env_value_from_backend_dotenv(key: str) -> str | None:
+    try:
+        env_path = Path(__file__).resolve().parents[3] / ".env"
+        if not env_path.exists():
+            return None
+
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+
+            env_key, env_value = line.split("=", 1)
+            if env_key.strip() != key:
+                continue
+
+            return env_value.strip().strip('"').strip("'")
+    except Exception:
+        return None
+
+    return None
+
+
+def workspace_limits_disabled() -> bool:
+    direct_env_value = os.getenv("DISABLE_WORKSPACE_LIMITS")
+    if direct_env_value is not None:
+        return parse_bool_like(direct_env_value)
+
+    dotenv_value = read_env_value_from_backend_dotenv("DISABLE_WORKSPACE_LIMITS")
+    return parse_bool_like(dotenv_value)
+
+
+def enforce_workspace_claim_limit(workspace_id: int, db: Session):
+    if workspace_limits_disabled():
+        return
+
+    workspace = get_workspace_or_404(workspace_id, db)
+
+    claim_limit = workspace.claim_limit or 0
+    current_claim_count = (
+        db.query(ClaimSchema)
+        .filter(ClaimSchema.workspace_id == workspace_id)
+        .count()
+    )
+
+    if claim_limit > 0 and current_claim_count >= claim_limit:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Claim limit reached for workspace {workspace_id}. "
+                f"Current claims: {current_claim_count}. "
+                f"Plan limit: {claim_limit}. "
+                f"Upgrade workspace plan to create additional claims."
+            ),
+        )
 
 
 def serialize_schema(schema: ClaimSchema):
@@ -589,203 +667,603 @@ def draw_pdf_wrapped_text(
     y: float,
     max_width: float,
     line_height: float = 14,
+    font_name: str = "Helvetica",
+    font_size: int = 11,
 ):
     words = (text or "").split()
     if not words:
         return y
 
-    line = ""
-    for word in words:
-        candidate = word if not line else f"{line} {word}"
-        if pdf.stringWidth(candidate, "Helvetica", 11) <= max_width:
-            line = candidate
-        else:
-            pdf.drawString(x, y, line)
-            y -= line_height
-            line = word
-
-    if line:
+    lines = simpleSplit(" ".join(words), font_name, font_size, max_width)
+    for line in lines:
         pdf.drawString(x, y, line)
         y -= line_height
 
     return y
 
 
-def ensure_pdf_space(pdf: canvas.Canvas, y: float, required_space: float):
+def shorten_text(value: str | None, max_len: int = 88) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "—"
+    if len(text) <= max_len:
+        return text
+    return f"{text[:max_len - 3]}..."
+
+
+def short_hash(value: str | None, head: int = 16, tail: int = 12) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "—"
+    if len(text) <= head + tail + 3:
+        return text
+    return f"{text[:head]}...{text[-tail:]}"
+
+
+def pdf_new_page(pdf: canvas.Canvas, title: str | None = None):
+    pdf.showPage()
+    pdf.setFillColor(colors.black)
+    pdf.setStrokeColor(colors.black)
+    if title:
+        pdf.setTitle(title)
+    return 750
+
+
+def pdf_require_space(pdf: canvas.Canvas, y: float, required_space: float):
     if y >= required_space:
         return y
+    return pdf_new_page(pdf)
 
-    pdf.showPage()
-    pdf.setFont("Helvetica", 11)
-    return 750
+
+def pdf_section_title(pdf: canvas.Canvas, title: str, x: float, y: float):
+    pdf.setFillColor(colors.HexColor("#0F172A"))
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(x, y, title)
+    pdf.setFillColor(colors.black)
+    return y - 22
+
+
+def pdf_round_box(
+    pdf: canvas.Canvas,
+    x: float,
+    y_top: float,
+    width: float,
+    height: float,
+    fill_color,
+    stroke_color,
+    radius: int = 12,
+):
+    pdf.setFillColor(fill_color)
+    pdf.setStrokeColor(stroke_color)
+    pdf.roundRect(x, y_top - height, width, height, radius, fill=1, stroke=1)
+    pdf.setFillColor(colors.black)
+    pdf.setStrokeColor(colors.black)
+
+
+def draw_metric_card(pdf: canvas.Canvas, x: float, top_y: float, w: float, h: float, label: str, value: str):
+    pdf_round_box(
+        pdf,
+        x,
+        top_y,
+        w,
+        h,
+        colors.HexColor("#F8FAFC"),
+        colors.HexColor("#E2E8F0"),
+        radius=12,
+    )
+    pdf.setFillColor(colors.HexColor("#64748B"))
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(x + 12, top_y - 18, label)
+
+    pdf.setFillColor(colors.HexColor("#0F172A"))
+    pdf.setFont("Helvetica-Bold", 17)
+    pdf.drawString(x + 12, top_y - 40, value)
+    pdf.setFillColor(colors.black)
+
+
+def draw_label_value_box(
+    pdf: canvas.Canvas,
+    x: float,
+    top_y: float,
+    w: float,
+    h: float,
+    label: str,
+    value: str,
+    fill_color=colors.HexColor("#F8FAFC"),
+    stroke_color=colors.HexColor("#E2E8F0"),
+):
+    pdf_round_box(pdf, x, top_y, w, h, fill_color, stroke_color, radius=12)
+    pdf.setFillColor(colors.HexColor("#64748B"))
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(x + 12, top_y - 18, label)
+
+    pdf.setFillColor(colors.HexColor("#0F172A"))
+    pdf.setFont("Helvetica-Bold", 11)
+    current_y = top_y - 38
+    current_y = draw_pdf_wrapped_text(
+        pdf,
+        value or "—",
+        x + 12,
+        current_y,
+        max_width=w - 24,
+        line_height=13,
+        font_name="Helvetica",
+        font_size=10,
+    )
+    pdf.setFillColor(colors.black)
+    return current_y
+
+
+def draw_kv_pair(pdf: canvas.Canvas, x: float, y: float, label: str, value: str):
+    pdf.setFillColor(colors.HexColor("#64748B"))
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(x, y, label)
+    pdf.setFillColor(colors.HexColor("#0F172A"))
+    pdf.setFont("Helvetica-Bold", 11)
+    pdf.drawString(x, y - 15, shorten_text(value, 36))
+    pdf.setFillColor(colors.black)
+
+
+def draw_hash_block(pdf: canvas.Canvas, x: float, y_top: float, width: float, label: str, value: str):
+    pdf.setFillColor(colors.HexColor("#64748B"))
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(x, y_top, label)
+    pdf_round_box(
+        pdf,
+        x,
+        y_top - 8,
+        width,
+        34,
+        colors.HexColor("#F8FAFC"),
+        colors.HexColor("#E2E8F0"),
+        radius=10,
+    )
+    pdf.setFillColor(colors.HexColor("#334155"))
+    pdf.setFont("Helvetica", 8)
+    pdf.drawString(x + 10, y_top - 28, shorten_text(value, 84))
+    pdf.setFillColor(colors.black)
+
+
+def compute_drawdown_stats(points: list[dict]):
+    if not points:
+        return {
+            "max_drawdown": 0.0,
+            "peak_cumulative": 0.0,
+            "trough_cumulative": 0.0,
+        }
+
+    running_peak = float("-inf")
+    max_drawdown = 0.0
+    peak_cumulative = 0.0
+    trough_cumulative = 0.0
+
+    for point in points:
+        current = float(point.get("cumulative_pnl", 0.0))
+        if current > running_peak:
+            running_peak = current
+
+        drawdown = running_peak - current
+        if drawdown > max_drawdown:
+            max_drawdown = drawdown
+            peak_cumulative = running_peak
+            trough_cumulative = current
+
+    return {
+        "max_drawdown": round(max_drawdown, 4),
+        "peak_cumulative": round(peak_cumulative, 4),
+        "trough_cumulative": round(trough_cumulative, 4),
+    }
+
+
+def draw_equity_curve_preview(
+    pdf: canvas.Canvas,
+    x: float,
+    top_y: float,
+    width: float,
+    height: float,
+    points: list[dict],
+):
+    pdf_round_box(
+        pdf,
+        x,
+        top_y,
+        width,
+        height,
+        colors.white,
+        colors.HexColor("#E2E8F0"),
+        radius=14,
+    )
+
+    chart_x = x + 18
+    chart_y_bottom = top_y - height + 20
+    chart_y_top = top_y - 34
+    chart_w = width - 36
+    chart_h = chart_y_top - chart_y_bottom
+
+    pdf.setFillColor(colors.HexColor("#64748B"))
+    pdf.setFont("Helvetica-Bold", 14)
+    pdf.drawString(x + 14, top_y - 18, "Equity Curve Preview")
+
+    if not points:
+        pdf.setFont("Helvetica", 11)
+        pdf.setFillColor(colors.HexColor("#64748B"))
+        pdf.drawString(x + 14, top_y - 46, "No equity curve data available.")
+        pdf.setFillColor(colors.black)
+        return
+
+    values = [float(p.get("cumulative_pnl", 0.0)) for p in points]
+    min_value = min(min(values), 0.0)
+    max_value = max(max(values), 0.0)
+    range_value = max_value - min_value
+    if range_value == 0:
+        range_value = 1.0
+
+    def x_for(index: int):
+        if len(points) == 1:
+            return chart_x + (chart_w / 2)
+        return chart_x + (index / (len(points) - 1)) * chart_w
+
+    def y_for(value: float):
+        return chart_y_bottom + ((value - min_value) / range_value) * chart_h
+
+    zero_y = y_for(0.0)
+    pdf.setStrokeColor(colors.HexColor("#CBD5E1"))
+    pdf.setDash(4, 4)
+    pdf.line(chart_x, zero_y, chart_x + chart_w, zero_y)
+    pdf.setDash()
+
+    pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
+    pdf.line(chart_x, chart_y_bottom, chart_x + chart_w, chart_y_bottom)
+    pdf.line(chart_x, chart_y_bottom, chart_x, chart_y_top)
+
+    pdf.setStrokeColor(colors.HexColor("#0F172A"))
+    pdf.setLineWidth(2)
+
+    prev_x = None
+    prev_y = None
+    for idx, point in enumerate(points):
+        px = x_for(idx)
+        py = y_for(float(point.get("cumulative_pnl", 0.0)))
+        if prev_x is not None and prev_y is not None:
+            pdf.line(prev_x, prev_y, px, py)
+        prev_x = px
+        prev_y = py
+
+    pdf.setFillColor(colors.HexColor("#0F172A"))
+    for idx, point in enumerate(points):
+        px = x_for(idx)
+        py = y_for(float(point.get("cumulative_pnl", 0.0)))
+        pdf.circle(px, py, 2.2, stroke=0, fill=1)
+
+    pdf.setFillColor(colors.HexColor("#64748B"))
+    pdf.setFont("Helvetica", 8)
+    pdf.drawString(chart_x, chart_y_top + 6, f"max {round(max_value, 4)}")
+    pdf.drawString(chart_x, chart_y_bottom - 12, f"min {round(min_value, 4)}")
+    pdf.setFillColor(colors.black)
 
 
 def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[BytesIO, str]:
     filtered_trades = resolve_schema_trades(schema, db)
     metrics = compute_trade_metrics(filtered_trades)
     leaderboard = build_leaderboard(filtered_trades)
+    equity_curve = build_equity_curve(filtered_trades)
+    drawdown_stats = compute_drawdown_stats(equity_curve["curve"])
 
     trade_set_hash = schema.locked_trade_set_hash
     if not trade_set_hash:
         trade_set_hash = compute_trade_set_hash(filtered_trades)
 
     claim_hash = compute_claim_hash(schema)
+    integrity_status = "valid"
+
+    if schema.status == "locked" and schema.locked_trade_set_hash:
+        recomputed_trade_set_hash = compute_trade_set_hash(filtered_trades)
+        if recomputed_trade_set_hash != schema.locked_trade_set_hash:
+            integrity_status = "compromised"
+
+    included_members = ", ".join(str(x) for x in json.loads(schema.included_member_ids_json or "[]")) or "All in scope"
+    included_symbols = ", ".join(json.loads(schema.included_symbols_json or "[]")) or "All in scope"
+    excluded_trade_ids = ", ".join(str(x) for x in json.loads(schema.excluded_trade_ids_json or "[]")) or "None"
+
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
 
-    left = 50
-    right = width - 50
-    y = height - 50
-
-    def section_title(title: str, current_y: float):
-        current_y = ensure_pdf_space(pdf, current_y, 120)
-        pdf.setFont("Helvetica-Bold", 14)
-        pdf.drawString(left, current_y, title)
-        return current_y - 22
+    left = 42
+    right = width - 42
+    content_width = right - left
+    y = height - 42
 
     pdf.setTitle(f"claim_report_{schema.id}_{claim_hash[:12]}")
     pdf.setAuthor("Trading Truth Layer")
     pdf.setSubject("Verified Trading Claim Report")
 
-    pdf.setFont("Helvetica-Bold", 22)
+    pdf.setFillColor(colors.HexColor("#0F172A"))
+    pdf.setFont("Helvetica-Bold", 23)
     pdf.drawString(left, y, "Trading Truth Layer")
-    y -= 28
-
-    pdf.setFont("Helvetica-Bold", 18)
-    pdf.drawString(left, y, "Verified Claim Report")
-    y -= 26
-
-    pdf.setFont("Helvetica", 11)
-    pdf.drawString(left, y, f"Generated At: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}")
-    y -= 26
-
-    y = section_title("Claim Identity", y)
-    pdf.setFont("Helvetica", 11)
-    pdf.drawString(left, y, f"Claim Name: {schema.name}")
-    y -= 16
-    pdf.drawString(left, y, f"Claim ID: {schema.id}")
-    y -= 16
-    pdf.drawString(left, y, f"Workspace ID: {schema.workspace_id}")
-    y -= 16
-    pdf.drawString(left, y, f"Status: {schema.status}")
-    y -= 16
-    pdf.drawString(left, y, f"Visibility: {schema.visibility}")
-    y -= 16
-    pdf.drawString(left, y, f"Version Number: {schema.version_number}")
-    y -= 26
-
-    y = section_title("Verification Window", y)
-    pdf.setFont("Helvetica", 11)
-    pdf.drawString(left, y, f"Period Start: {schema.period_start}")
-    y -= 16
-    pdf.drawString(left, y, f"Period End: {schema.period_end}")
-    y -= 26
-
-    y = section_title("Performance Summary", y)
-    pdf.setFont("Helvetica", 11)
-    pdf.drawString(left, y, f"Trade Count: {metrics['trade_count']}")
-    y -= 16
-    pdf.drawString(left, y, f"Net PnL: {metrics['net_pnl']}")
-    y -= 16
-    pdf.drawString(left, y, f"Profit Factor: {metrics['profit_factor']}")
-    y -= 16
-    pdf.drawString(left, y, f"Win Rate: {metrics['win_rate']}")
-    y -= 16
-    pdf.drawString(left, y, f"Best Trade: {metrics['best_trade']}")
-    y -= 16
-    pdf.drawString(left, y, f"Worst Trade: {metrics['worst_trade']}")
-    y -= 26
-
-    y = section_title("Integrity", y)
-    pdf.setFont("Helvetica", 11)
-    pdf.drawString(left, y, f"Claim Hash: {claim_hash}")
-    y -= 16
-    pdf.drawString(left, y, f"Trade Set Hash: {trade_set_hash}")
-    y -= 16
-    pdf.drawString(left, y, f"Verified At: {schema.verified_at.isoformat() if schema.verified_at else '-'}")
-    y -= 16
-    pdf.drawString(left, y, f"Published At: {schema.published_at.isoformat() if schema.published_at else '-'}")
-    y -= 16
-    pdf.drawString(left, y, f"Locked At: {schema.locked_at.isoformat() if schema.locked_at else '-'}")
-    y -= 26
-
-    y = section_title("Scope", y)
-    pdf.setFont("Helvetica", 11)
-    included_members = ", ".join(str(x) for x in json.loads(schema.included_member_ids_json or "[]")) or "All in scope"
-    included_symbols = ", ".join(json.loads(schema.included_symbols_json or "[]")) or "All in scope"
-    excluded_trade_ids = ", ".join(str(x) for x in json.loads(schema.excluded_trade_ids_json or "[]")) or "None"
-
-    pdf.drawString(left, y, f"Included Members: {included_members}")
-    y -= 16
-    pdf.drawString(left, y, f"Included Symbols: {included_symbols}")
-    y -= 16
-    pdf.drawString(left, y, f"Excluded Trade IDs: {excluded_trade_ids}")
     y -= 24
 
-    pdf.setFont("Helvetica-Bold", 11)
-    pdf.drawString(left, y, "Methodology Notes:")
-    y -= 16
     pdf.setFont("Helvetica", 11)
+    pdf.setFillColor(colors.HexColor("#64748B"))
+    pdf.drawString(left, y, "Verified Trading Claims OS")
+    y -= 28
+
+    pdf.setFont("Helvetica-Bold", 27)
+    pdf.setFillColor(colors.HexColor("#0F172A"))
+    pdf.drawString(left, y, "Institutional Claim Report")
+    y -= 20
+
+    pdf.setFont("Helvetica", 11)
+    pdf.setFillColor(colors.HexColor("#475569"))
     y = draw_pdf_wrapped_text(
         pdf,
-        schema.methodology_notes or "-",
+        "Lifecycle-governed trading claim report with evidence-backed performance summary, canonical fingerprints, lineage state, and integrity validation context.",
         left,
         y,
-        max_width=right - left,
+        max_width=content_width,
         line_height=14,
+        font_name="Helvetica",
+        font_size=11,
     )
+    y -= 10
+
+    banner_height = 126
+    pdf_round_box(
+        pdf,
+        left,
+        y,
+        content_width,
+        banner_height,
+        colors.HexColor("#ECFDF5") if integrity_status == "valid" else colors.HexColor("#FEF2F2"),
+        colors.HexColor("#A7F3D0") if integrity_status == "valid" else colors.HexColor("#FECACA"),
+        radius=16,
+    )
+
+    pdf.setFillColor(colors.HexColor("#166534") if integrity_status == "valid" else colors.HexColor("#991B1B"))
+    pdf.setFont("Helvetica", 11)
+    pdf.drawString(left + 16, y - 22, "Verification Signature")
+
+    signature_text = (
+        "Verified • Locked • Integrity Valid"
+        if schema.status == "locked" and integrity_status == "valid"
+        else (
+            "Verified • Published"
+            if schema.status == "published"
+            else (
+                "Locked • Integrity Compromised"
+                if schema.status == "locked" and integrity_status != "valid"
+                else f"{schema.status.title()} Claim"
+            )
+        )
+    )
+
+    pdf.setFont("Helvetica-Bold", 20)
+    pdf.drawString(left + 16, y - 46, signature_text)
+
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(
+        left + 16,
+        y - 66,
+        "This report summarizes lifecycle state, integrity state, performance metrics, and canonical claim fingerprinting.",
+    )
+
+    chip_x = right - 148
+    pdf_round_box(
+        pdf,
+        chip_x,
+        y - 8,
+        132,
+        42,
+        colors.white,
+        colors.HexColor("#D1D5DB"),
+        radius=10,
+    )
+    pdf.setFillColor(colors.HexColor("#0F172A"))
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(chip_x + 10, y - 24, f"status: {schema.status}")
+    pdf.drawString(chip_x + 10, y - 38, f"integrity: {integrity_status}")
+    pdf.setFillColor(colors.black)
+
+    hash_top = y - 84
+    half_gap = 12
+    box_w = (content_width - half_gap) / 2
+    draw_label_value_box(
+        pdf,
+        left + 16,
+        hash_top,
+        box_w - 16,
+        48,
+        "Claim Hash Fingerprint",
+        short_hash(claim_hash, 22, 16),
+    )
+    draw_label_value_box(
+        pdf,
+        left + 16 + box_w,
+        hash_top,
+        box_w - 16,
+        48,
+        "Trade Set Hash Fingerprint",
+        short_hash(trade_set_hash, 22, 16),
+    )
+
+    y -= banner_height + 26
+
+    y = pdf_section_title(pdf, "Claim Identity", left, y)
+    pdf.setFont("Helvetica-Bold", 19)
+    pdf.setFillColor(colors.HexColor("#0F172A"))
+    pdf.drawString(left, y, shorten_text(schema.name, 68))
+    y -= 24
+
+    card_gap = 12
+    card_w = (content_width - (card_gap * 3)) / 4
+    card_h = 58
+    y = pdf_require_space(pdf, y, 180)
+
+    draw_metric_card(pdf, left, y, card_w, card_h, "Trade Count", str(metrics["trade_count"]))
+    draw_metric_card(pdf, left + card_w + card_gap, y, card_w, card_h, "Net PnL", str(metrics["net_pnl"]))
+    draw_metric_card(pdf, left + (card_w + card_gap) * 2, y, card_w, card_h, "Profit Factor", str(metrics["profit_factor"]))
+    draw_metric_card(pdf, left + (card_w + card_gap) * 3, y, card_w, card_h, "Win Rate", f"{round(metrics['win_rate'] * 100, 2)}%")
+    y -= card_h + 26
+
+    y = pdf_require_space(pdf, y, 250)
+    panel_gap = 16
+    panel_w = (content_width - panel_gap) / 2
+    panel_h = 202
+
+    pdf_round_box(pdf, left, y, panel_w, panel_h, colors.white, colors.HexColor("#E2E8F0"), radius=14)
+    pdf.setFillColor(colors.HexColor("#0F172A"))
+    pdf.setFont("Helvetica-Bold", 15)
+    pdf.drawString(left + 14, y - 22, "Verification Scope")
+
+    draw_kv_pair(pdf, left + 14, y - 50, "Period Start", schema.period_start or "—")
+    draw_kv_pair(pdf, left + 170, y - 50, "Period End", schema.period_end or "—")
+    draw_kv_pair(pdf, left + 14, y - 88, "Included Members", included_members)
+    draw_kv_pair(pdf, left + 170, y - 88, "Included Symbols", included_symbols)
+    draw_kv_pair(pdf, left + 14, y - 126, "Excluded Trade IDs", excluded_trade_ids)
+    draw_kv_pair(pdf, left + 170, y - 126, "Visibility", schema.visibility or "—")
+
+    pdf.setFillColor(colors.HexColor("#64748B"))
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(left + 14, y - 156, "Methodology Notes")
+    pdf.setFillColor(colors.HexColor("#0F172A"))
+    pdf.setFont("Helvetica", 10)
+    draw_pdf_wrapped_text(
+        pdf,
+        schema.methodology_notes or "—",
+        left + 14,
+        y - 174,
+        max_width=panel_w - 28,
+        line_height=12,
+        font_name="Helvetica",
+        font_size=10,
+    )
+
+    panel2_x = left + panel_w + panel_gap
+    pdf_round_box(pdf, panel2_x, y, panel_w, panel_h, colors.white, colors.HexColor("#E2E8F0"), radius=14)
+    pdf.setFillColor(colors.HexColor("#0F172A"))
+    pdf.setFont("Helvetica-Bold", 15)
+    pdf.drawString(panel2_x + 14, y - 22, "Lifecycle & Lineage")
+
+    draw_kv_pair(pdf, panel2_x + 14, y - 50, "Status", schema.status or "—")
+    draw_kv_pair(pdf, panel2_x + 170, y - 50, "Integrity", integrity_status)
+    draw_kv_pair(pdf, panel2_x + 14, y - 88, "Verified At", schema.verified_at.isoformat() if schema.verified_at else "—")
+    draw_kv_pair(pdf, panel2_x + 170, y - 88, "Published At", schema.published_at.isoformat() if schema.published_at else "—")
+    draw_kv_pair(pdf, panel2_x + 14, y - 126, "Locked At", schema.locked_at.isoformat() if schema.locked_at else "—")
+    draw_kv_pair(pdf, panel2_x + 170, y - 126, "Version Number", str(schema.version_number or "—"))
+    draw_kv_pair(pdf, panel2_x + 14, y - 164, "Root Claim ID", str(schema.root_claim_id or "—"))
+    draw_kv_pair(pdf, panel2_x + 170, y - 164, "Parent Claim ID", str(schema.parent_claim_id or "—"))
+
+    y -= panel_h + 26
+
+    y = pdf_section_title(pdf, "Performance Diagnostics", left, y)
+    y = pdf_require_space(pdf, y, 200)
+
+    diag_w = (content_width - 12 * 3) / 4
+    draw_metric_card(pdf, left, y, diag_w, 58, "Best Trade", str(metrics["best_trade"]))
+    draw_metric_card(pdf, left + diag_w + 12, y, diag_w, 58, "Worst Trade", str(metrics["worst_trade"]))
+    draw_metric_card(pdf, left + (diag_w + 12) * 2, y, diag_w, 58, "Max Drawdown", str(drawdown_stats["max_drawdown"]))
+    draw_metric_card(pdf, left + (diag_w + 12) * 3, y, diag_w, 58, "Ending Equity", str(equity_curve["ending_equity"]))
+    y -= 74
+
+    y = pdf_require_space(pdf, y, 280)
+    draw_equity_curve_preview(pdf, left, y, content_width, 210, equity_curve["curve"][:24])
+    y -= 228
+
+    y = pdf_section_title(pdf, "Leaderboard Snapshot", left, y)
+    y = pdf_require_space(pdf, y, 160)
+
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.setFillColor(colors.HexColor("#64748B"))
+    pdf.drawString(left + 4, y, "Rank")
+    pdf.drawString(left + 92, y, "Member")
+    pdf.drawString(left + 240, y, "Net PnL")
+    pdf.drawString(left + 350, y, "Win Rate")
+    pdf.drawString(left + 470, y, "Profit Factor")
     y -= 12
 
-    y = section_title("Leaderboard", y)
-    pdf.setFont("Helvetica-Bold", 10)
-    pdf.drawString(left, y, "Rank")
-    pdf.drawString(left + 50, y, "Member")
-    pdf.drawString(left + 220, y, "Net PnL")
-    pdf.drawString(left + 320, y, "Win Rate")
-    pdf.drawString(left + 420, y, "Profit Factor")
-    y -= 14
-
-    pdf.setFont("Helvetica", 10)
-    for row in leaderboard[:10]:
-        y = ensure_pdf_space(pdf, y, 100)
-        pdf.drawString(left, y, str(row["rank"]))
-        pdf.drawString(left + 50, y, str(row["member"]))
-        pdf.drawString(left + 220, y, str(row["net_pnl"]))
-        pdf.drawString(left + 320, y, str(row["win_rate"]))
-        pdf.drawString(left + 420, y, str(row["profit_factor"]))
-        y -= 14
-
+    pdf.setStrokeColor(colors.HexColor("#CBD5E1"))
+    pdf.line(left, y, right, y)
     y -= 16
-    y = section_title("Trade Evidence Snapshot", y)
-
-    pdf.setFont("Helvetica-Bold", 10)
-    pdf.drawString(left, y, "#")
-    pdf.drawString(left + 25, y, "Trade ID")
-    pdf.drawString(left + 90, y, "Opened")
-    pdf.drawString(left + 230, y, "Symbol")
-    pdf.drawString(left + 300, y, "PnL")
-    pdf.drawString(left + 380, y, "Cumulative")
-    y -= 14
 
     pdf.setFont("Helvetica", 10)
-    evidence_rows = build_trade_evidence(filtered_trades)
-    for row in evidence_rows[:20]:
-        y = ensure_pdf_space(pdf, y, 100)
-        pdf.drawString(left, y, str(row["index"]))
-        pdf.drawString(left + 25, y, str(row["trade_id"]))
-        pdf.drawString(left + 90, y, str(row["opened_at"])[:19])
-        pdf.drawString(left + 230, y, str(row["symbol"]))
-        pdf.drawString(left + 300, y, str(row["net_pnl"]))
-        pdf.drawString(left + 380, y, str(row["cumulative_pnl"]))
-        y -= 14
+    pdf.setFillColor(colors.HexColor("#0F172A"))
 
-    y -= 20
+    if leaderboard:
+        for row in leaderboard[:10]:
+            y = pdf_require_space(pdf, y, 110)
+            pdf.drawString(left + 4, y, str(row["rank"]))
+            pdf.drawString(left + 92, y, shorten_text(str(row["member"]), 18))
+            pdf.drawString(left + 240, y, str(row["net_pnl"]))
+            pdf.drawString(left + 350, y, f"{round(float(row['win_rate']) * 100, 2)}%")
+            pdf.drawString(left + 470, y, str(row["profit_factor"]))
+            y -= 12
+            pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
+            pdf.line(left, y, right, y)
+            y -= 12
+    else:
+        pdf.drawString(left + 4, y, "No leaderboard data available.")
+        y -= 18
+
+    y -= 8
+
+    y = pdf_section_title(pdf, "Trade Evidence Snapshot", left, y)
+    y = pdf_require_space(pdf, y, 180)
+
+    pdf.setFont("Helvetica-Bold", 9)
+    pdf.setFillColor(colors.HexColor("#64748B"))
+    pdf.drawString(left, y, "#")
+    pdf.drawString(left + 24, y, "Trade ID")
+    pdf.drawString(left + 82, y, "Opened")
+    pdf.drawString(left + 212, y, "Symbol")
+    pdf.drawString(left + 278, y, "Side")
+    pdf.drawString(left + 323, y, "Member")
+    pdf.drawString(left + 385, y, "PnL")
+    pdf.drawString(left + 455, y, "Cumulative")
+    y -= 12
+
+    pdf.setStrokeColor(colors.HexColor("#CBD5E1"))
+    pdf.line(left, y, right, y)
+    y -= 15
+
+    pdf.setFont("Helvetica", 9)
+    pdf.setFillColor(colors.HexColor("#0F172A"))
+    evidence_rows = build_trade_evidence(filtered_trades)
+
+    if evidence_rows:
+        for row in evidence_rows[:20]:
+            y = pdf_require_space(pdf, y, 110)
+            pdf.drawString(left, y, str(row["index"]))
+            pdf.drawString(left + 24, y, str(row["trade_id"]))
+            pdf.drawString(left + 82, y, shorten_text(str(row["opened_at"]), 19))
+            pdf.drawString(left + 212, y, shorten_text(str(row["symbol"]), 10))
+            pdf.drawString(left + 278, y, shorten_text(str(row["side"]), 8))
+            pdf.drawString(left + 323, y, str(row["member_id"]))
+            pdf.drawString(left + 385, y, str(row["net_pnl"]))
+            pdf.drawString(left + 455, y, str(row["cumulative_pnl"]))
+            y -= 12
+            pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
+            pdf.line(left, y, right, y)
+            y -= 10
+    else:
+        pdf.drawString(left, y, "No trade evidence rows available.")
+        y -= 18
+
+    y -= 8
+
+    y = pdf_section_title(pdf, "Canonical Fingerprints", left, y)
+    y = pdf_require_space(pdf, y, 180)
+
+    draw_hash_block(pdf, left, y, content_width, "Claim Hash", claim_hash)
+    y -= 58
+    draw_hash_block(pdf, left, y, content_width, "Trade Set Hash", trade_set_hash)
+    y -= 66
+
     pdf.setFont("Helvetica-Oblique", 9)
+    pdf.setFillColor(colors.HexColor("#64748B"))
     pdf.drawString(
         left,
         y,
-        "This report was generated by Trading Truth Layer from the canonical trade ledger and lifecycle-governed claim state.",
+        "Generated from the canonical trade ledger and lifecycle-governed claim state in Trading Truth Layer.",
     )
 
     pdf.save()
@@ -816,46 +1294,16 @@ def build_next_version_name(db: Session, workspace_id: int, base_name: str) -> s
     return f"{root_name} v{max_version + 1}"
 
 
-def require_workspace_operator_or_owner(workspace_id: int, current_user: User, db: Session):
-    membership = (
-        db.query(WorkspaceMembership)
-        .filter(
-            WorkspaceMembership.workspace_id == workspace_id,
-            WorkspaceMembership.user_id == current_user.id,
-        )
-        .first()
-    )
-
-    if not membership:
-        raise HTTPException(status_code=403, detail="User is not a member of this workspace")
-
-    if membership.role not in {"owner", "operator"}:
-        raise HTTPException(status_code=403, detail="Operator or owner role required for this workspace")
-
-    return membership
-
-
-def require_workspace_member(workspace_id: int, current_user: User, db: Session):
-    membership = (
-        db.query(WorkspaceMembership)
-        .filter(
-            WorkspaceMembership.workspace_id == workspace_id,
-            WorkspaceMembership.user_id == current_user.id,
-        )
-        .first()
-    )
-
-    if not membership:
-        raise HTTPException(status_code=403, detail="User is not a member of this workspace")
-
-    return membership
-
-
 @router.get("/claim-schemas/latest")
-def get_latest_claim_schema(db: Session = Depends(get_db)):
+def get_latest_claim_schema(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     schema = db.query(ClaimSchema).order_by(ClaimSchema.id.desc()).first()
     if not schema:
         raise HTTPException(status_code=404, detail="No claim schemas found")
+
+    require_workspace_member(schema.workspace_id, current_user, db)
     return serialize_schema(schema)
 
 
@@ -884,6 +1332,7 @@ def create_claim_schema(
     current_user: User = Depends(get_current_user),
 ):
     require_workspace_operator_or_owner(payload.workspace_id, current_user, db)
+    enforce_workspace_claim_limit(payload.workspace_id, db)
 
     visibility = normalize_visibility(payload.visibility)
 
@@ -996,6 +1445,7 @@ def clone_claim_schema(
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
     require_workspace_operator_or_owner(source.workspace_id, current_user, db)
+    enforce_workspace_claim_limit(source.workspace_id, db)
 
     root_id = source.root_claim_id or source.id
     new_name = build_next_version_name(db, source.workspace_id, source.name)
@@ -1055,10 +1505,16 @@ def clone_claim_schema(
 
 
 @router.get("/claim-schemas/{claim_schema_id}/versions")
-def get_claim_versions(claim_schema_id: int, db: Session = Depends(get_db)):
+def get_claim_versions(
+    claim_schema_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_schema_id).first()
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
+
+    require_workspace_member(schema.workspace_id, current_user, db)
 
     root_id = schema.root_claim_id or schema.id
 
@@ -1076,10 +1532,16 @@ def get_claim_versions(claim_schema_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/claim-schemas/{claim_schema_id}")
-def get_claim_schema(claim_schema_id: int, db: Session = Depends(get_db)):
+def get_claim_schema(
+    claim_schema_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_schema_id).first()
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
+
+    require_workspace_member(schema.workspace_id, current_user, db)
     return serialize_schema(schema)
 
 
@@ -1140,7 +1602,7 @@ def publish_claim_schema(
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
-    require_workspace_operator_or_owner(schema.workspace_id, current_user, db)
+    require_workspace_owner(schema.workspace_id, current_user, db)
 
     if schema.status != "verified":
         raise HTTPException(status_code=400, detail="Only verified claims can be published")
@@ -1187,7 +1649,7 @@ def lock_claim_schema(
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
-    require_workspace_operator_or_owner(schema.workspace_id, current_user, db)
+    require_workspace_owner(schema.workspace_id, current_user, db)
 
     if schema.status == "locked":
         return serialize_schema(schema)
@@ -1235,10 +1697,16 @@ def lock_claim_schema(
 
 
 @router.get("/claim-schemas/{claim_schema_id}/preview")
-def get_claim_schema_preview(claim_schema_id: int, db: Session = Depends(get_db)):
+def get_claim_schema_preview(
+    claim_schema_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_schema_id).first()
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
+
+    require_workspace_member(schema.workspace_id, current_user, db)
 
     filtered_trades = resolve_schema_trades(schema, db)
     metrics = compute_trade_metrics(filtered_trades)
@@ -1278,10 +1746,16 @@ def get_claim_schema_preview(claim_schema_id: int, db: Session = Depends(get_db)
 
 
 @router.get("/claim-schemas/{claim_schema_id}/equity-curve")
-def get_claim_equity_curve(claim_schema_id: int, db: Session = Depends(get_db)):
+def get_claim_equity_curve(
+    claim_schema_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_schema_id).first()
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
+
+    require_workspace_member(schema.workspace_id, current_user, db)
 
     filtered_trades = resolve_schema_trades(schema, db)
     equity_curve = build_equity_curve(filtered_trades)
@@ -1300,10 +1774,13 @@ def get_claim_equity_curve(claim_schema_id: int, db: Session = Depends(get_db)):
 def get_claim_trades(
     claim_schema_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_schema_id).first()
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
+
+    require_workspace_member(schema.workspace_id, current_user, db)
 
     filtered_trades = resolve_schema_trades(schema, db)
     evidence_rows = build_trade_evidence(filtered_trades)
@@ -1319,22 +1796,33 @@ def get_claim_trades(
 
 
 @router.get("/claim-schemas/{claim_schema_id}/evidence-pack")
-def get_evidence_pack(claim_schema_id: int, db: Session = Depends(get_db)):
+def get_evidence_pack(
+    claim_schema_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_schema_id).first()
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
+    require_workspace_member(schema.workspace_id, current_user, db)
     return build_evidence_pack_payload(schema, db)
 
 
 @router.get("/claim-schemas/{claim_schema_id}/evidence-pack/download")
-def download_evidence_pack(claim_schema_id: int, db: Session = Depends(get_db)):
+def download_evidence_pack(
+    claim_schema_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_schema_id).first()
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
+    require_workspace_member(schema.workspace_id, current_user, db)
+
     payload = build_evidence_pack_payload(schema, db)
-    filename = f"evidence_pack_claim_{schema.id}_{compute_claim_hash(schema)[:12]}.json"
+    filename = f'evidence_pack_claim_{schema.id}_{compute_claim_hash(schema)[:12]}.json'
 
     return JSONResponse(
         content=payload,
@@ -1343,25 +1831,57 @@ def download_evidence_pack(claim_schema_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/claim-schemas/{claim_schema_id}/evidence-bundle")
-def get_evidence_bundle(claim_schema_id: int, db: Session = Depends(get_db)):
+def get_evidence_bundle(
+    claim_schema_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_schema_id).first()
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
+    require_workspace_member(schema.workspace_id, current_user, db)
     return build_evidence_bundle_payload(schema, db)
 
 
 @router.get("/claim-schemas/{claim_schema_id}/evidence-bundle/download")
-def download_evidence_bundle(claim_schema_id: int, db: Session = Depends(get_db)):
+def download_evidence_bundle(
+    claim_schema_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_schema_id).first()
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
+
+    require_workspace_member(schema.workspace_id, current_user, db)
 
     zip_buffer, filename = build_evidence_bundle_zip_bytes(schema, db)
 
     return StreamingResponse(
         zip_buffer,
         media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/claim-schemas/{claim_schema_id}/claim-report/download")
+def download_internal_claim_report(
+    claim_schema_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_schema_id).first()
+    if not schema:
+        raise HTTPException(status_code=404, detail="Claim schema not found")
+
+    require_workspace_member(schema.workspace_id, current_user, db)
+
+    pdf_buffer, filename = build_claim_report_pdf_bytes(schema, db)
+
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
@@ -1521,10 +2041,16 @@ def verify_public_claim_by_hash(claim_hash: str, db: Session = Depends(get_db)):
 
 
 @router.get("/claim-schemas/{claim_schema_id}/verify-integrity")
-def verify_claim_schema_integrity(claim_schema_id: int, db: Session = Depends(get_db)):
+def verify_claim_schema_integrity(
+    claim_schema_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_schema_id).first()
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
+
+    require_workspace_member(schema.workspace_id, current_user, db)
 
     if schema.status != "locked":
         raise HTTPException(status_code=400, detail="Only locked claims can be integrity-verified")

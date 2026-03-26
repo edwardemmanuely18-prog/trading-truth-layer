@@ -1,16 +1,22 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
-from pydantic import BaseModel
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
+import csv
 import hashlib
+import io
 import json
+import os
+from pathlib import Path
 
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user, require_workspace_member
 from app.core.db import get_db
-from app.models.trade import Trade
 from app.models.claim_schema import ClaimSchema
+from app.models.trade import Trade
 from app.models.user import User
+from app.models.workspace import Workspace
 from app.models.workspace_membership import WorkspaceMembership
-from app.api.deps import get_current_user
 from app.services.ingestion_service import import_csv_trades
 
 router = APIRouter()
@@ -65,6 +71,93 @@ def require_workspace_operator_or_owner(workspace_id: int, current_user: User, d
         )
 
     return membership
+
+
+def get_workspace_or_404(workspace_id: int, db: Session) -> Workspace:
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    return workspace
+
+
+def get_workspace_trade_count(workspace_id: int, db: Session) -> int:
+    return db.query(Trade).filter(Trade.workspace_id == workspace_id).count()
+
+
+def parse_bool_like(value: str | None) -> bool:
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def read_env_value_from_backend_dotenv(key: str) -> str | None:
+    try:
+        env_path = Path(__file__).resolve().parents[3] / ".env"
+        if not env_path.exists():
+            return None
+
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+
+            env_key, env_value = line.split("=", 1)
+            if env_key.strip() != key:
+                continue
+
+            return env_value.strip().strip('"').strip("'")
+    except Exception:
+        return None
+
+    return None
+
+
+def workspace_limits_disabled() -> bool:
+    direct_env_value = os.getenv("DISABLE_WORKSPACE_LIMITS")
+    if direct_env_value is not None:
+        return parse_bool_like(direct_env_value)
+
+    dotenv_value = read_env_value_from_backend_dotenv("DISABLE_WORKSPACE_LIMITS")
+    return parse_bool_like(dotenv_value)
+
+
+def enforce_workspace_trade_limit(workspace_id: int, db: Session, additional_needed: int = 1):
+    if workspace_limits_disabled():
+        return
+
+    workspace = get_workspace_or_404(workspace_id, db)
+    trade_limit = workspace.trade_limit or 0
+    current_trade_count = get_workspace_trade_count(workspace_id, db)
+
+    if trade_limit > 0 and (current_trade_count + additional_needed) > trade_limit:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Trade limit reached for workspace {workspace_id}. "
+                f"Current trades: {current_trade_count}. "
+                f"Requested additional trades: {additional_needed}. "
+                f"Plan limit: {trade_limit}. "
+                f"Upgrade workspace plan to add more trades."
+            ),
+        )
+
+
+def estimate_csv_row_count(content: bytes) -> int:
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = content.decode("latin-1")
+
+    reader = csv.reader(io.StringIO(text))
+    rows = list(reader)
+
+    if not rows:
+        return 0
+
+    if len(rows) == 1:
+        return 0
+
+    return max(len(rows) - 1, 0)
 
 
 def build_trade_fingerprint(
@@ -187,7 +280,13 @@ def serialize_trade(trade: Trade):
 
 
 @router.get("/workspaces/{workspace_id}/trades")
-def list_trades(workspace_id: int, db: Session = Depends(get_db)):
+def list_trades(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_workspace_member(workspace_id, current_user, db)
+
     trades = (
         db.query(Trade)
         .filter(Trade.workspace_id == workspace_id)
@@ -205,6 +304,7 @@ def create_trade(
     current_user: User = Depends(get_current_user),
 ):
     require_workspace_operator_or_owner(workspace_id, current_user, db)
+    enforce_workspace_trade_limit(workspace_id, db, additional_needed=1)
 
     conflict = find_locked_claim_conflict(
         db=db,
@@ -392,6 +492,20 @@ async def import_trades_csv(
         }
 
     content = await file.read()
+    estimated_rows = estimate_csv_row_count(content)
+
+    if estimated_rows <= 0:
+        return {
+            "workspace_id": workspace_id,
+            "filename": file.filename or "",
+            "rows_received": 0,
+            "rows_imported": 0,
+            "rows_rejected": 1,
+            "rows_skipped_duplicates": 0,
+            "errors": ["CSV file appears empty or has no data rows"],
+        }
+
+    enforce_workspace_trade_limit(workspace_id, db, additional_needed=estimated_rows)
 
     try:
         return import_csv_trades(
