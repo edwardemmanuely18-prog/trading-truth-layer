@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "../../../lib/api";
@@ -46,7 +46,7 @@ function extractErrorMessage(err: unknown): string {
   return raw;
 }
 
-export default function AcceptInvitePage() {
+function AcceptInvitePageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isAuthenticated, refresh, workspaces, loading: authLoading } = useAuth();
@@ -127,9 +127,9 @@ export default function AcceptInvitePage() {
   const acceptedWorkspaceId =
     result?.membership?.workspace_id || result?.invite?.workspace_id || null;
 
-  const workspaceNowAvailable =
-    acceptedWorkspaceId &&
-    workspaces.some((w) => w.workspace_id === acceptedWorkspaceId);
+  const workspaceNowAvailable = acceptedWorkspaceId
+    ? workspaces.some((w) => w.workspace_id === acceptedWorkspaceId)
+    : false;
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-16 text-slate-900">
@@ -236,5 +236,21 @@ export default function AcceptInvitePage() {
         </form>
       </div>
     </main>
+  );
+}
+
+export default function AcceptInvitePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-50 px-6 py-16 text-slate-900">
+          <div className="mx-auto max-w-2xl rounded-2xl border bg-white p-8 shadow-sm">
+            Loading invite acceptance page...
+          </div>
+        </main>
+      }
+    >
+      <AcceptInvitePageInner />
+    </Suspense>
   );
 }
