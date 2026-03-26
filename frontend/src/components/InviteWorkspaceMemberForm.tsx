@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { api, type WorkspaceUsageSummary } from "../lib/api";
+import {
+  api,
+  type WorkspaceMemberRole,
+  type WorkspaceUsageSummary,
+} from "../lib/api";
 import { useAuth } from "./AuthProvider";
 
 type Props = {
@@ -21,7 +25,7 @@ export default function InviteWorkspaceMemberForm({
   const { getWorkspaceRole } = useAuth();
 
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("member");
+  const [role, setRole] = useState<WorkspaceMemberRole>("member");
   const [loading, setLoading] = useState(false);
   const [usageLoading, setUsageLoading] = useState(true);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
@@ -175,12 +179,13 @@ export default function InviteWorkspaceMemberForm({
             <label className="mb-1 block text-sm font-medium text-slate-700">Role</label>
             <select
               value={role}
-              onChange={(e) => setRole(e.target.value)}
+              onChange={(e) => setRole(e.target.value as WorkspaceMemberRole)}
               className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none ring-0 focus:border-slate-500"
             >
               <option value="member">Member</option>
               <option value="operator">Operator</option>
               <option value="auditor">Auditor</option>
+              <option value="owner">Owner</option>
             </select>
           </div>
 
