@@ -6,6 +6,7 @@ from app.models.audit_event import AuditEvent
 from app.models.user import User
 from app.models.workspace_membership import WorkspaceMembership
 from app.models.workspace_invite import WorkspaceInvite
+from app.models.billing_request import BillingRequest
 
 __all__ = [
     "Workspace",
@@ -16,4 +17,5 @@ __all__ = [
     "User",
     "WorkspaceMembership",
     "WorkspaceInvite",
+    "BillingRequest",
 ]

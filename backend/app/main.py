@@ -15,12 +15,15 @@ from app.models import (
     WorkspaceInvite,
 )
 from app.api.routes.health import router as health_router
+from app.api.routes.auth import router as auth_router
 from app.api.routes.workspaces import router as workspaces_router
 from app.api.routes.trades import router as trades_router
 from app.api.routes.claim_schemas import router as claim_schemas_router
 from app.api.routes.imports import router as imports_router
 from app.api.routes.audit import router as audit_router
 from app.api.routes.invites import router as invites_router
+from app.api.routes.billing import router as billing_router
+from app.core.security import hash_password
 
 
 def parse_cors_origins() -> list[str]:
@@ -50,32 +53,65 @@ def on_startup():
     try:
         existing_workspace = db.query(Workspace).filter(Workspace.id == 1).first()
         if not existing_workspace:
-            db.add(Workspace(id=1, name="Verification Sandbox"))
+            existing_workspace = Workspace(
+                id=1,
+                name="Verification Sandbox",
+                plan_code="starter",
+                billing_status="inactive",
+                claim_limit=5,
+                trade_limit=1000,
+                member_limit=3,
+                storage_limit_mb=500,
+            )
+            db.add(existing_workspace)
             db.commit()
+            db.refresh(existing_workspace)
 
         default_owner = db.query(User).filter(User.id == 1).first()
         if not default_owner:
             db.add(
                 User(
                     id=1,
-                    email="owner@tradingtruthlayer.local",
+                    email="owner@tradingtruthlayer.com",
                     name="Default Owner",
                     role="owner",
+                    password_hash=hash_password("OwnerPass123!"),
                 )
             )
             db.commit()
+        else:
+            changed = False
+            if default_owner.email != "owner@tradingtruthlayer.com":
+                default_owner.email = "owner@tradingtruthlayer.com"
+                changed = True
+            if not default_owner.password_hash:
+                default_owner.password_hash = hash_password("OwnerPass123!")
+                changed = True
+            if changed:
+                db.commit()
 
         default_operator = db.query(User).filter(User.id == 2).first()
         if not default_operator:
             db.add(
                 User(
                     id=2,
-                    email="operator@tradingtruthlayer.local",
+                    email="operator@tradingtruthlayer.com",
                     name="Default Operator",
                     role="operator",
+                    password_hash=hash_password("OperatorPass123!"),
                 )
             )
             db.commit()
+        else:
+            changed = False
+            if default_operator.email != "operator@tradingtruthlayer.com":
+                default_operator.email = "operator@tradingtruthlayer.com"
+                changed = True
+            if not default_operator.password_hash:
+                default_operator.password_hash = hash_password("OperatorPass123!")
+                changed = True
+            if changed:
+                db.commit()
 
         owner_membership = (
             db.query(WorkspaceMembership)
@@ -123,9 +159,11 @@ def root():
 
 
 app.include_router(health_router)
+app.include_router(auth_router)
 app.include_router(workspaces_router)
 app.include_router(trades_router)
 app.include_router(claim_schemas_router)
 app.include_router(imports_router)
 app.include_router(audit_router)
 app.include_router(invites_router)
+app.include_router(billing_router)
