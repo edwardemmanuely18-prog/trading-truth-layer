@@ -1,12 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "../../lib/api";
 import { useAuth } from "../../components/AuthProvider";
 
-export default function RegisterPage() {
+function RegisterPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { refresh, user, workspaces, loading: authLoading, isAuthenticated } = useAuth();
@@ -182,11 +182,7 @@ export default function RegisterPage() {
         <div className="mt-6 border-t pt-4 text-sm text-slate-600">
           Already have an account?{" "}
           <Link
-            href={
-              inviteToken
-                ? `/login?token=${encodeURIComponent(inviteToken)}`
-                : "/login"
-            }
+            href={inviteToken ? `/login?token=${encodeURIComponent(inviteToken)}` : "/login"}
             className="font-medium text-slate-900 hover:underline"
           >
             Sign in
@@ -194,5 +190,21 @@ export default function RegisterPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-50 px-6 py-16 text-slate-900">
+          <div className="mx-auto max-w-md rounded-2xl border bg-white p-8 shadow-sm">
+            Loading registration page...
+          </div>
+        </main>
+      }
+    >
+      <RegisterPageInner />
+    </Suspense>
   );
 }
