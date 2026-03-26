@@ -327,8 +327,8 @@ function ManualPaymentCard({
   selectedPlanCode: string;
   selectedBillingCycle: string;
 }) {
-  const details = (billingFoundation as any)?.manual_payment_details ?? null;
-  const manualBilling = (billingFoundation as any)?.manual_billing ?? null;
+  const details = billingFoundation?.manual_payment_details ?? null;
+  const manualBilling = billingFoundation?.manual_billing ?? null;
 
   if (!manualBilling?.enabled || !details) {
     return null;
@@ -609,7 +609,7 @@ export default function WorkspaceSettingsPage() {
         return;
       }
 
-      const manualDetails = (response as any)?.manual_payment_details;
+      const manualDetails = response.manual_payment_details;
       const manualMessage = manualDetails
         ? ` Payment method: ${manualDetails.payment_method || "Manual transfer"}. Account name: ${
             manualDetails.account_name || "—"
@@ -619,8 +619,7 @@ export default function WorkspaceSettingsPage() {
         : "";
 
       const diagnosticMessage =
-        response.diagnostics &&
-        response.mode === "placeholder_until_stripe_checkout"
+        response.diagnostics && response.mode === "placeholder_until_stripe_checkout"
           ? ` Stripe ready: package=${formatBooleanLabel(
               response.diagnostics.stripe_package_installed
             )}, billing_enabled=${formatBooleanLabel(
@@ -662,7 +661,7 @@ export default function WorkspaceSettingsPage() {
         return;
       }
 
-      const manualDetails = (response as any)?.manual_payment_details;
+      const manualDetails = response.manual_payment_details;
       const manualMessage = manualDetails
         ? ` Payment method: ${manualDetails.payment_method || "Manual transfer"}. Account name: ${
             manualDetails.account_name || "—"
@@ -792,8 +791,8 @@ export default function WorkspaceSettingsPage() {
               <SummaryCard
                 label="Billing Mode"
                 value={
-                  ((billingFoundation as any)?.manual_billing?.enabled &&
-                  billingFoundation?.checkout_state?.mode === "manual_billing_ready")
+                  billingFoundation?.manual_billing?.enabled &&
+                  billingFoundation?.checkout_state?.mode === "manual_billing_ready"
                     ? "Manual billing"
                     : billingFoundation?.checkout_state.mode ||
                       usage?.stripe_ready.integration_status ||
