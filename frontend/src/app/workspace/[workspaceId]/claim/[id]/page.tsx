@@ -10,7 +10,9 @@ import {
   type ClaimIntegrityResult,
   type ClaimSchema,
   type ClaimSchemaPreview,
-  type ClaimTradeEvidenceRow,
+  type ClaimTradeEvidence,
+  type ClaimTradeScopeReason,
+  type ClaimTradeScopeRow,
   type ClaimVersion,
   type WorkspaceUsageSummary,
 } from "../../../../../lib/api";
@@ -41,10 +43,6 @@ function formatPercent(value?: number | null, digits = 2) {
   return `${(Number(value) * 100).toFixed(digits)}%`;
 }
 
-function safeRows(rows?: ClaimTradeEvidenceRow[] | null): ClaimTradeEvidenceRow[] {
-  return Array.isArray(rows) ? rows : [];
-}
-
 function truncateMiddle(value?: string | null, start = 12, end = 10) {
   if (!value) return "—";
   if (value.length <= start + end + 3) return value;
@@ -53,6 +51,27 @@ function truncateMiddle(value?: string | null, start = 12, end = 10) {
 
 function normalizeText(value?: string | null) {
   return String(value || "").toLowerCase().trim();
+}
+
+function emptyTradeEvidence(claimId: number): ClaimTradeEvidence {
+  return {
+    claim_schema_id: claimId,
+    claim_hash: "",
+    name: "",
+    status: "",
+    trade_count: 0,
+    trades: [],
+    included_trade_count: 0,
+    excluded_trade_count: 0,
+    included_trades: [],
+    excluded_trades: [],
+    summary: {
+      workspace_trade_count: 0,
+      included_trade_count: 0,
+      excluded_trade_count: 0,
+      excluded_breakdown: {},
+    },
+  };
 }
 
 function StatusBadge({ status }: { status?: string | null }) {
@@ -218,7 +237,7 @@ function HashCard({
         <CopyButton value={value} label={copyLabel || "Copy"} />
       </div>
 
-      <div className="mt-4 rounded-xl bg-slate-50 p-3 font-mono text-xs text-slate-700 break-all">
+      <div className="mt-4 break-all rounded-xl bg-slate-50 p-3 font-mono text-xs text-slate-700">
         {value || "—"}
       </div>
     </div>
@@ -255,77 +274,6 @@ function PageNavButton({
     >
       {label}
     </Link>
-  );
-}
-
-function ClaimTradesTable({ rows }: { rows?: ClaimTradeEvidenceRow[] | null }) {
-  const safe = safeRows(rows);
-
-  if (safe.length === 0) {
-    return (
-      <div className="rounded-2xl border bg-white p-5 shadow-sm">
-        <h2 className="text-xl font-semibold">Claim Trade Evidence</h2>
-        <div className="mt-2 text-sm text-slate-500">
-          No in-scope trade evidence rows available for this claim.
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-2xl border bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold">Claim Trade Evidence</h2>
-          <div className="mt-2 text-sm text-slate-500">
-            Exact in-scope trades used to compute this claim, ordered by trade open time.
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-          <div className="text-slate-500">Evidence rows</div>
-          <div className="mt-1 font-semibold">{safe.length}</div>
-        </div>
-      </div>
-
-      <div className="mt-4 overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-slate-500">
-              <th className="px-3 py-2">#</th>
-              <th className="px-3 py-2">Trade ID</th>
-              <th className="px-3 py-2">Opened</th>
-              <th className="px-3 py-2">Symbol</th>
-              <th className="px-3 py-2">Side</th>
-              <th className="px-3 py-2">Member</th>
-              <th className="px-3 py-2">Entry</th>
-              <th className="px-3 py-2">Qty</th>
-              <th className="px-3 py-2">PnL</th>
-              <th className="px-3 py-2">Cumulative</th>
-              <th className="px-3 py-2">Strategy</th>
-              <th className="px-3 py-2">Source</th>
-            </tr>
-          </thead>
-          <tbody>
-            {safe.map((row) => (
-              <tr key={`${row.trade_id}-${row.index}`} className="border-b last:border-0">
-                <td className="px-3 py-2">{row.index}</td>
-                <td className="px-3 py-2">{row.trade_id}</td>
-                <td className="px-3 py-2">{formatDateTime(row.opened_at)}</td>
-                <td className="px-3 py-2">{row.symbol}</td>
-                <td className="px-3 py-2">{row.side}</td>
-                <td className="px-3 py-2">{row.member_id}</td>
-                <td className="px-3 py-2">{formatNumber(row.entry_price, 4)}</td>
-                <td className="px-3 py-2">{formatNumber(row.quantity, 4)}</td>
-                <td className="px-3 py-2">{formatNumber(row.net_pnl, 4)}</td>
-                <td className="px-3 py-2">{formatNumber(row.cumulative_pnl, 4)}</td>
-                <td className="px-3 py-2">{row.strategy_tag || "—"}</td>
-                <td className="px-3 py-2">{row.source_system || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
   );
 }
 
@@ -367,6 +315,206 @@ function VersionCard({
   );
 }
 
+function ScopeStatusBadge({ status }: { status?: string | null }) {
+  const normalized = normalizeText(status);
+  const className =
+    normalized === "excluded"
+      ? "border-red-200 bg-red-50 text-red-700"
+      : "border-green-200 bg-green-50 text-green-700";
+
+  return (
+    <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${className}`}>
+      {status || "unknown"}
+    </span>
+  );
+}
+
+function ExclusionReasonBadge({ reason }: { reason?: string | null }) {
+  if (!reason) {
+    return <span className="text-slate-400">—</span>;
+  }
+
+  return (
+    <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+      {reason}
+    </span>
+  );
+}
+
+function humanizeReason(reason: ClaimTradeScopeReason | string) {
+  switch (reason) {
+    case "OUTSIDE_PERIOD":
+      return "Outside period";
+    case "MEMBER_FILTER":
+      return "Member filter";
+    case "SYMBOL_FILTER":
+      return "Symbol filter";
+    case "MANUAL_EXCLUSION":
+      return "Manual exclusion";
+    default:
+      return reason;
+  }
+}
+
+function ScopeSummaryCard({ evidence }: { evidence: ClaimTradeEvidence | null }) {
+  const summary = evidence?.summary;
+  const breakdown = summary?.excluded_breakdown ?? {};
+
+  const breakdownRows = (Object.entries(breakdown) as [string, number][])
+    .filter(([, value]) => Number(value) > 0)
+    .sort((a, b) => Number(b[1]) - Number(a[1]));
+
+  return (
+    <div className="rounded-2xl border bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Scope Summary</h2>
+          <div className="mt-1 text-sm text-slate-500">
+            Explainability layer for what entered claim computation and what was left out.
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-xl bg-slate-50 px-4 py-3">
+          <div className="text-sm text-slate-500">Workspace Trades</div>
+          <div className="mt-1 text-xl font-semibold">{summary?.workspace_trade_count ?? 0}</div>
+        </div>
+        <div className="rounded-xl bg-green-50 px-4 py-3">
+          <div className="text-sm text-green-700">Included Trades</div>
+          <div className="mt-1 text-xl font-semibold text-green-900">
+            {summary?.included_trade_count ?? 0}
+          </div>
+        </div>
+        <div className="rounded-xl bg-red-50 px-4 py-3">
+          <div className="text-sm text-red-700">Excluded Trades</div>
+          <div className="mt-1 text-xl font-semibold text-red-900">
+            {summary?.excluded_trade_count ?? 0}
+          </div>
+        </div>
+        <div className="rounded-xl bg-slate-50 px-4 py-3">
+          <div className="text-sm text-slate-500">In-scope Evidence Rows</div>
+          <div className="mt-1 text-xl font-semibold">{evidence?.trade_count ?? 0}</div>
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <div className="mb-2 text-sm font-medium text-slate-700">Excluded breakdown</div>
+        {breakdownRows.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+            No excluded trades were found for this claim scope.
+          </div>
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {breakdownRows.map(([reason, count]) => (
+              <div key={reason} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-sm text-slate-500">{humanizeReason(reason)}</div>
+                <div className="mt-1 text-lg font-semibold">{count}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ScopeTradesTable({
+  title,
+  subtitle,
+  rows,
+  emptyText,
+  showExclusionColumns = false,
+}: {
+  title: string;
+  subtitle: string;
+  rows?: ClaimTradeScopeRow[] | null;
+  emptyText: string;
+  showExclusionColumns?: boolean;
+}) {
+  const safe = Array.isArray(rows) ? rows : [];
+
+  return (
+    <div className="rounded-2xl border bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">{title}</h2>
+          <div className="mt-2 text-sm text-slate-500">{subtitle}</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+          <div className="text-slate-500">Rows</div>
+          <div className="mt-1 font-semibold">{safe.length}</div>
+        </div>
+      </div>
+
+      {safe.length === 0 ? (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+          {emptyText}
+        </div>
+      ) : (
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-slate-500">
+                <th className="px-3 py-2">#</th>
+                <th className="px-3 py-2">Trade ID</th>
+                <th className="px-3 py-2">Opened</th>
+                <th className="px-3 py-2">Symbol</th>
+                <th className="px-3 py-2">Side</th>
+                <th className="px-3 py-2">Member</th>
+                <th className="px-3 py-2">Entry</th>
+                <th className="px-3 py-2">Qty</th>
+                <th className="px-3 py-2">PnL</th>
+                <th className="px-3 py-2">Cumulative</th>
+                <th className="px-3 py-2">Scope</th>
+                {showExclusionColumns ? <th className="px-3 py-2">Reason</th> : null}
+                {showExclusionColumns ? <th className="px-3 py-2">Detail</th> : null}
+                <th className="px-3 py-2">Strategy</th>
+                <th className="px-3 py-2">Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {safe.map((row) => (
+                <tr key={`${row.trade_id}-${row.index}-${row.scope_status}`} className="border-b last:border-0 align-top">
+                  <td className="px-3 py-2">{row.index}</td>
+                  <td className="px-3 py-2">{row.trade_id}</td>
+                  <td className="px-3 py-2">{formatDateTime(row.opened_at)}</td>
+                  <td className="px-3 py-2">{row.symbol}</td>
+                  <td className="px-3 py-2">{row.side}</td>
+                  <td className="px-3 py-2">{row.member_id}</td>
+                  <td className="px-3 py-2">{formatNumber(row.entry_price, 4)}</td>
+                  <td className="px-3 py-2">{formatNumber(row.quantity, 4)}</td>
+                  <td className="px-3 py-2">{formatNumber(row.net_pnl, 4)}</td>
+                  <td className="px-3 py-2">{formatNumber(row.cumulative_pnl, 4)}</td>
+                  <td className="px-3 py-2">
+                    <ScopeStatusBadge status={row.scope_status} />
+                  </td>
+                  {showExclusionColumns ? (
+                    <td className="px-3 py-2">
+                      <div className="flex min-w-[140px]">
+                        <ExclusionReasonBadge reason={row.exclusion_reason_label || row.exclusion_reason} />
+                      </div>
+                    </td>
+                  ) : null}
+                  {showExclusionColumns ? (
+                    <td className="px-3 py-2 text-slate-600">
+                      <div className="min-w-[280px] whitespace-normal">
+                        {row.exclusion_reason_detail || "—"}
+                      </div>
+                    </td>
+                  ) : null}
+                  <td className="px-3 py-2">{row.strategy_tag || "—"}</td>
+                  <td className="px-3 py-2">{row.source_system || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function WorkspaceClaimDetailPage() {
   const params = useParams();
   const pathname = usePathname();
@@ -400,7 +548,7 @@ export default function WorkspaceClaimDetailPage() {
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [integrity, setIntegrity] = useState<ClaimIntegrityResult | null>(null);
   const [equityCurve, setEquityCurve] = useState<ClaimEquityCurve | null>(null);
-  const [claimTrades, setClaimTrades] = useState<ClaimTradeEvidenceRow[]>([]);
+  const [claimTrades, setClaimTrades] = useState<ClaimTradeEvidence | null>(null);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkingIntegrity, setCheckingIntegrity] = useState(false);
@@ -453,14 +601,7 @@ export default function WorkspaceClaimDetailPage() {
           api.getClaimVersions(claimId),
           api.getAuditEventsForEntity("claim_schema", claimId),
           api.getClaimEquityCurve(claimId),
-          api.getClaimTrades(claimId).catch(() => ({
-            claim_schema_id: claimId,
-            claim_hash: "",
-            name: "",
-            status: "",
-            trade_count: 0,
-            trades: [],
-          })),
+          api.getClaimTrades(claimId).catch(() => emptyTradeEvidence(claimId)),
           api.getWorkspaceUsage(workspaceId).catch(() => null),
         ]);
 
@@ -469,7 +610,7 @@ export default function WorkspaceClaimDetailPage() {
       setVersions(Array.isArray(versionsRes) ? versionsRes : []);
       setAuditEvents(Array.isArray(auditRes) ? auditRes : []);
       setEquityCurve(equityRes);
-      setClaimTrades(safeRows(tradesRes?.trades));
+      setClaimTrades(tradesRes ?? emptyTradeEvidence(claimId));
       setUsage(usageRes);
 
       if (claimRes.status === "locked") {
@@ -716,9 +857,26 @@ export default function WorkspaceClaimDetailPage() {
           />
         </section>
 
-        {equityCurve ? <EquityCurveChart title="Internal Equity Curve" points={equityCurve.curve} /> : null}
+        {equityCurve ? (
+  <EquityCurveChart title="Internal Equity Curve" points={equityCurve.curve} />
+) : null}
 
-        <ClaimTradesTable rows={claimTrades} />
+<ScopeSummaryCard evidence={claimTrades} />
+
+<ScopeTradesTable
+  title="Included Trades"
+  subtitle="Exact in-scope trades used to compute this claim, ordered by trade open time."
+  rows={claimTrades?.included_trades ?? []}
+  emptyText="No included trades were found for this claim."
+/>
+
+<ScopeTradesTable
+  title="Excluded Trades"
+  subtitle="Trades excluded from the claim scope, with explicit exclusion reasons."
+  rows={claimTrades?.excluded_trades ?? []}
+  emptyText="No excluded trades were found for this claim."
+  showExclusionColumns={true}
+/>
 
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
@@ -745,7 +903,7 @@ export default function WorkspaceClaimDetailPage() {
 
               <div className="mt-4">
                 <div className="text-sm text-slate-500">Methodology Notes</div>
-                <div className="mt-1 rounded-xl bg-slate-50 p-3 text-sm text-slate-700 whitespace-pre-wrap">
+                <div className="mt-1 whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
                   {claim.methodology_notes || "—"}
                 </div>
               </div>
@@ -830,13 +988,13 @@ export default function WorkspaceClaimDetailPage() {
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>
                       <div className="text-sm text-slate-500">Stored Hash</div>
-                      <div className="mt-1 rounded-xl bg-white p-3 font-mono text-xs text-slate-700 break-all">
+                      <div className="mt-1 break-all rounded-xl bg-white p-3 font-mono text-xs text-slate-700">
                         {integrity.stored_hash}
                       </div>
                     </div>
                     <div>
                       <div className="text-sm text-slate-500">Recomputed Hash</div>
-                      <div className="mt-1 rounded-xl bg-white p-3 font-mono text-xs text-slate-700 break-all">
+                      <div className="mt-1 break-all rounded-xl bg-white p-3 font-mono text-xs text-slate-700">
                         {integrity.recomputed_hash}
                       </div>
                     </div>
@@ -974,62 +1132,22 @@ export default function WorkspaceClaimDetailPage() {
             </div>
 
             <div className="rounded-2xl border bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-xl font-semibold">Versions</h2>
-                <div className="text-sm text-slate-500">{versions.length} total</div>
-              </div>
-
-              {versions.length === 0 ? (
-                <div className="mt-4 text-sm text-slate-500">No versions found.</div>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  {versions.map((version) => (
+              <h2 className="text-xl font-semibold">Claim Versions</h2>
+              <div className="mt-4 space-y-3">
+                {versions.length === 0 ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                    No governed versions found.
+                  </div>
+                ) : (
+                  versions.map((version) => (
                     <VersionCard
                       key={version.id}
                       version={version}
                       workspaceId={workspaceId}
                       isCurrent={version.id === claim.id}
                     />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-2xl border bg-white p-5 shadow-sm">
-              <h2 className="text-xl font-semibold">Quick Links</h2>
-              <div className="mt-4 space-y-2 text-sm">
-                <Link
-                  href={`/workspace/${workspaceId}/claim/${claim.id}`}
-                  className="block rounded-lg border px-3 py-2 hover:bg-slate-50"
-                >
-                  Refresh current claim page
-                </Link>
-                <Link
-                  href={`/workspace/${workspaceId}/claims`}
-                  className="block rounded-lg border px-3 py-2 hover:bg-slate-50"
-                >
-                  Go to claims list
-                </Link>
-                <Link
-                  href={`/workspace/${workspaceId}/evidence?claimId=${claim.id}`}
-                  className="block rounded-lg border px-3 py-2 hover:bg-slate-50"
-                >
-                  Go to evidence page
-                </Link>
-                <Link
-                  href={`/workspace/${workspaceId}/ledger`}
-                  className="block rounded-lg border px-3 py-2 hover:bg-slate-50"
-                >
-                  Go to ledger page
-                </Link>
-                {publicRouteReady || unlistedRouteReady ? (
-                  <Link
-                    href={`/verify/${claim.claim_hash}`}
-                    className="block rounded-lg border px-3 py-2 hover:bg-slate-50"
-                  >
-                    Open public verification surface
-                  </Link>
-                ) : null}
+                  ))
+                )}
               </div>
             </div>
           </div>
