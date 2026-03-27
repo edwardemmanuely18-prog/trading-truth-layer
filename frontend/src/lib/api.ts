@@ -468,7 +468,46 @@ export type ClaimTradeEvidenceRow = {
   currency: string;
   strategy_tag?: string | null;
   source_system?: string | null;
-  cumulative_pnl: number;
+  cumulative_pnl: number | null;
+};
+
+export type ClaimTradeScopeReason =
+  | "OUTSIDE_PERIOD"
+  | "MEMBER_FILTER"
+  | "SYMBOL_FILTER"
+  | "MANUAL_EXCLUSION";
+
+export type ClaimTradeScopeRow = {
+  index: number;
+  trade_id: number;
+  workspace_id: number;
+  member_id: number;
+  symbol: string;
+  side: string;
+  opened_at: string;
+  closed_at: string | null;
+  entry_price: number;
+  exit_price: number | null;
+  quantity: number;
+  net_pnl: number;
+  currency: string;
+  strategy_tag?: string | null;
+  source_system?: string | null;
+  cumulative_pnl: number | null;
+
+  scope_status: "included" | "excluded";
+
+  exclusion_reason?: ClaimTradeScopeReason | null;
+  exclusion_reason_label?: string | null;
+  exclusion_reason_detail?: string | null;
+};
+
+
+export type ClaimTradeScopeSummary = {
+  workspace_trade_count: number;
+  included_trade_count: number;
+  excluded_trade_count: number;
+  excluded_breakdown: Partial<Record<ClaimTradeScopeReason, number>>;
 };
 
 export type ClaimTradeEvidence = {
@@ -478,6 +517,11 @@ export type ClaimTradeEvidence = {
   status: string;
   trade_count: number;
   trades: ClaimTradeEvidenceRow[];
+  included_trade_count?: number;
+  excluded_trade_count?: number;
+  included_trades?: ClaimTradeScopeRow[];
+  excluded_trades?: ClaimTradeScopeRow[];
+  summary?: ClaimTradeScopeSummary;
 };
 
 export type EvidencePack = {
@@ -914,6 +958,67 @@ function ensureWorkspaceInvite(row: WorkspaceInvite): WorkspaceInvite {
   };
 }
 
+function ensureClaimTradeScopeRow(row: Partial<ClaimTradeScopeRow>, fallbackStatus: "included" | "excluded"): ClaimTradeScopeRow {
+  return {
+    index: Number(row.index ?? 0),
+    trade_id: Number(row.trade_id ?? 0),
+    workspace_id: Number(row.workspace_id ?? 0),
+    member_id: Number(row.member_id ?? 0),
+    symbol: String(row.symbol ?? ""),
+    side: String(row.side ?? ""),
+    opened_at: String(row.opened_at ?? ""),
+    closed_at: row.closed_at ?? null,
+    entry_price: Number(row.entry_price ?? 0),
+    exit_price: typeof row.exit_price === "number" ? row.exit_price : row.exit_price ?? null,
+    quantity: Number(row.quantity ?? 0),
+    net_pnl: Number(row.net_pnl ?? 0),
+    currency: String(row.currency ?? ""),
+    strategy_tag: row.strategy_tag ?? null,
+    source_system: row.source_system ?? null,
+    cumulative_pnl:
+      typeof row.cumulative_pnl === "number" ? row.cumulative_pnl : row.cumulative_pnl ?? null,
+    scope_status: row.scope_status ?? fallbackStatus,
+    exclusion_reason: row.exclusion_reason ?? null,
+    exclusion_reason_label: row.exclusion_reason_label ?? null,
+    exclusion_reason_detail: row.exclusion_reason_detail ?? null,
+  };
+}
+
+function ensureClaimTradeEvidence(row: ClaimTradeEvidence): ClaimTradeEvidence {
+  const includedRows = Array.isArray(row?.included_trades)
+    ? row.included_trades.map((item) => ensureClaimTradeScopeRow(item, "included"))
+    : Array.isArray(row?.trades)
+      ? row.trades.map((item) => ensureClaimTradeScopeRow(item as ClaimTradeScopeRow, "included"))
+      : [];
+
+  const excludedRows = Array.isArray(row?.excluded_trades)
+    ? row.excluded_trades.map((item) => ensureClaimTradeScopeRow(item, "excluded"))
+    : [];
+
+  return {
+    ...row,
+    trade_count: Number(row?.trade_count ?? includedRows.length),
+    trades: includedRows,
+    included_trade_count: Number(row?.included_trade_count ?? includedRows.length),
+    excluded_trade_count: Number(row?.excluded_trade_count ?? excludedRows.length),
+    included_trades: includedRows,
+    excluded_trades: excludedRows,
+    summary: row?.summary
+      ? {
+          workspace_trade_count: Number(row.summary.workspace_trade_count ?? 0),
+          included_trade_count: Number(row.summary.included_trade_count ?? includedRows.length),
+          excluded_trade_count: Number(row.summary.excluded_trade_count ?? excludedRows.length),
+          excluded_breakdown: row.summary.excluded_breakdown ?? {},
+        }
+      : {
+          workspace_trade_count: includedRows.length + excludedRows.length,
+          included_trade_count: includedRows.length,
+          excluded_trade_count: excludedRows.length,
+          excluded_breakdown: {},
+        },
+  };
+}
+
 export const api = {
   register: async (payload: RegisterPayload): Promise<AuthResponse> => {
     const result = await apiFetch<AuthResponse>(`/auth/register`, {
@@ -1234,10 +1339,7 @@ export const api = {
       cache: "no-store",
     });
 
-    return {
-      ...row,
-      trades: Array.isArray(row.trades) ? row.trades : [],
-    };
+    return ensureClaimTradeEvidence(row);
   },
 
   getEvidencePack: async (claimSchemaId: number): Promise<EvidencePack> => {
