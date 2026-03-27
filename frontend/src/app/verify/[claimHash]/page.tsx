@@ -147,6 +147,36 @@ function DetailRow({
   );
 }
 
+function ScopeListCard({
+  title,
+  items,
+  emptyText,
+}: {
+  title: string;
+  items: Array<string | number>;
+  emptyText: string;
+}) {
+  return (
+    <div className="rounded-2xl border bg-white p-6 shadow-sm">
+      <h2 className="text-2xl font-semibold">{title}</h2>
+      {items.length === 0 ? (
+        <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">{emptyText}</div>
+      ) : (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {items.map((item) => (
+            <span
+              key={String(item)}
+              className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700"
+            >
+              {item}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PublicVerifyClaimPage() {
   const params = useParams();
 
@@ -336,9 +366,7 @@ export default function PublicVerifyClaimPage() {
 
             <div
               className={`rounded-2xl border px-5 py-4 ${
-                integrityOk
-                  ? "border-green-200 bg-green-50"
-                  : "border-red-200 bg-red-50"
+                integrityOk ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
               }`}
             >
               <div className="text-sm text-slate-500">Public Verification</div>
@@ -430,12 +458,12 @@ export default function PublicVerifyClaimPage() {
               <h2 className="text-2xl font-semibold">Verification Reading</h2>
               <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
                 <div className="rounded-xl bg-slate-50 p-4">
-                  <span className="font-medium text-slate-900">Claim hash:</span> canonical
-                  identity fingerprint for this claim definition.
+                  <span className="font-medium text-slate-900">Claim hash:</span> canonical identity
+                  fingerprint for this claim definition.
                 </div>
                 <div className="rounded-xl bg-slate-50 p-4">
-                  <span className="font-medium text-slate-900">Trade-set hash:</span> fingerprint
-                  of the in-scope trade evidence used by the record.
+                  <span className="font-medium text-slate-900">Trade-set hash:</span> fingerprint of
+                  the in-scope trade evidence used by the record.
                 </div>
                 <div className="rounded-xl bg-slate-50 p-4">
                   <span className="font-medium text-slate-900">Integrity valid:</span> recomputed
@@ -444,6 +472,20 @@ export default function PublicVerifyClaimPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="mb-8 grid gap-6 lg:grid-cols-2">
+          <ScopeListCard
+            title="Included Members"
+            items={Array.isArray(scope.included_members) ? scope.included_members : []}
+            emptyText="All members were considered in scope for this public claim."
+          />
+
+          <ScopeListCard
+            title="Included Symbols"
+            items={Array.isArray(scope.included_symbols) ? scope.included_symbols : []}
+            emptyText="All symbols were considered in scope for this public claim."
+          />
         </div>
 
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
