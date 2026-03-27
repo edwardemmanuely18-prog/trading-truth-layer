@@ -31,8 +31,21 @@ from app.models.user import User
 from app.models.workspace import Workspace
 from app.services.audit_service import log_audit_event
 from app.services.claim_service import compute_claim_hash
+from app.services.entitlements import enforce_claim_creation_allowed
 
 router = APIRouter()
+
+EXCLUSION_REASON_OUTSIDE_PERIOD = "OUTSIDE_PERIOD"
+EXCLUSION_REASON_MEMBER_FILTER = "MEMBER_FILTER"
+EXCLUSION_REASON_SYMBOL_FILTER = "SYMBOL_FILTER"
+EXCLUSION_REASON_MANUAL_EXCLUSION = "MANUAL_EXCLUSION"
+
+EXCLUSION_REASON_LABELS = {
+    EXCLUSION_REASON_OUTSIDE_PERIOD: "Outside claim period",
+    EXCLUSION_REASON_MEMBER_FILTER: "Member not included",
+    EXCLUSION_REASON_SYMBOL_FILTER: "Symbol not included",
+    EXCLUSION_REASON_MANUAL_EXCLUSION: "Manually excluded",
+}
 
 
 class ClaimSchemaCreate(BaseModel):
@@ -143,31 +156,6 @@ def workspace_limits_disabled() -> bool:
 
     dotenv_value = read_env_value_from_backend_dotenv("DISABLE_WORKSPACE_LIMITS")
     return parse_bool_like(dotenv_value)
-
-
-def enforce_workspace_claim_limit(workspace_id: int, db: Session):
-    if workspace_limits_disabled():
-        return
-
-    workspace = get_workspace_or_404(workspace_id, db)
-
-    claim_limit = workspace.claim_limit or 0
-    current_claim_count = (
-        db.query(ClaimSchema)
-        .filter(ClaimSchema.workspace_id == workspace_id)
-        .count()
-    )
-
-    if claim_limit > 0 and current_claim_count >= claim_limit:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                f"Claim limit reached for workspace {workspace_id}. "
-                f"Current claims: {current_claim_count}. "
-                f"Plan limit: {claim_limit}. "
-                f"Upgrade workspace plan to create additional claims."
-            ),
-        )
 
 
 def serialize_schema(schema: ClaimSchema):
@@ -290,6 +278,183 @@ def resolve_schema_trades(schema: ClaimSchema, db: Session):
         filtered.append(trade)
 
     return filtered
+
+
+def build_exclusion_reason_detail(
+    reason: str,
+    trade: Trade,
+    schema: ClaimSchema,
+    included_members: list[int],
+    included_symbols: list[str],
+):
+    opened_at_value = coerce_trade_opened_at(trade.opened_at)
+    opened_at_text = (
+        opened_at_value.isoformat()
+        if isinstance(opened_at_value, datetime)
+        else str(trade.opened_at)
+    )
+
+    if reason == EXCLUSION_REASON_OUTSIDE_PERIOD:
+        return (
+            f"Trade opened at {opened_at_text} is outside the claim period "
+            f"{schema.period_start} to {schema.period_end}."
+        )
+
+    if reason == EXCLUSION_REASON_MEMBER_FILTER:
+        allowed = ", ".join(str(x) for x in included_members) or "all members"
+        return f"Trade member_id {trade.member_id} is not in the included member set ({allowed})."
+
+    if reason == EXCLUSION_REASON_SYMBOL_FILTER:
+        allowed = ", ".join(included_symbols) or "all symbols"
+        return f"Trade symbol {(trade.symbol or '').upper()} is not in the included symbol set ({allowed})."
+
+    if reason == EXCLUSION_REASON_MANUAL_EXCLUSION:
+        return f"Trade {trade.id} was explicitly excluded in the claim schema."
+
+    return "Trade was excluded by claim scope rules."
+
+
+def classify_trade_scope(
+    trade: Trade,
+    schema: ClaimSchema,
+    period_start,
+    period_end,
+    included_members: list[int],
+    included_symbols: list[str],
+    excluded_trade_ids: set[int],
+):
+    trade_dt = coerce_trade_opened_at(trade.opened_at)
+
+    if period_start is not None and (trade_dt is None or trade_dt < period_start):
+        return {
+            "scope_status": "excluded",
+            "reason": EXCLUSION_REASON_OUTSIDE_PERIOD,
+            "reason_label": EXCLUSION_REASON_LABELS[EXCLUSION_REASON_OUTSIDE_PERIOD],
+            "reason_detail": build_exclusion_reason_detail(
+                EXCLUSION_REASON_OUTSIDE_PERIOD,
+                trade,
+                schema,
+                included_members,
+                included_symbols,
+            ),
+        }
+
+    if period_end is not None and (trade_dt is None or trade_dt >= period_end):
+        return {
+            "scope_status": "excluded",
+            "reason": EXCLUSION_REASON_OUTSIDE_PERIOD,
+            "reason_label": EXCLUSION_REASON_LABELS[EXCLUSION_REASON_OUTSIDE_PERIOD],
+            "reason_detail": build_exclusion_reason_detail(
+                EXCLUSION_REASON_OUTSIDE_PERIOD,
+                trade,
+                schema,
+                included_members,
+                included_symbols,
+            ),
+        }
+
+    if included_members and trade.member_id not in included_members:
+        return {
+            "scope_status": "excluded",
+            "reason": EXCLUSION_REASON_MEMBER_FILTER,
+            "reason_label": EXCLUSION_REASON_LABELS[EXCLUSION_REASON_MEMBER_FILTER],
+            "reason_detail": build_exclusion_reason_detail(
+                EXCLUSION_REASON_MEMBER_FILTER,
+                trade,
+                schema,
+                included_members,
+                included_symbols,
+            ),
+        }
+
+    symbol = (trade.symbol or "").upper()
+    if included_symbols and symbol not in included_symbols:
+        return {
+            "scope_status": "excluded",
+            "reason": EXCLUSION_REASON_SYMBOL_FILTER,
+            "reason_label": EXCLUSION_REASON_LABELS[EXCLUSION_REASON_SYMBOL_FILTER],
+            "reason_detail": build_exclusion_reason_detail(
+                EXCLUSION_REASON_SYMBOL_FILTER,
+                trade,
+                schema,
+                included_members,
+                included_symbols,
+            ),
+        }
+
+    if trade.id in excluded_trade_ids:
+        return {
+            "scope_status": "excluded",
+            "reason": EXCLUSION_REASON_MANUAL_EXCLUSION,
+            "reason_label": EXCLUSION_REASON_LABELS[EXCLUSION_REASON_MANUAL_EXCLUSION],
+            "reason_detail": build_exclusion_reason_detail(
+                EXCLUSION_REASON_MANUAL_EXCLUSION,
+                trade,
+                schema,
+                included_members,
+                included_symbols,
+            ),
+        }
+
+    return {
+        "scope_status": "included",
+        "reason": None,
+        "reason_label": None,
+        "reason_detail": None,
+    }
+
+
+def resolve_schema_trade_scope(schema: ClaimSchema, db: Session):
+    included_members = json.loads(schema.included_member_ids_json or "[]")
+    included_symbols = [s.upper() for s in json.loads(schema.included_symbols_json or "[]")]
+    excluded_trade_ids = set(json.loads(schema.excluded_trade_ids_json or "[]"))
+
+    period_start = parse_period_start(schema.period_start)
+    period_end = parse_period_end(schema.period_end)
+
+    trades = db.query(Trade).filter(Trade.workspace_id == schema.workspace_id).all()
+
+    included = []
+    excluded = []
+    excluded_breakdown = {
+        EXCLUSION_REASON_OUTSIDE_PERIOD: 0,
+        EXCLUSION_REASON_MEMBER_FILTER: 0,
+        EXCLUSION_REASON_SYMBOL_FILTER: 0,
+        EXCLUSION_REASON_MANUAL_EXCLUSION: 0,
+    }
+
+    for trade in trades:
+        result = classify_trade_scope(
+            trade=trade,
+            schema=schema,
+            period_start=period_start,
+            period_end=period_end,
+            included_members=included_members,
+            included_symbols=included_symbols,
+            excluded_trade_ids=excluded_trade_ids,
+        )
+
+        if result["scope_status"] == "included":
+            included.append(trade)
+            continue
+
+        excluded.append(
+            {
+                "trade": trade,
+                "reason": result["reason"],
+                "reason_label": result["reason_label"],
+                "reason_detail": result["reason_detail"],
+            }
+        )
+        if result["reason"] in excluded_breakdown:
+            excluded_breakdown[result["reason"]] += 1
+
+    return {
+        "workspace_trade_count": len(trades),
+        "included": included,
+        "excluded": excluded,
+        "excluded_breakdown": excluded_breakdown,
+    }
 
 
 def compute_trade_metrics(trades: list[Trade]):
@@ -419,6 +584,107 @@ def build_trade_evidence(trades: list[Trade]):
                 "source_system": trade.source_system,
                 "cumulative_pnl": round(cumulative, 4),
             }
+        )
+
+    return rows
+
+
+def build_trade_scope_row(
+    trade: Trade,
+    index: int,
+    cumulative_pnl: float | None = None,
+    scope_status: str = "included",
+    exclusion_reason: str | None = None,
+    exclusion_reason_label: str | None = None,
+    exclusion_reason_detail: str | None = None,
+):
+    pnl = float(trade.net_pnl) if trade.net_pnl is not None else 0.0
+
+    opened_at_value = coerce_trade_opened_at(trade.opened_at)
+    opened_at_iso = (
+        opened_at_value.isoformat()
+        if isinstance(opened_at_value, datetime)
+        else str(trade.opened_at)
+    )
+    closed_at_iso = (
+        trade.closed_at.isoformat()
+        if isinstance(trade.closed_at, datetime)
+        else (str(trade.closed_at) if trade.closed_at is not None else None)
+    )
+
+    return {
+        "index": index,
+        "trade_id": trade.id,
+        "workspace_id": trade.workspace_id,
+        "member_id": trade.member_id,
+        "symbol": trade.symbol,
+        "side": trade.side,
+        "opened_at": opened_at_iso,
+        "closed_at": closed_at_iso,
+        "entry_price": trade.entry_price,
+        "exit_price": trade.exit_price,
+        "quantity": trade.quantity,
+        "net_pnl": round(pnl, 4),
+        "currency": trade.currency,
+        "strategy_tag": trade.strategy_tag,
+        "source_system": trade.source_system,
+        "cumulative_pnl": round(cumulative_pnl, 4) if cumulative_pnl is not None else None,
+        "scope_status": scope_status,
+        "exclusion_reason": exclusion_reason,
+        "exclusion_reason_label": exclusion_reason_label,
+        "exclusion_reason_detail": exclusion_reason_detail,
+    }
+
+
+def build_included_trade_scope_rows(trades: list[Trade]):
+    ordered = sorted(
+        trades,
+        key=lambda t: (
+            coerce_trade_opened_at(t.opened_at) or datetime.min,
+            t.id,
+        ),
+    )
+
+    cumulative = 0.0
+    rows = []
+
+    for index, trade in enumerate(ordered, start=1):
+        pnl = float(trade.net_pnl) if trade.net_pnl is not None else 0.0
+        cumulative += pnl
+        rows.append(
+            build_trade_scope_row(
+                trade=trade,
+                index=index,
+                cumulative_pnl=cumulative,
+                scope_status="included",
+            )
+        )
+
+    return rows
+
+
+def build_excluded_trade_scope_rows(excluded_items: list[dict]):
+    ordered = sorted(
+        excluded_items,
+        key=lambda item: (
+            coerce_trade_opened_at(item["trade"].opened_at) or datetime.min,
+            item["trade"].id,
+        ),
+    )
+
+    rows = []
+    for index, item in enumerate(ordered, start=1):
+        trade = item["trade"]
+        rows.append(
+            build_trade_scope_row(
+                trade=trade,
+                index=index,
+                cumulative_pnl=None,
+                scope_status="excluded",
+                exclusion_reason=item.get("reason"),
+                exclusion_reason_label=item.get("reason_label"),
+                exclusion_reason_detail=item.get("reason_detail"),
+            )
         )
 
     return rows
@@ -1332,7 +1598,7 @@ def create_claim_schema(
     current_user: User = Depends(get_current_user),
 ):
     require_workspace_operator_or_owner(payload.workspace_id, current_user, db)
-    enforce_workspace_claim_limit(payload.workspace_id, db)
+    enforce_claim_creation_allowed(payload.workspace_id, db)
 
     visibility = normalize_visibility(payload.visibility)
 
@@ -1445,7 +1711,7 @@ def clone_claim_schema(
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
     require_workspace_operator_or_owner(source.workspace_id, current_user, db)
-    enforce_workspace_claim_limit(source.workspace_id, db)
+    enforce_claim_creation_allowed(source.workspace_id, db)
 
     root_id = source.root_claim_id or source.id
     new_name = build_next_version_name(db, source.workspace_id, source.name)
@@ -1782,16 +2048,27 @@ def get_claim_trades(
 
     require_workspace_member(schema.workspace_id, current_user, db)
 
-    filtered_trades = resolve_schema_trades(schema, db)
-    evidence_rows = build_trade_evidence(filtered_trades)
+    scope = resolve_schema_trade_scope(schema, db)
+    included_rows = build_included_trade_scope_rows(scope["included"])
+    excluded_rows = build_excluded_trade_scope_rows(scope["excluded"])
 
     return {
         "claim_schema_id": schema.id,
         "claim_hash": compute_claim_hash(schema),
         "name": schema.name,
         "status": schema.status,
-        "trade_count": len(evidence_rows),
-        "trades": evidence_rows,
+        "trade_count": len(included_rows),
+        "trades": included_rows,
+        "included_trade_count": len(included_rows),
+        "excluded_trade_count": len(excluded_rows),
+        "included_trades": included_rows,
+        "excluded_trades": excluded_rows,
+        "summary": {
+            "workspace_trade_count": scope["workspace_trade_count"],
+            "included_trade_count": len(included_rows),
+            "excluded_trade_count": len(excluded_rows),
+            "excluded_breakdown": scope["excluded_breakdown"],
+        },
     }
 
 
