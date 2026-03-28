@@ -14,6 +14,7 @@ from app.models.workspace import Workspace
 from app.models.workspace_invite import WorkspaceInvite
 from app.models.workspace_membership import WorkspaceMembership
 from app.services.audit_service import log_audit_event
+from app.services.entitlements import enforce_member_invite_allowed
 
 router = APIRouter()
 
@@ -339,7 +340,7 @@ def create_workspace_invite(
 
     require_workspace_owner(workspace_id, current_user, db)
     expire_stale_pending_invites(workspace_id, db)
-    enforce_workspace_member_limit(workspace_id, db)
+    enforce_member_invite_allowed(workspace_id, db)
 
     role = normalize_invite_role(payload.role)
     normalized_email = normalize_email(payload.email)

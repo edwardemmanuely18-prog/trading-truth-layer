@@ -17,6 +17,7 @@ from app.models.trade import Trade
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.models.workspace_membership import WorkspaceMembership
+from app.services.entitlements import enforce_trade_import_allowed
 from app.services.ingestion_service import import_csv_trades
 
 router = APIRouter()
@@ -304,7 +305,7 @@ def create_trade(
     current_user: User = Depends(get_current_user),
 ):
     require_workspace_operator_or_owner(workspace_id, current_user, db)
-    enforce_workspace_trade_limit(workspace_id, db, additional_needed=1)
+    enforce_trade_import_allowed(workspace_id, db, additional_trades=1)
 
     conflict = find_locked_claim_conflict(
         db=db,
@@ -505,7 +506,7 @@ async def import_trades_csv(
             "errors": ["CSV file appears empty or has no data rows"],
         }
 
-    enforce_workspace_trade_limit(workspace_id, db, additional_needed=estimated_rows)
+    enforce_trade_import_allowed(workspace_id, db, additional_trades=estimated_rows)
 
     try:
         return import_csv_trades(

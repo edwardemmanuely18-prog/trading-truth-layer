@@ -1,16 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import Navbar from "../../components/Navbar";
 import ClaimVerificationSignature from "../../components/ClaimVerificationSignature";
-import { api, type PublicClaimDirectoryItem } from "../../lib/api";
-
-type PageProps = {
-  searchParams?: Promise<{
-    q?: string;
-    sort?: string;
-    status?: string;
-    visibility?: string;
-  }>;
-};
+import { api } from "../../lib/api";
 
 function formatDateTime(value?: string | null) {
   if (!value) return "—";
@@ -21,550 +15,654 @@ function formatDateTime(value?: string | null) {
   }
 }
 
-function formatNumber(value?: number | null, digits = 2) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
-  return Number(value).toFixed(digits);
+function formatNumber(value: unknown, digits = 2) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "—";
+  return num.toFixed(digits);
 }
 
-function formatPercent(value?: number | null, digits = 2) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
-  return `${(Number(value) * 100).toFixed(digits)}%`;
+function formatPercent(value: unknown, digits = 2) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "—";
+  return `${(num * 100).toFixed(digits)}%`;
 }
 
-function normalizeText(value: unknown) {
+function shortHash(value?: string | null, head = 12, tail = 8) {
+  const text = String(value ?? "").trim();
+  if (!text) return "—";
+  if (text.length <= head + tail + 3) return text;
+  return `${text.slice(0, head)}...${text.slice(-tail)}`;
+}
+
+function normalize(value: unknown) {
   return String(value ?? "").toLowerCase().trim();
 }
 
-function truncateMiddle(value?: string | null, start = 12, end = 10) {
-  if (!value) return "—";
-  if (value.length <= start + end + 3) return value;
-  return `${value.slice(0, start)}...${value.slice(-end)}`;
+function toArray<T = any>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
 }
 
-function safeLeaderboard(claim: PublicClaimDirectoryItem) {
-  return Array.isArray(claim?.leaderboard) ? claim.leaderboard : [];
+function safeString(value: unknown, fallback = "—") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
 }
 
-function safeScope(claim: PublicClaimDirectoryItem) {
-  return claim?.scope ?? {
-    period_start: "",
-    period_end: "",
-    included_members: [],
-    included_symbols: [],
-    methodology_notes: "",
-    visibility: "",
-  };
+function extractTopLeaderboardEntry(row: any) {
+  const leaderboard = toArray(row?.leaderboard);
+  return leaderboard.length > 0 ? leaderboard[0] : null;
 }
 
-function safeLifecycle(claim: PublicClaimDirectoryItem) {
-  return claim?.lifecycle ?? {
-    status: "",
-    verified_at: null,
-    published_at: null,
-    locked_at: null,
-    locked_trade_set_hash: null,
-  };
+function buildVerifyHref(row: any) {
+  const claimHash = String(row?.claim_hash ?? "").trim();
+  return claimHash ? `/verify/${claimHash}` : "/claims";
 }
 
-function StatusBadge({ status }: { status?: string | null }) {
-  const normalized = normalizeText(status);
-
-  const className =
-    normalized === "locked"
-      ? "bg-green-100 text-green-800 border-green-200"
-      : normalized === "published"
-        ? "bg-blue-100 text-blue-800 border-blue-200"
-        : normalized === "verified"
-          ? "bg-amber-100 text-amber-800 border-amber-200"
-          : "bg-slate-100 text-slate-800 border-slate-200";
-
-  return (
-    <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
-      {status || "unknown"}
-    </span>
-  );
+function statusTone(status: string) {
+  const value = normalize(status);
+  if (value === "locked") return "border-green-200 bg-green-50 text-green-800";
+  if (value === "published") return "border-blue-200 bg-blue-50 text-blue-800";
+  if (value === "verified") return "border-indigo-200 bg-indigo-50 text-indigo-800";
+  if (value === "draft") return "border-slate-200 bg-slate-50 text-slate-700";
+  return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
-function VisibilityBadge({ visibility }: { visibility?: string | null }) {
-  const normalized = normalizeText(visibility);
-
-  const className =
-    normalized === "public"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-      : normalized === "unlisted"
-        ? "border-violet-200 bg-violet-50 text-violet-800"
-        : "border-slate-200 bg-slate-100 text-slate-800";
-
-  return (
-    <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
-      visibility: {visibility || "—"}
-    </span>
-  );
+function visibilityTone(value: string) {
+  const normalized = normalize(value);
+  if (normalized === "public") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (normalized === "unlisted") return "border-amber-200 bg-amber-50 text-amber-800";
+  if (normalized === "private") return "border-slate-200 bg-slate-50 text-slate-700";
+  return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
-function ExposureBadge({ claim }: { claim: PublicClaimDirectoryItem }) {
-  const isPubliclyAccessible = Boolean(claim.is_publicly_accessible);
-
-  return (
-    <span
-      className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${
-        isPubliclyAccessible
-          ? "border-green-200 bg-green-50 text-green-700"
-          : "border-slate-200 bg-slate-50 text-slate-700"
-      }`}
-    >
-      {isPubliclyAccessible ? "verification route active" : "route inactive"}
-    </span>
-  );
+function integrityTone(value: string) {
+  const normalized = normalize(value);
+  if (normalized === "valid") return "border-green-200 bg-green-50 text-green-800";
+  if (normalized === "compromised") return "border-red-200 bg-red-50 text-red-800";
+  return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
-function SummaryCard({
-  label,
-  value,
-  hint,
+function routeTone(value: string) {
+  const normalized = normalize(value);
+  if (normalized === "active") return "border-green-200 bg-green-50 text-green-800";
+  if (normalized === "pending lock") return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+function Pill({
+  children,
+  className = "",
 }: {
-  label: string;
-  value: string;
-  hint: string;
+  children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="rounded-2xl bg-slate-50 p-4">
-      <div className="text-sm text-slate-500">{label}</div>
-      <div className="mt-1 text-2xl font-semibold">{value}</div>
-      <div className="mt-2 text-xs text-slate-500">{hint}</div>
+    <div className={`rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
+      {children}
     </div>
   );
 }
 
-function sortClaims(claims: PublicClaimDirectoryItem[], sort: string) {
-  const items = [...claims];
+function getVerificationRouteState(row: any) {
+  const status = normalize(row?.verification_status ?? row?.status);
+  const visibility = normalize(row?.visibility);
 
-  switch (sort) {
-    case "net_pnl_desc":
-      return items.sort((a, b) => (b.net_pnl ?? 0) - (a.net_pnl ?? 0));
-    case "net_pnl_asc":
-      return items.sort((a, b) => (a.net_pnl ?? 0) - (b.net_pnl ?? 0));
-    case "profit_factor_desc":
-      return items.sort((a, b) => (b.profit_factor ?? 0) - (a.profit_factor ?? 0));
-    case "win_rate_desc":
-      return items.sort((a, b) => (b.win_rate ?? 0) - (a.win_rate ?? 0));
-    case "name_asc":
-      return items.sort((a, b) => a.name.localeCompare(b.name));
-    case "oldest":
-      return items.sort((a, b) => a.claim_schema_id - b.claim_schema_id);
-    case "newest":
-    default:
-      return items.sort((a, b) => b.claim_schema_id - a.claim_schema_id);
+  if (status === "locked" && (visibility === "public" || visibility === "unlisted")) {
+    return "active";
   }
+  if (status === "published" && (visibility === "public" || visibility === "unlisted")) {
+    return "pending lock";
+  }
+  if (status === "locked") {
+    return "active";
+  }
+  return "internal only";
 }
 
-function filterClaims(
-  claims: PublicClaimDirectoryItem[],
-  q: string,
-  status: string,
-  visibility: string
-) {
-  const query = normalizeText(q);
+function sortRows(rows: any[], sortBy: string) {
+  const next = [...rows];
 
-  return claims.filter((claim) => {
-    const scope = safeScope(claim);
-
-    const matchesQuery =
-      !query ||
-      normalizeText(claim.name).includes(query) ||
-      normalizeText(claim.claim_hash).includes(query) ||
-      normalizeText(claim.claim_schema_id).includes(query) ||
-      normalizeText(scope.methodology_notes).includes(query) ||
-      normalizeText(scope.period_start).includes(query) ||
-      normalizeText(scope.period_end).includes(query) ||
-      normalizeText(scope.included_symbols.join(",")).includes(query);
-
-    const matchesStatus =
-      status === "all" || normalizeText(claim.verification_status) === normalizeText(status);
-
-    const matchesVisibility =
-      visibility === "all" || normalizeText(scope.visibility) === normalizeText(visibility);
-
-    return matchesQuery && matchesStatus && matchesVisibility;
+  next.sort((a, b) => {
+    if (sortBy === "best_net_pnl") {
+      return Number(b?.net_pnl ?? 0) - Number(a?.net_pnl ?? 0);
+    }
+    if (sortBy === "best_profit_factor") {
+      return Number(b?.profit_factor ?? 0) - Number(a?.profit_factor ?? 0);
+    }
+    if (sortBy === "best_win_rate") {
+      return Number(b?.win_rate ?? 0) - Number(a?.win_rate ?? 0);
+    }
+    if (sortBy === "oldest") {
+      return Number(a?.claim_schema_id ?? a?.id ?? 0) - Number(b?.claim_schema_id ?? b?.id ?? 0);
+    }
+    return Number(b?.claim_schema_id ?? b?.id ?? 0) - Number(a?.claim_schema_id ?? a?.id ?? 0);
   });
+
+  return next;
 }
 
-function FilterChip({
-  href,
-  label,
-  active,
-}: {
-  href: string;
-  label: string;
-  active: boolean;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`inline-flex rounded-full border px-4 py-2 text-sm transition ${
-        active
-          ? "border-slate-900 bg-slate-900 text-white"
-          : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
-      }`}
-    >
-      {label}
-    </Link>
-  );
-}
+export default function PublicClaimsPage() {
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>("");
 
-function ClaimCard({ claim }: { claim: PublicClaimDirectoryItem }) {
-  const scope = safeScope(claim);
-  const lifecycle = safeLifecycle(claim);
-  const leaderboard = safeLeaderboard(claim);
+  const [searchInput, setSearchInput] = useState("");
+  const [statusInput, setStatusInput] = useState("all");
+  const [visibilityInput, setVisibilityInput] = useState("all");
+  const [sortInput, setSortInput] = useState("newest");
 
-  const topMember = leaderboard[0] ?? null;
-  const isLocked = normalizeText(claim.verification_status) === "locked";
+  const [searchApplied, setSearchApplied] = useState("");
+  const [statusApplied, setStatusApplied] = useState("all");
+  const [visibilityApplied, setVisibilityApplied] = useState("all");
+  const [sortApplied, setSortApplied] = useState("newest");
+  const [quickFilter, setQuickFilter] = useState("newest");
 
-  return (
-    <div className="rounded-3xl border bg-white p-6 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-4xl">
-          <div className="mb-2 text-sm text-slate-500">Public Verified Claim</div>
-          <h2 className="text-2xl font-semibold tracking-tight">{claim.name}</h2>
+  useEffect(() => {
+    let active = true;
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            <StatusBadge status={claim.verification_status} />
-            <VisibilityBadge visibility={scope.visibility || "—"} />
-            <ExposureBadge claim={claim} />
-            <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-              claim #{claim.claim_schema_id}
-            </span>
-          </div>
+    async function load() {
+      try {
+        setLoading(true);
+        setError("");
+        const result = await api.getPublicClaims();
+        if (!active) return;
+        setRows(Array.isArray(result) ? result : []);
+      } catch (err: any) {
+        if (!active) return;
+        setRows([]);
+        setError(err?.message || "Failed to load public claims.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
 
-          <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600">
-            Public trust surface for lifecycle-governed trading performance with claim
-            fingerprinting, trade-set fingerprinting, methodology scope, and verification-ready
-            metric snapshots.
-          </p>
-        </div>
+    void load();
 
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={`/verify/${claim.claim_hash}`}
-            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-          >
-            Open Verification Surface
-          </Link>
-        </div>
-      </div>
+    return () => {
+      active = false;
+    };
+  }, []);
 
-      <div className="mt-6">
-        <ClaimVerificationSignature
-          compact
-          status={claim.verification_status}
-          integrityStatus={isLocked ? "valid" : "not checked"}
-          claimHash={claim.claim_hash}
-          tradeSetHash={claim.trade_set_hash}
-          verifiedAt={lifecycle.verified_at}
-          lockedAt={lifecycle.locked_at}
-        />
-      </div>
+  const summary = useMemo(() => {
+    const locked = rows.filter(
+      (row) => normalize(row?.verification_status ?? row?.status) === "locked",
+    ).length;
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          label="Trade Count"
-          value={String(claim.trade_count ?? 0)}
-          hint="In-scope evidence rows"
-        />
-        <SummaryCard
-          label="Net PnL"
-          value={formatNumber(claim.net_pnl)}
-          hint="Aggregate net performance"
-        />
-        <SummaryCard
-          label="Profit Factor"
-          value={formatNumber(claim.profit_factor, 4)}
-          hint="Gross profit ÷ gross loss"
-        />
-        <SummaryCard
-          label="Win Rate"
-          value={formatPercent(claim.win_rate, 2)}
-          hint="Winning trades as percentage"
-        />
-      </div>
+    const published = rows.filter(
+      (row) => normalize(row?.verification_status ?? row?.status) === "published",
+    ).length;
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-        <div>
-          <div className="text-sm text-slate-500">Verification Period</div>
-          <div className="mt-1 font-medium">
-            {scope.period_start || "—"} → {scope.period_end || "—"}
-          </div>
+    const tradeCount = rows.reduce((sum, row) => {
+      const value = Number(row?.trade_count);
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl bg-slate-50 p-3">
-              <div className="text-sm text-slate-500">Verified At</div>
-              <div className="mt-1 font-medium">{formatDateTime(lifecycle.verified_at)}</div>
-            </div>
+    return {
+      total: rows.length,
+      locked,
+      published,
+      tradeCount,
+    };
+  }, [rows]);
 
-            <div className="rounded-xl bg-slate-50 p-3">
-              <div className="text-sm text-slate-500">Locked At</div>
-              <div className="mt-1 font-medium">{formatDateTime(lifecycle.locked_at)}</div>
-            </div>
-          </div>
+  const filteredRows = useMemo(() => {
+    let next = [...rows];
+    const q = normalize(searchApplied);
 
-          <div className="mt-4 text-sm text-slate-500">Methodology</div>
-          <div className="mt-1 rounded-xl bg-slate-50 p-3 text-sm whitespace-pre-wrap text-slate-700">
-            {scope.methodology_notes || "—"}
-          </div>
-        </div>
+    if (q) {
+      next = next.filter((row) => {
+        const haystack = [
+          row?.name,
+          row?.claim_hash,
+          row?.trade_set_hash,
+          row?.locked_trade_set_hash,
+          row?.methodology_notes,
+          row?.visibility,
+          row?.verification_status,
+          ...(toArray(row?.included_symbols) as any[]),
+        ]
+          .map((value) => String(value ?? ""))
+          .join(" ")
+          .toLowerCase();
 
-        <div className="space-y-4">
-          <div className="rounded-xl bg-slate-50 p-3">
-            <div className="text-sm text-slate-500">Top leaderboard entry</div>
-            <div className="mt-1 font-medium">
-              {topMember ? `${topMember.member} · ${formatNumber(topMember.net_pnl)}` : "—"}
-            </div>
-          </div>
+        return haystack.includes(q);
+      });
+    }
 
-          <div>
-            <div className="text-sm text-slate-500">Claim Hash</div>
-            <div className="mt-1 rounded-xl bg-slate-50 p-3 font-mono text-xs break-all text-slate-700">
-              {claim.claim_hash || "—"}
-            </div>
-            <div className="mt-1 text-xs text-slate-500">{truncateMiddle(claim.claim_hash)}</div>
-          </div>
+    if (statusApplied !== "all") {
+      next = next.filter(
+        (row) => normalize(row?.verification_status ?? row?.status) === normalize(statusApplied),
+      );
+    }
 
-          <div>
-            <div className="text-sm text-slate-500">Trade Set Hash</div>
-            <div className="mt-1 rounded-xl bg-slate-50 p-3 font-mono text-xs break-all text-slate-700">
-              {claim.trade_set_hash || "—"}
-            </div>
-            <div className="mt-1 text-xs text-slate-500">
-              {truncateMiddle(claim.trade_set_hash)}
-            </div>
-          </div>
-        </div>
-      </div>
+    if (visibilityApplied !== "all") {
+      next = next.filter((row) => normalize(row?.visibility) === normalize(visibilityApplied));
+    }
 
-      {leaderboard.length > 0 && (
-        <div className="mt-6">
-          <div className="mb-2 text-sm font-medium text-slate-700">Top Leaderboard Entries</div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-slate-500">
-                  <th className="px-3 py-2">Rank</th>
-                  <th className="px-3 py-2">Member</th>
-                  <th className="px-3 py-2">Net PnL</th>
-                  <th className="px-3 py-2">Win Rate</th>
-                  <th className="px-3 py-2">Profit Factor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {leaderboard.slice(0, 5).map((row) => (
-                  <tr
-                    key={`${claim.claim_schema_id}-${row.rank}-${row.member}`}
-                    className="border-b last:border-0"
-                  >
-                    <td className="px-3 py-2">{row.rank}</td>
-                    <td className="px-3 py-2">{row.member}</td>
-                    <td className="px-3 py-2">{formatNumber(row.net_pnl)}</td>
-                    <td className="px-3 py-2">{formatPercent(row.win_rate, 2)}</td>
-                    <td className="px-3 py-2">{formatNumber(row.profit_factor, 4)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+    if (quickFilter === "locked only") {
+      next = next.filter(
+        (row) => normalize(row?.verification_status ?? row?.status) === "locked",
+      );
+    } else if (quickFilter === "public only") {
+      next = next.filter((row) => normalize(row?.visibility) === "public");
+    }
 
-export default async function PublicClaimsPage({ searchParams }: PageProps) {
-  const resolvedSearch = (await searchParams) || {};
-  const q = resolvedSearch.q || "";
-  const sort = resolvedSearch.sort || "newest";
-  const status = resolvedSearch.status || "all";
-  const visibility = resolvedSearch.visibility || "all";
+    const effectiveSort =
+      quickFilter === "best net pnl"
+        ? "best_net_pnl"
+        : quickFilter === "best profit factor"
+          ? "best_profit_factor"
+          : quickFilter === "best win rate"
+            ? "best_win_rate"
+            : sortApplied;
 
-  const claims = await api.getPublicClaims();
-  const filtered = sortClaims(filterClaims(claims, q, status, visibility), sort);
+    return sortRows(next, effectiveSort);
+  }, [rows, searchApplied, statusApplied, visibilityApplied, sortApplied, quickFilter]);
 
-  const lockedCount = claims.filter(
-    (claim) => normalizeText(claim.verification_status) === "locked"
-  ).length;
-  const publishedCount = claims.filter(
-    (claim) => normalizeText(claim.verification_status) === "published"
-  ).length;
-  const totalTrades = claims.reduce((sum, claim) => sum + (claim.trade_count ?? 0), 0);
+  function applyFilters() {
+    setSearchApplied(searchInput);
+    setStatusApplied(statusInput);
+    setVisibilityApplied(visibilityInput);
+    setSortApplied(sortInput);
+  }
 
-  const qs = (next: { q?: string; sort?: string; status?: string; visibility?: string }) => {
-    const params = new URLSearchParams({
-      q: next.q ?? q,
-      sort: next.sort ?? sort,
-      status: next.status ?? status,
-      visibility: next.visibility ?? visibility,
-    });
-    return `/claims?${params.toString()}`;
-  };
+  function resetFilters() {
+    setSearchInput("");
+    setStatusInput("all");
+    setVisibilityInput("all");
+    setSortInput("newest");
+
+    setSearchApplied("");
+    setStatusApplied("all");
+    setVisibilityApplied("all");
+    setSortApplied("newest");
+    setQuickFilter("newest");
+  }
+
+  function setQuickMode(value: string) {
+    setQuickFilter(value);
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <Navbar />
+      <Navbar workspaceId={1} />
 
       <main className="mx-auto max-w-[1400px] px-6 py-10">
-        <div className="mb-8 rounded-3xl border bg-white p-6 shadow-sm">
+        <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="text-sm text-slate-500">Trading Truth Layer · Public Claim Directory</div>
-          <h1 className="mt-2 text-4xl font-bold tracking-tight">Verified Claims</h1>
-          <p className="mt-3 max-w-3xl text-slate-600">
+          <h1 className="mt-2 text-5xl font-semibold tracking-tight text-slate-950">
+            Verified Claims
+          </h1>
+          <p className="mt-5 max-w-5xl text-2xl leading-10 text-slate-700">
             Public registry of lifecycle-governed, hash-verifiable trading claims that are
             published or locked and eligible for external credibility, verification, and evidence
             review.
           </p>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard
-              label="Public claims"
-              value={String(claims.length)}
-              hint="Claims shown in this public directory"
-            />
-            <SummaryCard
-              label="Locked"
-              value={String(lockedCount)}
-              hint="Finalized claims with locked trade-set state"
-            />
-            <SummaryCard
-              label="Published"
-              value={String(publishedCount)}
-              hint="Externally visible but not yet locked"
-            />
-            <SummaryCard
-              label="In-scope trades"
-              value={String(totalTrades)}
-              hint="Aggregate public trade evidence count"
-            />
-          </div>
-        </div>
+          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-3xl bg-slate-50 p-5">
+              <div className="text-lg text-slate-500">Public claims</div>
+              <div className="mt-2 text-5xl font-semibold text-slate-950">{summary.total}</div>
+              <div className="mt-3 text-base text-slate-500">Claims shown in this public directory</div>
+            </div>
 
-        <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
-          <form action="/claims" method="get" className="space-y-4">
-            <div className="grid gap-4 lg:grid-cols-4">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Search</label>
-                <input
-                  type="text"
-                  name="q"
-                  defaultValue={q}
-                  placeholder="Search by name, hash, notes, symbols..."
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Sort By</label>
-                <select
-                  name="sort"
-                  defaultValue={sort}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                >
-                  <option value="newest">Newest</option>
-                  <option value="oldest">Oldest</option>
-                  <option value="net_pnl_desc">Net PnL High → Low</option>
-                  <option value="net_pnl_asc">Net PnL Low → High</option>
-                  <option value="profit_factor_desc">Best Profit Factor</option>
-                  <option value="win_rate_desc">Best Win Rate</option>
-                  <option value="name_asc">Name A → Z</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Status</label>
-                <select
-                  name="status"
-                  defaultValue={status}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                >
-                  <option value="all">All statuses</option>
-                  <option value="published">Published</option>
-                  <option value="locked">Locked</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Visibility</label>
-                <select
-                  name="visibility"
-                  defaultValue={visibility}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                >
-                  <option value="all">All visibility</option>
-                  <option value="public">Public</option>
-                  <option value="unlisted">Unlisted</option>
-                </select>
+            <div className="rounded-3xl bg-slate-50 p-5">
+              <div className="text-lg text-slate-500">Locked</div>
+              <div className="mt-2 text-5xl font-semibold text-slate-950">{summary.locked}</div>
+              <div className="mt-3 text-base text-slate-500">
+                Finalized claims with locked trade-set state
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="submit"
-                className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+            <div className="rounded-3xl bg-slate-50 p-5">
+              <div className="text-lg text-slate-500">Published</div>
+              <div className="mt-2 text-5xl font-semibold text-slate-950">{summary.published}</div>
+              <div className="mt-3 text-base text-slate-500">
+                Externally visible but not yet locked
+              </div>
+            </div>
+
+            <div className="rounded-3xl bg-slate-50 p-5">
+              <div className="text-lg text-slate-500">In-scope trades</div>
+              <div className="mt-2 text-5xl font-semibold text-slate-950">
+                {summary.tradeCount}
+              </div>
+              <div className="mt-3 text-base text-slate-500">
+                Aggregate public trade evidence count
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-8 rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="grid gap-4 xl:grid-cols-4">
+            <div>
+              <label className="text-lg text-slate-700">Search</label>
+              <input
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search by name, hash, notes, symbol"
+                className="mt-3 w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 text-xl outline-none ring-0 placeholder:text-slate-400"
+              />
+            </div>
+
+            <div>
+              <label className="text-lg text-slate-700">Sort By</label>
+              <select
+                value={sortInput}
+                onChange={(e) => setSortInput(e.target.value)}
+                className="mt-3 w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 text-xl outline-none"
               >
-                Apply Filters
-              </button>
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+                <option value="best_net_pnl">Best Net PnL</option>
+                <option value="best_profit_factor">Best Profit Factor</option>
+                <option value="best_win_rate">Best Win Rate</option>
+              </select>
+            </div>
 
-              <Link
-                href="/claims?q=&sort=newest&status=all&visibility=all"
-                className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
+            <div>
+              <label className="text-lg text-slate-700">Status</label>
+              <select
+                value={statusInput}
+                onChange={(e) => setStatusInput(e.target.value)}
+                className="mt-3 w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 text-xl outline-none"
               >
-                Reset
-              </Link>
-
-              <div className="text-sm text-slate-500">
-                Showing {filtered.length} of {claims.length} public claim
-                {claims.length === 1 ? "" : "s"}.
-              </div>
+                <option value="all">All statuses</option>
+                <option value="locked">Locked</option>
+                <option value="published">Published</option>
+                <option value="verified">Verified</option>
+                <option value="draft">Draft</option>
+              </select>
             </div>
-          </form>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            <FilterChip href={qs({ sort: "newest" })} label="Newest" active={sort === "newest"} />
-            <FilterChip
-              href={qs({ sort: "net_pnl_desc" })}
-              label="Best Net PnL"
-              active={sort === "net_pnl_desc"}
-            />
-            <FilterChip
-              href={qs({ sort: "profit_factor_desc" })}
-              label="Best Profit Factor"
-              active={sort === "profit_factor_desc"}
-            />
-            <FilterChip
-              href={qs({ sort: "win_rate_desc" })}
-              label="Best Win Rate"
-              active={sort === "win_rate_desc"}
-            />
-            <FilterChip
-              href={qs({ status: "locked" })}
-              label="Locked Only"
-              active={status === "locked"}
-            />
-            <FilterChip
-              href={qs({ visibility: "public" })}
-              label="Public Only"
-              active={visibility === "public"}
-            />
-          </div>
-        </div>
-
-        {filtered.length === 0 ? (
-          <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="text-slate-900 font-medium">No public claims match the selected filters.</div>
-            <div className="mt-2 text-slate-600">
-              Try resetting filters or broadening the search terms.
+            <div>
+              <label className="text-lg text-slate-700">Visibility</label>
+              <select
+                value={visibilityInput}
+                onChange={(e) => setVisibilityInput(e.target.value)}
+                className="mt-3 w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 text-xl outline-none"
+              >
+                <option value="all">All visibility</option>
+                <option value="public">Public</option>
+                <option value="unlisted">Unlisted</option>
+                <option value="private">Private</option>
+              </select>
             </div>
           </div>
+
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={applyFilters}
+              className="rounded-2xl bg-slate-900 px-6 py-4 text-lg font-semibold text-white hover:bg-slate-800"
+            >
+              Apply Filters
+            </button>
+
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="rounded-2xl border border-slate-300 bg-white px-6 py-4 text-lg font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Reset
+            </button>
+
+            <div className="text-lg text-slate-500">
+              Showing {filteredRows.length} of {rows.length} public claims.
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            {[
+              { key: "newest", label: "Newest" },
+              { key: "best net pnl", label: "Best Net PnL" },
+              { key: "best profit factor", label: "Best Profit Factor" },
+              { key: "best win rate", label: "Best Win Rate" },
+              { key: "locked only", label: "Locked Only" },
+              { key: "public only", label: "Public Only" },
+            ].map((item) => {
+              const active = quickFilter === item.key;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setQuickMode(item.key)}
+                  className={
+                    active
+                      ? "rounded-full bg-slate-900 px-5 py-3 text-lg font-medium text-white"
+                      : "rounded-full border border-slate-200 bg-slate-50 px-5 py-3 text-lg font-medium text-slate-700 hover:bg-slate-100"
+                  }
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {loading ? (
+          <section className="mt-8 rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
+            <div className="text-xl text-slate-500">Loading public claims…</div>
+          </section>
+        ) : error ? (
+          <section className="mt-8 rounded-[32px] border border-red-200 bg-red-50 p-8 shadow-sm">
+            <div className="text-xl font-medium text-red-700">{error}</div>
+          </section>
+        ) : filteredRows.length === 0 ? (
+          <section className="mt-8 rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
+            <div className="text-2xl font-medium text-slate-900">
+              No public claims match the selected filters.
+            </div>
+          </section>
         ) : (
-          <div className="space-y-6">
-            {filtered.map((claim) => (
-              <ClaimCard key={`${claim.claim_schema_id}-${claim.claim_hash}`} claim={claim} />
-            ))}
+          <div className="mt-8 space-y-6">
+            {filteredRows.map((row) => {
+              const leaderboard = toArray(row?.leaderboard);
+              const topEntry = extractTopLeaderboardEntry(row);
+              const routeState = getVerificationRouteState(row);
+              const verifyHref = buildVerifyHref(row);
+
+              return (
+                <section
+                  key={String(row?.claim_schema_id ?? row?.id ?? row?.claim_hash)}
+                  className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="max-w-5xl">
+                      <div className="text-sm text-slate-500">Public Verified Claim</div>
+                      <h2 className="mt-2 text-4xl font-semibold tracking-tight text-slate-950">
+                        {safeString(row?.name, "Unnamed Claim")}
+                      </h2>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Pill className={statusTone(String(row?.verification_status ?? row?.status))}>
+                          {safeString(row?.verification_status ?? row?.status, "unknown")}
+                        </Pill>
+                        <Pill className={visibilityTone(String(row?.visibility))}>
+                          visibility: {safeString(row?.visibility, "unknown")}
+                        </Pill>
+                        <Pill className={routeTone(routeState)}>
+                          verification route {routeState}
+                        </Pill>
+                        <Pill className="border-slate-200 bg-slate-100 text-slate-700">
+                          claim #{safeString(row?.claim_schema_id ?? row?.id, "—")}
+                        </Pill>
+                      </div>
+
+                      <p className="mt-5 max-w-5xl text-xl leading-9 text-slate-700">
+                        Public trust surface for lifecycle-governed trading performance with claim
+                        fingerprinting, trade-set fingerprinting, methodology scope, and
+                        verification-ready metric snapshots.
+                      </p>
+                    </div>
+
+                    <Link
+                      href={verifyHref}
+                      className="rounded-2xl border border-slate-300 bg-white px-6 py-4 text-lg font-medium text-slate-900 hover:bg-slate-50"
+                    >
+                      Open Verification Surface
+                    </Link>
+                  </div>
+
+                  <div className="mt-6">
+                    <ClaimVerificationSignature
+                      compact
+                      status={String(row?.verification_status ?? row?.status ?? "")}
+                      integrityStatus={String(row?.integrity_status ?? "")}
+                      claimHash={String(row?.claim_hash ?? "")}
+                      tradeSetHash={String(row?.trade_set_hash ?? row?.locked_trade_set_hash ?? "")}
+                      verifiedAt={String(row?.verified_at ?? "")}
+                      lockedAt={String(row?.locked_at ?? "")}
+                    />
+                  </div>
+
+                  <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-3xl bg-slate-50 p-4">
+                      <div className="text-lg text-slate-500">Trade Count</div>
+                      <div className="mt-2 text-4xl font-semibold text-slate-950">
+                        {safeString(row?.trade_count, "0")}
+                      </div>
+                      <div className="mt-3 text-base text-slate-500">In-scope evidence rows</div>
+                    </div>
+
+                    <div className="rounded-3xl bg-slate-50 p-4">
+                      <div className="text-lg text-slate-500">Net PnL</div>
+                      <div className="mt-2 text-4xl font-semibold text-slate-950">
+                        {formatNumber(row?.net_pnl, 2)}
+                      </div>
+                      <div className="mt-3 text-base text-slate-500">Aggregate net performance</div>
+                    </div>
+
+                    <div className="rounded-3xl bg-slate-50 p-4">
+                      <div className="text-lg text-slate-500">Profit Factor</div>
+                      <div className="mt-2 text-4xl font-semibold text-slate-950">
+                        {formatNumber(row?.profit_factor, 4)}
+                      </div>
+                      <div className="mt-3 text-base text-slate-500">Gross profit ÷ gross loss</div>
+                    </div>
+
+                    <div className="rounded-3xl bg-slate-50 p-4">
+                      <div className="text-lg text-slate-500">Win Rate</div>
+                      <div className="mt-2 text-4xl font-semibold text-slate-950">
+                        {formatPercent(row?.win_rate, 2)}
+                      </div>
+                      <div className="mt-3 text-base text-slate-500">
+                        Winning trades as percentage
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+                    <div className="space-y-4">
+                      <div>
+                        <div className="text-lg text-slate-500">Verification Period</div>
+                        <div className="mt-1 text-3xl text-slate-950">
+                          {safeString(row?.period_start)} → {safeString(row?.period_end)}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-2xl bg-slate-50 p-4">
+                          <div className="text-lg text-slate-500">Verified At</div>
+                          <div className="mt-2 text-2xl text-slate-950">
+                            {formatDateTime(row?.verified_at)}
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl bg-slate-50 p-4">
+                          <div className="text-lg text-slate-500">Locked At</div>
+                          <div className="mt-2 text-2xl text-slate-950">
+                            {formatDateTime(row?.locked_at)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <div className="text-lg text-slate-500">Methodology</div>
+                        <div className="mt-3 whitespace-pre-wrap text-xl leading-9 text-slate-700">
+                          {safeString(
+                            row?.methodology_notes,
+                            "No methodology notes were supplied for this public claim.",
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <div className="text-lg text-slate-500">Top leaderboard entry</div>
+                        <div className="mt-2 text-2xl text-slate-950">
+                          {topEntry
+                            ? `${safeString(topEntry?.member, "Member")} · ${formatNumber(
+                                topEntry?.net_pnl,
+                                2,
+                              )}`
+                            : "No leaderboard data"}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <div className="text-lg text-slate-500">Claim Hash</div>
+                        <div className="mt-2 break-all font-mono text-sm text-slate-800">
+                          {safeString(row?.claim_hash)}
+                        </div>
+                        <div className="mt-2 text-sm text-slate-500">
+                          {shortHash(String(row?.claim_hash ?? ""), 16, 10)}
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <div className="text-lg text-slate-500">Trade Set Hash</div>
+                        <div className="mt-2 break-all font-mono text-sm text-slate-800">
+                          {safeString(row?.trade_set_hash ?? row?.locked_trade_set_hash)}
+                        </div>
+                        <div className="mt-2 text-sm text-slate-500">
+                          {shortHash(
+                            String(row?.trade_set_hash ?? row?.locked_trade_set_hash ?? ""),
+                            16,
+                            10,
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6">
+                    <div className="text-xl font-medium text-slate-900">Top Leaderboard Entries</div>
+                    {leaderboard.length === 0 ? (
+                      <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-lg text-slate-500">
+                        No leaderboard snapshot available for this claim.
+                      </div>
+                    ) : (
+                      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+                        <table className="min-w-full">
+                          <thead className="bg-slate-50 text-left text-base text-slate-500">
+                            <tr>
+                              <th className="px-4 py-3 font-medium">Rank</th>
+                              <th className="px-4 py-3 font-medium">Member</th>
+                              <th className="px-4 py-3 font-medium">Net PnL</th>
+                              <th className="px-4 py-3 font-medium">Win Rate</th>
+                              <th className="px-4 py-3 font-medium">Profit Factor</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200 bg-white text-lg text-slate-900">
+                            {leaderboard.map((entry: any, index: number) => (
+                              <tr key={`${row?.claim_hash}-leaderboard-${index}`}>
+                                <td className="px-4 py-4">{safeString(entry?.rank, String(index + 1))}</td>
+                                <td className="px-4 py-4">{safeString(entry?.member, "Member")}</td>
+                                <td className="px-4 py-4">{formatNumber(entry?.net_pnl, 2)}</td>
+                                <td className="px-4 py-4">{formatPercent(entry?.win_rate, 2)}</td>
+                                <td className="px-4 py-4">{formatNumber(entry?.profit_factor, 4)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              );
+            })}
           </div>
         )}
       </main>

@@ -1,10 +1,68 @@
-﻿project_review_snapshot/
-project_review_clean/
-backend/.venv/
-frontend/node_modules/
-node_modules/
-.venv/
+﻿# =========================
+# Python
+# =========================
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.python-version
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# =========================
+# FastAPI / backend
+# =========================
+backend/.venv/
+backend/__pycache__/
+backend/app/__pycache__/
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+
+# Ignore all env files
 .env
-.env.local
+.env.*
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
+
+# Keep only example env files if you create them later
+!backend/.env.example
+!frontend/.env.example
+
+# =========================
+# Node / Next.js / frontend
+# =========================
+node_modules/
+.next/
+out/
+dist/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# IDE / OS
+# =========================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# =========================
+# Local generated files
+# =========================
+*.log
+*.tmp
+*.bak

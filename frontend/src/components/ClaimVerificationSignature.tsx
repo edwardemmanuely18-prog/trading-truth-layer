@@ -83,23 +83,41 @@ function FingerprintCard({
   value,
   shortValue,
   copyLabel,
+  helper,
 }: {
   title: string;
   value?: string | null;
   shortValue?: string;
   copyLabel: string;
+  helper: string;
 }) {
   return (
     <div className="rounded-2xl bg-white/70 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-sm opacity-70">{title}</div>
+          <div className="text-sm font-medium opacity-80">{title}</div>
           <div className="mt-2 break-all font-mono text-xs">{value || "—"}</div>
           {value ? <div className="mt-2 text-xs opacity-70">{shortValue}</div> : null}
+          <div className="mt-3 text-xs leading-5 opacity-75">{helper}</div>
         </div>
 
         <CopyButton value={value} label={copyLabel} />
       </div>
+    </div>
+  );
+}
+
+function ReadingCard({
+  title,
+  body,
+}: {
+  title: string;
+  body: string;
+}) {
+  return (
+    <div className="rounded-2xl bg-white/70 p-4">
+      <div className="text-sm font-medium opacity-80">{title}</div>
+      <div className="mt-2 text-sm leading-6 opacity-85">{body}</div>
     </div>
   );
 }
@@ -133,6 +151,8 @@ export default function ClaimVerificationSignature({
         summary:
           "This claim is finalized and the current in-scope trade set matches the stored locked fingerprint.",
         trustState: "High-trust finalized record",
+        verificationMeaning:
+          "The record has reached locked state and its evidence fingerprint recomputes successfully.",
       };
     }
 
@@ -143,6 +163,8 @@ export default function ClaimVerificationSignature({
         summary:
           "This claim is locked, but the recomputed trade-set fingerprint does not match the stored locked fingerprint.",
         trustState: "Integrity mismatch detected",
+        verificationMeaning:
+          "The record is finalized, but its current trade evidence no longer matches the stored locked state.",
       };
     }
 
@@ -153,6 +175,8 @@ export default function ClaimVerificationSignature({
         summary:
           "This claim is locked, but the integrity state has not yet been confirmed on this surface.",
         trustState: "Finalized but awaiting check",
+        verificationMeaning:
+          "The record is finalized, but this viewer has not yet confirmed whether the fingerprint still matches.",
       };
     }
 
@@ -163,6 +187,8 @@ export default function ClaimVerificationSignature({
         summary:
           "This claim is externally presentable and fingerprinted, but it has not yet reached locked finality.",
         trustState: "Externally visible pre-lock state",
+        verificationMeaning:
+          "This record is shareable, but it should not yet be interpreted as final locked evidence.",
       };
     }
 
@@ -173,6 +199,8 @@ export default function ClaimVerificationSignature({
         summary:
           "This claim has passed internal verification and is eligible for lifecycle progression into publication.",
         trustState: "Internally verified state",
+        verificationMeaning:
+          "The record passed internal verification, but it is not yet a locked public trust artifact.",
       };
     }
 
@@ -182,6 +210,8 @@ export default function ClaimVerificationSignature({
       summary:
         "This claim is still editable or incomplete and should not be treated as finalized public evidence.",
       trustState: "Draft state",
+      verificationMeaning:
+        "This record is still being prepared and should not be used as conclusive verification evidence.",
     };
   }, [isCompromised, isLocked, isPublished, isValid, isVerified]);
 
@@ -213,6 +243,10 @@ export default function ClaimVerificationSignature({
             <div className="text-[11px] uppercase tracking-wide opacity-70">Trade Set Hash</div>
             <div className="mt-1 font-mono text-xs">{shortHash(tradeSetHash)}</div>
           </div>
+        </div>
+
+        <div className="mt-4 rounded-xl bg-white/70 p-3 text-xs leading-5 opacity-85">
+          <span className="font-semibold">Trust meaning:</span> {signature.verificationMeaning}
         </div>
       </div>
     );
@@ -268,6 +302,7 @@ export default function ClaimVerificationSignature({
           value={claimHash}
           shortValue={shortHash(claimHash, 18, 12)}
           copyLabel="Copy Claim Hash"
+          helper="Canonical identity fingerprint for this claim definition. If the claim definition changes materially, the claim hash should change."
         />
 
         <FingerprintCard
@@ -275,6 +310,7 @@ export default function ClaimVerificationSignature({
           value={tradeSetHash}
           shortValue={shortHash(tradeSetHash, 18, 12)}
           copyLabel="Copy Trade Set Hash"
+          helper="Fingerprint of the in-scope trade evidence used by this record. Integrity checks compare the current trade set against this stored value."
         />
 
         <div className="rounded-2xl bg-white/70 p-4">
@@ -286,6 +322,33 @@ export default function ClaimVerificationSignature({
           <div className="text-sm opacity-70">Locked At</div>
           <div className="mt-2 font-medium">{formatDateTime(lockedAt)}</div>
         </div>
+      </div>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <ReadingCard
+          title="What this proves"
+          body={signature.verificationMeaning}
+        />
+        <ReadingCard
+          title="Claim hash meaning"
+          body="The claim hash identifies the claim definition itself: scope, methodology, and canonical record identity."
+        />
+        <ReadingCard
+          title="Trade-set hash meaning"
+          body="The trade-set hash identifies the exact in-scope trade evidence used for verification and later integrity review."
+        />
+        <ReadingCard
+          title="What integrity valid means"
+          body="A valid integrity state means the recomputed trade-set fingerprint matches the stored locked fingerprint."
+        />
+        <ReadingCard
+          title="What this does not prove"
+          body="This surface does not, by itself, prove broker authenticity, execution quality, or absence of off-platform risk unless those are separately evidenced."
+        />
+        <ReadingCard
+          title="How to read this record"
+          body="Start with lifecycle status, then check integrity, then compare claim hash and trade-set hash, then review evidence and leaderboard context."
+        />
       </div>
     </div>
   );
