@@ -10,6 +10,7 @@ import {
   type PublicVerifyResult,
 } from "../../../lib/api";
 import ClaimVerificationSignature from "../../../components/ClaimVerificationSignature";
+import EquityCurveChart from "../../../components/EquityCurveChart";
 
 function formatDateTime(value?: string | null) {
   if (!value) return "—";
@@ -353,6 +354,7 @@ export default function PublicVerifyClaimPage() {
         setLoading(true);
         setError(null);
         setEvidenceError(null);
+
         const res = await api.getPublicClaimByHash(claimHash);
         setResult(res);
 
@@ -451,12 +453,16 @@ export default function PublicVerifyClaimPage() {
     typeof window !== "undefined" ? window.location.href : `/verify/${result.claim_hash}`;
 
   const includedRows = Array.isArray(tradeEvidence?.included_trades)
-    ? tradeEvidence!.included_trades!
+    ? tradeEvidence.included_trades
     : [];
   const excludedRows = Array.isArray(tradeEvidence?.excluded_trades)
-    ? tradeEvidence!.excluded_trades!
+    ? tradeEvidence.excluded_trades
     : [];
   const evidenceSummary = tradeEvidence?.summary;
+
+  const publicCurvePoints = Array.isArray(result.equity_curve?.curve)
+    ? result.equity_curve.curve
+    : [];
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -468,7 +474,7 @@ export default function PublicVerifyClaimPage() {
             <p className="mt-3 max-w-3xl text-slate-600">
               Public verification view for a lifecycle-governed trading claim, including integrity
               state, canonical fingerprints, scope definition, lifecycle history, leaderboard
-              snapshot, and verified trade evidence.
+              snapshot, verified trade evidence, and equity-curve inspection.
             </p>
           </div>
 
@@ -698,6 +704,10 @@ export default function PublicVerifyClaimPage() {
               </table>
             </div>
           )}
+        </div>
+
+        <div className="mb-8">
+          <EquityCurveChart title="Public Equity Curve" points={publicCurvePoints} />
         </div>
 
         <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">

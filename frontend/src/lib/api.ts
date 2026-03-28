@@ -502,7 +502,6 @@ export type ClaimTradeScopeRow = {
   exclusion_reason_detail?: string | null;
 };
 
-
 export type ClaimTradeScopeSummary = {
   workspace_trade_count: number;
   included_trade_count: number;
@@ -665,6 +664,20 @@ export type PublicVerifyResult = {
     version_number?: number;
   };
   trade_set_hash: string;
+
+  trades?: ClaimTradeScopeRow[];
+  included_trade_count?: number;
+  excluded_trade_count?: number;
+  included_trades?: ClaimTradeScopeRow[];
+  excluded_trades?: ClaimTradeScopeRow[];
+  summary?: ClaimTradeScopeSummary;
+
+  equity_curve?: {
+    point_count: number;
+    starting_equity: number;
+    ending_equity: number;
+    curve: EquityCurvePoint[];
+  };
 };
 
 export type ClaimIntegrityResult = {
@@ -958,7 +971,10 @@ function ensureWorkspaceInvite(row: WorkspaceInvite): WorkspaceInvite {
   };
 }
 
-function ensureClaimTradeScopeRow(row: Partial<ClaimTradeScopeRow>, fallbackStatus: "included" | "excluded"): ClaimTradeScopeRow {
+function ensureClaimTradeScopeRow(
+  row: Partial<ClaimTradeScopeRow>,
+  fallbackStatus: "included" | "excluded"
+): ClaimTradeScopeRow {
   return {
     index: Number(row.index ?? 0),
     trade_id: Number(row.trade_id ?? 0),
@@ -1393,6 +1409,33 @@ export const api = {
         locked_at: null,
       },
       trade_set_hash: row.trade_set_hash ?? "—",
+      trades: Array.isArray(row.trades)
+        ? row.trades.map((item) => ensureClaimTradeScopeRow(item, "included"))
+        : [],
+      included_trade_count: Number(row.included_trade_count ?? 0),
+      excluded_trade_count: Number(row.excluded_trade_count ?? 0),
+      included_trades: Array.isArray(row.included_trades)
+        ? row.included_trades.map((item) => ensureClaimTradeScopeRow(item, "included"))
+        : [],
+      excluded_trades: Array.isArray(row.excluded_trades)
+        ? row.excluded_trades.map((item) => ensureClaimTradeScopeRow(item, "excluded"))
+        : [],
+      summary: row.summary
+        ? {
+            workspace_trade_count: Number(row.summary.workspace_trade_count ?? 0),
+            included_trade_count: Number(row.summary.included_trade_count ?? 0),
+            excluded_trade_count: Number(row.summary.excluded_trade_count ?? 0),
+            excluded_breakdown: row.summary.excluded_breakdown ?? {},
+          }
+        : undefined,
+      equity_curve: row.equity_curve
+        ? {
+            point_count: Number(row.equity_curve.point_count ?? 0),
+            starting_equity: Number(row.equity_curve.starting_equity ?? 0),
+            ending_equity: Number(row.equity_curve.ending_equity ?? 0),
+            curve: Array.isArray(row.equity_curve.curve) ? row.equity_curve.curve : [],
+          }
+        : undefined,
     };
   },
 
