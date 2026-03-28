@@ -158,6 +158,13 @@ def workspace_limits_disabled() -> bool:
     return parse_bool_like(dotenv_value)
 
 
+def is_claim_publicly_accessible(schema: ClaimSchema) -> bool:
+    return (
+        schema.visibility in {"public", "unlisted"}
+        and schema.status in {"published", "locked"}
+    )
+
+
 def serialize_schema(schema: ClaimSchema):
     return {
         "id": schema.id,
@@ -794,7 +801,7 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
             "version_number": schema.version_number,
         },
         "trade_set_hash": trade_set_hash,
-        "is_publicly_accessible": schema.visibility in {"public", "unlisted"} and schema.status in {"published", "locked"},
+        "is_publicly_accessible": is_claim_publicly_accessible(schema),
     }
 
 
@@ -986,11 +993,8 @@ def build_evidence_bundle_zip_bytes(schema: ClaimSchema, db: Session) -> tuple[B
 
 
 def require_public_claim_access(schema: ClaimSchema):
-    if schema.visibility not in {"public", "unlisted"}:
+    if not is_claim_publicly_accessible(schema):
         raise HTTPException(status_code=403, detail="Claim is not publicly accessible")
-
-    if schema.status not in {"published", "locked"}:
-        raise HTTPException(status_code=403, detail="Claim is not yet publicly publishable")
 
 
 def draw_pdf_wrapped_text(
@@ -1942,12 +1946,21 @@ def publish_claim_schema(
 
     old_state = {
         "status": schema.status,
+        "visibility": schema.visibility,
         "published_at": schema.published_at.isoformat() if schema.published_at else None,
         "claim_hash": compute_claim_hash(schema),
     }
 
+    original_visibility = schema.visibility
     schema.status = "published"
     schema.published_at = datetime.utcnow()
+
+    # Published claims should be externally verifiable.
+    # If a claim is still private at publish time, promote it to unlisted
+    # so it becomes hash-accessible without appearing in the public directory.
+    if schema.visibility == "private":
+        schema.visibility = "unlisted"
+
     db.commit()
     db.refresh(schema)
 
@@ -1960,12 +1973,17 @@ def publish_claim_schema(
         old_state=old_state,
         new_state={
             "status": schema.status,
+            "visibility": schema.visibility,
             "published_at": schema.published_at.isoformat() if schema.published_at else None,
             "claim_hash": compute_claim_hash(schema),
+            "is_publicly_accessible": is_claim_publicly_accessible(schema),
         },
         metadata={
             "source": "claim_schemas.publish_claim_schema",
             "actor_user_id": current_user.id,
+            "visibility_changed": original_visibility != schema.visibility,
+            "original_visibility": original_visibility,
+            "effective_visibility": schema.visibility,
         },
     )
 
