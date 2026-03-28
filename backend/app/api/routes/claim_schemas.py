@@ -798,6 +798,73 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
     }
 
 
+def build_public_claim_payload(schema: ClaimSchema, db: Session):
+    filtered_trades = resolve_schema_trades(schema, db)
+    metrics = compute_trade_metrics(filtered_trades)
+    leaderboard = build_leaderboard(filtered_trades)
+
+    trade_set_hash = schema.locked_trade_set_hash
+    if not trade_set_hash:
+        trade_set_hash = compute_trade_set_hash(filtered_trades)
+
+    integrity_status = "valid"
+    if schema.status == "locked" and schema.locked_trade_set_hash:
+        recomputed_trade_set_hash = compute_trade_set_hash(filtered_trades)
+        if recomputed_trade_set_hash != schema.locked_trade_set_hash:
+            integrity_status = "compromised"
+
+    scope = resolve_schema_trade_scope(schema, db)
+    included_rows = build_included_trade_scope_rows(scope["included"])
+    excluded_rows = build_excluded_trade_scope_rows(scope["excluded"])
+    equity_curve = build_equity_curve(scope["included"])
+
+    return {
+        "claim_schema_id": schema.id,
+        "claim_hash": compute_claim_hash(schema),
+        "name": schema.name,
+        "verification_status": schema.status,
+        "integrity_status": integrity_status,
+        "trade_count": metrics["trade_count"],
+        "net_pnl": metrics["net_pnl"],
+        "profit_factor": metrics["profit_factor"],
+        "win_rate": metrics["win_rate"],
+        "leaderboard": leaderboard,
+        "scope": {
+            "period_start": schema.period_start,
+            "period_end": schema.period_end,
+            "included_members": json.loads(schema.included_member_ids_json or "[]"),
+            "included_symbols": json.loads(schema.included_symbols_json or "[]"),
+            "methodology_notes": schema.methodology_notes,
+            "visibility": schema.visibility,
+        },
+        "lifecycle": {
+            "status": schema.status,
+            "verified_at": schema.verified_at.isoformat() if schema.verified_at else None,
+            "published_at": schema.published_at.isoformat() if schema.published_at else None,
+            "locked_at": schema.locked_at.isoformat() if schema.locked_at else None,
+            "locked_trade_set_hash": schema.locked_trade_set_hash,
+        },
+        "lineage": {
+            "parent_claim_id": schema.parent_claim_id,
+            "root_claim_id": schema.root_claim_id,
+            "version_number": schema.version_number,
+        },
+        "trade_set_hash": trade_set_hash,
+        "trades": included_rows,
+        "included_trade_count": len(included_rows),
+        "excluded_trade_count": len(excluded_rows),
+        "included_trades": included_rows,
+        "excluded_trades": excluded_rows,
+        "summary": {
+            "workspace_trade_count": scope["workspace_trade_count"],
+            "included_trade_count": len(included_rows),
+            "excluded_trade_count": len(excluded_rows),
+            "excluded_breakdown": scope["excluded_breakdown"],
+        },
+        "equity_curve": equity_curve,
+    }
+
+
 def build_evidence_pack_payload(schema: ClaimSchema, db: Session):
     filtered_trades = resolve_schema_trades(schema, db)
     metrics = compute_trade_metrics(filtered_trades)
@@ -2186,52 +2253,8 @@ def get_public_claim_schema(claim_schema_id: int, db: Session = Depends(get_db))
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
-    if schema.visibility not in {"public", "unlisted"}:
-        raise HTTPException(status_code=403, detail="Claim is not publicly accessible")
-
-    if schema.status not in {"published", "locked"}:
-        raise HTTPException(status_code=403, detail="Claim is not yet publicly publishable")
-
-    filtered_trades = resolve_schema_trades(schema, db)
-    metrics = compute_trade_metrics(filtered_trades)
-    leaderboard = build_leaderboard(filtered_trades)
-
-    trade_set_hash = schema.locked_trade_set_hash
-    if not trade_set_hash:
-        trade_set_hash = compute_trade_set_hash(filtered_trades)
-
-    return {
-        "claim_schema_id": schema.id,
-        "claim_hash": compute_claim_hash(schema),
-        "name": schema.name,
-        "verification_status": schema.status,
-        "trade_count": metrics["trade_count"],
-        "net_pnl": metrics["net_pnl"],
-        "profit_factor": metrics["profit_factor"],
-        "win_rate": metrics["win_rate"],
-        "leaderboard": leaderboard,
-        "scope": {
-            "period_start": schema.period_start,
-            "period_end": schema.period_end,
-            "included_members": json.loads(schema.included_member_ids_json or "[]"),
-            "included_symbols": json.loads(schema.included_symbols_json or "[]"),
-            "methodology_notes": schema.methodology_notes,
-            "visibility": schema.visibility,
-        },
-        "lifecycle": {
-            "status": schema.status,
-            "verified_at": schema.verified_at.isoformat() if schema.verified_at else None,
-            "published_at": schema.published_at.isoformat() if schema.published_at else None,
-            "locked_at": schema.locked_at.isoformat() if schema.locked_at else None,
-            "locked_trade_set_hash": schema.locked_trade_set_hash,
-        },
-        "lineage": {
-            "parent_claim_id": schema.parent_claim_id,
-            "root_claim_id": schema.root_claim_id,
-            "version_number": schema.version_number,
-        },
-        "trade_set_hash": trade_set_hash,
-    }
+    require_public_claim_access(schema)
+    return build_public_claim_payload(schema, db)
 
 
 @router.get("/public/claims")
@@ -2269,52 +2292,9 @@ def verify_public_claim_by_hash(claim_hash: str, db: Session = Depends(get_db)):
     if not matched_schema:
         raise HTTPException(status_code=404, detail="Public claim not found for supplied hash")
 
-    filtered_trades = resolve_schema_trades(matched_schema, db)
-    metrics = compute_trade_metrics(filtered_trades)
-    leaderboard = build_leaderboard(filtered_trades)
-
-    trade_set_hash = matched_schema.locked_trade_set_hash
-    if not trade_set_hash:
-        trade_set_hash = compute_trade_set_hash(filtered_trades)
-
-    integrity_status = "valid"
-    if matched_schema.status == "locked" and matched_schema.locked_trade_set_hash:
-        recomputed_trade_set_hash = compute_trade_set_hash(filtered_trades)
-        if recomputed_trade_set_hash != matched_schema.locked_trade_set_hash:
-            integrity_status = "compromised"
-
-    return {
-        "claim_schema_id": matched_schema.id,
-        "claim_hash": claim_hash,
-        "name": matched_schema.name,
-        "verification_status": matched_schema.status,
-        "integrity_status": integrity_status,
-        "trade_count": metrics["trade_count"],
-        "net_pnl": metrics["net_pnl"],
-        "profit_factor": metrics["profit_factor"],
-        "win_rate": metrics["win_rate"],
-        "leaderboard": leaderboard,
-        "scope": {
-            "period_start": matched_schema.period_start,
-            "period_end": matched_schema.period_end,
-            "included_members": json.loads(matched_schema.included_member_ids_json or "[]"),
-            "included_symbols": json.loads(matched_schema.included_symbols_json or "[]"),
-            "methodology_notes": matched_schema.methodology_notes,
-            "visibility": matched_schema.visibility,
-        },
-        "lifecycle": {
-            "status": matched_schema.status,
-            "verified_at": matched_schema.verified_at.isoformat() if matched_schema.verified_at else None,
-            "published_at": matched_schema.published_at.isoformat() if matched_schema.published_at else None,
-            "locked_at": matched_schema.locked_at.isoformat() if matched_schema.locked_at else None,
-        },
-        "lineage": {
-            "parent_claim_id": matched_schema.parent_claim_id,
-            "root_claim_id": matched_schema.root_claim_id,
-            "version_number": matched_schema.version_number,
-        },
-        "trade_set_hash": trade_set_hash,
-    }
+    payload = build_public_claim_payload(matched_schema, db)
+    payload["claim_hash"] = claim_hash
+    return payload
 
 
 @router.get("/claim-schemas/{claim_schema_id}/verify-integrity")

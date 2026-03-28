@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { api, type PublicVerifyResult } from "../../../lib/api";
+import {
+  api,
+  type ClaimTradeEvidence,
+  type ClaimTradeScopeRow,
+  type PublicVerifyResult,
+} from "../../../lib/api";
 import ClaimVerificationSignature from "../../../components/ClaimVerificationSignature";
 
 function formatDateTime(value?: string | null) {
@@ -78,6 +83,32 @@ function VisibilityBadge({ visibility }: { visibility?: string | null }) {
   return (
     <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
       visibility: {visibility || "—"}
+    </span>
+  );
+}
+
+function ScopeStatusBadge({ status }: { status?: string | null }) {
+  const normalized = normalizeText(status);
+  const className =
+    normalized === "excluded"
+      ? "border-red-200 bg-red-50 text-red-700"
+      : "border-green-200 bg-green-50 text-green-700";
+
+  return (
+    <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${className}`}>
+      {status || "unknown"}
+    </span>
+  );
+}
+
+function ExclusionReasonBadge({ reason }: { reason?: string | null }) {
+  if (!reason) {
+    return <span className="text-slate-400">—</span>;
+  }
+
+  return (
+    <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+      {reason}
     </span>
   );
 }
@@ -177,6 +208,124 @@ function ScopeListCard({
   );
 }
 
+function PublicTradeEvidenceTable({
+  title,
+  subtitle,
+  rows,
+  emptyText,
+  showExclusionColumns = false,
+}: {
+  title: string;
+  subtitle: string;
+  rows: ClaimTradeScopeRow[];
+  emptyText: string;
+  showExclusionColumns?: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border bg-white p-6 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold">{title}</h2>
+          <div className="mt-2 text-sm text-slate-500">{subtitle}</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+          <div className="text-slate-500">Rows</div>
+          <div className="mt-1 font-semibold">{rows.length}</div>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">{emptyText}</div>
+      ) : (
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-slate-500">
+                <th className="px-3 py-2">#</th>
+                <th className="px-3 py-2">Trade ID</th>
+                <th className="px-3 py-2">Opened</th>
+                <th className="px-3 py-2">Symbol</th>
+                <th className="px-3 py-2">Side</th>
+                <th className="px-3 py-2">Entry</th>
+                <th className="px-3 py-2">Exit</th>
+                <th className="px-3 py-2">Qty</th>
+                <th className="px-3 py-2">PnL</th>
+                <th className="px-3 py-2">Cumulative</th>
+                <th className="px-3 py-2">Scope</th>
+                {showExclusionColumns ? <th className="px-3 py-2">Reason</th> : null}
+                {showExclusionColumns ? <th className="px-3 py-2">Detail</th> : null}
+                <th className="px-3 py-2">Strategy</th>
+                <th className="px-3 py-2">Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr
+                  key={`${row.trade_id}-${row.index}-${row.scope_status}`}
+                  className="border-b last:border-0 align-top"
+                >
+                  <td className="px-3 py-2">{row.index}</td>
+                  <td className="px-3 py-2">{row.trade_id}</td>
+                  <td className="px-3 py-2">{formatDateTime(row.opened_at)}</td>
+                  <td className="px-3 py-2">{row.symbol}</td>
+                  <td className="px-3 py-2">{row.side}</td>
+                  <td className="px-3 py-2">{formatNumber(row.entry_price, 4)}</td>
+                  <td className="px-3 py-2">{formatNumber(row.exit_price, 4)}</td>
+                  <td className="px-3 py-2">{formatNumber(row.quantity, 4)}</td>
+                  <td className="px-3 py-2">{formatNumber(row.net_pnl, 4)}</td>
+                  <td className="px-3 py-2">{formatNumber(row.cumulative_pnl, 4)}</td>
+                  <td className="px-3 py-2">
+                    <ScopeStatusBadge status={row.scope_status} />
+                  </td>
+                  {showExclusionColumns ? (
+                    <td className="px-3 py-2">
+                      <div className="min-w-[140px]">
+                        <ExclusionReasonBadge
+                          reason={row.exclusion_reason_label || row.exclusion_reason}
+                        />
+                      </div>
+                    </td>
+                  ) : null}
+                  {showExclusionColumns ? (
+                    <td className="px-3 py-2 text-slate-600">
+                      <div className="min-w-[280px] whitespace-normal">
+                        {row.exclusion_reason_detail || "—"}
+                      </div>
+                    </td>
+                  ) : null}
+                  <td className="px-3 py-2">{row.strategy_tag || "—"}</td>
+                  <td className="px-3 py-2">{row.source_system || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function emptyTradeEvidence(claimId: number): ClaimTradeEvidence {
+  return {
+    claim_schema_id: claimId,
+    claim_hash: "",
+    name: "",
+    status: "",
+    trade_count: 0,
+    trades: [],
+    included_trade_count: 0,
+    excluded_trade_count: 0,
+    included_trades: [],
+    excluded_trades: [],
+    summary: {
+      workspace_trade_count: 0,
+      included_trade_count: 0,
+      excluded_trade_count: 0,
+      excluded_breakdown: {},
+    },
+  };
+}
+
 export default function PublicVerifyClaimPage() {
   const params = useParams();
 
@@ -186,8 +335,11 @@ export default function PublicVerifyClaimPage() {
   }, [params]);
 
   const [result, setResult] = useState<PublicVerifyResult | null>(null);
+  const [tradeEvidence, setTradeEvidence] = useState<ClaimTradeEvidence | null>(null);
   const [loading, setLoading] = useState(true);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -200,8 +352,24 @@ export default function PublicVerifyClaimPage() {
       try {
         setLoading(true);
         setError(null);
+        setEvidenceError(null);
         const res = await api.getPublicClaimByHash(claimHash);
         setResult(res);
+
+        if (res.claim_schema_id) {
+          try {
+            setEvidenceLoading(true);
+            const evidence = await api.getClaimTrades(res.claim_schema_id);
+            setTradeEvidence(evidence);
+          } catch (err) {
+            setTradeEvidence(emptyTradeEvidence(res.claim_schema_id));
+            setEvidenceError(
+              err instanceof Error ? err.message : "Failed to load verified trade evidence."
+            );
+          } finally {
+            setEvidenceLoading(false);
+          }
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load public verification record.");
       } finally {
@@ -282,6 +450,14 @@ export default function PublicVerifyClaimPage() {
   const verificationUrl =
     typeof window !== "undefined" ? window.location.href : `/verify/${result.claim_hash}`;
 
+  const includedRows = Array.isArray(tradeEvidence?.included_trades)
+    ? tradeEvidence!.included_trades!
+    : [];
+  const excludedRows = Array.isArray(tradeEvidence?.excluded_trades)
+    ? tradeEvidence!.excluded_trades!
+    : [];
+  const evidenceSummary = tradeEvidence?.summary;
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <main className="mx-auto max-w-[1400px] px-6 py-10">
@@ -291,8 +467,8 @@ export default function PublicVerifyClaimPage() {
             <h1 className="mt-2 text-4xl font-bold tracking-tight">Verified Claim Record</h1>
             <p className="mt-3 max-w-3xl text-slate-600">
               Public verification view for a lifecycle-governed trading claim, including integrity
-              state, canonical fingerprints, scope definition, lifecycle history, and leaderboard
-              snapshot.
+              state, canonical fingerprints, scope definition, lifecycle history, leaderboard
+              snapshot, and verified trade evidence.
             </p>
           </div>
 
@@ -488,7 +664,7 @@ export default function PublicVerifyClaimPage() {
           />
         </div>
 
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-semibold">Leaderboard Snapshot</h2>
 
           {leaderboard.length === 0 ? (
@@ -522,6 +698,65 @@ export default function PublicVerifyClaimPage() {
               </table>
             </div>
           )}
+        </div>
+
+        <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-semibold">Verified Trade Evidence</h2>
+              <div className="mt-2 text-sm text-slate-500">
+                Public trade-level evidence derived from the verified in-scope claim trade set.
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                <div className="text-slate-500">Workspace Trades</div>
+                <div className="mt-1 font-semibold">
+                  {evidenceSummary?.workspace_trade_count ?? "—"}
+                </div>
+              </div>
+              <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm">
+                <div className="text-green-700">Included Trades</div>
+                <div className="mt-1 font-semibold text-green-900">
+                  {evidenceSummary?.included_trade_count ?? includedRows.length}
+                </div>
+              </div>
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm">
+                <div className="text-red-700">Excluded Trades</div>
+                <div className="mt-1 font-semibold text-red-900">
+                  {evidenceSummary?.excluded_trade_count ?? excludedRows.length}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {evidenceLoading ? (
+            <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+              Loading verified trade evidence...
+            </div>
+          ) : evidenceError ? (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              {evidenceError}
+            </div>
+          ) : null}
+
+          <div className="mt-6 space-y-6">
+            <PublicTradeEvidenceTable
+              title="Included Trade Rows"
+              subtitle="Trades included in the public claim scope and used to compute the published verification metrics."
+              rows={includedRows}
+              emptyText="No included trade rows are available for this public claim."
+            />
+
+            <PublicTradeEvidenceTable
+              title="Excluded Trade Rows"
+              subtitle="Trades outside the final public claim scope, shown with explicit exclusion reasons when available."
+              rows={excludedRows}
+              emptyText="No excluded trade rows are available for this public claim."
+              showExclusionColumns
+            />
+          </div>
         </div>
       </main>
     </div>
