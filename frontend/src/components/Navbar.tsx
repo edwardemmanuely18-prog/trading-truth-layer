@@ -90,7 +90,7 @@ export default function Navbar({ workspaceId = 1 }: Props) {
     startsWithPath(currentPath, `${base}/claim`);
   const evidenceActive =
     startsWithPath(currentPath, `${base}/evidence`) ||
-    startsWithPath(currentPath, `${base}/claim`) && currentPath.endsWith("/evidence");
+    (startsWithPath(currentPath, `${base}/claim`) && currentPath.endsWith("/evidence"));
   const membersActive = startsWithPath(currentPath, membersHref);
   const settingsActive = startsWithPath(currentPath, settingsHref);
 
@@ -107,8 +107,6 @@ export default function Navbar({ workspaceId = 1 }: Props) {
           <Link href="/" className="text-lg font-bold text-slate-900">
             Trading Truth Layer
           </Link>
-
-          <div className="text-sm text-slate-500">Workspace</div>
 
           <WorkspaceSwitcher />
         </div>
