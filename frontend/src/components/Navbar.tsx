@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { api } from "../lib/api";
 import { useAuth } from "./AuthProvider";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
@@ -15,25 +15,19 @@ function normalizePath(value?: string | null) {
   return String(value || "").replace(/\/+$/, "");
 }
 
+function startsWithPath(currentPath: string, basePath: string) {
+  const current = normalizePath(currentPath);
+  const base = normalizePath(basePath);
+  return current === base || current.startsWith(`${base}/`);
+}
+
 export default function Navbar({ workspaceId = 1 }: Props) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [latestClaimId, setLatestClaimId] = useState<number | null>(null);
   const { user, logout, getWorkspaceRole, loading } = useAuth();
 
-  const base = `/workspace/${workspaceId}`;
-  const currentPath = normalizePath(pathname);
-  const isSettingsPage = currentPath === normalizePath(`${base}/settings`);
-
   useEffect(() => {
     let active = true;
-
-    if (isSettingsPage) {
-      setLatestClaimId(null);
-      return () => {
-        active = false;
-      };
-    }
 
     async function loadLatestWorkspaceClaim() {
       try {
@@ -57,12 +51,7 @@ export default function Navbar({ workspaceId = 1 }: Props) {
     return () => {
       active = false;
     };
-  }, [workspaceId, isSettingsPage]);
-
-  const claimsHref = `${base}/claims`;
-  const evidenceHref = latestClaimId
-    ? `${base}/evidence?claimId=${latestClaimId}`
-    : `${base}/evidence`;
+  }, [workspaceId]);
 
   const workspaceRole = useMemo(() => {
     return getWorkspaceRole(workspaceId);
@@ -76,132 +65,120 @@ export default function Navbar({ workspaceId = 1 }: Props) {
     workspaceRole === "auditor" ||
     workspaceRole === "member";
 
-  const currentClaimIdFromEvidenceQuery = searchParams.get("claimId");
+  const currentPath = normalizePath(pathname);
+  const base = `/workspace/${workspaceId}`;
 
-  function isDashboardActive() {
-    return currentPath === normalizePath(`${base}/dashboard`);
-  }
+  const dashboardHref = `${base}/dashboard`;
+  const importHref = `${base}/import`;
+  const ledgerHref = `${base}/ledger`;
+  const workspaceSchemaHref = `${base}/schema`;
+  const claimsHref = `${base}/claims`;
+  const evidenceHref = latestClaimId
+    ? `${base}/evidence?claimId=${latestClaimId}`
+    : `${base}/evidence`;
+  const membersHref = `${base}/members`;
+  const settingsHref = `${base}/settings`;
 
-  function isImportActive() {
-    return currentPath === normalizePath(`${base}/import`);
-  }
-
-  function isLedgerActive() {
-    return currentPath === normalizePath(`${base}/ledger`);
-  }
-
-  function isSchemaActive() {
-    return currentPath === normalizePath(`${base}/schema`);
-  }
-
-  function isClaimsActive() {
-    if (currentPath === normalizePath(`${base}/claims`)) return true;
-    if (currentPath.startsWith(normalizePath(`${base}/claim/`))) return true;
-    return false;
-  }
-
-  function isEvidenceActive() {
-    if (currentPath === normalizePath(`${base}/evidence`)) return true;
-
-    if (
-      currentPath.startsWith(normalizePath(`${base}/claim/`)) &&
-      currentPath.endsWith("/evidence")
-    ) {
-      return true;
-    }
-
-    if (
-      currentPath.startsWith(normalizePath(`${base}/claim/`)) &&
-      currentClaimIdFromEvidenceQuery
-    ) {
-      return false;
-    }
-
-    return false;
-  }
-
-  function isMembersActive() {
-    return currentPath === normalizePath(`${base}/members`);
-  }
-
-  function isSettingsActive() {
-    return currentPath === normalizePath(`${base}/settings`);
-  }
+  const publicClaimsActive = currentPath === "/claims";
+  const schemaBuilderActive = currentPath === "/schema";
+  const dashboardActive = startsWithPath(currentPath, dashboardHref);
+  const importActive = startsWithPath(currentPath, importHref);
+  const ledgerActive = startsWithPath(currentPath, ledgerHref);
+  const workspaceSchemaActive = startsWithPath(currentPath, workspaceSchemaHref);
+  const claimsActive =
+    startsWithPath(currentPath, claimsHref) ||
+    startsWithPath(currentPath, `${base}/claim`);
+  const evidenceActive =
+    startsWithPath(currentPath, `${base}/evidence`) ||
+    startsWithPath(currentPath, `${base}/claim`) && currentPath.endsWith("/evidence");
+  const membersActive = startsWithPath(currentPath, membersHref);
+  const settingsActive = startsWithPath(currentPath, settingsHref);
 
   function navClass(active: boolean) {
     return active
-      ? "rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white transition"
-      : "rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100";
+      ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+      : "rounded-xl px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100";
   }
 
   return (
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-4">
-        <div className="flex items-center gap-4">
-          <Link href={`${base}/dashboard`} className="text-lg font-bold text-slate-900">
+        <div className="flex flex-wrap items-center gap-4">
+          <Link href="/" className="text-lg font-bold text-slate-900">
             Trading Truth Layer
           </Link>
+
+          <div className="text-sm text-slate-500">Workspace</div>
 
           <WorkspaceSwitcher />
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <nav className="flex flex-wrap gap-2">
-            <Link href={`${base}/dashboard`} className={navClass(isDashboardActive())}>
-              Dashboard
+        <nav className="flex flex-wrap items-center gap-2">
+          <Link href="/claims" className={navClass(publicClaimsActive)}>
+            Public Claims
+          </Link>
+
+          <Link href="/schema" className={navClass(schemaBuilderActive)}>
+            Schema Builder
+          </Link>
+
+          <div className="mx-1 hidden h-6 w-px bg-slate-200 md:block" />
+
+          <Link href={dashboardHref} className={navClass(dashboardActive)}>
+            Dashboard
+          </Link>
+
+          {canSeeImport ? (
+            <Link href={importHref} className={navClass(importActive)}>
+              Import
             </Link>
+          ) : null}
 
-            {canSeeImport && (
-              <Link href={`${base}/import`} className={navClass(isImportActive())}>
-                Import
-              </Link>
-            )}
+          <Link href={ledgerHref} className={navClass(ledgerActive)}>
+            Ledger
+          </Link>
 
-            <Link href={`${base}/ledger`} className={navClass(isLedgerActive())}>
-              Ledger
+          {canSeeSchema ? (
+            <Link href={workspaceSchemaHref} className={navClass(workspaceSchemaActive)}>
+              Workspace Schema
             </Link>
+          ) : null}
 
-            {canSeeSchema && (
-              <Link href={`${base}/schema`} className={navClass(isSchemaActive())}>
-                Schema Builder
-              </Link>
-            )}
+          <Link href={claimsHref} className={navClass(claimsActive)}>
+            Claims
+          </Link>
 
-            <Link href={claimsHref} className={navClass(isClaimsActive())}>
-              Claims
+          <Link href={evidenceHref} className={navClass(evidenceActive)}>
+            Evidence
+          </Link>
+
+          {canSeeMembers ? (
+            <Link href={membersHref} className={navClass(membersActive)}>
+              Members
             </Link>
+          ) : null}
 
-            <Link href={evidenceHref} className={navClass(isEvidenceActive())}>
-              Evidence
-            </Link>
+          <Link href={settingsHref} className={navClass(settingsActive)}>
+            Settings & Billing
+          </Link>
+        </nav>
 
-            {canSeeMembers && (
-              <Link href={`${base}/members`} className={navClass(isMembersActive())}>
-                Members
-              </Link>
-            )}
-
-            <Link href={`${base}/settings`} className={navClass(isSettingsActive())}>
-              Settings & Billing
-            </Link>
-          </nav>
-
-          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-            <div className="text-sm">
-              <div className="font-medium text-slate-900">{user?.name || "Unknown User"}</div>
-              <div className="text-xs text-slate-500">
-                {user?.email || "No email"}
-                {!loading && workspaceRole ? ` · ${workspaceRole}` : ""}
-              </div>
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="text-sm">
+            <div className="font-medium text-slate-900">{user?.name || "User"}</div>
+            <div className="text-xs text-slate-500">
+              {user?.email || "—"}
+              {!loading && workspaceRole ? ` · ${workspaceRole}` : ""}
             </div>
-
-            <button
-              onClick={logout}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-white"
-            >
-              Logout
-            </button>
           </div>
+
+          <button
+            type="button"
+            onClick={logout}
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
+          >
+            Logout
+          </button>
         </div>
       </div>
     </header>
