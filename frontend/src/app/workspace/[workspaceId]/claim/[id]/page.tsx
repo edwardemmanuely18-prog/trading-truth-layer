@@ -244,6 +244,21 @@ function HashCard({
   );
 }
 
+function GovernanceCard({
+  title,
+  body,
+}: {
+  title: string;
+  body: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+      <div className="mt-2 text-sm leading-6 text-slate-600">{body}</div>
+    </div>
+  );
+}
+
 function PageNavButton({
   href,
   label,
@@ -354,6 +369,83 @@ function humanizeReason(reason: ClaimTradeScopeReason | string) {
     default:
       return reason;
   }
+}
+
+function GovernanceOverview({
+  claim,
+  versions,
+  auditEvents,
+  integrity,
+}: {
+  claim: ClaimSchema;
+  versions: ClaimVersion[];
+  auditEvents: AuditEvent[];
+  integrity: ClaimIntegrityResult | null;
+}) {
+  const latestEvent = auditEvents[0] ?? null;
+  const lineageDepth = versions.length;
+  const integrityState = integrity
+    ? integrity.integrity_status === "valid" && integrity.hash_match
+      ? "Confirmed"
+      : "Compromised"
+    : claim.status === "locked"
+      ? "Pending check"
+      : "Pre-lock";
+
+  return (
+    <div className="rounded-2xl border bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Governance Overview</h2>
+          <div className="mt-1 text-sm text-slate-500">
+            Lineage, lifecycle, integrity, and audit posture for this claim record.
+          </div>
+        </div>
+
+        <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+          claim #{claim.id}
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Lifecycle state</div>
+          <div className="mt-1 text-lg font-semibold text-slate-900">{claim.status}</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Integrity posture</div>
+          <div className="mt-1 text-lg font-semibold text-slate-900">{integrityState}</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Lineage depth</div>
+          <div className="mt-1 text-lg font-semibold text-slate-900">{lineageDepth}</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Latest audit event</div>
+          <div className="mt-1 text-lg font-semibold text-slate-900">
+            {latestEvent?.event_type || "—"}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          <div className="font-medium text-slate-900">Version governance</div>
+          <div className="mt-2">
+            Claim versions should preserve historical states instead of mutating prior records. This
+            makes comparison, accountability, and later public verification defensible.
+          </div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          <div className="font-medium text-slate-900">Audit governance</div>
+          <div className="mt-2">
+            Every draft edit and lifecycle transition should remain visible in audit history so
+            external trust can be supported by internal evidence.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ScopeSummaryCard({ evidence }: { evidence: ClaimTradeEvidence | null }) {
@@ -730,9 +822,7 @@ export default function WorkspaceClaimDetailPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {claim.status === "draft" && canEditDraft ? (
-                <EditClaimDraftButton claim={claim} onSaved={handleDraftSaved} />
-              ) : null}
+              <EditClaimDraftButton claim={claim} onSaved={handleDraftSaved} />
 
               <button
                 onClick={handleRefresh}
@@ -821,6 +911,13 @@ export default function WorkspaceClaimDetailPage() {
           </div>
         ) : null}
 
+        <GovernanceOverview
+          claim={claim}
+          versions={versions}
+          auditEvents={auditEvents}
+          integrity={integrity}
+        />
+
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard
             label="Trade Count"
@@ -858,25 +955,25 @@ export default function WorkspaceClaimDetailPage() {
         </section>
 
         {equityCurve ? (
-  <EquityCurveChart title="Internal Equity Curve" points={equityCurve.curve} />
-) : null}
+          <EquityCurveChart title="Internal Equity Curve" points={equityCurve.curve} />
+        ) : null}
 
-<ScopeSummaryCard evidence={claimTrades} />
+        <ScopeSummaryCard evidence={claimTrades} />
 
-<ScopeTradesTable
-  title="Included Trades"
-  subtitle="Exact in-scope trades used to compute this claim, ordered by trade open time."
-  rows={claimTrades?.included_trades ?? []}
-  emptyText="No included trades were found for this claim."
-/>
+        <ScopeTradesTable
+          title="Included Trades"
+          subtitle="Exact in-scope trades used to compute this claim, ordered by trade open time."
+          rows={claimTrades?.included_trades ?? []}
+          emptyText="No included trades were found for this claim."
+        />
 
-<ScopeTradesTable
-  title="Excluded Trades"
-  subtitle="Trades excluded from the claim scope, with explicit exclusion reasons."
-  rows={claimTrades?.excluded_trades ?? []}
-  emptyText="No excluded trades were found for this claim."
-  showExclusionColumns={true}
-/>
+        <ScopeTradesTable
+          title="Excluded Trades"
+          subtitle="Trades excluded from the claim scope, with explicit exclusion reasons."
+          rows={claimTrades?.excluded_trades ?? []}
+          emptyText="No excluded trades were found for this claim."
+          showExclusionColumns={true}
+        />
 
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
@@ -941,7 +1038,13 @@ export default function WorkspaceClaimDetailPage() {
                 <h2 className="text-xl font-semibold">Lifecycle & Integrity</h2>
 
                 {!isMember ? (
-                  <CreateClaimVersionButton claimSchemaId={claim.id} workspaceId={workspaceId} />
+                  <CreateClaimVersionButton
+                    claimSchemaId={claim.id}
+                    workspaceId={workspaceId}
+                    currentVersionNumber={claim.version_number ?? null}
+                    rootClaimId={claim.root_claim_id ?? null}
+                    parentClaimId={claim.parent_claim_id ?? null}
+                  />
                 ) : null}
               </div>
 
@@ -1132,6 +1235,32 @@ export default function WorkspaceClaimDetailPage() {
             </div>
 
             <div className="rounded-2xl border bg-white p-5 shadow-sm">
+              <h2 className="text-xl font-semibold">Governance Guidance</h2>
+              <div className="mt-4 space-y-4 text-sm text-slate-700">
+                <div className="rounded-xl bg-slate-50 p-4">
+                  <div className="font-medium">Version before changing meaning</div>
+                  <div className="mt-1 text-slate-600">
+                    Create a new governed version when scope, methodology, or exclusion logic changes.
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 p-4">
+                  <div className="font-medium">Audit before exposure</div>
+                  <div className="mt-1 text-slate-600">
+                    Review the audit timeline before public distribution to confirm the record tells a defensible story.
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 p-4">
+                  <div className="font-medium">Lock only after final review</div>
+                  <div className="mt-1 text-slate-600">
+                    Locking should be treated as finalization of the trust surface and associated evidence fingerprint.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border bg-white p-5 shadow-sm">
               <h2 className="text-xl font-semibold">Claim Versions</h2>
               <div className="mt-4 space-y-3">
                 {versions.length === 0 ? (
@@ -1150,6 +1279,11 @@ export default function WorkspaceClaimDetailPage() {
                 )}
               </div>
             </div>
+
+            <GovernanceCard
+              title="Governance principle"
+              body="A trustworthy claim is not just a metric summary. It is a lifecycle-governed record with preserved versions, visible audit events, explainable scope, and verifiable integrity."
+            />
           </div>
         </div>
       </main>

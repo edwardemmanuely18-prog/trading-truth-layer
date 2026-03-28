@@ -8,6 +8,9 @@ import { useAuth } from "./AuthProvider";
 type Props = {
   claimSchemaId: number;
   workspaceId?: number;
+  currentVersionNumber?: number | null;
+  rootClaimId?: number | null;
+  parentClaimId?: number | null;
 };
 
 function formatPercent(value?: number | null) {
@@ -19,9 +22,27 @@ function normalizeText(value?: string | null) {
   return String(value || "").toLowerCase().trim();
 }
 
+function GovernanceBadge({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="mt-1 font-semibold text-slate-900">{value}</div>
+    </div>
+  );
+}
+
 export default function CreateClaimVersionButton({
   claimSchemaId,
   workspaceId,
+  currentVersionNumber,
+  rootClaimId,
+  parentClaimId,
 }: Props) {
   const router = useRouter();
   const { getWorkspaceRole } = useAuth();
@@ -40,6 +61,21 @@ export default function CreateClaimVersionButton({
   const claimUsage = usage?.usage?.claims;
   const claimLimitReached =
     (claimUsage?.limit ?? 0) > 0 && (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
+
+  const nextVersionNumber = useMemo(() => {
+    if (typeof currentVersionNumber === "number" && currentVersionNumber > 0) {
+      return currentVersionNumber + 1;
+    }
+    return null;
+  }, [currentVersionNumber]);
+
+  const governanceState = useMemo(() => {
+    if (loading) return "creating...";
+    if (usageLoading) return "loading usage...";
+    if (!canCloneByRole) return "restricted";
+    if (claimLimitReached) return "plan blocked";
+    return "available";
+  }, [loading, usageLoading, canCloneByRole, claimLimitReached]);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -119,44 +155,67 @@ export default function CreateClaimVersionButton({
           <div className="text-sm font-semibold text-slate-900">Versioning Action</div>
           <div className="mt-1 text-xs leading-5 text-slate-600">
             Create a new governed claim version instead of overwriting the current record.
-            This preserves lineage and historical traceability.
+            This preserves lineage, comparison context, and historical traceability.
           </div>
         </div>
 
         <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-700">
-          {loading
-            ? "creating..."
-            : usageLoading
-              ? "loading usage..."
-              : disabled
-                ? "restricted"
-                : "available"}
+          {governanceState}
         </span>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <div className="text-xs text-slate-500">Workspace role</div>
-          <div className="mt-1 font-semibold text-slate-900">{workspaceRole || "unknown"}</div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <div className="text-xs text-slate-500">Current plan</div>
-          <div className="mt-1 font-semibold text-slate-900">{currentPlanName}</div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <div className="text-xs text-slate-500">Claim usage</div>
-          <div className="mt-1 font-semibold text-slate-900">
-            {workspaceId && !usageLoading && claimUsage
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <GovernanceBadge label="Workspace role" value={workspaceRole || "unknown"} />
+        <GovernanceBadge label="Current plan" value={currentPlanName} />
+        <GovernanceBadge
+          label="Claim usage"
+          value={
+            workspaceId && !usageLoading && claimUsage
               ? `${claimUsage.used} / ${claimUsage.limit}`
-              : "—"}
+              : "—"
+          }
+        />
+        <GovernanceBadge
+          label="Usage ratio"
+          value={workspaceId && !usageLoading && claimUsage ? formatPercent(claimUsage.ratio) : "—"}
+        />
+        <GovernanceBadge
+          label="Current version"
+          value={typeof currentVersionNumber === "number" ? currentVersionNumber : "—"}
+        />
+        <GovernanceBadge
+          label="Next version"
+          value={typeof nextVersionNumber === "number" ? nextVersionNumber : "auto"}
+        />
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="text-xs text-slate-500">Root claim</div>
+          <div className="mt-1 font-semibold text-slate-900">
+            {rootClaimId ?? claimSchemaId}
           </div>
-          {workspaceId && !usageLoading && claimUsage ? (
-            <div className="mt-1 text-xs text-slate-500">
-              {formatPercent(claimUsage.ratio)}
-            </div>
-          ) : null}
+          <div className="mt-1 text-xs text-slate-500">
+            Governing lineage anchor for the claim family.
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="text-xs text-slate-500">Parent claim</div>
+          <div className="mt-1 font-semibold text-slate-900">
+            {parentClaimId ?? "current claim becomes parent"}
+          </div>
+          <div className="mt-1 text-xs text-slate-500">
+            New versions preserve history instead of mutating prior records.
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-6 text-slate-600">
+        <div className="font-semibold text-slate-900">Governance effect</div>
+        <div className="mt-2">
+          Creating a version should record lineage continuity, preserve the old claim in history,
+          and allow later version-by-version comparison without destroying prior audit evidence.
         </div>
       </div>
 
