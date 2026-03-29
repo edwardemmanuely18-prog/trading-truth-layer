@@ -1582,10 +1582,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     y -= banner_height + 38
 
+    y -= 8
+
     pdf.setFillColor(colors.HexColor("#0F172A"))
-    pdf.setFont("Helvetica-Bold", 13)
+    pdf.setFont("Helvetica-Bold", 18)
     pdf.drawString(PDF_MARGIN_LEFT, y, "Claim Identity")
-    y -= 14
+    y -= 34
 
     pdf.setFillColor(colors.HexColor("#0F172A"))
     pdf.setFont("Helvetica-Bold", 22)
