@@ -1585,6 +1585,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     y -= banner_height + 38
 
     y = pdf_section_title(pdf, "Claim Identity", PDF_MARGIN_LEFT, y)
+    y -= 6
 
     pdf.setFillColor(colors.HexColor("#0F172A"))
     pdf.setFont("Helvetica-Bold", 22)
