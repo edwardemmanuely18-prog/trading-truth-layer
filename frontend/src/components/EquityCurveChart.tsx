@@ -434,32 +434,32 @@ export default function EquityCurveChart({
 
           {peakEqualsTrough ? (
             <>
-              <circle cx={peakX} cy={peakY} r="5" fill="#16A34A" />
+              <circle cx={peakX} cy={peakY} r="6" fill="#16A34A" />
               <text
-                x={peakX + 10}
-                y={peakY - 10}
-                className="fill-green-600 text-[10px] font-medium"
+                x={peakX + 12}
+                y={peakY - 12}
+                className="fill-green-600 text-[10px] font-semibold"
               >
                 Peak / Trough {formatNumber(stats.max, 2)}
               </text>
             </>
           ) : (
             <>
-              <circle cx={peakX} cy={peakY} r="5" fill="#16A34A" />
+              <circle cx={peakX} cy={peakY} r="6" fill="#16A34A" />
               <text
-                x={peakX + 10}
-                y={peakY - 10}
-                className="fill-green-600 text-[10px] font-medium"
+                x={peakX + 12}
+                y={peakY - 12}
+                className="fill-green-600 text-[10px] font-semibold"
               >
                 Peak {formatNumber(stats.max, 2)}
               </text>
 
-              <circle cx={troughX} cy={troughY} r="5" fill="#DC2626" />
+              <circle cx={troughX} cy={troughY} r="6" fill="#DC2626" />
               <text
-                x={troughX - 10}
-                y={troughY - 10}
+                x={troughX - 14}
+                y={troughY - 12}
                 textAnchor="end"
-                className="fill-red-600 text-[10px] font-medium"
+                className="fill-red-700 text-[10px] font-semibold"
               >
                 Trough {formatNumber(stats.min, 2)}
               </text>
