@@ -10,43 +10,6 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-def enforce_workspace_claim_limit(workspace_id: int, db: Session):
-    """
-    Backend enforcement layer for workspace claim limits.
-    This is the authoritative gate used by creation / cloning flows.
-    """
-
-    workspace = (
-        db.query(Workspace)
-        .filter(Workspace.id == workspace_id)
-        .first()
-    )
-
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-
-    claim_limit = workspace.claim_limit or 0
-
-    current_claim_count = (
-        db.query(ClaimSchema)
-        .filter(ClaimSchema.workspace_id == workspace_id)
-        .count()
-    )
-
-    if claim_limit > 0 and current_claim_count >= claim_limit:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "code": "claim_limit_reached",
-                "message": "Claim limit reached for this workspace.",
-                "resource": "claim",
-                "workspace_id": workspace_id,
-                "used": current_claim_count,
-                "limit": claim_limit,
-                "recommended_action": "upgrade_workspace_plan",
-                "upgrade_hint": "Upgrade workspace plan to create additional claims.",
-            },
-        )
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from reportlab.lib import colors
@@ -1789,47 +1752,57 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     end_equity = equity_curve["ending_equity"]
     point_count = equity_curve["point_count"]
     curve_points = equity_curve["curve"]
-    first_point = equity_curve["curve"][0] if equity_curve["curve"] else None
-    last_point = equity_curve["curve"][-1] if equity_curve["curve"] else None
+    first_point = curve_points[0] if curve_points else None
+    last_point = curve_points[-1] if curve_points else None
     peak_point = drawdown_stats.get("peak_point")
     trough_point = drawdown_stats.get("trough_point")
 
+    mini_gap = 12
+    note_w = (PDF_CONTENT_WIDTH - (mini_gap * 3)) / 4
+    row_h = 52
+    row_left = PDF_MARGIN_LEFT
+
     draw_label_value_box(
         pdf,
-        left,
+        row_left,
         y,
         note_w,
-        52,
+        row_h,
         "First Point",
         f"Trade #{first_point['trade_id']} · {first_point['symbol']} · {format_pdf_datetime(first_point['opened_at'])}" if first_point else "—",
+        value_font_size=9,
     )
     draw_label_value_box(
         pdf,
-        left + note_w + 12,
+        row_left + note_w + mini_gap,
         y,
         note_w,
-        52,
+        row_h,
         "Last Point",
         f"Trade #{last_point['trade_id']} · {last_point['symbol']} · {format_pdf_datetime(last_point['opened_at'])}" if last_point else "—",
+        value_font_size=9,
     )
     draw_label_value_box(
         pdf,
-        left + (note_w + 12) * 2,
+        row_left + (note_w + mini_gap) * 2,
         y,
         note_w,
-        52,
+        row_h,
         "Peak Point",
         f"Trade #{peak_point['trade_id']} · {peak_point['symbol']} · {format_pdf_datetime(peak_point['opened_at'])}" if peak_point else "—",
+        value_font_size=9,
     )
     draw_label_value_box(
         pdf,
-        left + (note_w + 12) * 3,
+        row_left + (note_w + mini_gap) * 3,
         y,
         note_w,
-        52,
+        row_h,
         "Trough Point",
         f"Trade #{trough_point['trade_id']} · {trough_point['symbol']} · {format_pdf_datetime(trough_point['opened_at'])}" if trough_point else "—",
+        value_font_size=9,
     )
+    y -= row_h + 18
 
     draw_light_note_box(
         pdf,
@@ -1840,6 +1813,26 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         height=50,
     )
     y -= 74
+
+    curve_box_h = 180
+    y, page_number = pdf_require_space(
+        pdf,
+        y,
+        curve_box_h + 20,
+        page_number,
+        document_title,
+        claim_hash,
+    )
+
+    draw_equity_curve_preview(
+        pdf,
+        PDF_MARGIN_LEFT,
+        y,
+        PDF_CONTENT_WIDTH,
+        curve_box_h,
+        curve_points,
+    )
+    y -= curve_box_h + 18
 
     # =========================
     # PAGE 3 — CONTEXT / EVIDENCE
@@ -2269,7 +2262,6 @@ def clone_claim_schema(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    enforce_workspace_claim_limit(workspace_id, db)
     source = db.query(ClaimSchema).filter(ClaimSchema.id == claim_schema_id).first()
     if not source:
         raise HTTPException(status_code=404, detail="Claim schema not found")
