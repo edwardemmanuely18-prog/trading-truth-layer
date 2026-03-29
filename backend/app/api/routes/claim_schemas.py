@@ -1087,8 +1087,6 @@ def pdf_draw_header(pdf: canvas.Canvas, document_title: str):
     pdf.setFillColor(colors.HexColor("#64748B"))
     pdf.setFont("Helvetica", 9)
     pdf.drawRightString(PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT, PDF_PAGE_HEIGHT - 26, document_title)
-    pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
-    pdf.line(PDF_MARGIN_LEFT, PDF_HEADER_RULE_Y, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT, PDF_HEADER_RULE_Y)
 
 
 def pdf_draw_footer(pdf: canvas.Canvas, page_number: int, claim_hash: str):
@@ -1583,6 +1581,10 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     )
 
     y -= banner_height + 38
+
+    pdf.setStrokeColor(colors.HexColor("#D8E1EC"))
+    pdf.setLineWidth(0.8)
+    pdf.line(PDF_MARGIN_LEFT, y + 6, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT, y + 6)
 
     y = pdf_section_title(pdf, "Claim Identity", PDF_MARGIN_LEFT, y)
     y -= 6
