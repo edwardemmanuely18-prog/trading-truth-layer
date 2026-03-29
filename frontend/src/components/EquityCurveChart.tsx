@@ -188,12 +188,8 @@ export default function EquityCurveChart({
 
   const firstPoint = points[0] ?? null;
   const lastPoint = points[points.length - 1] ?? null;
-  const equityHighPoint = points[stats.maxIndex] ?? null;
-  const equityLowPoint = points[stats.minIndex] ?? null;
-  const drawdownPeakPoint =
-    stats.drawdownPeakIndex !== null ? points[stats.drawdownPeakIndex] ?? null : null;
-  const drawdownTroughPoint =
-    stats.drawdownTroughIndex !== null ? points[stats.drawdownTroughIndex] ?? null : null;
+  const peakPoint = points[stats.maxIndex] ?? null;
+  const troughPoint = points[stats.minIndex] ?? null;
 
   const xFor = (index: number) => {
     if (points.length <= 1) return padding.left + chartWidth / 2;
@@ -232,25 +228,29 @@ export default function EquityCurveChart({
     stats.drawdownPeakValue !== null &&
     stats.drawdownTroughValue !== null;
 
-  const drawdownShadePath =
-    hasDrawdown && drawdownPeakPoint && drawdownTroughPoint
-      ? [
-          `M ${xFor(stats.drawdownPeakIndex!)} ${yFor(stats.drawdownPeakValue!)}`,
-          `L ${xFor(stats.drawdownTroughIndex!)} ${yFor(stats.drawdownTroughValue!)}`,
-          `L ${xFor(stats.drawdownTroughIndex!)} ${yFor(stats.drawdownPeakValue!)}`,
-          `L ${xFor(stats.drawdownPeakIndex!)} ${yFor(stats.drawdownPeakValue!)}`,
-          "Z",
-        ].join(" ")
-      : null;
+  const drawdownShadePath = hasDrawdown
+    ? [
+        `M ${xFor(stats.drawdownPeakIndex!)} ${yFor(stats.drawdownPeakValue!)}`,
+        `L ${xFor(stats.drawdownTroughIndex!)} ${yFor(stats.drawdownTroughValue!)}`,
+        `L ${xFor(stats.drawdownTroughIndex!)} ${yFor(stats.drawdownPeakValue!)}`,
+        `L ${xFor(stats.drawdownPeakIndex!)} ${yFor(stats.drawdownPeakValue!)}`,
+        "Z",
+      ].join(" ")
+    : null;
 
-  const equityHighX = xFor(stats.maxIndex);
-  const equityHighY = yFor(stats.max);
-  const drawdownPeakX = hasDrawdown ? xFor(stats.drawdownPeakIndex!) : 0;
-  const drawdownPeakY = hasDrawdown ? yFor(stats.drawdownPeakValue!) : 0;
-  const drawdownTroughX = hasDrawdown ? xFor(stats.drawdownTroughIndex!) : 0;
-  const drawdownTroughY = hasDrawdown ? yFor(stats.drawdownTroughValue!) : 0;
+  const peakX = xFor(stats.maxIndex);
+  const peakY = yFor(stats.max);
+  const troughX = xFor(stats.minIndex);
+  const troughY = yFor(stats.min);
 
-  const showDistinctDrawdownPeak = hasDrawdown && stats.drawdownPeakIndex !== stats.maxIndex;
+  const peakEqualsTrough = stats.maxIndex === stats.minIndex;
+
+  const netChangeLabel =
+    stats.netChange > 0
+      ? `Net change +${formatNumber(stats.netChange, 4)}`
+      : stats.netChange < 0
+        ? `Net change ${formatNumber(stats.netChange, 4)}`
+        : `Net change ${formatNumber(stats.netChange, 4)}`;
 
   return (
     <div className="rounded-2xl border bg-white p-5 shadow-sm">
@@ -280,12 +280,12 @@ export default function EquityCurveChart({
 
       <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatTile
-          label="Equity High"
+          label="Peak"
           value={formatNumber(stats.max, 4)}
           hint="Highest cumulative point"
         />
         <StatTile
-          label="Equity Low"
+          label="Trough"
           value={formatNumber(stats.min, 4)}
           hint="Lowest cumulative point"
         />
@@ -410,10 +410,10 @@ export default function EquityCurveChart({
 
           {hasDrawdown ? (
             <line
-              x1={drawdownPeakX}
-              y1={drawdownPeakY}
-              x2={drawdownTroughX}
-              y2={drawdownTroughY}
+              x1={xFor(stats.drawdownPeakIndex!)}
+              y1={yFor(stats.drawdownPeakValue!)}
+              x2={xFor(stats.drawdownTroughIndex!)}
+              y2={yFor(stats.drawdownTroughValue!)}
               stroke="#94A3B8"
               strokeWidth="1.5"
               strokeDasharray="4 4"
@@ -432,45 +432,39 @@ export default function EquityCurveChart({
             </circle>
           ))}
 
-          {equityHighPoint ? (
+          {peakEqualsTrough ? (
             <>
-              <circle cx={equityHighX} cy={equityHighY} r="5" fill="#16A34A" />
+              <circle cx={peakX} cy={peakY} r="5" fill="#16A34A" />
               <text
-                x={equityHighX + 10}
-                y={equityHighY - 10}
+                x={peakX + 10}
+                y={peakY - 10}
                 className="fill-green-600 text-[10px] font-medium"
               >
-                High {formatNumber(stats.max, 2)}
+                Peak / Trough {formatNumber(stats.max, 2)}
               </text>
             </>
-          ) : null}
-
-          {showDistinctDrawdownPeak ? (
+          ) : (
             <>
-              <circle cx={drawdownPeakX} cy={drawdownPeakY} r="4.5" fill="#D97706" />
+              <circle cx={peakX} cy={peakY} r="5" fill="#16A34A" />
               <text
-                x={drawdownPeakX + 10}
-                y={drawdownPeakY + 16}
-                className="fill-amber-600 text-[10px] font-medium"
+                x={peakX + 10}
+                y={peakY - 10}
+                className="fill-green-600 text-[10px] font-medium"
               >
-                DD peak {formatNumber(stats.drawdownPeakValue, 2)}
+                Peak {formatNumber(stats.max, 2)}
               </text>
-            </>
-          ) : null}
 
-          {hasDrawdown ? (
-            <>
-              <circle cx={drawdownTroughX} cy={drawdownTroughY} r="5" fill="#DC2626" />
+              <circle cx={troughX} cy={troughY} r="5" fill="#DC2626" />
               <text
-                x={drawdownTroughX - 10}
-                y={drawdownTroughY - 10}
+                x={troughX - 10}
+                y={troughY - 10}
                 textAnchor="end"
                 className="fill-red-600 text-[10px] font-medium"
               >
-                DD trough {formatNumber(stats.drawdownTroughValue, 2)}
+                Trough {formatNumber(stats.min, 2)}
               </text>
             </>
-          ) : null}
+          )}
 
           <text
             x={width - padding.right}
@@ -478,7 +472,7 @@ export default function EquityCurveChart({
             textAnchor="end"
             className="fill-slate-400 text-[10px]"
           >
-            Net change {formatNumber(stats.netChange, 4)}
+            {netChangeLabel}
           </text>
         </svg>
       </div>
@@ -503,30 +497,20 @@ export default function EquityCurveChart({
         />
 
         <InfoCard
-          label="Drawdown peak"
+          label="Peak point"
           value={
-            hasDrawdown ? (
-              <>
-                Trade #{drawdownPeakPoint?.trade_id} · {drawdownPeakPoint?.symbol} ·{" "}
-                {formatDateTime(drawdownPeakPoint?.opened_at)}
-              </>
-            ) : (
-              "No drawdown event"
-            )
+            <>
+              Trade #{peakPoint?.trade_id} · {peakPoint?.symbol} · {formatDateTime(peakPoint?.opened_at)}
+            </>
           }
         />
 
         <InfoCard
-          label="Drawdown trough"
+          label="Trough point"
           value={
-            hasDrawdown ? (
-              <>
-                Trade #{drawdownTroughPoint?.trade_id} · {drawdownTroughPoint?.symbol} ·{" "}
-                {formatDateTime(drawdownTroughPoint?.opened_at)}
-              </>
-            ) : (
-              "No drawdown event"
-            )
+            <>
+              Trade #{troughPoint?.trade_id} · {troughPoint?.symbol} · {formatDateTime(troughPoint?.opened_at)}
+            </>
           }
         />
       </div>
@@ -534,9 +518,9 @@ export default function EquityCurveChart({
       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <div className="text-sm font-semibold text-slate-900">Risk path note</div>
         <div className="mt-2 text-sm text-slate-600">
-          This curve distinguishes absolute equity high from drawdown peak, highlights the deepest
-          peak-to-trough decline only when one actually exists, and shows full sequence context for
-          smaller evidence sets so reviewers can inspect both performance progression and risk path quality.
+          This curve uses consistent peak and trough labeling across all claim shapes, while max
+          drawdown remains available as a separate risk statistic. For smaller evidence sets, every
+          point is shown on the sequence axis to keep review context complete.
         </div>
       </div>
     </div>
