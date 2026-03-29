@@ -464,40 +464,58 @@ def resolve_schema_trade_scope(schema: ClaimSchema, db: Session):
     }
 
 
-def compute_trade_metrics(trades: list[Trade]):
-    trade_count = len(trades)
-    pnl_values = [t.net_pnl for t in trades if t.net_pnl is not None]
-
-    if not pnl_values:
+def compute_drawdown_stats(points: list[dict]):
+    if not points:
         return {
-            "trade_count": trade_count,
-            "net_pnl": 0.0,
-            "win_rate": 0.0,
-            "profit_factor": 0.0,
-            "best_trade": 0.0,
-            "worst_trade": 0.0,
+            "max_drawdown": 0.0,
+            "peak_cumulative": 0.0,
+            "trough_cumulative": 0.0,
+            "peak_point": None,
+            "trough_point": None,
+            "drawdown_peak_point": None,
+            "drawdown_trough_point": None,
+            "has_drawdown": False,
+            "net_change": 0.0,
+            "peak_equals_trough": False,
         }
 
-    wins = [x for x in pnl_values if x > 0]
-    losses = [x for x in pnl_values if x < 0]
+    values = [float(p.get("cumulative_pnl", 0.0)) for p in points]
 
-    gross_profit = sum(wins)
-    gross_loss_abs = abs(sum(losses))
-    net_pnl = sum(pnl_values)
-    win_rate = len(wins) / len(pnl_values) if pnl_values else 0.0
+    peak_point = max(points, key=lambda p: float(p.get("cumulative_pnl", 0.0)))
+    trough_point = min(points, key=lambda p: float(p.get("cumulative_pnl", 0.0)))
 
-    if gross_loss_abs == 0:
-        profit_factor = gross_profit if gross_profit > 0 else 0.0
-    else:
-        profit_factor = gross_profit / gross_loss_abs
+    running_peak = float("-inf")
+    max_drawdown = 0.0
+    drawdown_peak_point = None
+    drawdown_trough_point = None
+    current_peak_point = None
+
+    for point in points:
+        current = float(point.get("cumulative_pnl", 0.0))
+        if current > running_peak:
+            running_peak = current
+            current_peak_point = point
+
+        drawdown = running_peak - current
+        if drawdown > max_drawdown:
+            max_drawdown = drawdown
+            drawdown_peak_point = current_peak_point
+            drawdown_trough_point = point
+
+    start_value = float(points[0].get("cumulative_pnl", 0.0))
+    end_value = float(points[-1].get("cumulative_pnl", 0.0))
 
     return {
-        "trade_count": trade_count,
-        "net_pnl": round(net_pnl, 4),
-        "win_rate": round(win_rate, 4),
-        "profit_factor": round(profit_factor, 4),
-        "best_trade": round(max(pnl_values), 4),
-        "worst_trade": round(min(pnl_values), 4),
+        "max_drawdown": round(max_drawdown, 4),
+        "peak_cumulative": round(float(peak_point.get("cumulative_pnl", 0.0)), 4),
+        "trough_cumulative": round(float(trough_point.get("cumulative_pnl", 0.0)), 4),
+        "peak_point": peak_point,
+        "trough_point": trough_point,
+        "drawdown_peak_point": drawdown_peak_point,
+        "drawdown_trough_point": drawdown_trough_point,
+        "has_drawdown": max_drawdown > 0,
+        "net_change": round(end_value - start_value, 4),
+        "peak_equals_trough": peak_point.get("index") == trough_point.get("index"),
     }
 
 
@@ -1323,22 +1341,22 @@ def draw_equity_curve_preview(
         radius=14,
     )
 
-    chart_x = x + 18
-    chart_y_bottom = top_y - height + 20
-    chart_y_top = top_y - 40
-    chart_w = width - 36
-    chart_h = chart_y_top - chart_y_bottom
-
     pdf.setFillColor(colors.HexColor("#0F172A"))
     pdf.setFont("Helvetica-Bold", 14)
     pdf.drawString(x + 14, top_y - 18, "Equity Curve Preview")
 
     if not points:
-        pdf.setFont("Helvetica", 11)
         pdf.setFillColor(colors.HexColor("#64748B"))
-        pdf.drawString(x + 14, top_y - 46, "No equity curve data available.")
+        pdf.setFont("Helvetica", 10)
+        pdf.drawString(x + 14, top_y - 42, "No equity curve data available.")
         pdf.setFillColor(colors.black)
         return
+
+    chart_x = x + 22
+    chart_y_top = top_y - 42
+    chart_y_bottom = top_y - height + 28
+    chart_w = width - 44
+    chart_h = chart_y_top - chart_y_bottom
 
     values = [float(p.get("cumulative_pnl", 0.0)) for p in points]
     min_value = min(min(values), 0.0)
@@ -1347,48 +1365,167 @@ def draw_equity_curve_preview(
     if range_value == 0:
         range_value = 1.0
 
+    stats = compute_drawdown_stats(points)
+
     def x_for(index: int):
-        if len(points) == 1:
-            return chart_x + (chart_w / 2)
+        if len(points) <= 1:
+            return chart_x + chart_w / 2
         return chart_x + (index / (len(points) - 1)) * chart_w
 
     def y_for(value: float):
         return chart_y_bottom + ((value - min_value) / range_value) * chart_h
 
-    zero_y = y_for(0.0)
+    # grid
+    y_ticks = 5
+    pdf.setStrokeColor(colors.HexColor("#F1F5F9"))
+    pdf.setLineWidth(1)
+    for i in range(y_ticks + 1):
+        tick_value = min_value + ((max_value - min_value) / y_ticks) * i
+        y_tick = y_for(tick_value)
+        pdf.line(chart_x, y_tick, chart_x + chart_w, y_tick)
+
+        pdf.setFillColor(colors.HexColor("#64748B"))
+        pdf.setFont("Helvetica", 8)
+        pdf.drawRightString(chart_x - 8, y_tick - 3, f"{round(tick_value, 1)}")
+
+    # x ticks
+    if len(points) <= 8:
+        tick_indexes = list(range(len(points)))
+    else:
+        tick_indexes = [0, max(0, (len(points) - 1) // 2), len(points) - 1]
+
+    seen = set()
+    tick_indexes = [i for i in tick_indexes if not (i in seen or seen.add(i))]
+
+    pdf.setStrokeColor(colors.HexColor("#F8FAFC"))
+    for tick_index in tick_indexes:
+        tick_x = x_for(tick_index)
+        pdf.line(tick_x, chart_y_bottom, tick_x, chart_y_top)
+
+        point = points[tick_index]
+        pdf.setFillColor(colors.HexColor("#64748B"))
+        pdf.setFont("Helvetica", 8)
+        pdf.drawCentredString(tick_x, chart_y_bottom - 12, str(point.get("index", tick_index + 1)))
+        pdf.setFillColor(colors.HexColor("#94A3B8"))
+        pdf.setFont("Helvetica", 7)
+        pdf.drawCentredString(tick_x, chart_y_bottom - 24, format_pdf_datetime(point.get("opened_at"))[:10])
+
+    # axes
     pdf.setStrokeColor(colors.HexColor("#CBD5E1"))
-    pdf.setDash(4, 4)
-    pdf.line(chart_x, zero_y, chart_x + chart_w, zero_y)
-    pdf.setDash()
-
-    pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
-    pdf.line(chart_x, chart_y_bottom, chart_x + chart_w, chart_y_bottom)
+    pdf.setLineWidth(1)
     pdf.line(chart_x, chart_y_bottom, chart_x, chart_y_top)
+    pdf.line(chart_x, chart_y_bottom, chart_x + chart_w, chart_y_bottom)
 
-    pdf.setStrokeColor(colors.HexColor("#0F172A"))
-    pdf.setLineWidth(2)
+    # area fill under line
+    if len(points) >= 2:
+        fill_path = pdf.beginPath()
+        first_x = x_for(0)
+        first_y = y_for(float(points[0].get("cumulative_pnl", 0.0)))
+        fill_path.moveTo(first_x, chart_y_bottom)
+        fill_path.lineTo(first_x, first_y)
+        for idx, point in enumerate(points[1:], start=1):
+            fill_path.lineTo(x_for(idx), y_for(float(point.get("cumulative_pnl", 0.0))))
+        fill_path.lineTo(x_for(len(points) - 1), chart_y_bottom)
+        fill_path.close()
 
+        pdf.setFillColor(colors.HexColor("#E2E8F0"))
+        pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
+        pdf.drawPath(fill_path, fill=1, stroke=0)
+
+    # drawdown shade
+    if stats["has_drawdown"] and stats["drawdown_peak_point"] and stats["drawdown_trough_point"]:
+        peak_idx = max(0, int(stats["drawdown_peak_point"]["index"]) - 1)
+        trough_idx = max(0, int(stats["drawdown_trough_point"]["index"]) - 1)
+
+        dd_x1 = x_for(peak_idx)
+        dd_x2 = x_for(trough_idx)
+        dd_y_peak = y_for(float(stats["drawdown_peak_point"]["cumulative_pnl"]))
+        dd_y_trough = y_for(float(stats["drawdown_trough_point"]["cumulative_pnl"]))
+
+        left = min(dd_x1, dd_x2)
+        right = max(dd_x1, dd_x2)
+
+        pdf.setFillColor(colors.Color(220 / 255, 38 / 255, 38 / 255, alpha=0.08))
+        pdf.setStrokeColor(colors.Color(220 / 255, 38 / 255, 38 / 255, alpha=0))
+        pdf.rect(left, dd_y_trough, right - left, dd_y_peak - dd_y_trough, fill=1, stroke=0)
+
+        pdf.setStrokeColor(colors.HexColor("#94A3B8"))
+        pdf.setDash(4, 4)
+        pdf.line(dd_x1, dd_y_peak, dd_x2, dd_y_trough)
+        pdf.setDash()
+
+    # line shadow
+    pdf.setStrokeColor(colors.Color(15 / 255, 23 / 255, 42 / 255, alpha=0.15))
+    pdf.setLineWidth(6)
     prev_x = None
     prev_y = None
     for idx, point in enumerate(points):
         px = x_for(idx)
         py = y_for(float(point.get("cumulative_pnl", 0.0)))
-        if prev_x is not None and prev_y is not None:
+        if prev_x is not None:
             pdf.line(prev_x, prev_y, px, py)
         prev_x = px
         prev_y = py
 
+    # main line
+    pdf.setStrokeColor(colors.HexColor("#0F172A"))
+    pdf.setLineWidth(2.5)
+    prev_x = None
+    prev_y = None
+    for idx, point in enumerate(points):
+        px = x_for(idx)
+        py = y_for(float(point.get("cumulative_pnl", 0.0)))
+        if prev_x is not None:
+            pdf.line(prev_x, prev_y, px, py)
+        prev_x = px
+        prev_y = py
+
+    # all points
     pdf.setFillColor(colors.HexColor("#0F172A"))
     for idx, point in enumerate(points):
         px = x_for(idx)
         py = y_for(float(point.get("cumulative_pnl", 0.0)))
-        pdf.circle(px, py, 2.2, stroke=0, fill=1)
+        pdf.circle(px, py, 2.6, stroke=0, fill=1)
 
+    peak_point = stats["peak_point"]
+    trough_point = stats["trough_point"]
+
+    if peak_point and trough_point and stats["peak_equals_trough"]:
+        idx = max(0, int(peak_point["index"]) - 1)
+        px = x_for(idx)
+        py = y_for(float(peak_point["cumulative_pnl"]))
+        pdf.setFillColor(colors.HexColor("#16A34A"))
+        pdf.circle(px, py, 4.2, stroke=0, fill=1)
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.drawString(px + 10, py + 8, f"Peak / Trough {round(float(peak_point['cumulative_pnl']), 2)}")
+    else:
+        if peak_point:
+            idx = max(0, int(peak_point["index"]) - 1)
+            px = x_for(idx)
+            py = y_for(float(peak_point["cumulative_pnl"]))
+            pdf.setFillColor(colors.HexColor("#16A34A"))
+            pdf.circle(px, py, 4.2, stroke=0, fill=1)
+            pdf.setFont("Helvetica-Bold", 8)
+            pdf.drawString(px + 10, py + 8, f"Peak {round(float(peak_point['cumulative_pnl']), 2)}")
+
+        if trough_point:
+            idx = max(0, int(trough_point["index"]) - 1)
+            px = x_for(idx)
+            py = y_for(float(trough_point["cumulative_pnl"]))
+            pdf.setFillColor(colors.HexColor("#DC2626"))
+            pdf.circle(px, py, 4.2, stroke=0, fill=1)
+            pdf.setFont("Helvetica-Bold", 8)
+            pdf.drawRightString(px - 10, py + 8, f"Trough {round(float(trough_point['cumulative_pnl']), 2)}")
+
+    # net change
     pdf.setFillColor(colors.HexColor("#64748B"))
     pdf.setFont("Helvetica", 8)
-    pdf.drawString(chart_x, chart_y_top + 6, f"max {round(max_value, 4)}")
-    pdf.drawString(chart_x, chart_y_bottom - 12, f"min {round(min_value, 4)}")
+    sign = "+" if stats["net_change"] > 0 else ""
+    pdf.drawRightString(chart_x + chart_w, chart_y_top + 8, f"Net change {sign}{formatNumber(stats['net_change'], 4) if False else round(stats['net_change'], 4)}")
+
     pdf.setFillColor(colors.black)
+    pdf.setStrokeColor(colors.black)
+    pdf.setLineWidth(1)
 
 
 def draw_table_header(pdf: canvas.Canvas, x: float, y: float, headers: list[tuple[float, str]], font_size: int = 9):
@@ -1668,7 +1805,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         y,
         note_w,
         52,
-        "Drawdown Peak",
+        "Peak Point",
         f"Trade #{peak_point['trade_id']} · {peak_point['symbol']} · {format_pdf_datetime(peak_point['opened_at'])}" if peak_point else "—",
         value_font_size=9,
     )
@@ -1678,18 +1815,17 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         y,
         note_w,
         52,
-        "Drawdown Trough",
+        "Trough Point",
         f"Trade #{trough_point['trade_id']} · {trough_point['symbol']} · {format_pdf_datetime(trough_point['opened_at'])}" if trough_point else "—",
         value_font_size=9,
     )
-    y -= 66
 
     draw_light_note_box(
         pdf,
         PDF_MARGIN_LEFT,
         y,
         PDF_CONTENT_WIDTH,
-        "The most important additional statistic on an equity curve is usually max drawdown, because it shows the deepest peak-to-trough decline experienced along the path, not just the final result. Equity high and low help frame the range, but drawdown gives the stronger credibility signal for risk-aware review.",
+        "This curve now mirrors the internal verification surface more closely by showing cumulative path structure, consistent peak and trough annotations, and the deepest drawdown interval only when one exists. Max drawdown remains the primary risk statistic, while peak and trough identify the full performance range.",
         height=50,
     )
     y -= 74
