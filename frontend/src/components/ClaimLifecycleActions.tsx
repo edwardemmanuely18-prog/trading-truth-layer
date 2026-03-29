@@ -1,8 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "../lib/api";
 import { useAuth } from "./AuthProvider";
+import PaywallModal from "./PaywallModal";
+import { useWorkspaceGate } from "../hooks/useWorkspaceGate";
 
 type Props = {
   claimSchemaId: number;
@@ -175,7 +178,9 @@ export default function ClaimLifecycleActions({
   workspaceId,
   status,
 }: Props) {
+  const router = useRouter();
   const { getWorkspaceRole } = useAuth();
+  const { gateAndExecute, paywallState, closePaywall } = useWorkspaceGate();
 
   const [loadingAction, setLoadingAction] = useState<"verify" | "publish" | "lock" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -205,9 +210,9 @@ export default function ClaimLifecycleActions({
 
   const lockCompleted = normalizedStatus === "locked";
 
-  const verifyDisabled = loadingAction !== null || !verifyAvailable || !permissions.canVerify;
-  const publishDisabled = loadingAction !== null || !publishAvailable || !permissions.canPublish;
-  const lockDisabled = loadingAction !== null || !lockAvailable || !permissions.canLock;
+  const verifyDisabled = loadingAction !== null || !permissions.canVerify;
+  const publishDisabled = loadingAction !== null || !permissions.canPublish;
+  const lockDisabled = loadingAction !== null || !permissions.canLock;
 
   const verifyReason =
     !permissions.canVerify
@@ -272,119 +277,175 @@ export default function ClaimLifecycleActions({
     }
   };
 
+  async function handleVerify() {
+    await gateAndExecute(
+      {
+        action: "verify_claim",
+        workspaceRole,
+        claimStatus: status,
+      },
+      async () => {
+        await verifyClaim();
+      }
+    );
+  }
+
+  async function handlePublish() {
+    await gateAndExecute(
+      {
+        action: "publish_claim",
+        workspaceRole,
+        claimStatus: status,
+      },
+      async () => {
+        await publishClaim();
+      }
+    );
+  }
+
+  async function handleLock() {
+    await gateAndExecute(
+      {
+        action: "lock_claim",
+        workspaceRole,
+        claimStatus: status,
+      },
+      async () => {
+        await lockClaim();
+      }
+    );
+  }
+
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-sm text-slate-500">Lifecycle governance</div>
-            <div className="mt-1 text-base font-semibold text-slate-900">
-              Controlled state progression for verified claim publication
+    <>
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm text-slate-500">Lifecycle governance</div>
+              <div className="mt-1 text-base font-semibold text-slate-900">
+                Controlled state progression for verified claim publication
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusPill status={status || "unknown"} />
+              <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                role: {workspaceRole || "unknown"}
+              </span>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusPill status={status || "unknown"} />
-            <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-              role: {workspaceRole || "unknown"}
-            </span>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-xs text-slate-500">Step 1</div>
+              <div className="mt-1 font-semibold text-slate-900">Verify</div>
+              <div className="mt-1 text-xs text-slate-600">
+                Confirms the draft and freezes the calculated verification snapshot for lifecycle progression.
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-xs text-slate-500">Step 2</div>
+              <div className="mt-1 font-semibold text-slate-900">Publish</div>
+              <div className="mt-1 text-xs text-slate-600">
+                Moves the verified claim into publishable state for public or controlled exposure.
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-xs text-slate-500">Step 3</div>
+              <div className="mt-1 font-semibold text-slate-900">Lock</div>
+              <div className="mt-1 text-xs text-slate-600">
+                Finalizes the claim and stores the locked trade-set fingerprint for integrity checks.
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <div className="text-xs text-slate-500">Step 1</div>
-            <div className="mt-1 font-semibold text-slate-900">Verify</div>
-            <div className="mt-1 text-xs text-slate-600">
-              Confirms the draft and freezes the calculated verification snapshot for lifecycle progression.
-            </div>
-          </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <StepCard
+            title="Verify"
+            description="Moves a draft claim into verified state."
+            stateLabel={
+              verifyCompleted
+                ? "completed"
+                : verifyAvailable
+                  ? "available"
+                  : "not available"
+            }
+            isAvailableNow={verifyAvailable}
+            isCompleted={verifyCompleted}
+            disabled={verifyDisabled}
+            loading={loadingAction === "verify"}
+            actionLabel="Verify"
+            disabledReason={verifyReason}
+            accent="amber"
+            onClick={handleVerify}
+          />
 
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <div className="text-xs text-slate-500">Step 2</div>
-            <div className="mt-1 font-semibold text-slate-900">Publish</div>
-            <div className="mt-1 text-xs text-slate-600">
-              Moves the verified claim into publishable state for public or controlled exposure.
-            </div>
-          </div>
+          <StepCard
+            title="Publish"
+            description="Makes a verified claim publishable for external use."
+            stateLabel={
+              publishCompleted
+                ? "completed"
+                : publishAvailable
+                  ? "available"
+                  : "not available"
+            }
+            isAvailableNow={publishAvailable}
+            isCompleted={publishCompleted}
+            disabled={publishDisabled}
+            loading={loadingAction === "publish"}
+            actionLabel="Publish"
+            disabledReason={publishReason}
+            accent="blue"
+            onClick={handlePublish}
+          />
 
-          <div className="rounded-xl border border-slate-200 bg-white p-3">
-            <div className="text-xs text-slate-500">Step 3</div>
-            <div className="mt-1 font-semibold text-slate-900">Lock</div>
-            <div className="mt-1 text-xs text-slate-600">
-              Finalizes the claim and stores the locked trade-set fingerprint for integrity checks.
-            </div>
-          </div>
+          <StepCard
+            title="Lock"
+            description="Finalizes the claim and stores the locked trade-set hash."
+            stateLabel={
+              lockCompleted
+                ? "completed"
+                : lockAvailable
+                  ? "available"
+                  : "not available"
+            }
+            isAvailableNow={lockAvailable}
+            isCompleted={lockCompleted}
+            disabled={lockDisabled}
+            loading={loadingAction === "lock"}
+            actionLabel="Lock"
+            disabledReason={lockReason}
+            accent="green"
+            onClick={handleLock}
+          />
         </div>
+
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </div>
+        ) : null}
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        <StepCard
-          title="Verify"
-          description="Moves a draft claim into verified state."
-          stateLabel={
-            verifyCompleted
-              ? "completed"
-              : verifyAvailable
-                ? "available"
-                : "not available"
-          }
-          isAvailableNow={verifyAvailable}
-          isCompleted={verifyCompleted}
-          disabled={verifyDisabled}
-          loading={loadingAction === "verify"}
-          actionLabel="Verify"
-          disabledReason={verifyReason}
-          accent="amber"
-          onClick={verifyClaim}
-        />
-
-        <StepCard
-          title="Publish"
-          description="Makes a verified claim publishable for external use."
-          stateLabel={
-            publishCompleted
-              ? "completed"
-              : publishAvailable
-                ? "available"
-                : "not available"
-          }
-          isAvailableNow={publishAvailable}
-          isCompleted={publishCompleted}
-          disabled={publishDisabled}
-          loading={loadingAction === "publish"}
-          actionLabel="Publish"
-          disabledReason={publishReason}
-          accent="blue"
-          onClick={publishClaim}
-        />
-
-        <StepCard
-          title="Lock"
-          description="Finalizes the claim and stores the locked trade-set hash."
-          stateLabel={
-            lockCompleted
-              ? "completed"
-              : lockAvailable
-                ? "available"
-                : "not available"
-          }
-          isAvailableNow={lockAvailable}
-          isCompleted={lockCompleted}
-          disabled={lockDisabled}
-          loading={loadingAction === "lock"}
-          actionLabel="Lock"
-          disabledReason={lockReason}
-          accent="green"
-          onClick={lockClaim}
-        />
-      </div>
-
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </div>
-      ) : null}
-    </div>
+      <PaywallModal
+        open={paywallState.open}
+        onClose={closePaywall}
+        reason={paywallState.reason}
+        actionLabel={paywallState.actionLabel || "Claim lifecycle action"}
+        message={paywallState.message}
+        currentPlanName="Current workspace plan"
+        currentPlanCode={null}
+        usageLabel="Controlled by workflow entitlements"
+        recommendedPlanName="Pro or Team"
+        onUpgrade={() => {
+          router.push(`/workspace/${workspaceId}/settings?tab=billing`);
+        }}
+      />
+    </>
   );
 }
