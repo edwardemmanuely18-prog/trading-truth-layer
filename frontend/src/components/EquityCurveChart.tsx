@@ -2,156 +2,305 @@
 
 import { useMemo } from "react";
 
-type Point = {
+type EquityCurvePoint = {
   index: number;
+  trade_id: number;
+  member_id: number;
+  symbol: string;
+  opened_at: string;
+  net_pnl: number;
   cumulative_pnl: number;
 };
 
-export default function EquityCurveChart({
-  title,
-  points,
-}: {
+type Props = {
   title?: string;
-  points: Point[];
-}) {
-  const width = 800;
-  const height = 320;
+  points: EquityCurvePoint[];
+};
 
-  const padding = {
-    top: 20,
-    right: 20,
-    bottom: 40,
-    left: 60,
+function formatNumber(value?: number | null, digits = 2) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return Number(value).toFixed(digits);
+}
+
+function getSeriesStats(points: EquityCurvePoint[]) {
+  if (!points.length) {
+    return {
+      start: 0,
+      end: 0,
+      min: 0,
+      max: 0,
+      netChange: 0,
+      maxDrawdown: 0,
+      peakIndex: 0,
+      troughIndex: 0,
+      peakValue: 0,
+      troughValue: 0,
+    };
+  }
+
+  const cumulative = points.map((p) => p.cumulative_pnl);
+
+  let runningPeak = cumulative[0] ?? 0;
+  let runningPeakIndex = 0;
+  let maxDrawdown = 0;
+  let troughValue = cumulative[0] ?? 0;
+  let troughIndex = 0;
+  let peakValueAtDrawdown = cumulative[0] ?? 0;
+  let peakIndexAtDrawdown = 0;
+
+  for (let i = 0; i < cumulative.length; i += 1) {
+    const value = cumulative[i] ?? 0;
+
+    if (value > runningPeak) {
+      runningPeak = value;
+      runningPeakIndex = i;
+    }
+
+    const drawdown = runningPeak - value;
+    if (drawdown > maxDrawdown) {
+      maxDrawdown = drawdown;
+      troughValue = value;
+      troughIndex = i;
+      peakValueAtDrawdown = runningPeak;
+      peakIndexAtDrawdown = runningPeakIndex;
+    }
+  }
+
+  return {
+    start: cumulative[0] ?? 0,
+    end: cumulative[cumulative.length - 1] ?? 0,
+    min: Math.min(...cumulative),
+    max: Math.max(...cumulative),
+    netChange: (cumulative[cumulative.length - 1] ?? 0) - (cumulative[0] ?? 0),
+    maxDrawdown,
+    peakIndex: peakIndexAtDrawdown,
+    troughIndex,
+    peakValue: peakValueAtDrawdown,
+    troughValue,
   };
+}
 
+export default function EquityCurveChart({
+  title = "Equity Curve",
+  points,
+}: Props) {
+  const width = 960;
+  const height = 360;
+  const padding = { top: 24, right: 28, bottom: 40, left: 72 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
-  const { scaledPoints, min, max, peakIndex, troughIndex } = useMemo(() => {
-    if (!points || points.length === 0) {
-      return {
-        scaledPoints: [],
-        min: 0,
-        max: 0,
-        peakIndex: -1,
-        troughIndex: -1,
-      };
-    }
+  const stats = useMemo(() => getSeriesStats(points), [points]);
 
-    const values = points.map((p) => p.cumulative_pnl);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
+  const values = points.map((p) => p.cumulative_pnl);
+  const minValue = Math.min(...values, 0);
+  const maxValue = Math.max(...values, 0);
+  const range = maxValue - minValue || 1;
 
-    let peak = -Infinity;
-    let peakIndex = -1;
-    let troughIndex = -1;
-    let maxDrawdown = 0;
+  const xFor = (index: number) => {
+    if (points.length <= 1) return padding.left + chartWidth / 2;
+    return padding.left + (index / (points.length - 1)) * chartWidth;
+  };
 
-    points.forEach((p, i) => {
-      if (p.cumulative_pnl > peak) {
-        peak = p.cumulative_pnl;
-        peakIndex = i;
-      }
-      const dd = peak - p.cumulative_pnl;
-      if (dd > maxDrawdown) {
-        maxDrawdown = dd;
-        troughIndex = i;
-      }
-    });
-
-    const scaledPoints = points.map((p, i) => {
-      const x = padding.left + (i / (points.length - 1)) * chartWidth;
-      const y =
-        padding.top +
-        chartHeight -
-        ((p.cumulative_pnl - min) / (max - min || 1)) * chartHeight;
-
-      return { x, y, value: p.cumulative_pnl };
-    });
-
-    return { scaledPoints, min, max, peakIndex, troughIndex };
-  }, [points, chartWidth, chartHeight]);
-
-  const path = scaledPoints
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
-    .join(" ");
+  const yFor = (value: number) => {
+    return padding.top + ((maxValue - value) / range) * chartHeight;
+  };
 
   const yTicks = 5;
-  const yStep = (max - min) / yTicks;
+  const yTickValues = Array.from({ length: yTicks + 1 }, (_, i) => {
+    return minValue + ((maxValue - minValue) / yTicks) * i;
+  });
+
+  const linePath = points
+    .map((point, i) => `${i === 0 ? "M" : "L"} ${xFor(i)} ${yFor(point.cumulative_pnl)}`)
+    .join(" ");
+
+  const areaPath = [
+    linePath,
+    `L ${xFor(points.length - 1)} ${height - padding.bottom}`,
+    `L ${xFor(0)} ${height - padding.bottom}`,
+    "Z",
+  ].join(" ");
+
+  const peakPoint = points[stats.peakIndex] ?? null;
+  const troughPoint = points[stats.troughIndex] ?? null;
+
+  const drawdownShadePath =
+    peakPoint && troughPoint && stats.maxDrawdown > 0
+      ? [
+          `M ${xFor(stats.peakIndex)} ${yFor(stats.peakValue)}`,
+          `L ${xFor(stats.troughIndex)} ${yFor(stats.troughValue)}`,
+          `L ${xFor(stats.troughIndex)} ${yFor(stats.peakValue)}`,
+          `L ${xFor(stats.peakIndex)} ${yFor(stats.peakValue)}`,
+          "Z",
+        ].join(" ")
+      : null;
+
+  const peakX = xFor(stats.peakIndex);
+  const peakY = yFor(stats.peakValue);
+  const troughX = xFor(stats.troughIndex);
+  const troughY = yFor(stats.troughValue);
+
+  if (!points.length) {
+    return (
+      <div className="rounded-2xl border bg-white p-5 shadow-sm">
+        <h2 className="text-xl font-semibold">{title}</h2>
+        <div className="mt-4 text-sm text-slate-500">No equity curve data available.</div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border bg-white p-5 shadow-sm">
-      {title && <h2 className="text-xl font-semibold mb-4">{title}</h2>}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-2xl">
+          <h2 className="text-xl font-semibold">{title}</h2>
+          <div className="mt-1 text-sm text-slate-500">
+            Ordered by trade open time and cumulative net PnL across the claim evidence set.
+          </div>
+        </div>
 
-      <svg width="100%" viewBox={`0 0 ${width} ${height}`}>
-        {/* GRID + Y AXIS */}
-        {[...Array(yTicks + 1)].map((_, i) => {
-          const value = min + i * yStep;
-          const y =
-            padding.top +
-            chartHeight -
-            ((value - min) / (max - min || 1)) * chartHeight;
+        <div className="grid gap-2 text-sm sm:grid-cols-3">
+          <div className="rounded-xl bg-slate-50 px-4 py-3">
+            <div className="text-slate-500">Start</div>
+            <div className="mt-1 font-semibold">{formatNumber(stats.start, 4)}</div>
+          </div>
+          <div className="rounded-xl bg-slate-50 px-4 py-3">
+            <div className="text-slate-500">End</div>
+            <div className="mt-1 font-semibold">{formatNumber(stats.end, 4)}</div>
+          </div>
+          <div className="rounded-xl bg-slate-50 px-4 py-3">
+            <div className="text-slate-500">Max Drawdown</div>
+            <div className="mt-1 font-semibold">{formatNumber(stats.maxDrawdown, 4)}</div>
+          </div>
+        </div>
+      </div>
 
-          return (
-            <g key={i}>
-              <line
-                x1={padding.left}
-                x2={width - padding.right}
-                y1={y}
-                y2={y}
-                stroke="#E2E8F0"
-                strokeWidth={1}
-              />
-              <text
-                x={padding.left - 10}
-                y={y + 4}
-                textAnchor="end"
-                fontSize="10"
-                fill="#64748B"
-              >
-                {value.toFixed(1)}
+      <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <svg viewBox={`0 0 ${width} ${height}`} className="h-[360px] min-w-[760px] w-full">
+          <defs>
+            <linearGradient id="equityAreaFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(15,23,42,0.14)" />
+              <stop offset="100%" stopColor="rgba(15,23,42,0.03)" />
+            </linearGradient>
+          </defs>
+
+          {yTickValues.map((tick, i) => {
+            const y = yFor(tick);
+            return (
+              <g key={`y-tick-${i}`}>
+                <line
+                  x1={padding.left}
+                  y1={y}
+                  x2={width - padding.right}
+                  y2={y}
+                  stroke="#E2E8F0"
+                  strokeWidth="1"
+                />
+                <text
+                  x={padding.left - 12}
+                  y={y + 4}
+                  textAnchor="end"
+                  className="fill-slate-500 text-[11px]"
+                >
+                  {formatNumber(tick, 1)}
+                </text>
+              </g>
+            );
+          })}
+
+          <line
+            x1={padding.left}
+            y1={padding.top}
+            x2={padding.left}
+            y2={height - padding.bottom}
+            stroke="#CBD5E1"
+            strokeWidth="1"
+          />
+          <line
+            x1={padding.left}
+            y1={height - padding.bottom}
+            x2={width - padding.right}
+            y2={height - padding.bottom}
+            stroke="#CBD5E1"
+            strokeWidth="1"
+          />
+
+          <path d={areaPath} fill="url(#equityAreaFill)" stroke="none" />
+
+          {drawdownShadePath ? (
+            <path d={drawdownShadePath} fill="rgba(220,38,38,0.08)" stroke="none" />
+          ) : null}
+
+          <path
+            d={linePath}
+            fill="none"
+            stroke="#0F172A"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {stats.maxDrawdown > 0 ? (
+            <line
+              x1={peakX}
+              y1={peakY}
+              x2={troughX}
+              y2={troughY}
+              stroke="#94A3B8"
+              strokeWidth="1.5"
+              strokeDasharray="4 4"
+            />
+          ) : null}
+
+          {points.map((point, i) => (
+            <circle
+              key={`${point.trade_id}-${i}`}
+              cx={xFor(i)}
+              cy={yFor(point.cumulative_pnl)}
+              r="3.5"
+              fill="#0F172A"
+            >
+              <title>{`Trade #${point.trade_id} | ${point.symbol} | PnL ${point.net_pnl} | Cum ${point.cumulative_pnl}`}</title>
+            </circle>
+          ))}
+
+          {peakPoint ? (
+            <>
+              <circle cx={peakX} cy={peakY} r="5" fill="#16A34A" />
+              <text x={peakX + 10} y={peakY - 10} className="fill-green-700 text-[11px] font-medium">
+                Peak {formatNumber(stats.peakValue, 2)}
               </text>
-            </g>
-          );
-        })}
+            </>
+          ) : null}
 
-        {/* X AXIS */}
-        <line
-          x1={padding.left}
-          x2={width - padding.right}
-          y1={height - padding.bottom}
-          y2={height - padding.bottom}
-          stroke="#94A3B8"
-        />
+          {troughPoint ? (
+            <>
+              <circle cx={troughX} cy={troughY} r="5" fill="#DC2626" />
+              <text x={troughX - 10} y={troughY - 10} textAnchor="end" className="fill-red-700 text-[11px] font-medium">
+                Trough {formatNumber(stats.troughValue, 2)}
+              </text>
+            </>
+          ) : null}
 
-        {/* LINE */}
-        <path
-          d={path}
-          fill="none"
-          stroke="#0F172A"
-          strokeWidth={2}
-        />
+          <text
+            x={width - padding.right}
+            y={padding.top - 4}
+            textAnchor="end"
+            className="fill-slate-500 text-[11px]"
+          >
+            Net change {formatNumber(stats.netChange, 4)}
+          </text>
+        </svg>
+      </div>
 
-        {/* PEAK POINT */}
-        {peakIndex >= 0 && scaledPoints[peakIndex] && (
-          <circle
-            cx={scaledPoints[peakIndex].x}
-            cy={scaledPoints[peakIndex].y}
-            r={4}
-            fill="#16A34A"
-          />
-        )}
-
-        {/* TROUGH POINT */}
-        {troughIndex >= 0 && scaledPoints[troughIndex] && (
-          <circle
-            cx={scaledPoints[troughIndex].x}
-            cy={scaledPoints[troughIndex].y}
-            r={4}
-            fill="#DC2626"
-          />
-        )}
-      </svg>
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="text-sm font-semibold text-slate-900">Risk path note</div>
+        <div className="mt-2 text-sm text-slate-600">
+          This curve now shows cumulative performance structure, peak-to-trough drawdown path, and
+          annotated turning points so the evidence surface communicates both return and risk.
+        </div>
+      </div>
     </div>
   );
 }
