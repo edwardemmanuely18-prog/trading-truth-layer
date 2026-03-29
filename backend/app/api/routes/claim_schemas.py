@@ -1140,13 +1140,13 @@ def pdf_section_title(pdf: canvas.Canvas, title: str, x: float, y: float):
 
     pdf.setStrokeColor(colors.HexColor("#CBD5E1"))
     pdf.setLineWidth(1)
-    pdf.line(line_left, y + 6, line_right, y + 6)
-    pdf.line(line_left, y - 10, line_right, y - 10)
+    pdf.line(line_left, y - 8, line_right, y - 8)
+    pdf.line(line_left, y - 14, line_right, y - 14)
 
     pdf.setFillColor(colors.black)
     pdf.setStrokeColor(colors.black)
     pdf.setLineWidth(1)
-    return y - 24
+    return y - 28
 
 
 def pdf_round_box(
@@ -1752,20 +1752,29 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     y -= panel_h + 16
 
-    pdf.setFillColor(colors.HexColor("#64748B"))
-    pdf.setFont("Helvetica", 9)
-    pdf.drawString(PDF_MARGIN_LEFT, y, "Methodology Notes")
-    y -= 8
-
-    draw_light_note_box(
+    y, page_number = draw_dynamic_note_box(
         pdf,
         PDF_MARGIN_LEFT,
         y,
         PDF_CONTENT_WIDTH,
         schema.methodology_notes or "No methodology notes supplied.",
-        height=46,
+        page_number,
+        document_title,
+        claim_hash,
+        label="Methodology Notes",
     )
-    y -= 60
+
+    y, page_number = pdf_require_space(
+        pdf,
+        y,
+        220,
+        page_number,
+        document_title,
+        claim_hash,
+    )
+
+    # Leaderboard
+    y = pdf_section_title(pdf, "Leaderboard Snapshot", PDF_MARGIN_LEFT, y)
 
     # Leaderboard
     y = pdf_section_title(pdf, "Leaderboard Snapshot", PDF_MARGIN_LEFT, y)
@@ -1861,6 +1870,65 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.save()
     buffer.seek(0)
     return buffer, filename
+
+def draw_dynamic_note_box(
+    pdf: canvas.Canvas,
+    x: float,
+    y_top: float,
+    width: float,
+    text: str,
+    page_number: int,
+    document_title: str,
+    claim_hash: str,
+    label: str | None = None,
+):
+    note_text = text or "No methodology notes supplied."
+
+    lines = split_wrapped_lines(note_text, width - 24, "Helvetica", 9)
+    line_count = max(1, len(lines))
+    text_height = line_count * 11
+    box_height = max(46, text_height + 24)
+
+    required_space = box_height + (20 if label else 0)
+    y_top, page_number = pdf_require_space(
+        pdf,
+        y_top,
+        required_space,
+        page_number,
+        document_title,
+        claim_hash,
+    )
+
+    if label:
+        pdf.setFillColor(colors.HexColor("#64748B"))
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(x, y_top, label)
+        y_top -= 8
+
+    pdf_round_box(
+        pdf,
+        x,
+        y_top,
+        width,
+        box_height,
+        colors.HexColor("#F8FAFC"),
+        colors.HexColor("#E2E8F0"),
+        radius=10,
+    )
+
+    pdf.setFillColor(colors.HexColor("#475569"))
+    pdf.setFont("Helvetica", 9)
+
+    current_y = y_top - 18
+    for line in lines:
+        pdf.drawString(x + 12, current_y, line)
+        current_y -= 11
+
+    pdf.setFillColor(colors.black)
+
+    return y_top - box_height - 14, page_number
+
+    
 
 
 def build_next_version_name(db: Session, workspace_id: int, base_name: str) -> str:
