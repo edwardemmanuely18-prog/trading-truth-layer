@@ -48,12 +48,14 @@ function getSeriesStats(points: EquityCurvePoint[]) {
       end: 0,
       min: 0,
       max: 0,
+      minIndex: 0,
+      maxIndex: 0,
       netChange: 0,
       maxDrawdown: 0,
-      peakIndex: 0,
-      troughIndex: 0,
-      peakValue: 0,
-      troughValue: 0,
+      drawdownPeakIndex: 0,
+      drawdownTroughIndex: 0,
+      drawdownPeakValue: 0,
+      drawdownTroughValue: 0,
       positiveTrades: 0,
       negativeTrades: 0,
       avgTradePnl: 0,
@@ -63,13 +65,30 @@ function getSeriesStats(points: EquityCurvePoint[]) {
   const cumulative = points.map((p) => p.cumulative_pnl);
   const pnl = points.map((p) => p.net_pnl);
 
+  let maxValue = cumulative[0] ?? 0;
+  let maxIndex = 0;
+  let minValue = cumulative[0] ?? 0;
+  let minIndex = 0;
+
+  for (let i = 0; i < cumulative.length; i += 1) {
+    const value = cumulative[i] ?? 0;
+    if (value > maxValue) {
+      maxValue = value;
+      maxIndex = i;
+    }
+    if (value < minValue) {
+      minValue = value;
+      minIndex = i;
+    }
+  }
+
   let runningPeak = cumulative[0] ?? 0;
   let runningPeakIndex = 0;
   let maxDrawdown = 0;
-  let troughValue = cumulative[0] ?? 0;
-  let troughIndex = 0;
-  let peakValueAtDrawdown = cumulative[0] ?? 0;
-  let peakIndexAtDrawdown = 0;
+  let drawdownTroughValue = cumulative[0] ?? 0;
+  let drawdownTroughIndex = 0;
+  let drawdownPeakValue = cumulative[0] ?? 0;
+  let drawdownPeakIndex = 0;
 
   for (let i = 0; i < cumulative.length; i += 1) {
     const value = cumulative[i] ?? 0;
@@ -82,24 +101,26 @@ function getSeriesStats(points: EquityCurvePoint[]) {
     const drawdown = runningPeak - value;
     if (drawdown > maxDrawdown) {
       maxDrawdown = drawdown;
-      troughValue = value;
-      troughIndex = i;
-      peakValueAtDrawdown = runningPeak;
-      peakIndexAtDrawdown = runningPeakIndex;
+      drawdownTroughValue = value;
+      drawdownTroughIndex = i;
+      drawdownPeakValue = runningPeak;
+      drawdownPeakIndex = runningPeakIndex;
     }
   }
 
   return {
     start: cumulative[0] ?? 0,
     end: cumulative[cumulative.length - 1] ?? 0,
-    min: Math.min(...cumulative),
-    max: Math.max(...cumulative),
+    min: minValue,
+    max: maxValue,
+    minIndex,
+    maxIndex,
     netChange: (cumulative[cumulative.length - 1] ?? 0) - (cumulative[0] ?? 0),
     maxDrawdown,
-    peakIndex: peakIndexAtDrawdown,
-    troughIndex,
-    peakValue: peakValueAtDrawdown,
-    troughValue,
+    drawdownPeakIndex,
+    drawdownTroughIndex,
+    drawdownPeakValue,
+    drawdownTroughValue,
     positiveTrades: pnl.filter((x) => x > 0).length,
     negativeTrades: pnl.filter((x) => x < 0).length,
     avgTradePnl: pnl.length ? pnl.reduce((sum, x) => sum + x, 0) / pnl.length : 0,
@@ -136,6 +157,15 @@ export default function EquityCurveChart({
 
   const stats = useMemo(() => getSeriesStats(points), [points]);
 
+  if (!points.length) {
+    return (
+      <div className="rounded-2xl border bg-white p-5 shadow-sm">
+        <h2 className="text-xl font-semibold">{title}</h2>
+        <div className="mt-4 text-sm text-slate-500">No equity curve data available.</div>
+      </div>
+    );
+  }
+
   const values = points.map((p) => p.cumulative_pnl);
   const minValue = Math.min(...values, 0);
   const maxValue = Math.max(...values, 0);
@@ -143,8 +173,10 @@ export default function EquityCurveChart({
 
   const firstPoint = points[0] ?? null;
   const lastPoint = points[points.length - 1] ?? null;
-  const peakPoint = points[stats.peakIndex] ?? null;
-  const troughPoint = points[stats.troughIndex] ?? null;
+  const equityHighPoint = points[stats.maxIndex] ?? null;
+  const equityLowPoint = points[stats.minIndex] ?? null;
+  const drawdownPeakPoint = points[stats.drawdownPeakIndex] ?? null;
+  const drawdownTroughPoint = points[stats.drawdownTroughIndex] ?? null;
 
   const xFor = (index: number) => {
     if (points.length <= 1) return padding.left + chartWidth / 2;
@@ -160,9 +192,10 @@ export default function EquityCurveChart({
     return minValue + ((maxValue - minValue) / yTicks) * i;
   });
 
-  const xTicks = points.length <= 2
-    ? [0, Math.max(points.length - 1, 0)]
-    : [0, Math.floor((points.length - 1) / 2), points.length - 1];
+  const xTicks =
+    points.length <= 2
+      ? [0, Math.max(points.length - 1, 0)]
+      : [0, Math.floor((points.length - 1) / 2), points.length - 1];
 
   const linePath = points
     .map((point, i) => `${i === 0 ? "M" : "L"} ${xFor(i)} ${yFor(point.cumulative_pnl)}`)
@@ -176,29 +209,25 @@ export default function EquityCurveChart({
   ].join(" ");
 
   const drawdownShadePath =
-    peakPoint && troughPoint && stats.maxDrawdown > 0
+    drawdownPeakPoint && drawdownTroughPoint && stats.maxDrawdown > 0
       ? [
-          `M ${xFor(stats.peakIndex)} ${yFor(stats.peakValue)}`,
-          `L ${xFor(stats.troughIndex)} ${yFor(stats.troughValue)}`,
-          `L ${xFor(stats.troughIndex)} ${yFor(stats.peakValue)}`,
-          `L ${xFor(stats.peakIndex)} ${yFor(stats.peakValue)}`,
+          `M ${xFor(stats.drawdownPeakIndex)} ${yFor(stats.drawdownPeakValue)}`,
+          `L ${xFor(stats.drawdownTroughIndex)} ${yFor(stats.drawdownTroughValue)}`,
+          `L ${xFor(stats.drawdownTroughIndex)} ${yFor(stats.drawdownPeakValue)}`,
+          `L ${xFor(stats.drawdownPeakIndex)} ${yFor(stats.drawdownPeakValue)}`,
           "Z",
         ].join(" ")
       : null;
 
-  const peakX = xFor(stats.peakIndex);
-  const peakY = yFor(stats.peakValue);
-  const troughX = xFor(stats.troughIndex);
-  const troughY = yFor(stats.troughValue);
+  const equityHighX = xFor(stats.maxIndex);
+  const equityHighY = yFor(stats.max);
+  const drawdownPeakX = xFor(stats.drawdownPeakIndex);
+  const drawdownPeakY = yFor(stats.drawdownPeakValue);
+  const drawdownTroughX = xFor(stats.drawdownTroughIndex);
+  const drawdownTroughY = yFor(stats.drawdownTroughValue);
 
-  if (!points.length) {
-    return (
-      <div className="rounded-2xl border bg-white p-5 shadow-sm">
-        <h2 className="text-xl font-semibold">{title}</h2>
-        <div className="mt-4 text-sm text-slate-500">No equity curve data available.</div>
-      </div>
-    );
-  }
+  const showDistinctDrawdownPeak =
+    stats.maxDrawdown > 0 && stats.drawdownPeakIndex !== stats.maxIndex;
 
   return (
     <div className="rounded-2xl border bg-white p-5 shadow-sm">
@@ -253,8 +282,8 @@ export default function EquityCurveChart({
         <svg viewBox={`0 0 ${width} ${height}`} className="h-[380px] min-w-[760px] w-full">
           <defs>
             <linearGradient id="equityAreaFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgba(15,23,42,0.14)" />
-              <stop offset="100%" stopColor="rgba(15,23,42,0.03)" />
+              <stop offset="0%" stopColor="rgba(15,23,42,0.10)" />
+              <stop offset="100%" stopColor="rgba(15,23,42,0.02)" />
             </linearGradient>
           </defs>
 
@@ -267,7 +296,7 @@ export default function EquityCurveChart({
                   y1={y}
                   x2={width - padding.right}
                   y2={y}
-                  stroke="#E2E8F0"
+                  stroke="#F1F5F9"
                   strokeWidth="1"
                 />
                 <text
@@ -294,7 +323,7 @@ export default function EquityCurveChart({
                   y1={padding.top}
                   x2={x}
                   y2={height - padding.bottom}
-                  stroke="#F1F5F9"
+                  stroke="#F8FAFC"
                   strokeWidth="1"
                 />
                 <text
@@ -343,18 +372,25 @@ export default function EquityCurveChart({
           <path
             d={linePath}
             fill="none"
+            stroke="rgba(15,23,42,0.15)"
+            strokeWidth="6"
+          />
+
+          <path
+            d={linePath}
+            fill="none"
             stroke="#0F172A"
-            strokeWidth="3"
+            strokeWidth="3.5"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
 
           {stats.maxDrawdown > 0 ? (
             <line
-              x1={peakX}
-              y1={peakY}
-              x2={troughX}
-              y2={troughY}
+              x1={drawdownPeakX}
+              y1={drawdownPeakY}
+              x2={drawdownTroughX}
+              y2={drawdownTroughY}
               stroke="#94A3B8"
               strokeWidth="1.5"
               strokeDasharray="4 4"
@@ -373,25 +409,42 @@ export default function EquityCurveChart({
             </circle>
           ))}
 
-          {peakPoint ? (
+          {equityHighPoint ? (
             <>
-              <circle cx={peakX} cy={peakY} r="5" fill="#16A34A" />
-              <text x={peakX + 10} y={peakY - 10} className="fill-green-700 text-[11px] font-medium">
-                Peak {formatNumber(stats.peakValue, 2)}
+              <circle cx={equityHighX} cy={equityHighY} r="5" fill="#16A34A" />
+              <text
+                x={equityHighX + 10}
+                y={equityHighY - 10}
+                className="fill-green-600 text-[10px] font-medium"
+              >
+                High {formatNumber(stats.max, 2)}
               </text>
             </>
           ) : null}
 
-          {troughPoint ? (
+          {showDistinctDrawdownPeak ? (
             <>
-              <circle cx={troughX} cy={troughY} r="5" fill="#DC2626" />
+              <circle cx={drawdownPeakX} cy={drawdownPeakY} r="4.5" fill="#D97706" />
               <text
-                x={troughX - 10}
-                y={troughY - 10}
-                textAnchor="end"
-                className="fill-red-700 text-[11px] font-medium"
+                x={drawdownPeakX + 10}
+                y={drawdownPeakY + 16}
+                className="fill-amber-600 text-[10px] font-medium"
               >
-                Trough {formatNumber(stats.troughValue, 2)}
+                DD peak {formatNumber(stats.drawdownPeakValue, 2)}
+              </text>
+            </>
+          ) : null}
+
+          {drawdownTroughPoint ? (
+            <>
+              <circle cx={drawdownTroughX} cy={drawdownTroughY} r="5" fill="#DC2626" />
+              <text
+                x={drawdownTroughX - 10}
+                y={drawdownTroughY - 10}
+                textAnchor="end"
+                className="fill-red-600 text-[10px] font-medium"
+              >
+                DD trough {formatNumber(stats.drawdownTroughValue, 2)}
               </text>
             </>
           ) : null}
@@ -400,7 +453,7 @@ export default function EquityCurveChart({
             x={width - padding.right}
             y={padding.top - 6}
             textAnchor="end"
-            className="fill-slate-500 text-[11px]"
+            className="fill-slate-400 text-[10px]"
           >
             Net change {formatNumber(stats.netChange, 4)}
           </text>
@@ -425,14 +478,14 @@ export default function EquityCurveChart({
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="text-sm text-slate-500">Drawdown peak</div>
           <div className="mt-2 text-sm text-slate-700">
-            Trade #{peakPoint?.trade_id} · {peakPoint?.symbol} · {formatDateTime(peakPoint?.opened_at)}
+            Trade #{drawdownPeakPoint?.trade_id} · {drawdownPeakPoint?.symbol} · {formatDateTime(drawdownPeakPoint?.opened_at)}
           </div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="text-sm text-slate-500">Drawdown trough</div>
           <div className="mt-2 text-sm text-slate-700">
-            Trade #{troughPoint?.trade_id} · {troughPoint?.symbol} · {formatDateTime(troughPoint?.opened_at)}
+            Trade #{drawdownTroughPoint?.trade_id} · {drawdownTroughPoint?.symbol} · {formatDateTime(drawdownTroughPoint?.opened_at)}
           </div>
         </div>
       </div>
@@ -440,9 +493,9 @@ export default function EquityCurveChart({
       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <div className="text-sm font-semibold text-slate-900">Risk path note</div>
         <div className="mt-2 text-sm text-slate-600">
-          This curve now shows cumulative performance structure, peak-to-trough drawdown path,
-          annotated turning points, and sequence context so the evidence surface communicates both
-          return and risk with stronger review value.
+          This curve distinguishes absolute equity high from drawdown peak, highlights the deepest
+          peak-to-trough decline, and presents sequence context so reviewers can inspect both
+          performance progression and risk path quality.
         </div>
       </div>
     </div>
