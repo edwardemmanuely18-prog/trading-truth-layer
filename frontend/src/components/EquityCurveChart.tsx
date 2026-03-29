@@ -52,10 +52,10 @@ function getSeriesStats(points: EquityCurvePoint[]) {
       maxIndex: 0,
       netChange: 0,
       maxDrawdown: 0,
-      drawdownPeakIndex: 0,
-      drawdownTroughIndex: 0,
-      drawdownPeakValue: 0,
-      drawdownTroughValue: 0,
+      drawdownPeakIndex: null as number | null,
+      drawdownTroughIndex: null as number | null,
+      drawdownPeakValue: null as number | null,
+      drawdownTroughValue: null as number | null,
       positiveTrades: 0,
       negativeTrades: 0,
       avgTradePnl: 0,
@@ -85,10 +85,10 @@ function getSeriesStats(points: EquityCurvePoint[]) {
   let runningPeak = cumulative[0] ?? 0;
   let runningPeakIndex = 0;
   let maxDrawdown = 0;
-  let drawdownTroughValue = cumulative[0] ?? 0;
-  let drawdownTroughIndex = 0;
-  let drawdownPeakValue = cumulative[0] ?? 0;
-  let drawdownPeakIndex = 0;
+  let drawdownTroughValue: number | null = null;
+  let drawdownTroughIndex: number | null = null;
+  let drawdownPeakValue: number | null = null;
+  let drawdownPeakIndex: number | null = null;
 
   for (let i = 0; i < cumulative.length; i += 1) {
     const value = cumulative[i] ?? 0;
@@ -145,6 +145,21 @@ function StatTile({
   );
 }
 
+function InfoCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <div className="text-sm text-slate-500">{label}</div>
+      <div className="mt-2 text-sm text-slate-700">{value}</div>
+    </div>
+  );
+}
+
 export default function EquityCurveChart({
   title = "Equity Curve",
   points,
@@ -175,8 +190,10 @@ export default function EquityCurveChart({
   const lastPoint = points[points.length - 1] ?? null;
   const equityHighPoint = points[stats.maxIndex] ?? null;
   const equityLowPoint = points[stats.minIndex] ?? null;
-  const drawdownPeakPoint = points[stats.drawdownPeakIndex] ?? null;
-  const drawdownTroughPoint = points[stats.drawdownTroughIndex] ?? null;
+  const drawdownPeakPoint =
+    stats.drawdownPeakIndex !== null ? points[stats.drawdownPeakIndex] ?? null : null;
+  const drawdownTroughPoint =
+    stats.drawdownTroughIndex !== null ? points[stats.drawdownTroughIndex] ?? null : null;
 
   const xFor = (index: number) => {
     if (points.length <= 1) return padding.left + chartWidth / 2;
@@ -193,8 +210,8 @@ export default function EquityCurveChart({
   });
 
   const xTicks =
-    points.length <= 2
-      ? [0, Math.max(points.length - 1, 0)]
+    points.length <= 8
+      ? points.map((_, i) => i)
       : [0, Math.floor((points.length - 1) / 2), points.length - 1];
 
   const linePath = points
@@ -208,26 +225,32 @@ export default function EquityCurveChart({
     "Z",
   ].join(" ");
 
+  const hasDrawdown =
+    stats.maxDrawdown > 0 &&
+    stats.drawdownPeakIndex !== null &&
+    stats.drawdownTroughIndex !== null &&
+    stats.drawdownPeakValue !== null &&
+    stats.drawdownTroughValue !== null;
+
   const drawdownShadePath =
-    drawdownPeakPoint && drawdownTroughPoint && stats.maxDrawdown > 0
+    hasDrawdown && drawdownPeakPoint && drawdownTroughPoint
       ? [
-          `M ${xFor(stats.drawdownPeakIndex)} ${yFor(stats.drawdownPeakValue)}`,
-          `L ${xFor(stats.drawdownTroughIndex)} ${yFor(stats.drawdownTroughValue)}`,
-          `L ${xFor(stats.drawdownTroughIndex)} ${yFor(stats.drawdownPeakValue)}`,
-          `L ${xFor(stats.drawdownPeakIndex)} ${yFor(stats.drawdownPeakValue)}`,
+          `M ${xFor(stats.drawdownPeakIndex!)} ${yFor(stats.drawdownPeakValue!)}`,
+          `L ${xFor(stats.drawdownTroughIndex!)} ${yFor(stats.drawdownTroughValue!)}`,
+          `L ${xFor(stats.drawdownTroughIndex!)} ${yFor(stats.drawdownPeakValue!)}`,
+          `L ${xFor(stats.drawdownPeakIndex!)} ${yFor(stats.drawdownPeakValue!)}`,
           "Z",
         ].join(" ")
       : null;
 
   const equityHighX = xFor(stats.maxIndex);
   const equityHighY = yFor(stats.max);
-  const drawdownPeakX = xFor(stats.drawdownPeakIndex);
-  const drawdownPeakY = yFor(stats.drawdownPeakValue);
-  const drawdownTroughX = xFor(stats.drawdownTroughIndex);
-  const drawdownTroughY = yFor(stats.drawdownTroughValue);
+  const drawdownPeakX = hasDrawdown ? xFor(stats.drawdownPeakIndex!) : 0;
+  const drawdownPeakY = hasDrawdown ? yFor(stats.drawdownPeakValue!) : 0;
+  const drawdownTroughX = hasDrawdown ? xFor(stats.drawdownTroughIndex!) : 0;
+  const drawdownTroughY = hasDrawdown ? yFor(stats.drawdownTroughValue!) : 0;
 
-  const showDistinctDrawdownPeak =
-    stats.maxDrawdown > 0 && stats.drawdownPeakIndex !== stats.maxIndex;
+  const showDistinctDrawdownPeak = hasDrawdown && stats.drawdownPeakIndex !== stats.maxIndex;
 
   return (
     <div className="rounded-2xl border bg-white p-5 shadow-sm">
@@ -385,7 +408,7 @@ export default function EquityCurveChart({
             strokeLinejoin="round"
           />
 
-          {stats.maxDrawdown > 0 ? (
+          {hasDrawdown ? (
             <line
               x1={drawdownPeakX}
               y1={drawdownPeakY}
@@ -435,7 +458,7 @@ export default function EquityCurveChart({
             </>
           ) : null}
 
-          {drawdownTroughPoint ? (
+          {hasDrawdown ? (
             <>
               <circle cx={drawdownTroughX} cy={drawdownTroughY} r="5" fill="#DC2626" />
               <text
@@ -461,41 +484,59 @@ export default function EquityCurveChart({
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-sm text-slate-500">First point</div>
-          <div className="mt-2 text-sm text-slate-700">
-            Trade #{firstPoint?.trade_id} · {firstPoint?.symbol} · {formatDateTime(firstPoint?.opened_at)}
-          </div>
-        </div>
+        <InfoCard
+          label="First point"
+          value={
+            <>
+              Trade #{firstPoint?.trade_id} · {firstPoint?.symbol} · {formatDateTime(firstPoint?.opened_at)}
+            </>
+          }
+        />
 
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-sm text-slate-500">Last point</div>
-          <div className="mt-2 text-sm text-slate-700">
-            Trade #{lastPoint?.trade_id} · {lastPoint?.symbol} · {formatDateTime(lastPoint?.opened_at)}
-          </div>
-        </div>
+        <InfoCard
+          label="Last point"
+          value={
+            <>
+              Trade #{lastPoint?.trade_id} · {lastPoint?.symbol} · {formatDateTime(lastPoint?.opened_at)}
+            </>
+          }
+        />
 
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-sm text-slate-500">Drawdown peak</div>
-          <div className="mt-2 text-sm text-slate-700">
-            Trade #{drawdownPeakPoint?.trade_id} · {drawdownPeakPoint?.symbol} · {formatDateTime(drawdownPeakPoint?.opened_at)}
-          </div>
-        </div>
+        <InfoCard
+          label="Drawdown peak"
+          value={
+            hasDrawdown ? (
+              <>
+                Trade #{drawdownPeakPoint?.trade_id} · {drawdownPeakPoint?.symbol} ·{" "}
+                {formatDateTime(drawdownPeakPoint?.opened_at)}
+              </>
+            ) : (
+              "No drawdown event"
+            )
+          }
+        />
 
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-sm text-slate-500">Drawdown trough</div>
-          <div className="mt-2 text-sm text-slate-700">
-            Trade #{drawdownTroughPoint?.trade_id} · {drawdownTroughPoint?.symbol} · {formatDateTime(drawdownTroughPoint?.opened_at)}
-          </div>
-        </div>
+        <InfoCard
+          label="Drawdown trough"
+          value={
+            hasDrawdown ? (
+              <>
+                Trade #{drawdownTroughPoint?.trade_id} · {drawdownTroughPoint?.symbol} ·{" "}
+                {formatDateTime(drawdownTroughPoint?.opened_at)}
+              </>
+            ) : (
+              "No drawdown event"
+            )
+          }
+        />
       </div>
 
       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <div className="text-sm font-semibold text-slate-900">Risk path note</div>
         <div className="mt-2 text-sm text-slate-600">
           This curve distinguishes absolute equity high from drawdown peak, highlights the deepest
-          peak-to-trough decline, and presents sequence context so reviewers can inspect both
-          performance progression and risk path quality.
+          peak-to-trough decline only when one actually exists, and shows full sequence context for
+          smaller evidence sets so reviewers can inspect both performance progression and risk path quality.
         </div>
       </div>
     </div>
