@@ -22,6 +22,25 @@ function formatNumber(value?: number | null, digits = 2) {
   return Number(value).toFixed(digits);
 }
 
+function formatDateShort(value?: string | null) {
+  if (!value) return "—";
+  try {
+    const date = new Date(value);
+    return date.toLocaleDateString();
+  } catch {
+    return value;
+  }
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
+
 function getSeriesStats(points: EquityCurvePoint[]) {
   if (!points.length) {
     return {
@@ -35,10 +54,14 @@ function getSeriesStats(points: EquityCurvePoint[]) {
       troughIndex: 0,
       peakValue: 0,
       troughValue: 0,
+      positiveTrades: 0,
+      negativeTrades: 0,
+      avgTradePnl: 0,
     };
   }
 
   const cumulative = points.map((p) => p.cumulative_pnl);
+  const pnl = points.map((p) => p.net_pnl);
 
   let runningPeak = cumulative[0] ?? 0;
   let runningPeakIndex = 0;
@@ -77,7 +100,28 @@ function getSeriesStats(points: EquityCurvePoint[]) {
     troughIndex,
     peakValue: peakValueAtDrawdown,
     troughValue,
+    positiveTrades: pnl.filter((x) => x > 0).length,
+    negativeTrades: pnl.filter((x) => x < 0).length,
+    avgTradePnl: pnl.length ? pnl.reduce((sum, x) => sum + x, 0) / pnl.length : 0,
   };
+}
+
+function StatTile({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+      <div className="text-sm text-slate-500">{label}</div>
+      <div className="mt-1 text-lg font-semibold text-slate-900">{value}</div>
+      {hint ? <div className="mt-1 text-xs text-slate-500">{hint}</div> : null}
+    </div>
+  );
 }
 
 export default function EquityCurveChart({
@@ -85,8 +129,8 @@ export default function EquityCurveChart({
   points,
 }: Props) {
   const width = 960;
-  const height = 360;
-  const padding = { top: 24, right: 28, bottom: 40, left: 72 };
+  const height = 380;
+  const padding = { top: 28, right: 28, bottom: 52, left: 72 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
@@ -96,6 +140,11 @@ export default function EquityCurveChart({
   const minValue = Math.min(...values, 0);
   const maxValue = Math.max(...values, 0);
   const range = maxValue - minValue || 1;
+
+  const firstPoint = points[0] ?? null;
+  const lastPoint = points[points.length - 1] ?? null;
+  const peakPoint = points[stats.peakIndex] ?? null;
+  const troughPoint = points[stats.troughIndex] ?? null;
 
   const xFor = (index: number) => {
     if (points.length <= 1) return padding.left + chartWidth / 2;
@@ -111,6 +160,10 @@ export default function EquityCurveChart({
     return minValue + ((maxValue - minValue) / yTicks) * i;
   });
 
+  const xTicks = points.length <= 2
+    ? [0, Math.max(points.length - 1, 0)]
+    : [0, Math.floor((points.length - 1) / 2), points.length - 1];
+
   const linePath = points
     .map((point, i) => `${i === 0 ? "M" : "L"} ${xFor(i)} ${yFor(point.cumulative_pnl)}`)
     .join(" ");
@@ -121,9 +174,6 @@ export default function EquityCurveChart({
     `L ${xFor(0)} ${height - padding.bottom}`,
     "Z",
   ].join(" ");
-
-  const peakPoint = points[stats.peakIndex] ?? null;
-  const troughPoint = points[stats.troughIndex] ?? null;
 
   const drawdownShadePath =
     peakPoint && troughPoint && stats.maxDrawdown > 0
@@ -176,8 +226,31 @@ export default function EquityCurveChart({
         </div>
       </div>
 
+      <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatTile
+          label="Equity High"
+          value={formatNumber(stats.max, 4)}
+          hint="Highest cumulative point"
+        />
+        <StatTile
+          label="Equity Low"
+          value={formatNumber(stats.min, 4)}
+          hint="Lowest cumulative point"
+        />
+        <StatTile
+          label="Average Trade PnL"
+          value={formatNumber(stats.avgTradePnl, 4)}
+          hint="Mean net PnL per trade"
+        />
+        <StatTile
+          label="Positive / Negative"
+          value={`${stats.positiveTrades}/${stats.negativeTrades}`}
+          hint="Trade count balance"
+        />
+      </div>
+
       <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <svg viewBox={`0 0 ${width} ${height}`} className="h-[360px] min-w-[760px] w-full">
+        <svg viewBox={`0 0 ${width} ${height}`} className="h-[380px] min-w-[760px] w-full">
           <defs>
             <linearGradient id="equityAreaFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="rgba(15,23,42,0.14)" />
@@ -204,6 +277,41 @@ export default function EquityCurveChart({
                   className="fill-slate-500 text-[11px]"
                 >
                   {formatNumber(tick, 1)}
+                </text>
+              </g>
+            );
+          })}
+
+          {xTicks.map((tickIndex) => {
+            const point = points[tickIndex];
+            if (!point) return null;
+            const x = xFor(tickIndex);
+
+            return (
+              <g key={`x-tick-${tickIndex}`}>
+                <line
+                  x1={x}
+                  y1={padding.top}
+                  x2={x}
+                  y2={height - padding.bottom}
+                  stroke="#F1F5F9"
+                  strokeWidth="1"
+                />
+                <text
+                  x={x}
+                  y={height - padding.bottom + 18}
+                  textAnchor="middle"
+                  className="fill-slate-500 text-[11px]"
+                >
+                  {point.index}
+                </text>
+                <text
+                  x={x}
+                  y={height - padding.bottom + 32}
+                  textAnchor="middle"
+                  className="fill-slate-400 text-[10px]"
+                >
+                  {formatDateShort(point.opened_at)}
                 </text>
               </g>
             );
@@ -261,7 +369,7 @@ export default function EquityCurveChart({
               r="3.5"
               fill="#0F172A"
             >
-              <title>{`Trade #${point.trade_id} | ${point.symbol} | PnL ${point.net_pnl} | Cum ${point.cumulative_pnl}`}</title>
+              <title>{`Trade #${point.trade_id} | ${point.symbol} | ${formatDateTime(point.opened_at)} | PnL ${point.net_pnl} | Cum ${point.cumulative_pnl}`}</title>
             </circle>
           ))}
 
@@ -277,7 +385,12 @@ export default function EquityCurveChart({
           {troughPoint ? (
             <>
               <circle cx={troughX} cy={troughY} r="5" fill="#DC2626" />
-              <text x={troughX - 10} y={troughY - 10} textAnchor="end" className="fill-red-700 text-[11px] font-medium">
+              <text
+                x={troughX - 10}
+                y={troughY - 10}
+                textAnchor="end"
+                className="fill-red-700 text-[11px] font-medium"
+              >
                 Trough {formatNumber(stats.troughValue, 2)}
               </text>
             </>
@@ -285,7 +398,7 @@ export default function EquityCurveChart({
 
           <text
             x={width - padding.right}
-            y={padding.top - 4}
+            y={padding.top - 6}
             textAnchor="end"
             className="fill-slate-500 text-[11px]"
           >
@@ -294,11 +407,42 @@ export default function EquityCurveChart({
         </svg>
       </div>
 
+      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-sm text-slate-500">First point</div>
+          <div className="mt-2 text-sm text-slate-700">
+            Trade #{firstPoint?.trade_id} · {firstPoint?.symbol} · {formatDateTime(firstPoint?.opened_at)}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-sm text-slate-500">Last point</div>
+          <div className="mt-2 text-sm text-slate-700">
+            Trade #{lastPoint?.trade_id} · {lastPoint?.symbol} · {formatDateTime(lastPoint?.opened_at)}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-sm text-slate-500">Drawdown peak</div>
+          <div className="mt-2 text-sm text-slate-700">
+            Trade #{peakPoint?.trade_id} · {peakPoint?.symbol} · {formatDateTime(peakPoint?.opened_at)}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-sm text-slate-500">Drawdown trough</div>
+          <div className="mt-2 text-sm text-slate-700">
+            Trade #{troughPoint?.trade_id} · {troughPoint?.symbol} · {formatDateTime(troughPoint?.opened_at)}
+          </div>
+        </div>
+      </div>
+
       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <div className="text-sm font-semibold text-slate-900">Risk path note</div>
         <div className="mt-2 text-sm text-slate-600">
-          This curve now shows cumulative performance structure, peak-to-trough drawdown path, and
-          annotated turning points so the evidence surface communicates both return and risk.
+          This curve now shows cumulative performance structure, peak-to-trough drawdown path,
+          annotated turning points, and sequence context so the evidence surface communicates both
+          return and risk with stronger review value.
         </div>
       </div>
     </div>
