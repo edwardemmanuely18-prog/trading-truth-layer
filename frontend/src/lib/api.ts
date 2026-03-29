@@ -494,9 +494,7 @@ export type ClaimTradeScopeRow = {
   strategy_tag?: string | null;
   source_system?: string | null;
   cumulative_pnl: number | null;
-
   scope_status: "included" | "excluded";
-
   exclusion_reason?: ClaimTradeScopeReason | null;
   exclusion_reason_label?: string | null;
   exclusion_reason_detail?: string | null;
@@ -664,14 +662,12 @@ export type PublicVerifyResult = {
     version_number?: number;
   };
   trade_set_hash: string;
-
   trades?: ClaimTradeScopeRow[];
   included_trade_count?: number;
   excluded_trade_count?: number;
   included_trades?: ClaimTradeScopeRow[];
   excluded_trades?: ClaimTradeScopeRow[];
   summary?: ClaimTradeScopeSummary;
-
   equity_curve?: {
     point_count: number;
     starting_equity: number;
@@ -693,6 +689,41 @@ export type ClaimIntegrityResult = {
   verified_at: string;
 };
 
+export type ApiErrorPayload = {
+  code?: string;
+  message?: string;
+  detail?: string;
+  resource?: string;
+  workspace_id?: number;
+  used?: number;
+  limit?: number;
+  recommended_action?: string;
+  upgrade_hint?: string;
+};
+
+export class ApiError extends Error {
+  status: number;
+  payload: ApiErrorPayload | null;
+  rawBody: string;
+
+  constructor(message: string, status: number, payload: ApiErrorPayload | null, rawBody: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.payload = payload;
+    this.rawBody = rawBody;
+  }
+}
+
+export function isApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError;
+}
+
+export function getApiErrorCode(error: unknown): string | null {
+  if (!isApiError(error)) return null;
+  return error.payload?.code ?? null;
+}
+
 function getAuthHeaders(headers?: HeadersInit) {
   const merged = new Headers(headers || {});
   const token = getStoredAccessToken();
@@ -702,6 +733,38 @@ function getAuthHeaders(headers?: HeadersInit) {
   }
 
   return merged;
+}
+
+function parseApiErrorPayload(rawText: string): ApiErrorPayload | null {
+  if (!rawText) return null;
+
+  try {
+    const parsed = JSON.parse(rawText);
+
+    if (typeof parsed === "string") {
+      return { message: parsed };
+    }
+
+    if (parsed && typeof parsed === "object") {
+      if ("detail" in parsed) {
+        const detail = (parsed as { detail?: unknown }).detail;
+
+        if (typeof detail === "string") {
+          return { message: detail, detail };
+        }
+
+        if (detail && typeof detail === "object") {
+          return detail as ApiErrorPayload;
+        }
+      }
+
+      return parsed as ApiErrorPayload;
+    }
+  } catch {
+    return { message: rawText, detail: rawText };
+  }
+
+  return null;
 }
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -717,8 +780,15 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `API request failed with status ${res.status}`);
+    const rawText = await res.text();
+    const payload = parseApiErrorPayload(rawText);
+    const message =
+      payload?.message ||
+      payload?.detail ||
+      rawText ||
+      `API request failed with status ${res.status}`;
+
+    throw new ApiError(message, res.status, payload, rawText);
   }
 
   return res.json() as Promise<T>;
@@ -744,9 +814,13 @@ function ensureLeaderboard<T extends { leaderboard?: unknown }>(row: T) {
 function ensurePlanBilling(row?: Partial<PlanBilling> | null): PlanBilling {
   return {
     monthly_price_usd:
-      typeof row?.monthly_price_usd === "number" ? row.monthly_price_usd : row?.monthly_price_usd ?? null,
+      typeof row?.monthly_price_usd === "number"
+        ? row.monthly_price_usd
+        : row?.monthly_price_usd ?? null,
     annual_price_usd:
-      typeof row?.annual_price_usd === "number" ? row.annual_price_usd : row?.annual_price_usd ?? null,
+      typeof row?.annual_price_usd === "number"
+        ? row.annual_price_usd
+        : row?.annual_price_usd ?? null,
     currency: row?.currency ?? "USD",
     billing_interval: row?.billing_interval ?? "monthly",
   };
@@ -847,7 +921,8 @@ function ensureWorkspaceUsageSummary(row: WorkspaceUsageSummary): WorkspaceUsage
     stripe_ready: {
       has_customer_id: Boolean(row?.stripe_ready?.has_customer_id),
       has_subscription_id: Boolean(row?.stripe_ready?.has_subscription_id),
-      integration_status: row?.stripe_ready?.integration_status || "ready_for_stripe_foundation",
+      integration_status:
+        row?.stripe_ready?.integration_status || "ready_for_stripe_foundation",
     },
     governance: row?.governance
       ? {
@@ -879,7 +954,9 @@ function ensureWorkspaceUsageSummary(row: WorkspaceUsageSummary): WorkspaceUsage
   };
 }
 
-function ensureManualPaymentDetails(row?: Partial<ManualPaymentDetails> | null): ManualPaymentDetails | undefined {
+function ensureManualPaymentDetails(
+  row?: Partial<ManualPaymentDetails> | null
+): ManualPaymentDetails | undefined {
   if (!row) return undefined;
   return {
     enabled: Boolean(row.enabled),
@@ -911,7 +988,8 @@ function ensureWorkspaceBillingFoundation(
     stripe_ready: {
       has_customer_id: Boolean(row?.stripe_ready?.has_customer_id),
       has_subscription_id: Boolean(row?.stripe_ready?.has_subscription_id),
-      integration_status: row?.stripe_ready?.integration_status || "ready_for_stripe_foundation",
+      integration_status:
+        row?.stripe_ready?.integration_status || "ready_for_stripe_foundation",
       billing_enabled: Boolean(row?.stripe_ready?.billing_enabled),
       secret_key_configured: Boolean(row?.stripe_ready?.secret_key_configured),
       package_installed: Boolean(row?.stripe_ready?.package_installed),
@@ -962,9 +1040,13 @@ function ensureWorkspaceInvite(row: WorkspaceInvite): WorkspaceInvite {
     token: String(row.token ?? ""),
     status: String(row.status ?? "pending"),
     invited_by_user_id:
-      typeof row.invited_by_user_id === "number" ? row.invited_by_user_id : row.invited_by_user_id ?? null,
+      typeof row.invited_by_user_id === "number"
+        ? row.invited_by_user_id
+        : row.invited_by_user_id ?? null,
     accepted_by_user_id:
-      typeof row.accepted_by_user_id === "number" ? row.accepted_by_user_id : row.accepted_by_user_id ?? null,
+      typeof row.accepted_by_user_id === "number"
+        ? row.accepted_by_user_id
+        : row.accepted_by_user_id ?? null,
     created_at: row.created_at ?? null,
     expires_at: row.expires_at ?? null,
     accepted_at: row.accepted_at ?? null,
@@ -1287,8 +1369,14 @@ export const api = {
     });
 
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || `CSV import failed with status ${res.status}`);
+      const rawText = await res.text();
+      const payload = parseApiErrorPayload(rawText);
+      const message =
+        payload?.message ||
+        payload?.detail ||
+        rawText ||
+        `CSV import failed with status ${res.status}`;
+      throw new ApiError(message, res.status, payload, rawText);
     }
 
     return res.json() as Promise<ImportCsvResult>;
@@ -1332,17 +1420,23 @@ export const api = {
   },
 
   getClaimPreview: async (claimSchemaId: number): Promise<ClaimSchemaPreview> => {
-    const row = await apiFetch<ClaimSchemaPreview>(withDevUser(`/claim-schemas/${claimSchemaId}/preview`), {
-      cache: "no-store",
-    });
+    const row = await apiFetch<ClaimSchemaPreview>(
+      withDevUser(`/claim-schemas/${claimSchemaId}/preview`),
+      {
+        cache: "no-store",
+      }
+    );
 
     return ensureLeaderboard(row);
   },
 
   getClaimEquityCurve: async (claimSchemaId: number): Promise<ClaimEquityCurve> => {
-    const row = await apiFetch<ClaimEquityCurve>(withDevUser(`/claim-schemas/${claimSchemaId}/equity-curve`), {
-      cache: "no-store",
-    });
+    const row = await apiFetch<ClaimEquityCurve>(
+      withDevUser(`/claim-schemas/${claimSchemaId}/equity-curve`),
+      {
+        cache: "no-store",
+      }
+    );
 
     return {
       ...row,
@@ -1440,9 +1534,12 @@ export const api = {
   },
 
   getClaimIntegrity: async (claimSchemaId: number): Promise<ClaimIntegrityResult> => {
-    return apiFetch<ClaimIntegrityResult>(withDevUser(`/claim-schemas/${claimSchemaId}/verify-integrity`), {
-      cache: "no-store",
-    });
+    return apiFetch<ClaimIntegrityResult>(
+      withDevUser(`/claim-schemas/${claimSchemaId}/verify-integrity`),
+      {
+        cache: "no-store",
+      }
+    );
   },
 
   getLatestAuditEvents: async (limit = 20): Promise<AuditEvent[]> => {
@@ -1455,17 +1552,23 @@ export const api = {
     entityType: string,
     entityId: string | number
   ): Promise<AuditEvent[]> => {
-    return apiFetch<AuditEvent[]>(withDevUser(`/audit-events/entity/${entityType}/${entityId}`), {
-      cache: "no-store",
-    });
+    return apiFetch<AuditEvent[]>(
+      withDevUser(`/audit-events/entity/${entityType}/${entityId}`),
+      {
+        cache: "no-store",
+      }
+    );
   },
 
   getAuditEventsForWorkspace: async (
     workspaceId: string | number,
     limit = 50
   ): Promise<AuditEvent[]> => {
-    return apiFetch<AuditEvent[]>(withDevUser(`/audit-events/workspace/${workspaceId}?limit=${limit}`), {
-      cache: "no-store",
-    });
+    return apiFetch<AuditEvent[]>(
+      withDevUser(`/audit-events/workspace/${workspaceId}?limit=${limit}`),
+      {
+        cache: "no-store",
+      }
+    );
   },
 };
