@@ -1595,52 +1595,13 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     draw_metric_card(pdf, PDF_MARGIN_LEFT + (card_w + card_gap) * 3, y, card_w, card_h, "Win Rate", f"{round(metrics['win_rate'] * 100, 2)}%", "Winning trades %")
     y -= card_h + 24
 
-    panel_gap = 16
-    panel_w = (PDF_CONTENT_WIDTH - panel_gap) / 2
-    panel_h = 214
-
-    pdf_round_box(pdf, PDF_MARGIN_LEFT, y, panel_w, panel_h, colors.white, colors.HexColor("#E2E8F0"), radius=14)
-    pdf.setFillColor(colors.HexColor("#0F172A"))
-    pdf.setFont("Helvetica-Bold", 15)
-    pdf.drawString(PDF_MARGIN_LEFT + 14, y - 22, "Verification Scope")
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 14, y - 48, "Period Start", schema.period_start or "—")
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 174, y - 48, "Period End", schema.period_end or "—")
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 14, y - 96, "Included Members", included_members)
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 174, y - 96, "Included Symbols", included_symbols)
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 14, y - 144, "Excluded Trade IDs", excluded_trade_ids)
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 174, y - 144, "Visibility", schema.visibility or "—")
-    pdf.setFillColor(colors.HexColor("#64748B"))
-    pdf.setFont("Helvetica", 9)
-    pdf.drawString(PDF_MARGIN_LEFT + 14, y - 176, "Methodology Notes")
-    draw_light_note_box(
-        pdf,
-        PDF_MARGIN_LEFT + 14,
-        y - 184,
-        panel_w - 28,
-        schema.methodology_notes or "No methodology notes supplied.",
-        height=56,
-    )
-
-    panel2_x = PDF_MARGIN_LEFT + panel_w + panel_gap
-    pdf_round_box(pdf, panel2_x, y, panel_w, panel_h, colors.white, colors.HexColor("#E2E8F0"), radius=14)
-    pdf.setFillColor(colors.HexColor("#0F172A"))
-    pdf.setFont("Helvetica-Bold", 15)
-    pdf.drawString(panel2_x + 14, y - 22, "Lifecycle & Lineage")
-    draw_kv_pair(pdf, panel2_x + 14, y - 48, "Status", schema.status or "—")
-    draw_kv_pair(pdf, panel2_x + 174, y - 48, "Integrity", integrity_status)
-    draw_kv_pair(pdf, panel2_x + 14, y - 96, "Verified At", format_pdf_datetime(schema.verified_at))
-    draw_kv_pair(pdf, panel2_x + 174, y - 96, "Published At", format_pdf_datetime(schema.published_at))
-    draw_kv_pair(pdf, panel2_x + 14, y - 144, "Locked At", format_pdf_datetime(schema.locked_at))
-    draw_kv_pair(pdf, panel2_x + 174, y - 144, "Version Number", str(schema.version_number or "—"))
-    draw_kv_pair(pdf, panel2_x + 14, y - 192, "Root Claim ID", str(schema.root_claim_id or "—"))
-    draw_kv_pair(pdf, panel2_x + 174, y - 192, "Parent Claim ID", str(schema.parent_claim_id or "—"))
+    # Hard stop: page 1 ends after executive summary cards
+    page_number += 1
+    y = pdf_new_page(pdf, page_number, document_title, claim_hash)
 
     # =========================
     # PAGE 2 — PERFORMANCE DIAGNOSTICS
-    # hard break so the title never remains on page 1
     # =========================
-    page_number += 1
-    y = pdf_new_page(pdf, page_number, document_title, claim_hash)
 
     y = pdf_section_title(pdf, "Performance Diagnostics", PDF_MARGIN_LEFT, y)
 
@@ -1721,6 +1682,52 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         height=50,
     )
     y -= 74
+
+    # Verification context moved off page 1
+    y, page_number = pdf_require_space(pdf, y, 260, page_number, document_title, claim_hash)
+    y = pdf_section_title(pdf, "Verification Context", PDF_MARGIN_LEFT, y)
+
+    panel_gap = 16
+    panel_w = (PDF_CONTENT_WIDTH - panel_gap) / 2
+    panel_h = 214
+
+    pdf_round_box(pdf, PDF_MARGIN_LEFT, y, panel_w, panel_h, colors.white, colors.HexColor("#E2E8F0"), radius=14)
+    pdf.setFillColor(colors.HexColor("#0F172A"))
+    pdf.setFont("Helvetica-Bold", 15)
+    pdf.drawString(PDF_MARGIN_LEFT + 14, y - 22, "Verification Scope")
+    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 14, y - 48, "Period Start", schema.period_start or "—")
+    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 174, y - 48, "Period End", schema.period_end or "—")
+    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 14, y - 96, "Included Members", included_members)
+    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 174, y - 96, "Included Symbols", included_symbols)
+    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 14, y - 144, "Excluded Trade IDs", excluded_trade_ids)
+    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 174, y - 144, "Visibility", schema.visibility or "—")
+    pdf.setFillColor(colors.HexColor("#64748B"))
+    pdf.setFont("Helvetica", 9)
+    pdf.drawString(PDF_MARGIN_LEFT + 14, y - 176, "Methodology Notes")
+    draw_light_note_box(
+        pdf,
+        PDF_MARGIN_LEFT + 14,
+        y - 184,
+        panel_w - 28,
+        schema.methodology_notes or "No methodology notes supplied.",
+        height=56,
+    )
+
+    panel2_x = PDF_MARGIN_LEFT + panel_w + panel_gap
+    pdf_round_box(pdf, panel2_x, y, panel_w, panel_h, colors.white, colors.HexColor("#E2E8F0"), radius=14)
+    pdf.setFillColor(colors.HexColor("#0F172A"))
+    pdf.setFont("Helvetica-Bold", 15)
+    pdf.drawString(panel2_x + 14, y - 22, "Lifecycle & Lineage")
+    draw_kv_pair(pdf, panel2_x + 14, y - 48, "Status", schema.status or "—")
+    draw_kv_pair(pdf, panel2_x + 174, y - 48, "Integrity", integrity_status)
+    draw_kv_pair(pdf, panel2_x + 14, y - 96, "Verified At", format_pdf_datetime(schema.verified_at))
+    draw_kv_pair(pdf, panel2_x + 174, y - 96, "Published At", format_pdf_datetime(schema.published_at))
+    draw_kv_pair(pdf, panel2_x + 14, y - 144, "Locked At", format_pdf_datetime(schema.locked_at))
+    draw_kv_pair(pdf, panel2_x + 174, y - 144, "Version Number", str(schema.version_number or "—"))
+    draw_kv_pair(pdf, panel2_x + 14, y - 192, "Root Claim ID", str(schema.root_claim_id or "—"))
+    draw_kv_pair(pdf, panel2_x + 174, y - 192, "Parent Claim ID", str(schema.parent_claim_id or "—"))
+
+    y -= panel_h + 24
 
     # Leaderboard
     y, page_number = pdf_require_space(pdf, y, 180, page_number, document_title, claim_hash)
@@ -1818,6 +1825,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.save()
     buffer.seek(0)
     return buffer, filename
+
 
 def build_next_version_name(db: Session, workspace_id: int, base_name: str) -> str:
     match = re.match(r"^(.*?)(?:\s+v(\d+))?$", base_name.strip(), re.IGNORECASE)
