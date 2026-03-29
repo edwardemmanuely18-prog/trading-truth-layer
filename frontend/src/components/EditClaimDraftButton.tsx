@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ClaimSchema } from "../lib/api";
+import { getApiErrorCode, isApiError } from "../lib/api";
 import { useAuth } from "./AuthProvider";
 import EditClaimDraftModal from "./EditClaimDraftModal";
 import PaywallModal from "./PaywallModal";
@@ -36,7 +37,7 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
   const [open, setOpen] = useState(false);
   const { getWorkspaceRole } = useAuth();
   const router = useRouter();
-  const { gateAndExecute, paywallState, closePaywall } = useWorkspaceGate();
+  const { gateAndExecute, paywallState, closePaywall, openPaywall } = useWorkspaceGate();
 
   const workspaceRole = getWorkspaceRole(claim.workspace_id);
 
@@ -56,16 +57,34 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
   }, [claim.status, workspaceRole]);
 
   async function handleOpenEditor() {
-    await gateAndExecute(
-      {
-        action: "edit_draft",
-        workspaceRole,
-        claimStatus: claim.status,
-      },
-      async () => {
-        setOpen(true);
+    try {
+      await gateAndExecute(
+        {
+          action: "edit_draft",
+          workspaceRole,
+          claimStatus: claim.status,
+        },
+        async () => {
+          setOpen(true);
+        }
+      );
+    } catch (err) {
+      if (isApiError(err) && err.status === 403) {
+        const errorCode = getApiErrorCode(err);
+
+        openPaywall({
+          reason: errorCode === "claim_limit_reached" ? "feature_locked" : "edit_locked",
+          actionLabel: "Edit draft",
+          message:
+            err.payload?.message ||
+            err.payload?.upgrade_hint ||
+            "This draft action is blocked for the current workspace.",
+        });
+        return;
       }
-    );
+
+      throw err;
+    }
   }
 
   return (
