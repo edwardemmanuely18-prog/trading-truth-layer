@@ -1134,10 +1134,18 @@ def pdf_section_title(pdf: canvas.Canvas, title: str, x: float, y: float):
     pdf.setFillColor(colors.HexColor("#0F172A"))
     pdf.setFont("Helvetica-Bold", 16)
     pdf.drawString(x, y, title)
-    pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
-    pdf.line(x, y - 6, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT, y - 6)
+
+    line_left = x
+    line_right = PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT
+
+    pdf.setStrokeColor(colors.HexColor("#CBD5E1"))
+    pdf.setLineWidth(1)
+    pdf.line(line_left, y + 6, line_right, y + 6)
+    pdf.line(line_left, y - 10, line_right, y - 10)
+
     pdf.setFillColor(colors.black)
     pdf.setStrokeColor(colors.black)
+    pdf.setLineWidth(1)
     return y - 24
 
 
@@ -1574,7 +1582,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         short_hash(trade_set_hash, 18, 10),
     )
 
-    y -= banner_height + 26
+    y -= banner_height + 38
 
     y = pdf_section_title(pdf, "Claim Identity", PDF_MARGIN_LEFT, y)
 
