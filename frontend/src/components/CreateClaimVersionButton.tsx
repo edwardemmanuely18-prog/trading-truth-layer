@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, type WorkspaceUsageSummary } from "../lib/api";
+import {
+  api,
+  getApiErrorCode,
+  isApiError,
+  type WorkspaceUsageSummary,
+} from "../lib/api";
 import { useAuth } from "./AuthProvider";
 import PaywallModal from "./PaywallModal";
 import { useWorkspaceGate } from "../hooks/useWorkspaceGate";
@@ -48,7 +53,7 @@ export default function CreateClaimVersionButton({
 }: Props) {
   const router = useRouter();
   const { getWorkspaceRole } = useAuth();
-  const { gateAndExecute, paywallState, closePaywall } = useWorkspaceGate();
+  const { gateAndExecute, paywallState, closePaywall, openPaywall } = useWorkspaceGate();
 
   const [loading, setLoading] = useState(false);
   const [usageLoading, setUsageLoading] = useState(Boolean(workspaceId));
@@ -126,6 +131,22 @@ export default function CreateClaimVersionButton({
 
       router.refresh();
     } catch (cloneError) {
+      if (isApiError(cloneError) && cloneError.status === 403) {
+        const errorCode = getApiErrorCode(cloneError);
+
+        if (errorCode === "claim_limit_reached") {
+          openPaywall({
+            reason: "claim_limit_reached",
+            actionLabel: "Create claim version",
+            message:
+              cloneError.payload?.message ||
+              cloneError.payload?.upgrade_hint ||
+              "Claim limit reached for this workspace.",
+          });
+          return;
+        }
+      }
+
       setError(
         cloneError instanceof Error ? cloneError.message : "Failed to create claim version."
       );
@@ -151,6 +172,9 @@ export default function CreateClaimVersionButton({
     usage?.plan_catalog?.find(
       (plan) => normalizeText(plan.code) === normalizeText(usage?.plan_code)
     )?.name || usage?.plan_code || "—";
+
+  const recommendedPlanName =
+    usage?.upgrade_recommendation?.recommended_plan_name || "Pro or Team";
 
   const disabled = loading || usageLoading;
 
@@ -185,11 +209,19 @@ export default function CreateClaimVersionButton({
           <GovernanceBadge label="Current plan" value={currentPlanName} />
           <GovernanceBadge
             label="Claim usage"
-            value={workspaceId && !usageLoading && claimUsage ? `${claimUsage.used} / ${claimUsage.limit}` : "—"}
+            value={
+              workspaceId && !usageLoading && claimUsage
+                ? `${claimUsage.used} / ${claimUsage.limit}`
+                : "—"
+            }
           />
           <GovernanceBadge
             label="Usage ratio"
-            value={workspaceId && !usageLoading && claimUsage ? formatPercent(claimUsage.ratio) : "—"}
+            value={
+              workspaceId && !usageLoading && claimUsage
+                ? formatPercent(claimUsage.ratio)
+                : "—"
+            }
           />
           <GovernanceBadge
             label="Current version"
@@ -269,7 +301,7 @@ export default function CreateClaimVersionButton({
         currentPlanName={currentPlanName}
         currentPlanCode={usage?.plan_code || null}
         usageLabel={usageLabel}
-        recommendedPlanName="Pro or Team"
+        recommendedPlanName={recommendedPlanName}
         onUpgrade={() => {
           if (workspaceId) {
             router.push(`/workspace/${workspaceId}/settings?tab=billing`);
