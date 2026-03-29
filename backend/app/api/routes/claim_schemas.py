@@ -1138,15 +1138,15 @@ def pdf_section_title(pdf: canvas.Canvas, title: str, x: float, y: float):
     line_left = x
     line_right = PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT
 
-    pdf.setStrokeColor(colors.HexColor("#CBD5E1"))
-    pdf.setLineWidth(1)
-    pdf.line(line_left, y - 8, line_right, y - 8)
-    pdf.line(line_left, y - 14, line_right, y - 14)
+    pdf.setStrokeColor(colors.HexColor("#D8E1EC"))
+    pdf.setLineWidth(0.8)
+    pdf.line(line_left, y - 9, line_right, y - 9)
+    pdf.line(line_left, y - 15, line_right, y - 15)
 
     pdf.setFillColor(colors.black)
     pdf.setStrokeColor(colors.black)
     pdf.setLineWidth(1)
-    return y - 28
+    return y - 30
 
 
 def pdf_round_box(
@@ -1774,9 +1774,14 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     )
 
     # Leaderboard
-    y = pdf_section_title(pdf, "Leaderboard Snapshot", PDF_MARGIN_LEFT, y)
-
-    # Leaderboard
+    y, page_number = pdf_require_space(
+        pdf,
+        y,
+        120,
+        page_number,
+        document_title,
+        claim_hash,
+    )
     y = pdf_section_title(pdf, "Leaderboard Snapshot", PDF_MARGIN_LEFT, y)
     y = draw_table_header(
         pdf,
@@ -1811,6 +1816,14 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     y -= 10
 
     # Trade evidence snapshot
+    y, page_number = pdf_require_space(
+        pdf,
+        y,
+        120,
+        page_number,
+        document_title,
+        claim_hash,
+    )
     y = pdf_section_title(pdf, "Trade Evidence Snapshot", PDF_MARGIN_LEFT, y)
     y = draw_table_header(
         pdf,
@@ -1852,6 +1865,14 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     y -= 12
 
     # Fingerprints
+    y, page_number = pdf_require_space(
+        pdf,
+        y,
+        190,
+        page_number,
+        document_title,
+        claim_hash,
+    )
     y = pdf_section_title(pdf, "Canonical Fingerprints", PDF_MARGIN_LEFT, y)
     draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Claim Hash", claim_hash)
     y -= 62
