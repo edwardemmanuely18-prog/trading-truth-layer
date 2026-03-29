@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "../lib/api";
+import { api, getApiErrorCode, isApiError } from "../lib/api";
 import { useAuth } from "./AuthProvider";
 import PaywallModal from "./PaywallModal";
 import { useWorkspaceGate } from "../hooks/useWorkspaceGate";
@@ -180,7 +180,7 @@ export default function ClaimLifecycleActions({
 }: Props) {
   const router = useRouter();
   const { getWorkspaceRole } = useAuth();
-  const { gateAndExecute, paywallState, closePaywall } = useWorkspaceGate();
+  const { gateAndExecute, paywallState, closePaywall, openPaywall } = useWorkspaceGate();
 
   const [loadingAction, setLoadingAction] = useState<"verify" | "publish" | "lock" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -235,6 +235,36 @@ export default function ClaimLifecycleActions({
         ? "Only published claims can be locked."
         : null;
 
+  async function handleBackendDenied(err: unknown, actionLabel: string) {
+    if (isApiError(err) && err.status === 403) {
+      const errorCode = getApiErrorCode(err);
+
+      if (errorCode === "claim_limit_reached") {
+        openPaywall({
+          reason: "feature_locked",
+          actionLabel,
+          message:
+            err.payload?.message ||
+            err.payload?.upgrade_hint ||
+            "This action is blocked by current workspace plan limits.",
+        });
+        return true;
+      }
+
+      openPaywall({
+        reason: "lifecycle_action_locked",
+        actionLabel,
+        message:
+          err.payload?.message ||
+          err.message ||
+          "This lifecycle action is blocked for the current workspace.",
+      });
+      return true;
+    }
+
+    return false;
+  }
+
   const verifyClaim = async () => {
     try {
       setLoadingAction("verify");
@@ -243,7 +273,11 @@ export default function ClaimLifecycleActions({
       window.location.reload();
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "Failed to verify claim.");
+
+      const handled = await handleBackendDenied(err, "Verify claim");
+      if (!handled) {
+        setError(err instanceof Error ? err.message : "Failed to verify claim.");
+      }
     } finally {
       setLoadingAction(null);
     }
@@ -257,7 +291,11 @@ export default function ClaimLifecycleActions({
       window.location.reload();
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "Failed to publish claim.");
+
+      const handled = await handleBackendDenied(err, "Publish claim");
+      if (!handled) {
+        setError(err instanceof Error ? err.message : "Failed to publish claim.");
+      }
     } finally {
       setLoadingAction(null);
     }
@@ -271,7 +309,11 @@ export default function ClaimLifecycleActions({
       window.location.reload();
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "Failed to lock claim.");
+
+      const handled = await handleBackendDenied(err, "Lock claim");
+      if (!handled) {
+        setError(err instanceof Error ? err.message : "Failed to lock claim.");
+      }
     } finally {
       setLoadingAction(null);
     }
