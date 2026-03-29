@@ -1028,9 +1028,9 @@ def format_pdf_datetime(value) -> str:
             except ValueError:
                 continue
         if dt is None:
-            return shorten_text(text, 28)
+            return shorten_text(text, 22)
 
-    return dt.strftime("%Y-%m-%d %H:%M:%S")
+    return dt.strftime("%Y-%m-%d %H:%M")
 
 
 def draw_pdf_wrapped_text(
@@ -1562,7 +1562,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         hash_box_w,
         54,
         "Claim Hash Fingerprint",
-        short_hash(claim_hash, 26, 16),
+        short_hash(claim_hash, 18, 10),
     )
     draw_label_value_box(
         pdf,
@@ -1571,7 +1571,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         hash_box_w,
         54,
         "Trade Set Hash Fingerprint",
-        short_hash(trade_set_hash, 26, 16),
+        short_hash(trade_set_hash, 18, 10),
     )
 
     y -= banner_height + 26
@@ -1683,7 +1683,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     )
     y -= 74
 
-        # =========================
+    # =========================
     # PAGE 3 — CONTEXT / EVIDENCE
     # =========================
     page_number += 1
@@ -1744,7 +1744,6 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     y -= panel_h + 16
 
-    # Methodology note as a separate clean strip
     pdf.setFillColor(colors.HexColor("#64748B"))
     pdf.setFont("Helvetica", 9)
     pdf.drawString(PDF_MARGIN_LEFT, y, "Methodology Notes")
@@ -1770,8 +1769,8 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             (0, "Rank"),
             (96, "Member"),
             (300, "Net PnL"),
-            (420, "Win Rate"),
-            (520, "Profit Factor"),
+            (410, "Win Rate"),
+            (500, "Profit Factor"),
         ],
     )
 
@@ -1783,8 +1782,8 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             pdf.drawString(PDF_MARGIN_LEFT, y, str(row["rank"]))
             pdf.drawString(PDF_MARGIN_LEFT + 96, y, shorten_text(str(row["member"]), 24))
             pdf.drawString(PDF_MARGIN_LEFT + 300, y, str(row["net_pnl"]))
-            pdf.drawString(PDF_MARGIN_LEFT + 420, y, f"{round(float(row['win_rate']) * 100, 2)}%")
-            pdf.drawString(PDF_MARGIN_LEFT + 520, y, str(row["profit_factor"]))
+            pdf.drawString(PDF_MARGIN_LEFT + 410, y, f"{round(float(row['win_rate']) * 100, 2)}%")
+            pdf.drawString(PDF_MARGIN_LEFT + 500, y, str(row["profit_factor"]))
             pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
             pdf.line(PDF_MARGIN_LEFT, y - 8, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT, y - 8)
             y -= 18
