@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, type WorkspaceUsageSummary } from "../lib/api";
 import { useAuth } from "./AuthProvider";
+import PaywallModal from "./PaywallModal";
+import { useWorkspaceGate } from "../hooks/useWorkspaceGate";
 
 type Props = {
   claimSchemaId: number;
@@ -46,6 +48,7 @@ export default function CreateClaimVersionButton({
 }: Props) {
   const router = useRouter();
   const { getWorkspaceRole } = useAuth();
+  const { gateAndExecute, paywallState, closePaywall } = useWorkspaceGate();
 
   const [loading, setLoading] = useState(false);
   const [usageLoading, setUsageLoading] = useState(Boolean(workspaceId));
@@ -108,17 +111,7 @@ export default function CreateClaimVersionButton({
     };
   }, [workspaceId]);
 
-  async function handleClone() {
-    if (!canCloneByRole) {
-      setError("Only workspace owners and operators can create a new claim version.");
-      return;
-    }
-
-    if (claimLimitReached) {
-      setError("Claim limit reached. Upgrade workspace plan before creating another version.");
-      return;
-    }
-
+  async function createVersion() {
     try {
       setLoading(true);
       setError(null);
@@ -141,112 +134,150 @@ export default function CreateClaimVersionButton({
     }
   }
 
-  const disabled = loading || usageLoading || !canCloneByRole || claimLimitReached;
+  async function handleClone() {
+    await gateAndExecute(
+      {
+        action: "create_claim_version",
+        usage,
+        workspaceRole,
+      },
+      async () => {
+        await createVersion();
+      }
+    );
+  }
 
   const currentPlanName =
     usage?.plan_catalog?.find(
       (plan) => normalizeText(plan.code) === normalizeText(usage?.plan_code)
     )?.name || usage?.plan_code || "—";
 
+  const disabled = loading || usageLoading;
+
+  const usageLabel =
+    workspaceId && !usageLoading && claimUsage
+      ? `${claimUsage.used} / ${claimUsage.limit}${
+          claimUsage.ratio !== null && claimUsage.ratio !== undefined
+            ? ` · ${formatPercent(claimUsage.ratio)}`
+            : ""
+        }`
+      : "—";
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-slate-900">Versioning Action</div>
-          <div className="mt-1 text-xs leading-5 text-slate-600">
-            Create a new governed claim version instead of overwriting the current record.
-            This preserves lineage, comparison context, and historical traceability.
+    <>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">Versioning Action</div>
+            <div className="mt-1 text-xs leading-5 text-slate-600">
+              Create a new governed claim version instead of overwriting the current record. This
+              preserves lineage, comparison context, and historical traceability.
+            </div>
+          </div>
+
+          <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-700">
+            {governanceState}
+          </span>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <GovernanceBadge label="Workspace role" value={workspaceRole || "unknown"} />
+          <GovernanceBadge label="Current plan" value={currentPlanName} />
+          <GovernanceBadge
+            label="Claim usage"
+            value={workspaceId && !usageLoading && claimUsage ? `${claimUsage.used} / ${claimUsage.limit}` : "—"}
+          />
+          <GovernanceBadge
+            label="Usage ratio"
+            value={workspaceId && !usageLoading && claimUsage ? formatPercent(claimUsage.ratio) : "—"}
+          />
+          <GovernanceBadge
+            label="Current version"
+            value={typeof currentVersionNumber === "number" ? currentVersionNumber : "—"}
+          />
+          <GovernanceBadge
+            label="Next version"
+            value={typeof nextVersionNumber === "number" ? nextVersionNumber : "auto"}
+          />
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs text-slate-500">Root claim</div>
+            <div className="mt-1 font-semibold text-slate-900">{rootClaimId ?? claimSchemaId}</div>
+            <div className="mt-1 text-xs text-slate-500">
+              Governing lineage anchor for the claim family.
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="text-xs text-slate-500">Parent claim</div>
+            <div className="mt-1 font-semibold text-slate-900">
+              {parentClaimId ?? "current claim becomes parent"}
+            </div>
+            <div className="mt-1 text-xs text-slate-500">
+              New versions preserve history instead of mutating prior records.
+            </div>
           </div>
         </div>
 
-        <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-700">
-          {governanceState}
-        </span>
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-6 text-slate-600">
+          <div className="font-semibold text-slate-900">Governance effect</div>
+          <div className="mt-2">
+            Creating a version should record lineage continuity, preserve the old claim in history,
+            and allow later version-by-version comparison without destroying prior audit evidence.
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => void handleClone()}
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {loading ? "Creating Version..." : "Create New Version"}
+          </button>
+        </div>
+
+        {!canCloneByRole && workspaceId ? (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            Only workspace owners and operators can create new claim versions.
+          </div>
+        ) : null}
+
+        {claimLimitReached ? (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            Claim limit reached on the current workspace plan. Use the version action to open the
+            upgrade path and continue governed claim versioning.
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+            {error}
+          </div>
+        ) : null}
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <GovernanceBadge label="Workspace role" value={workspaceRole || "unknown"} />
-        <GovernanceBadge label="Current plan" value={currentPlanName} />
-        <GovernanceBadge
-          label="Claim usage"
-          value={
-            workspaceId && !usageLoading && claimUsage
-              ? `${claimUsage.used} / ${claimUsage.limit}`
-              : "—"
+      <PaywallModal
+        open={paywallState.open}
+        onClose={closePaywall}
+        reason={paywallState.reason}
+        actionLabel={paywallState.actionLabel || "Create claim version"}
+        message={paywallState.message}
+        currentPlanName={currentPlanName}
+        currentPlanCode={usage?.plan_code || null}
+        usageLabel={usageLabel}
+        recommendedPlanName="Pro or Team"
+        onUpgrade={() => {
+          if (workspaceId) {
+            router.push(`/workspace/${workspaceId}/settings?tab=billing`);
+          } else {
+            router.push(`/settings?tab=billing`);
           }
-        />
-        <GovernanceBadge
-          label="Usage ratio"
-          value={workspaceId && !usageLoading && claimUsage ? formatPercent(claimUsage.ratio) : "—"}
-        />
-        <GovernanceBadge
-          label="Current version"
-          value={typeof currentVersionNumber === "number" ? currentVersionNumber : "—"}
-        />
-        <GovernanceBadge
-          label="Next version"
-          value={typeof nextVersionNumber === "number" ? nextVersionNumber : "auto"}
-        />
-      </div>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <div className="text-xs text-slate-500">Root claim</div>
-          <div className="mt-1 font-semibold text-slate-900">
-            {rootClaimId ?? claimSchemaId}
-          </div>
-          <div className="mt-1 text-xs text-slate-500">
-            Governing lineage anchor for the claim family.
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <div className="text-xs text-slate-500">Parent claim</div>
-          <div className="mt-1 font-semibold text-slate-900">
-            {parentClaimId ?? "current claim becomes parent"}
-          </div>
-          <div className="mt-1 text-xs text-slate-500">
-            New versions preserve history instead of mutating prior records.
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-6 text-slate-600">
-        <div className="font-semibold text-slate-900">Governance effect</div>
-        <div className="mt-2">
-          Creating a version should record lineage continuity, preserve the old claim in history,
-          and allow later version-by-version comparison without destroying prior audit evidence.
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => void handleClone()}
-          className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-        >
-          {loading ? "Creating Version..." : "Create New Version"}
-        </button>
-      </div>
-
-      {!canCloneByRole && workspaceId ? (
-        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-          Only workspace owners and operators can create new claim versions.
-        </div>
-      ) : null}
-
-      {claimLimitReached ? (
-        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-          Claim limit reached. Upgrade the workspace plan before creating another version.
-        </div>
-      ) : null}
-
-      {error ? (
-        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-          {error}
-        </div>
-      ) : null}
-    </div>
+        }}
+      />
+    </>
   );
 }
