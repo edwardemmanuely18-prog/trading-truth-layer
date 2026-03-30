@@ -79,7 +79,7 @@ function PlanBadge({ plan }: { plan?: string | null }) {
   const normalized = normalizeText(plan);
 
   const className =
-    normalized === "pro" || normalized === "growth" || normalized === "business"
+    normalized === "pro" || normalized === "growth" || normalized === "business" || normalized === "team"
       ? "border-blue-200 bg-blue-50 text-blue-800"
       : "border-slate-200 bg-slate-100 text-slate-700";
 
@@ -117,12 +117,14 @@ function UsageCard({
   limit,
   ratio,
   atOrOver,
+  hint,
 }: {
   label: string;
   used?: number;
   limit?: number;
   ratio?: number | null;
   atOrOver: boolean;
+  hint?: string;
 }) {
   const safeUsed = used ?? 0;
   const safeLimit = limit ?? 0;
@@ -150,6 +152,7 @@ function UsageCard({
         />
       </div>
       <div className="mt-2 text-sm text-slate-500">Utilization: {formatPercent(ratio)}</div>
+      {hint ? <div className="mt-2 text-xs text-slate-500">{hint}</div> : null}
     </div>
   );
 }
@@ -409,6 +412,164 @@ function ManualPaymentCard({
   );
 }
 
+function UpgradeSummaryPanel({
+  settings,
+  usage,
+  selectedPlanCode,
+  selectedBillingCycle,
+  canSeeUpgrade,
+  onStartCheckout,
+  checkoutLoading,
+}: {
+  settings: WorkspaceSettings | null;
+  usage: WorkspaceUsageSummary | null;
+  selectedPlanCode: string;
+  selectedBillingCycle: string;
+  canSeeUpgrade: boolean;
+  onStartCheckout: () => void;
+  checkoutLoading: boolean;
+}) {
+  const claimUsage = usage?.usage?.claims;
+  const tradeUsage = usage?.usage?.trades;
+  const memberUsage = usage?.usage?.members;
+
+  const recommendedPlanCode = usage?.upgrade_recommendation?.recommended_plan_code;
+  const recommendedPlanName = usage?.upgrade_recommendation?.recommended_plan_name || "Pro or Team";
+  const currentPlanCode = settings?.plan_code || "starter";
+
+  const selectedMatchesCurrent =
+    normalizeText(selectedPlanCode) === normalizeText(currentPlanCode);
+
+  const claimBlocked =
+    (claimUsage?.limit ?? 0) > 0 && (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
+
+  const currentPlanName =
+    settings?.plan_detail?.name || formatPlanCodeLabel(currentPlanCode);
+
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold">Upgrade Summary</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            This should be the clearest next step for users arriving from blocked claim actions.
+          </p>
+        </div>
+
+        <span
+          className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+            claimBlocked
+              ? "border-amber-200 bg-amber-50 text-amber-800"
+              : "border-green-200 bg-green-50 text-green-800"
+          }`}
+        >
+          {claimBlocked ? "claim capacity blocked" : "capacity available"}
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Current plan</div>
+          <div className="mt-1 text-xl font-semibold text-slate-900">{currentPlanName}</div>
+          <div className="mt-2 text-sm text-slate-600">
+            Claims: {claimUsage?.used ?? 0} / {claimUsage?.limit ?? 0}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Selected upgrade</div>
+          <div className="mt-1 text-xl font-semibold text-slate-900">
+            {formatPlanCodeLabel(selectedPlanCode)}
+          </div>
+          <div className="mt-2 text-sm text-slate-600">
+            Billing cycle: {formatPlanCodeLabel(selectedBillingCycle)}
+          </div>
+        </div>
+      </div>
+
+      {(usage?.governance?.upgrade_required_now || usage?.governance?.upgrade_recommended_soon) ? (
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <div className="font-medium">
+            {usage?.governance?.upgrade_required_now ? "Upgrade required now" : "Upgrade recommended soon"}
+          </div>
+          <div className="mt-2">
+            {usage?.governance?.upgrade_required_now
+              ? "This workspace has reached or exceeded active capacity in one or more governed dimensions. Some workflows may now be blocked."
+              : "This workspace is approaching governed capacity limits. Upgrading early protects workflow continuity."}
+          </div>
+          {recommendedPlanCode ? (
+            <div className="mt-2">
+              Recommended next plan: <span className="font-semibold">{recommendedPlanName}</span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Claims</div>
+          <div className="mt-1 text-lg font-semibold text-slate-900">
+            {claimUsage?.used ?? 0} / {claimUsage?.limit ?? 0}
+          </div>
+          <div className="mt-1 text-xs text-slate-500">Governed versioning capacity</div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Trades</div>
+          <div className="mt-1 text-lg font-semibold text-slate-900">
+            {tradeUsage?.used ?? 0} / {tradeUsage?.limit ?? 0}
+          </div>
+          <div className="mt-1 text-xs text-slate-500">Evidence ingestion capacity</div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Members</div>
+          <div className="mt-1 text-lg font-semibold text-slate-900">
+            {memberUsage?.used ?? 0} / {memberUsage?.limit ?? 0}
+          </div>
+          <div className="mt-1 text-xs text-slate-500">Workspace collaborator capacity</div>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+        <div className="font-medium text-slate-900">What upgrading unlocks</div>
+        <div className="mt-2">
+          Higher plans increase governed claim capacity, reduce the chance of blocked lineage
+          workflows, and provide more operational room for evidence ingestion and workspace growth.
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={onStartCheckout}
+          disabled={!canSeeUpgrade || checkoutLoading || selectedMatchesCurrent}
+          className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+        >
+          {checkoutLoading ? "Starting Checkout..." : "Upgrade Workspace"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            const el = document.getElementById("plan-ladder");
+            el?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+          className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
+        >
+          Compare Plans
+        </button>
+      </div>
+
+      {!canSeeUpgrade ? (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Only workspace owners can start checkout or change billing.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function WorkspaceSettingsPage() {
   const params = useParams();
   const router = useRouter();
@@ -433,6 +594,7 @@ export default function WorkspaceSettingsPage() {
   const checkoutStatus = searchParams.get("checkout");
   const checkoutSessionId = searchParams.get("session_id");
   const portalStatus = searchParams.get("portal");
+  const activeTab = searchParams.get("tab");
 
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
@@ -753,6 +915,11 @@ export default function WorkspaceSettingsPage() {
               Administrative control surface for workspace identity, plan governance, usage
               visibility, billing readiness, and monetization foundations.
             </p>
+            {activeTab === "billing" ? (
+              <div className="mt-4 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">
+                billing focus
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-2xl border bg-white px-5 py-4 shadow-sm">
@@ -882,6 +1049,16 @@ export default function WorkspaceSettingsPage() {
 
             <div className="grid gap-6 lg:grid-cols-[1.2fr_0.95fr]">
               <div className="space-y-6">
+                <UpgradeSummaryPanel
+                  settings={settings}
+                  usage={usage}
+                  selectedPlanCode={selectedPlanCode}
+                  selectedBillingCycle={selectedBillingCycle}
+                  canSeeUpgrade={canSeeUpgrade}
+                  onStartCheckout={() => void handleStartCheckout()}
+                  checkoutLoading={checkoutLoading}
+                />
+
                 <div className="rounded-3xl border bg-white p-6 shadow-sm">
                   <div className="mb-4 flex items-center justify-between gap-4">
                     <div>
@@ -1170,7 +1347,7 @@ export default function WorkspaceSettingsPage() {
                 />
 
                 {planCatalog.length > 0 ? (
-                  <div className="rounded-3xl border bg-white p-6 shadow-sm">
+                  <div id="plan-ladder" className="rounded-3xl border bg-white p-6 shadow-sm">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
                         <h2 className="text-2xl font-semibold">Plan Ladder</h2>
@@ -1219,6 +1396,7 @@ export default function WorkspaceSettingsPage() {
                       limit={usage?.usage.members.limit}
                       ratio={usage?.usage.members.ratio}
                       atOrOver={membersAtOrOverLimit}
+                      hint="Workspace collaborator capacity"
                     />
 
                     <UsageCard
@@ -1227,6 +1405,7 @@ export default function WorkspaceSettingsPage() {
                       limit={usage?.usage.trades.limit}
                       ratio={usage?.usage.trades.ratio}
                       atOrOver={tradesAtOrOverLimit}
+                      hint="Evidence ingestion and operational throughput"
                     />
 
                     <UsageCard
@@ -1235,6 +1414,7 @@ export default function WorkspaceSettingsPage() {
                       limit={usage?.usage.claims.limit}
                       ratio={usage?.usage.claims.ratio}
                       atOrOver={claimsAtOrOverLimit}
+                      hint="Governed claim and versioning capacity"
                     />
 
                     <UsageCard
@@ -1243,7 +1423,37 @@ export default function WorkspaceSettingsPage() {
                       limit={usage?.usage.storage_mb.limit}
                       ratio={usage?.usage.storage_mb.ratio}
                       atOrOver={storageAtOrOverLimit}
+                      hint="Artifact and workspace storage budget"
                     />
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border bg-white p-6 shadow-sm">
+                  <h2 className="text-2xl font-semibold">Claim Governance Unlocks</h2>
+                  <div className="mt-4 space-y-4 text-sm text-slate-700">
+                    <div className="rounded-xl bg-slate-50 p-4">
+                      <div className="font-medium">Governed version capacity</div>
+                      <div className="mt-1 text-slate-600">
+                        Higher plans increase available claim capacity so users can continue versioning
+                        instead of hitting blocked lineage actions.
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl bg-slate-50 p-4">
+                      <div className="font-medium">Workflow continuity</div>
+                      <div className="mt-1 text-slate-600">
+                        Upgrading before limits are reached prevents interruption of claim creation,
+                        verification preparation, and governance review workflows.
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl bg-slate-50 p-4">
+                      <div className="font-medium">Operational headroom</div>
+                      <div className="mt-1 text-slate-600">
+                        Claims, trades, members, and storage all contribute to how much governed trust
+                        infrastructure the workspace can support.
+                      </div>
+                    </div>
                   </div>
                 </div>
 
