@@ -55,7 +55,7 @@ function resolveGovernanceState(params: {
   if (loading) return "creating version";
   if (usageLoading) return "loading governance";
   if (!canCloneByRole) return "role restricted";
-  if (claimLimitReached) return "plan blocked";
+  if (claimLimitReached) return "upgrade required";
   return "available";
 }
 
@@ -182,6 +182,8 @@ export default function CreateClaimVersionButton({
   }
 
   async function handleClone() {
+    if (loading || usageLoading || !canCloneByRole) return;
+
     await gateAndExecute(
       {
         action: "create_claim_version",
@@ -199,10 +201,17 @@ export default function CreateClaimVersionButton({
       (plan) => normalizeText(plan.code) === normalizeText(usage?.plan_code)
     )?.name || usage?.plan_code || "—";
 
+  const effectivePlanName =
+    usage?.plan_catalog?.find(
+      (plan) => normalizeText(plan.code) === normalizeText(usage?.effective_plan_code)
+    )?.name ||
+    usage?.effective_plan_code ||
+    currentPlanName;
+
   const recommendedPlanName =
     usage?.upgrade_recommendation?.recommended_plan_name || "Higher workspace plan";
 
-  const disabled = loading || usageLoading;
+  const disabled = loading || usageLoading || !canCloneByRole;
 
   const usageLabel =
     workspaceId && !usageLoading && claimUsage
@@ -212,6 +221,11 @@ export default function CreateClaimVersionButton({
             : ""
         }`
       : "—";
+
+  const planMismatch =
+    normalizeText(usage?.effective_plan_code) &&
+    normalizeText(usage?.plan_code) &&
+    normalizeText(usage?.effective_plan_code) !== normalizeText(usage?.plan_code);
 
   return (
     <>
@@ -233,6 +247,7 @@ export default function CreateClaimVersionButton({
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <GovernanceBadge label="Workspace role" value={workspaceRole || "unknown"} />
           <GovernanceBadge label="Configured plan" value={currentPlanName} />
+          <GovernanceBadge label="Effective plan" value={effectivePlanName} />
           <GovernanceBadge
             label="Claim usage"
             value={
@@ -287,6 +302,14 @@ export default function CreateClaimVersionButton({
           </div>
         </div>
 
+        {planMismatch ? (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            This workspace is configured on <span className="font-semibold">{currentPlanName}</span>,
+            but governed actions currently follow the effective plan posture of{" "}
+            <span className="font-semibold">{effectivePlanName}</span>.
+          </div>
+        ) : null}
+
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -306,7 +329,7 @@ export default function CreateClaimVersionButton({
 
         {claimLimitReached ? (
           <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            Claim capacity has been reached on the current workspace billing tier. Use this action
+            Claim capacity has been reached on the current effective workspace plan. Use this action
             to open the upgrade path and continue governed version creation.
           </div>
         ) : null}
