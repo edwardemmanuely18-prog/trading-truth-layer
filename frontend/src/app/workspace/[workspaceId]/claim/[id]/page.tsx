@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import {
@@ -567,7 +567,10 @@ function ScopeTradesTable({
             </thead>
             <tbody>
               {safe.map((row) => (
-                <tr key={`${row.trade_id}-${row.index}-${row.scope_status}`} className="border-b last:border-0 align-top">
+                <tr
+                  key={`${row.trade_id}-${row.index}-${row.scope_status}`}
+                  className="border-b last:border-0 align-top"
+                >
                   <td className="px-3 py-2">{row.index}</td>
                   <td className="px-3 py-2">{row.trade_id}</td>
                   <td className="px-3 py-2">{formatDateTime(row.opened_at)}</td>
@@ -584,7 +587,9 @@ function ScopeTradesTable({
                   {showExclusionColumns ? (
                     <td className="px-3 py-2">
                       <div className="flex min-w-[140px]">
-                        <ExclusionReasonBadge reason={row.exclusion_reason_label || row.exclusion_reason} />
+                        <ExclusionReasonBadge
+                          reason={row.exclusion_reason_label || row.exclusion_reason}
+                        />
                       </div>
                     </td>
                   ) : null}
@@ -726,7 +731,7 @@ function UpgradeContextCard({
         </div>
       ) : null}
 
-      {(breachedDimensions.length > 0 || nearLimitDimensions.length > 0) ? (
+      {breachedDimensions.length > 0 || nearLimitDimensions.length > 0 ? (
         <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
           {breachedDimensions.length > 0 ? (
             <div>
@@ -749,7 +754,8 @@ function UpgradeContextCard({
             <div className="font-medium text-slate-900">Local QA override active</div>
             <div className="mt-2">
               This workspace is over the normal claim plan limit, but version creation remains
-              enabled in this QA environment. Production behavior should route into the paywall flow.
+              enabled in this QA environment. Production behavior should route into the paywall
+              flow.
             </div>
           </>
         ) : claimLimitReached ? (
@@ -804,7 +810,8 @@ export default function WorkspaceClaimDetailPage() {
   const { getWorkspaceRole, loading: authLoading } = useAuth();
 
   const workspaceId = useMemo(
-    () => Number(Array.isArray(params?.workspaceId) ? params.workspaceId[0] : params?.workspaceId),
+    () =>
+      Number(Array.isArray(params?.workspaceId) ? params.workspaceId[0] : params?.workspaceId),
     [params]
   );
   const idParam = params?.id;
@@ -835,23 +842,17 @@ export default function WorkspaceClaimDetailPage() {
   const [claimTrades, setClaimTrades] = useState<ClaimTradeEvidence | null>(null);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [checkingIntegrity, setCheckingIntegrity] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const claimUsage = usage?.usage?.claims;
   const claimLimitReached =
-    (claimUsage?.limit ?? 0) > 0 &&
-    (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
+    (claimUsage?.limit ?? 0) > 0 && (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
 
-  const effectivePlanCode =
-    usage?.effective_plan_code || usage?.plan_code || null;
+  const effectivePlanCode = usage?.effective_plan_code || usage?.plan_code || null;
 
-  const isBlockedByPlan =
-    !qaOverrideActive && claimLimitReached;
-
-  const lifecycleBlockedReason = isBlockedByPlan
-    ? "claim_limit_reached"
-    : null;
+  const isBlockedByPlan = !qaOverrideActive && claimLimitReached;
 
   const effectivePlanName =
     usage?.plan_catalog?.find(
@@ -863,19 +864,17 @@ export default function WorkspaceClaimDetailPage() {
       (plan) => normalizeText(plan.code) === normalizeText(usage?.plan_code)
     )?.name || usage?.plan_code || "—";
 
-  const planMismatch =
-    normalizeText(usage?.effective_plan_code) &&
-    normalizeText(usage?.plan_code) &&
-    normalizeText(usage?.effective_plan_code) !== normalizeText(usage?.plan_code);
+  const claimStatusNormalized = normalizeText(claim?.status);
+  const claimVisibilityNormalized = normalizeText(claim?.visibility);
 
   const publicRouteReady =
-    claim?.visibility === "public" &&
-    (claim?.status === "published" || claim?.status === "locked") &&
+    claimVisibilityNormalized === "public" &&
+    (claimStatusNormalized === "published" || claimStatusNormalized === "locked") &&
     !!claim?.claim_hash;
 
   const unlistedRouteReady =
-    claim?.visibility === "unlisted" &&
-    (claim?.status === "published" || claim?.status === "locked") &&
+    claimVisibilityNormalized === "unlisted" &&
+    (claimStatusNormalized === "published" || claimStatusNormalized === "locked") &&
     !!claim?.claim_hash;
 
   const currentVersionIndex = useMemo(() => {
@@ -896,10 +895,9 @@ export default function WorkspaceClaimDetailPage() {
   const isInternalActive = pathname === internalHref;
   const isEvidenceActive = pathname === `/workspace/${workspaceId}/evidence`;
 
-  const loadClaimPage = async () => {
+  const loadClaimPage = useCallback(async () => {
     if (!claimId || Number.isNaN(claimId) || !workspaceId || Number.isNaN(workspaceId)) return;
 
-    setLoading(true);
     setError(null);
 
     try {
@@ -922,7 +920,7 @@ export default function WorkspaceClaimDetailPage() {
       setClaimTrades(tradesRes ?? emptyTradeEvidence(claimId));
       setUsage(usageRes);
 
-      if (claimRes.status === "locked") {
+      if (normalizeText(claimRes.status) === "locked") {
         try {
           const integrityRes = await api.getClaimIntegrity(claimId);
           setIntegrity(integrityRes);
@@ -934,27 +932,54 @@ export default function WorkspaceClaimDetailPage() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load claim");
-    } finally {
-      setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    void loadClaimPage();
   }, [claimId, workspaceId]);
 
-  const handleRefresh = async () => {
-    await loadClaimPage();
-  };
+  useEffect(() => {
+    let active = true;
 
-  const handleDraftSaved = async (updated: ClaimSchema) => {
-    setClaim(updated);
-    await loadClaimPage();
-  };
+    async function initialLoad() {
+      setLoading(true);
+      try {
+        if (active) {
+          await loadClaimPage();
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
 
-  const handleIntegrityCheck = async () => {
+    void initialLoad();
+
+    return () => {
+      active = false;
+    };
+  }, [loadClaimPage]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadClaimPage();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadClaimPage]);
+
+  const handleDraftSaved = useCallback(
+    async (updated: ClaimSchema) => {
+      setClaim(updated);
+      await loadClaimPage();
+    },
+    [loadClaimPage]
+  );
+
+  const handleIntegrityCheck = useCallback(async () => {
     if (!claimId) return;
     setCheckingIntegrity(true);
+    setError(null);
+
     try {
       const integrityRes = await api.getClaimIntegrity(claimId);
       setIntegrity(integrityRes);
@@ -963,7 +988,7 @@ export default function WorkspaceClaimDetailPage() {
     } finally {
       setCheckingIntegrity(false);
     }
-  };
+  }, [claimId]);
 
   if (!workspaceId || Number.isNaN(workspaceId)) {
     return <div className="p-6 text-red-600">Invalid workspace id.</div>;
@@ -982,7 +1007,7 @@ export default function WorkspaceClaimDetailPage() {
     );
   }
 
-  if (error) {
+  if (error && !claim && !preview) {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-900">
         <Navbar workspaceId={workspaceId} />
@@ -1034,7 +1059,7 @@ export default function WorkspaceClaimDetailPage() {
 
               <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600">
                 Internal claim presentation surface for lifecycle review, evidence inspection,
-                lineage tracking, integrity validation, and version governance.
+                lineage tracking, integrity validation, and governed version management.
               </p>
             </div>
 
@@ -1042,15 +1067,18 @@ export default function WorkspaceClaimDetailPage() {
               <EditClaimDraftButton claim={claim} onSaved={handleDraftSaved} />
 
               <button
-                onClick={handleRefresh}
-                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+                type="button"
+                onClick={() => void handleRefresh()}
+                disabled={refreshing}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Refresh
+                {refreshing ? "Refreshing..." : "Refresh"}
               </button>
 
               <button
-                onClick={handleIntegrityCheck}
-                disabled={claim.status !== "locked" || checkingIntegrity}
+                type="button"
+                onClick={() => void handleIntegrityCheck()}
+                disabled={normalizeText(claim.status) !== "locked" || checkingIntegrity}
                 className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {checkingIntegrity ? "Checking..." : "Verify Integrity"}
@@ -1106,7 +1134,7 @@ export default function WorkspaceClaimDetailPage() {
               <div className="mt-2 text-lg font-semibold text-slate-900">
                 {integrity?.integrity_status === "valid"
                   ? "Integrity confirmed"
-                  : claim.status === "locked"
+                  : normalizeText(claim.status) === "locked"
                     ? "Awaiting verification"
                     : "Pre-lock state"}
               </div>
@@ -1123,7 +1151,7 @@ export default function WorkspaceClaimDetailPage() {
             <p className="mt-2 text-slate-600">
               Your current workspace role is <span className="font-medium">{workspaceRole}</span>.
               You can inspect claim metrics, evidence, lineage, and audit history, but you cannot
-              edit drafts or run lifecycle transitions.
+              edit drafts or execute governed lifecycle actions.
             </p>
           </div>
         ) : null}
@@ -1197,7 +1225,7 @@ export default function WorkspaceClaimDetailPage() {
             <div className="rounded-2xl border bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-xl font-semibold">Claim Scope</h2>
-                {claim.status === "draft" && canEditDraft ? (
+                {normalizeText(claim.status) === "draft" && canEditDraft ? (
                   <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
                     editable draft
                   </span>
@@ -1277,9 +1305,9 @@ export default function WorkspaceClaimDetailPage() {
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                   <div className="text-sm font-semibold text-slate-900">Action governance note</div>
                   <div className="mt-2 text-sm leading-6 text-slate-600">
-                    Claim lifecycle transitions are role- and state-sensitive, while governed version
-                    creation is additionally controlled by workspace plan entitlements and usage
-                    capacity. The page should explain that distinction before modal interception.
+                    Draft editing depends on role and draft state. Lifecycle progression depends on
+                    role and current claim state. New version creation is additionally controlled by
+                    governed capacity and workspace billing posture.
                   </div>
 
                   <div className="mt-4 grid gap-3">
@@ -1288,7 +1316,8 @@ export default function WorkspaceClaimDetailPage() {
                         Draft editing
                       </div>
                       <div className="mt-1 text-sm text-slate-700">
-                        Controlled by role and claim state. Only editable while still in draft.
+                        Available only while the claim is still in draft and the user has workflow
+                        authority.
                       </div>
                     </div>
 
@@ -1297,7 +1326,8 @@ export default function WorkspaceClaimDetailPage() {
                         Lifecycle progression
                       </div>
                       <div className="mt-1 text-sm text-slate-700">
-                        Controlled by governance state and role permissions.
+                        Verify, publish, and lock remain state-driven governance actions with role
+                        restrictions.
                       </div>
                     </div>
 
@@ -1306,7 +1336,8 @@ export default function WorkspaceClaimDetailPage() {
                         New version creation
                       </div>
                       <div className="mt-1 text-sm text-slate-700">
-                        Controlled by both workflow permissions and claim-capacity entitlements.
+                        Capacity-changing versioning is controlled by workflow permissions and
+                        workspace entitlements.
                       </div>
                     </div>
                   </div>
@@ -1330,14 +1361,9 @@ export default function WorkspaceClaimDetailPage() {
                   </div>
                   <div className="mt-2">
                     New governed versions are blocked until the workspace plan state is upgraded or
-                    billing posture is corrected. Lifecycle review remains available, but capacity-changing
-                    actions should route into billing and paywall flow.
+                    billing posture is corrected. Lifecycle review remains available, but
+                    capacity-changing actions should route into billing and paywall flow.
                   </div>
-                  {lifecycleBlockedReason ? (
-                    <div className="mt-2 text-xs text-amber-700">
-                      Enforcement reason: {lifecycleBlockedReason}
-                    </div>
-                  ) : null}
                 </div>
               ) : claimLimitReached ? (
                 <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -1349,8 +1375,8 @@ export default function WorkspaceClaimDetailPage() {
                       : ""}
                   </div>
                   <div className="mt-2">
-                    This workspace is over the normal claim plan limit, but version creation remains
-                    enabled in this local QA environment.
+                    This workspace is over the normal claim plan limit, but version creation
+                    remains enabled in this local QA environment.
                   </div>
                 </div>
               ) : null}
@@ -1391,7 +1417,7 @@ export default function WorkspaceClaimDetailPage() {
                 </div>
               ) : (
                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                  {claim.status === "locked"
+                  {normalizeText(claim.status) === "locked"
                     ? "Integrity can be checked from the locked state."
                     : "Integrity verification becomes meaningful after the claim reaches locked state."}
                 </div>
@@ -1526,21 +1552,24 @@ export default function WorkspaceClaimDetailPage() {
                 <div className="rounded-xl bg-slate-50 p-4">
                   <div className="font-medium">Version before changing meaning</div>
                   <div className="mt-1 text-slate-600">
-                    Create a new governed version when scope, methodology, or exclusion logic changes.
+                    Create a new governed version when scope, methodology, or exclusion logic
+                    changes.
                   </div>
                 </div>
 
                 <div className="rounded-xl bg-slate-50 p-4">
                   <div className="font-medium">Audit before exposure</div>
                   <div className="mt-1 text-slate-600">
-                    Review the audit timeline before public distribution to confirm the record tells a defensible story.
+                    Review the audit timeline before public distribution to confirm the record tells
+                    a defensible story.
                   </div>
                 </div>
 
                 <div className="rounded-xl bg-slate-50 p-4">
                   <div className="font-medium">Lock only after final review</div>
                   <div className="mt-1 text-slate-600">
-                    Locking should be treated as finalization of the trust surface and associated evidence fingerprint.
+                    Locking should be treated as finalization of the trust surface and associated
+                    evidence fingerprint.
                   </div>
                 </div>
               </div>
@@ -1572,6 +1601,12 @@ export default function WorkspaceClaimDetailPage() {
             />
           </div>
         </div>
+
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {error}
+          </div>
+        ) : null}
       </main>
     </div>
   );
