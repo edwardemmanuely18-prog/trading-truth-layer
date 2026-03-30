@@ -626,11 +626,22 @@ function UpgradeContextCard({
       (plan) => normalizeText(plan.code) === normalizeText(usage?.plan_code)
     )?.name || usage?.plan_code || "—";
 
+  const effectivePlanName =
+    usage?.plan_catalog?.find(
+      (plan) => normalizeText(plan.code) === normalizeText(usage?.effective_plan_code)
+    )?.name ||
+    usage?.effective_plan_code ||
+    currentPlanName;
+
   const recommendedPlanName =
     usage?.upgrade_recommendation?.recommended_plan_name || "Pro or Team";
 
   const breachedDimensions = usage?.upgrade_recommendation?.breached_dimensions ?? [];
   const nearLimitDimensions = usage?.upgrade_recommendation?.near_limit_dimensions ?? [];
+  const planMismatch =
+    normalizeText(usage?.effective_plan_code) &&
+    normalizeText(usage?.plan_code) &&
+    normalizeText(usage?.effective_plan_code) !== normalizeText(usage?.plan_code);
 
   const statusChip = qaOverrideActive
     ? "qa override"
@@ -665,8 +676,16 @@ function UpgradeContextCard({
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Current plan</div>
+          <div className="text-xs uppercase tracking-wide text-slate-500">Configured plan</div>
           <div className="mt-1 text-lg font-semibold text-slate-900">{currentPlanName}</div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Effective plan</div>
+          <div className="mt-1 text-lg font-semibold text-slate-900">{effectivePlanName}</div>
+          <div className="mt-1 text-xs text-slate-500">
+            Backend-enforced plan posture for governed actions.
+          </div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -686,7 +705,7 @@ function UpgradeContextCard({
           <div className="mt-1 text-lg font-semibold text-slate-900">{recommendedPlanName}</div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
           <div className="text-xs uppercase tracking-wide text-slate-500">Governance signal</div>
           <div className="mt-1 text-lg font-semibold text-slate-900">
             {claimLimitReached
@@ -697,6 +716,15 @@ function UpgradeContextCard({
           </div>
         </div>
       </div>
+
+      {planMismatch ? (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          This workspace is configured on <span className="font-semibold">{currentPlanName}</span>,
+          but the current effective enforcement posture is{" "}
+          <span className="font-semibold">{effectivePlanName}</span>. Claim action gating should
+          follow the effective plan state.
+        </div>
+      ) : null}
 
       {(breachedDimensions.length > 0 || nearLimitDimensions.length > 0) ? (
         <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
@@ -814,6 +842,31 @@ export default function WorkspaceClaimDetailPage() {
   const claimLimitReached =
     (claimUsage?.limit ?? 0) > 0 &&
     (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
+
+  const effectivePlanCode =
+    usage?.effective_plan_code || usage?.plan_code || null;
+
+  const isBlockedByPlan =
+    !qaOverrideActive && claimLimitReached;
+
+  const lifecycleBlockedReason = isBlockedByPlan
+    ? "claim_limit_reached"
+    : null;
+
+  const effectivePlanName =
+    usage?.plan_catalog?.find(
+      (plan) => normalizeText(plan.code) === normalizeText(effectivePlanCode)
+    )?.name || effectivePlanCode || "—";
+
+  const configuredPlanName =
+    usage?.plan_catalog?.find(
+      (plan) => normalizeText(plan.code) === normalizeText(usage?.plan_code)
+    )?.name || usage?.plan_code || "—";
+
+  const planMismatch =
+    normalizeText(usage?.effective_plan_code) &&
+    normalizeText(usage?.plan_code) &&
+    normalizeText(usage?.effective_plan_code) !== normalizeText(usage?.plan_code);
 
   const publicRouteReady =
     claim?.visibility === "public" &&
@@ -1260,23 +1313,44 @@ export default function WorkspaceClaimDetailPage() {
                 </div>
               </div>
 
-              {claimLimitReached ? (
+              {isBlockedByPlan ? (
                 <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                  <div className="font-medium">
-                    {qaOverrideActive ? "Local QA override active" : "Claim plan limit reached"}
+                  <div className="font-medium">Governed claim capacity reached</div>
+                  <div className="mt-1">
+                    Effective plan: {effectivePlanName}
+                    {configuredPlanName && configuredPlanName !== effectivePlanName
+                      ? ` · configured plan: ${configuredPlanName}`
+                      : ""}
                   </div>
-
                   <div className="mt-1">
                     Claim usage: {claimUsage?.used ?? 0} / {claimUsage?.limit ?? 0}
                     {claimUsage?.ratio !== null && claimUsage?.ratio !== undefined
                       ? ` · ${(Number(claimUsage.ratio) * 100).toFixed(1)}%`
                       : ""}
                   </div>
-
                   <div className="mt-2">
-                    {qaOverrideActive
-                      ? "This workspace is over the normal claim plan limit, but version creation remains enabled in this local QA environment."
-                      : "This workspace is over the claim plan limit, so new version creation is blocked until the plan is upgraded."}
+                    New governed versions are blocked until the workspace plan state is upgraded or
+                    billing posture is corrected. Lifecycle review remains available, but capacity-changing
+                    actions should route into billing and paywall flow.
+                  </div>
+                  {lifecycleBlockedReason ? (
+                    <div className="mt-2 text-xs text-amber-700">
+                      Enforcement reason: {lifecycleBlockedReason}
+                    </div>
+                  ) : null}
+                </div>
+              ) : claimLimitReached ? (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  <div className="font-medium">Local QA override active</div>
+                  <div className="mt-1">
+                    Claim usage: {claimUsage?.used ?? 0} / {claimUsage?.limit ?? 0}
+                    {claimUsage?.ratio !== null && claimUsage?.ratio !== undefined
+                      ? ` · ${(Number(claimUsage.ratio) * 100).toFixed(1)}%`
+                      : ""}
+                  </div>
+                  <div className="mt-2">
+                    This workspace is over the normal claim plan limit, but version creation remains
+                    enabled in this local QA environment.
                   </div>
                 </div>
               ) : null}
