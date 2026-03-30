@@ -1,9 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { ClaimSchema } from "../lib/api";
-import { getApiErrorCode, isApiError } from "../lib/api";
+import {
+  api,
+  getApiErrorCode,
+  isApiError,
+  type ClaimSchema,
+  type WorkspaceUsageSummary,
+} from "../lib/api";
 import { useAuth } from "./AuthProvider";
 import EditClaimDraftModal from "./EditClaimDraftModal";
 import PaywallModal from "./PaywallModal";
@@ -16,6 +21,11 @@ type Props = {
 
 function normalizeText(value?: string | null) {
   return String(value || "").toLowerCase().trim();
+}
+
+function formatPercent(value?: number | null) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return `${(Number(value) * 100).toFixed(1)}%`;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -39,6 +49,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function EditClaimDraftButton({ claim, onSaved }: Props) {
   const [open, setOpen] = useState(false);
+  const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
   const { getWorkspaceRole } = useAuth();
   const router = useRouter();
   const { gateAndExecute, paywallState, closePaywall, openPaywall } = useWorkspaceGate();
@@ -46,13 +57,61 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
   const workspaceRole = getWorkspaceRole(claim.workspace_id);
   const normalizedStatus = normalizeText(claim.status);
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadUsage() {
+      try {
+        const result = await api.getWorkspaceUsage(claim.workspace_id);
+        if (!active) return;
+        setUsage(result);
+      } catch {
+        if (!active) return;
+        setUsage(null);
+      }
+    }
+
+    void loadUsage();
+
+    return () => {
+      active = false;
+    };
+  }, [claim.workspace_id]);
+
   const isOwner = workspaceRole === "owner";
   const isOperator = workspaceRole === "operator";
 
   const roleAllowed = isOwner || isOperator;
   const stateAllowed = normalizedStatus === "draft";
-
   const disabled = !roleAllowed || !stateAllowed;
+
+  const currentPlanName =
+    usage?.plan_catalog?.find(
+      (plan) => normalizeText(plan.code) === normalizeText(usage?.plan_code)
+    )?.name || usage?.plan_code || "—";
+
+  const effectivePlanName =
+    usage?.plan_catalog?.find(
+      (plan) => normalizeText(plan.code) === normalizeText(usage?.effective_plan_code)
+    )?.name || usage?.effective_plan_code || currentPlanName;
+
+  const billingActivationRecommended = Boolean(
+    (usage?.governance as { billing_activation_recommended?: boolean } | undefined)
+      ?.billing_activation_recommended
+  );
+
+  const recommendedPlanName = billingActivationRecommended
+    ? currentPlanName
+    : usage?.upgrade_recommendation?.recommended_plan_name || "Review billing posture";
+
+  const claimUsage = usage?.usage?.claims;
+  const usageLabel = claimUsage
+    ? `${claimUsage.used} / ${claimUsage.limit}${
+        claimUsage.ratio !== null && claimUsage.ratio !== undefined
+          ? ` · ${formatPercent(claimUsage.ratio)}`
+          : ""
+      }`
+    : `Effective plan: ${effectivePlanName}`;
 
   const disabledReason = useMemo(() => {
     if (!stateAllowed) {
@@ -89,7 +148,7 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
             message:
               err.payload?.message ||
               err.payload?.upgrade_hint ||
-              "This workspace has reached its governed claim capacity.",
+              "This workspace has reached its governed claim capacity. Review billing and plan posture to continue editing workflows.",
           });
           return;
         }
@@ -145,10 +204,10 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
         reason={paywallState.reason}
         actionLabel={paywallState.actionLabel || "Edit draft"}
         message={paywallState.message}
-        currentPlanName="Configured workspace plan"
-        currentPlanCode={null}
-        usageLabel="Draft editing governed by workflow entitlements"
-        recommendedPlanName="Higher workspace plan"
+        currentPlanName={currentPlanName}
+        currentPlanCode={usage?.plan_code || null}
+        usageLabel={usageLabel}
+        recommendedPlanName={recommendedPlanName}
         onUpgrade={() => {
           router.push(`/workspace/${claim.workspace_id}/settings?tab=billing`);
         }}
