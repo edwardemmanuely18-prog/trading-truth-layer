@@ -196,11 +196,15 @@ export type PlanCatalogItem = {
 
 export type UpgradeRecommendation = {
   current_plan_code: string;
+  effective_plan_code?: string;
+  recommendation_basis_plan_code?: string;
   recommended_plan_code: string;
   recommended_plan_name: string;
   recommended_plan_is_distinct?: boolean;
   upgrade_required_now: boolean;
   upgrade_recommended_soon: boolean;
+  billing_activation_recommended?: boolean;
+  already_at_highest_tier?: boolean;
   breached_dimensions: string[];
   near_limit_dimensions: string[];
 };
@@ -211,6 +215,7 @@ export type WorkspaceGovernance = {
   has_any_near_limit: boolean;
   upgrade_required_now: boolean;
   upgrade_recommended_soon: boolean;
+  billing_activation_recommended?: boolean;
   configured_plan_code?: string;
   effective_plan_code?: string;
   paid_access_active?: boolean;
@@ -246,6 +251,7 @@ export type WorkspaceUsageSummary = {
 
 export type BillingDiagnostics = {
   stripe_package_installed?: boolean;
+  stripe_billing_enabled?: boolean;
   billing_enabled?: boolean;
   secret_key_configured?: boolean;
   price_lookup_key?: string;
@@ -275,6 +281,7 @@ export type BillingCheckoutResponse = {
   current_plan_code?: string;
   target_plan_code?: string;
   billing_cycle?: string;
+  checkout_intent?: string;
   message?: string | null;
   stripe_customer_id?: string | null;
   stripe_price_id?: string | null;
@@ -298,7 +305,10 @@ export type WorkspaceBillingFoundation = {
   workspace_id: number;
   plan_code: string;
   plan_name: string;
+  effective_plan_code?: string;
   billing_status: string;
+  billing_status_is_paid?: boolean;
+  plan_mismatch?: boolean;
   billing_email?: string | null;
   billing_provider?: string | null;
   stripe_customer_id?: string | null;
@@ -920,7 +930,9 @@ function ensureWorkspaceSettings(row: WorkspaceSettings): WorkspaceSettings {
     plan_governance: row?.plan_governance
       ? {
           configured_plan_code: String(row.plan_governance.configured_plan_code ?? row.plan_code ?? "starter"),
-          effective_plan_code: String(row.plan_governance.effective_plan_code ?? row.effective_plan_code ?? row.plan_code ?? "starter"),
+          effective_plan_code: String(
+            row.plan_governance.effective_plan_code ?? row.effective_plan_code ?? row.plan_code ?? "starter"
+          ),
           billing_status: String(row.plan_governance.billing_status ?? row.billing_status ?? "inactive"),
           paid_access_active: Boolean(row.plan_governance.paid_access_active),
           plan_mismatch: Boolean(row.plan_governance.plan_mismatch),
@@ -986,8 +998,10 @@ function ensureWorkspaceUsageSummary(row: WorkspaceUsageSummary): WorkspaceUsage
           has_any_near_limit: Boolean(row.governance.has_any_near_limit),
           upgrade_required_now: Boolean(row.governance.upgrade_required_now),
           upgrade_recommended_soon: Boolean(row.governance.upgrade_recommended_soon),
+          billing_activation_recommended: Boolean(row.governance.billing_activation_recommended),
           configured_plan_code: row.governance.configured_plan_code ?? row.plan_code,
-          effective_plan_code: row.governance.effective_plan_code ?? row.effective_plan_code ?? row.plan_code,
+          effective_plan_code:
+            row.governance.effective_plan_code ?? row.effective_plan_code ?? row.plan_code,
           paid_access_active: Boolean(row.governance.paid_access_active),
           plan_mismatch: Boolean(row.governance.plan_mismatch),
           plan_mismatch_reason: row.governance.plan_mismatch_reason ?? "",
@@ -997,11 +1011,15 @@ function ensureWorkspaceUsageSummary(row: WorkspaceUsageSummary): WorkspaceUsage
     upgrade_recommendation: row?.upgrade_recommendation
       ? {
           current_plan_code: row.upgrade_recommendation.current_plan_code,
+          effective_plan_code: row.upgrade_recommendation.effective_plan_code,
+          recommendation_basis_plan_code: row.upgrade_recommendation.recommendation_basis_plan_code,
           recommended_plan_code: row.upgrade_recommendation.recommended_plan_code,
           recommended_plan_name: row.upgrade_recommendation.recommended_plan_name,
           recommended_plan_is_distinct: Boolean(row.upgrade_recommendation.recommended_plan_is_distinct),
           upgrade_required_now: Boolean(row.upgrade_recommendation.upgrade_required_now),
           upgrade_recommended_soon: Boolean(row.upgrade_recommendation.upgrade_recommended_soon),
+          billing_activation_recommended: Boolean(row.upgrade_recommendation.billing_activation_recommended),
+          already_at_highest_tier: Boolean(row.upgrade_recommendation.already_at_highest_tier),
           breached_dimensions: Array.isArray(row.upgrade_recommendation.breached_dimensions)
             ? row.upgrade_recommendation.breached_dimensions
             : [],
@@ -1038,6 +1056,9 @@ function ensureWorkspaceBillingFoundation(
 ): WorkspaceBillingFoundation {
   return {
     ...row,
+    effective_plan_code: row?.effective_plan_code ?? row?.plan_code ?? "starter",
+    billing_status_is_paid: Boolean(row?.billing_status_is_paid),
+    plan_mismatch: Boolean(row?.plan_mismatch),
     billing_provider: row?.billing_provider ?? null,
     stripe_customer_id: row?.stripe_customer_id ?? null,
     stripe_subscription_id: row?.stripe_subscription_id ?? null,
@@ -1284,6 +1305,7 @@ export const api = {
       ...row,
       url: row?.checkout_url ?? row?.url ?? null,
       checkout_url: row?.checkout_url ?? row?.url ?? null,
+      checkout_intent: row?.checkout_intent ?? undefined,
       manual_payment_details: ensureManualPaymentDetails(row?.manual_payment_details),
     };
   },
