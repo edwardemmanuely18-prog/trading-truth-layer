@@ -20,42 +20,90 @@ type Props = {
   onUpgrade?: () => void;
 };
 
+function normalizeText(value?: string | null) {
+  return String(value || "").toLowerCase().trim();
+}
+
 function resolveDefaultContent(reason: PaywallReason) {
   switch (reason) {
     case "claim_limit_reached":
       return {
         eyebrow: "Plan limit reached",
-        title: "Upgrade required to continue version governance",
+        title: "Plan action required to continue",
         body:
-          "This workspace has reached its current claim capacity. Upgrade the workspace plan to create another governed claim version without breaking your lineage workflow.",
-        primaryLabel: "Upgrade Workspace",
+          "This workspace has reached a governed plan limit. Review billing and plan posture before continuing this workflow.",
+        primaryLabel: "Open Billing & Plans",
       };
     case "lifecycle_action_locked":
       return {
-        eyebrow: "Lifecycle action gated",
-        title: "Upgrade required for advanced claim lifecycle actions",
+        eyebrow: "Governed action blocked",
+        title: "This workflow action is currently blocked",
         body:
-          "This action is part of the governed verification workflow and is not available on the current workspace plan.",
-        primaryLabel: "View Upgrade Options",
+          "This action changes governed workflow state and is not currently available under the workspace’s active enforcement posture.",
+        primaryLabel: "Review Billing & Access",
       };
     case "edit_locked":
       return {
-        eyebrow: "Editing gated",
-        title: "Upgrade required for governed draft editing",
+        eyebrow: "Governed action blocked",
+        title: "Draft editing is currently blocked",
         body:
-          "Draft editing on this workspace is currently gated. Upgrade the workspace plan to continue governed claim iteration.",
-        primaryLabel: "Upgrade Workspace",
+          "Draft editing is not currently available under the workspace’s active workflow and entitlement posture.",
+        primaryLabel: "Review Billing & Access",
       };
     case "feature_locked":
     default:
       return {
-        eyebrow: "Feature gated",
-        title: "Upgrade required to access this workflow",
+        eyebrow: "Access restricted",
+        title: "This workflow is currently unavailable",
         body:
-          "This action is not available on the current workspace plan. Upgrade to continue with the full verification workflow.",
-        primaryLabel: "Upgrade Workspace",
+          "This action is currently restricted by workspace role, billing posture, or governed plan access.",
+        primaryLabel: "Review Access & Billing",
       };
   }
+}
+
+function resolveWhyBlocked(reason: PaywallReason) {
+  switch (reason) {
+    case "claim_limit_reached":
+      return "This action is blocked because it would exceed currently enforced workspace capacity.";
+    case "lifecycle_action_locked":
+    case "edit_locked":
+      return "This action is blocked because it changes governed workflow state under the current enforcement posture.";
+    case "feature_locked":
+    default:
+      return "This action is blocked because the workspace does not currently meet the required access or entitlement conditions.";
+  }
+}
+
+function resolveActionGuidance(params: {
+  reason: PaywallReason;
+  currentPlanName?: string | null;
+  recommendedPlanName?: string | null;
+}) {
+  const { reason, currentPlanName, recommendedPlanName } = params;
+
+  const currentNormalized = normalizeText(currentPlanName);
+  const recommendedNormalized = normalizeText(recommendedPlanName);
+
+  const hasDistinctRecommendation =
+    !!recommendedNormalized &&
+    !!currentNormalized &&
+    recommendedNormalized !== currentNormalized &&
+    recommendedNormalized !== "review catalog";
+
+  if (reason === "claim_limit_reached") {
+    if (hasDistinctRecommendation) {
+      return "The next best step is to review billing and move the workspace into a plan posture that supports more capacity.";
+    }
+
+    return "The next best step is to review billing activation or current workspace entitlement posture so enforced limits can match the intended operating tier.";
+  }
+
+  if (reason === "lifecycle_action_locked" || reason === "edit_locked") {
+    return "Review the workspace billing posture, access conditions, and governed workflow availability before retrying this action.";
+  }
+
+  return "Review current role access and workspace billing posture to understand what is required for this workflow.";
 }
 
 function DetailRow({
@@ -91,6 +139,12 @@ export default function PaywallModal({
   const defaults = resolveDefaultContent(reason);
   const resolvedTitle = title || defaults.title;
   const resolvedBody = message || defaults.body;
+  const whyBlocked = resolveWhyBlocked(reason);
+  const actionGuidance = resolveActionGuidance({
+    reason,
+    currentPlanName: currentPlanName || currentPlanCode || null,
+    recommendedPlanName: recommendedPlanName || null,
+  });
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 px-4 py-6">
@@ -109,17 +163,18 @@ export default function PaywallModal({
           <div className="grid gap-3 sm:grid-cols-2">
             <DetailRow label="Current plan" value={currentPlanName || currentPlanCode || "—"} />
             <DetailRow label="Usage state" value={usageLabel || "—"} />
-            <DetailRow label="Recommended plan" value={recommendedPlanName || "Review catalog"} />
+            <DetailRow label="Recommended next step" value={recommendedPlanName || "Review billing posture"} />
             <DetailRow label="Blocked action" value={actionLabel || "Workflow action"} />
           </div>
 
           <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
             <div className="text-sm font-semibold text-amber-900">Why this is blocked</div>
-            <div className="mt-2 text-sm leading-6 text-amber-800">
-              Your workspace can still inspect existing claim records, but this action changes
-              governance state or creates additional claim capacity. Those are controlled by plan
-              entitlements and usage limits.
-            </div>
+            <div className="mt-2 text-sm leading-6 text-amber-800">{whyBlocked}</div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-semibold text-slate-900">What to do next</div>
+            <div className="mt-2 text-sm leading-6 text-slate-700">{actionGuidance}</div>
           </div>
         </div>
 
