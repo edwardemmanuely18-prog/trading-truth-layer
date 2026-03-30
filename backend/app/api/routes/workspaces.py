@@ -327,6 +327,41 @@ def serialize_workspace_settings(workspace: Workspace):
     }
 
 
+def usage_row_for_plan(plan_code: str, used: int, dimension: str):
+    plan = get_plan_definition(plan_code)
+
+    limit_key_map = {
+        "members": "member_limit",
+        "trades": "trade_limit",
+        "claims": "claim_limit",
+        "storage_mb": "storage_limit_mb",
+    }
+
+    limit_key = limit_key_map[dimension]
+    limit = plan["limits"][limit_key]
+
+    if not limit or limit <= 0:
+        ratio = None
+        status = "unlimited"
+    else:
+        ratio = round(used / limit, 4)
+        if used > limit:
+            status = "over_limit"
+        elif used == limit:
+            status = "at_limit"
+        elif used / limit >= 0.8:
+            status = "near_limit"
+        else:
+            status = "ok"
+
+    return {
+        "used": used,
+        "limit": limit,
+        "ratio": ratio,
+        "status": status,
+    }
+
+
 def build_upgrade_recommendation(
     configured_plan_code: str,
     effective_plan_code: str,
@@ -340,8 +375,75 @@ def build_upgrade_recommendation(
     configured_index = current_order.index(configured_normalized)
     effective_index = current_order.index(effective_normalized)
 
-    recommendation_basis_index = max(configured_index, effective_index)
-    recommendation_basis_plan_code = current_order[recommendation_basis_index]
+    configured_breached_dimensions = []
+    configured_near_limit_dimensions = []
+
+    for key, row in usage_summary.items():
+        configured_row = usage_row_for_plan(configured_normalized, row["used"], key)
+
+        if configured_row["status"] == "over_limit":
+            configured_breached_dimensions.append(key)
+        elif configured_row["status"] in {"at_limit", "near_limit"}:
+            configured_near_limit_dimensions.append(key)
+
+    configured_has_breaches = len(configured_breached_dimensions) > 0
+    configured_has_near_limits = len(configured_near_limit_dimensions) > 0
+
+    if plan_mismatch and configured_index > effective_index:
+        if not configured_has_breaches and not configured_has_near_limits:
+            configured_plan = get_plan_definition(configured_normalized)
+            return {
+                "current_plan_code": configured_normalized,
+                "effective_plan_code": effective_normalized,
+                "recommendation_basis_plan_code": configured_normalized,
+                "recommended_plan_code": configured_normalized,
+                "recommended_plan_name": configured_plan["name"],
+                "recommended_plan_is_distinct": False,
+                "upgrade_required_now": False,
+                "upgrade_recommended_soon": False,
+                "billing_activation_recommended": True,
+                "already_at_highest_tier": configured_index >= len(current_order) - 1,
+                "breached_dimensions": [],
+                "near_limit_dimensions": [],
+            }
+
+        if configured_has_near_limits and not configured_has_breaches:
+            if configured_index < len(current_order) - 1:
+                recommended_index = configured_index + 1
+                recommended_plan = get_plan_definition(current_order[recommended_index])
+                return {
+                    "current_plan_code": configured_normalized,
+                    "effective_plan_code": effective_normalized,
+                    "recommendation_basis_plan_code": configured_normalized,
+                    "recommended_plan_code": recommended_plan["code"],
+                    "recommended_plan_name": recommended_plan["name"],
+                    "recommended_plan_is_distinct": True,
+                    "upgrade_required_now": False,
+                    "upgrade_recommended_soon": True,
+                    "billing_activation_recommended": True,
+                    "already_at_highest_tier": False,
+                    "breached_dimensions": [],
+                    "near_limit_dimensions": configured_near_limit_dimensions,
+                }
+
+            configured_plan = get_plan_definition(configured_normalized)
+            return {
+                "current_plan_code": configured_normalized,
+                "effective_plan_code": effective_normalized,
+                "recommendation_basis_plan_code": configured_normalized,
+                "recommended_plan_code": configured_plan["code"],
+                "recommended_plan_name": configured_plan["name"],
+                "recommended_plan_is_distinct": False,
+                "upgrade_required_now": False,
+                "upgrade_recommended_soon": False,
+                "billing_activation_recommended": True,
+                "already_at_highest_tier": True,
+                "breached_dimensions": [],
+                "near_limit_dimensions": configured_near_limit_dimensions,
+            }
+
+    current_index = max(configured_index, effective_index)
+    current_normalized = current_order[current_index]
 
     breached_dimensions = []
     near_limit_dimensions = []
@@ -358,28 +460,27 @@ def build_upgrade_recommendation(
 
     has_breaches = len(breached_dimensions) > 0
     has_near_limits = len(near_limit_dimensions) > 0
-    already_at_highest_tier = recommendation_basis_index >= len(current_order) - 1
+    already_at_highest_tier = current_index >= len(current_order) - 1
 
     if (has_breaches or has_near_limits) and not already_at_highest_tier:
-        recommended_index = recommendation_basis_index + 1
+        recommended_index = current_index + 1
     else:
-        recommended_index = recommendation_basis_index
+        recommended_index = current_index
 
     recommended_plan_code = current_order[recommended_index]
     recommended_plan = get_plan_definition(recommended_plan_code)
-    has_distinct_recommendation = recommended_plan_code != recommendation_basis_plan_code
-    billing_activation_recommended = plan_mismatch and configured_index > effective_index
+    has_distinct_recommendation = recommended_plan_code != current_normalized
 
     return {
         "current_plan_code": configured_normalized,
         "effective_plan_code": effective_normalized,
-        "recommendation_basis_plan_code": recommendation_basis_plan_code,
+        "recommendation_basis_plan_code": current_normalized,
         "recommended_plan_code": recommended_plan_code,
         "recommended_plan_name": recommended_plan["name"],
         "recommended_plan_is_distinct": has_distinct_recommendation,
         "upgrade_required_now": has_breaches and has_distinct_recommendation,
         "upgrade_recommended_soon": (not has_breaches) and has_near_limits and has_distinct_recommendation,
-        "billing_activation_recommended": billing_activation_recommended and not has_distinct_recommendation,
+        "billing_activation_recommended": plan_mismatch and configured_index > effective_index and not has_distinct_recommendation,
         "already_at_highest_tier": already_at_highest_tier,
         "breached_dimensions": breached_dimensions,
         "near_limit_dimensions": near_limit_dimensions,
