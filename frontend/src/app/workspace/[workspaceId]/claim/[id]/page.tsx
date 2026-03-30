@@ -607,6 +607,169 @@ function ScopeTradesTable({
   );
 }
 
+function UpgradeContextCard({
+  usage,
+  claimLimitReached,
+  qaOverrideActive,
+  workspaceId,
+  canManageActions,
+}: {
+  usage: WorkspaceUsageSummary | null;
+  claimLimitReached: boolean;
+  qaOverrideActive: boolean;
+  workspaceId: number;
+  canManageActions: boolean;
+}) {
+  const claimUsage = usage?.usage?.claims;
+  const currentPlanName =
+    usage?.plan_catalog?.find(
+      (plan) => normalizeText(plan.code) === normalizeText(usage?.plan_code)
+    )?.name || usage?.plan_code || "—";
+
+  const recommendedPlanName =
+    usage?.upgrade_recommendation?.recommended_plan_name || "Pro or Team";
+
+  const breachedDimensions = usage?.upgrade_recommendation?.breached_dimensions ?? [];
+  const nearLimitDimensions = usage?.upgrade_recommendation?.near_limit_dimensions ?? [];
+
+  const statusChip = qaOverrideActive
+    ? "qa override"
+    : claimLimitReached
+      ? "upgrade required"
+      : usage?.governance?.upgrade_recommended_soon
+        ? "upgrade recommended"
+        : "within plan";
+
+  const statusChipClass = qaOverrideActive
+    ? "border-violet-200 bg-violet-50 text-violet-800"
+    : claimLimitReached
+      ? "border-amber-200 bg-amber-50 text-amber-800"
+      : usage?.governance?.upgrade_recommended_soon
+        ? "border-blue-200 bg-blue-50 text-blue-800"
+        : "border-green-200 bg-green-50 text-green-800";
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-slate-900">Claim Capacity & Upgrade</h3>
+          <div className="mt-1 text-sm text-slate-500">
+            Action gating should feel predictable before users click into blocked workflow steps.
+          </div>
+        </div>
+
+        <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusChipClass}`}>
+          {statusChip}
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Current plan</div>
+          <div className="mt-1 text-lg font-semibold text-slate-900">{currentPlanName}</div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Claim usage</div>
+          <div className="mt-1 text-lg font-semibold text-slate-900">
+            {claimUsage ? `${claimUsage.used} / ${claimUsage.limit}` : "—"}
+          </div>
+          <div className="mt-1 text-xs text-slate-500">
+            {claimUsage?.ratio !== null && claimUsage?.ratio !== undefined
+              ? `${(Number(claimUsage.ratio) * 100).toFixed(1)}% of current claim capacity`
+              : "No usage telemetry available"}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Recommended plan</div>
+          <div className="mt-1 text-lg font-semibold text-slate-900">{recommendedPlanName}</div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Governance signal</div>
+          <div className="mt-1 text-lg font-semibold text-slate-900">
+            {claimLimitReached
+              ? "New versions blocked"
+              : usage?.governance?.upgrade_recommended_soon
+                ? "Capacity getting tight"
+                : "Actions available"}
+          </div>
+        </div>
+      </div>
+
+      {(breachedDimensions.length > 0 || nearLimitDimensions.length > 0) ? (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          {breachedDimensions.length > 0 ? (
+            <div>
+              <span className="font-medium text-slate-900">Breached:</span>{" "}
+              {breachedDimensions.join(", ")}
+            </div>
+          ) : null}
+          {nearLimitDimensions.length > 0 ? (
+            <div className={breachedDimensions.length > 0 ? "mt-1" : ""}>
+              <span className="font-medium text-slate-900">Near limit:</span>{" "}
+              {nearLimitDimensions.join(", ")}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+        {qaOverrideActive ? (
+          <>
+            <div className="font-medium text-slate-900">Local QA override active</div>
+            <div className="mt-2">
+              This workspace is over the normal claim plan limit, but version creation remains
+              enabled in this QA environment. Production behavior should route into the paywall flow.
+            </div>
+          </>
+        ) : claimLimitReached ? (
+          <>
+            <div className="font-medium text-slate-900">Why actions are blocked</div>
+            <div className="mt-2">
+              Claim version creation changes governed capacity, so it is controlled by plan
+              entitlements and current usage. Users can still inspect records, but cannot create
+              additional claim lineage without upgrading.
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="font-medium text-slate-900">Action readiness</div>
+            <div className="mt-2">
+              This workspace is still within current claim capacity. Lifecycle actions and governed
+              versioning should remain available subject to role permissions and lifecycle state.
+            </div>
+          </>
+        )}
+      </div>
+
+      {canManageActions ? (
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Link
+            href={`/workspace/${workspaceId}/settings?tab=billing`}
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          >
+            Open Billing & Upgrade
+          </Link>
+
+          <Link
+            href={`/workspace/${workspaceId}/settings?tab=billing`}
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Review Plan Details
+          </Link>
+        </div>
+      ) : (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          Billing changes are owner/operator workflow surfaces. Members can inspect governance state
+          but should not change plan entitlements directly.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function WorkspaceClaimDetailPage() {
   const params = useParams();
   const pathname = usePathname();
@@ -629,6 +792,7 @@ export default function WorkspaceClaimDetailPage() {
   const isMember = workspaceRole === "member";
 
   const canEditDraft = isOwner || isOperator;
+  const canManageClaimActions = isOwner || isOperator;
 
   const qaOverrideActive =
     process.env.NEXT_PUBLIC_DISABLE_WORKSPACE_LIMITS === "true" ||
@@ -1046,6 +1210,54 @@ export default function WorkspaceClaimDetailPage() {
                     parentClaimId={claim.parent_claim_id ?? null}
                   />
                 ) : null}
+              </div>
+
+              <div className="mt-5 grid gap-6 xl:grid-cols-[1.1fr_1fr]">
+                <UpgradeContextCard
+                  usage={usage}
+                  claimLimitReached={claimLimitReached}
+                  qaOverrideActive={qaOverrideActive}
+                  workspaceId={workspaceId}
+                  canManageActions={canManageClaimActions}
+                />
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <div className="text-sm font-semibold text-slate-900">Action governance note</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-600">
+                    Claim lifecycle transitions are role- and state-sensitive, while governed version
+                    creation is additionally controlled by workspace plan entitlements and usage
+                    capacity. The page should explain that distinction before modal interception.
+                  </div>
+
+                  <div className="mt-4 grid gap-3">
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="text-xs uppercase tracking-wide text-slate-500">
+                        Draft editing
+                      </div>
+                      <div className="mt-1 text-sm text-slate-700">
+                        Controlled by role and claim state. Only editable while still in draft.
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="text-xs uppercase tracking-wide text-slate-500">
+                        Lifecycle progression
+                      </div>
+                      <div className="mt-1 text-sm text-slate-700">
+                        Controlled by governance state and role permissions.
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="text-xs uppercase tracking-wide text-slate-500">
+                        New version creation
+                      </div>
+                      <div className="mt-1 text-sm text-slate-700">
+                        Controlled by both workflow permissions and claim-capacity entitlements.
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {claimLimitReached ? (
