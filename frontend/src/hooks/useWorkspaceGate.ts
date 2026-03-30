@@ -32,8 +32,30 @@ type GateResult =
       actionLabel?: string;
     };
 
+function normalizeText(value?: string | null) {
+  return String(value || "").toLowerCase().trim();
+}
+
 function isOperator(role?: string | null) {
-  return role === "owner" || role === "operator";
+  const normalized = normalizeText(role);
+  return normalized === "owner" || normalized === "operator";
+}
+
+function getActionLabel(action: GateAction) {
+  switch (action) {
+    case "create_claim_version":
+      return "Create claim version";
+    case "verify_claim":
+      return "Verify claim";
+    case "publish_claim":
+      return "Publish claim";
+    case "lock_claim":
+      return "Lock claim";
+    case "edit_draft":
+      return "Edit draft";
+    default:
+      return "Governed action";
+  }
 }
 
 export function useWorkspaceGate() {
@@ -48,7 +70,7 @@ export function useWorkspaceGate() {
   });
 
   const closePaywall = useCallback(() => {
-    setPaywallState((s) => ({ ...s, open: false }));
+    setPaywallState((state) => ({ ...state, open: false }));
   }, []);
 
   const openPaywall = useCallback(
@@ -68,25 +90,25 @@ export function useWorkspaceGate() {
   );
 
   const checkGate = useCallback((ctx: GateContext): GateResult => {
-    const { action, usage, workspaceRole, claimStatus } = ctx;
+    const { action, usage, workspaceRole } = ctx;
+    const claimStatus = normalizeText(ctx.claimStatus);
+    const actionLabel = getActionLabel(action);
 
-    // ---------- ROLE GATING ----------
     if (!isOperator(workspaceRole)) {
       return {
         allowed: false,
         reason: "feature_locked",
         message: "You do not have permission to perform this action.",
-        actionLabel: action,
+        actionLabel,
       };
     }
 
-    // ---------- ACTION-SPECIFIC LOGIC ----------
     if (action === "create_claim_version") {
       if (!usage) {
         return { allowed: true };
       }
 
-      const claimUsage = usage?.usage?.claims;
+      const claimUsage = usage.usage?.claims;
       const claimLimitReached =
         (claimUsage?.limit ?? 0) > 0 &&
         (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
@@ -96,7 +118,7 @@ export function useWorkspaceGate() {
           allowed: false,
           reason: "claim_limit_reached",
           message: "Claim limit reached for this workspace.",
-          actionLabel: "Create claim version",
+          actionLabel,
         };
       }
 
@@ -107,9 +129,9 @@ export function useWorkspaceGate() {
       if (claimStatus !== "draft") {
         return {
           allowed: false,
-          reason: "edit_locked",
+          reason: "lifecycle_action_locked",
           message: "Only draft claims can be edited.",
-          actionLabel: "Edit draft",
+          actionLabel,
         };
       }
 
@@ -122,9 +144,10 @@ export function useWorkspaceGate() {
           allowed: false,
           reason: "lifecycle_action_locked",
           message: "Only draft claims can be verified.",
-          actionLabel: "Verify claim",
+          actionLabel,
         };
       }
+
       return { allowed: true };
     }
 
@@ -134,9 +157,10 @@ export function useWorkspaceGate() {
           allowed: false,
           reason: "lifecycle_action_locked",
           message: "Claim must be verified before publishing.",
-          actionLabel: "Publish claim",
+          actionLabel,
         };
       }
+
       return { allowed: true };
     }
 
@@ -146,9 +170,10 @@ export function useWorkspaceGate() {
           allowed: false,
           reason: "lifecycle_action_locked",
           message: "Only published claims can be locked.",
-          actionLabel: "Lock claim",
+          actionLabel,
         };
       }
+
       return { allowed: true };
     }
 
@@ -156,10 +181,7 @@ export function useWorkspaceGate() {
   }, []);
 
   const gateAndExecute = useCallback(
-    async (
-      ctx: GateContext,
-      fn: () => Promise<void> | void
-    ) => {
+    async (ctx: GateContext, fn: () => Promise<void> | void) => {
       const result = checkGate(ctx);
 
       if (!result.allowed) {
