@@ -44,6 +44,21 @@ function GovernanceBadge({
   );
 }
 
+function resolveGovernanceState(params: {
+  loading: boolean;
+  usageLoading: boolean;
+  canCloneByRole: boolean;
+  claimLimitReached: boolean;
+}) {
+  const { loading, usageLoading, canCloneByRole, claimLimitReached } = params;
+
+  if (loading) return "creating version";
+  if (usageLoading) return "loading governance";
+  if (!canCloneByRole) return "role restricted";
+  if (claimLimitReached) return "plan blocked";
+  return "available";
+}
+
 export default function CreateClaimVersionButton({
   claimSchemaId,
   workspaceId,
@@ -78,11 +93,12 @@ export default function CreateClaimVersionButton({
   }, [currentVersionNumber]);
 
   const governanceState = useMemo(() => {
-    if (loading) return "creating...";
-    if (usageLoading) return "loading usage...";
-    if (!canCloneByRole) return "restricted";
-    if (claimLimitReached) return "plan blocked";
-    return "available";
+    return resolveGovernanceState({
+      loading,
+      usageLoading,
+      canCloneByRole,
+      claimLimitReached,
+    });
   }, [loading, usageLoading, canCloneByRole, claimLimitReached]);
 
   useEffect(() => {
@@ -141,10 +157,20 @@ export default function CreateClaimVersionButton({
             message:
               cloneError.payload?.message ||
               cloneError.payload?.upgrade_hint ||
-              "Claim limit reached for this workspace.",
+              "This workspace has reached its governed claim capacity. Upgrade billing to continue version creation.",
           });
           return;
         }
+
+        openPaywall({
+          reason: "lifecycle_action_locked",
+          actionLabel: "Create claim version",
+          message:
+            cloneError.payload?.message ||
+            cloneError.message ||
+            "This workspace cannot create another governed claim version right now.",
+        });
+        return;
       }
 
       setError(
@@ -174,7 +200,7 @@ export default function CreateClaimVersionButton({
     )?.name || usage?.plan_code || "—";
 
   const recommendedPlanName =
-    usage?.upgrade_recommendation?.recommended_plan_name || "Pro or Team";
+    usage?.upgrade_recommendation?.recommended_plan_name || "Higher workspace plan";
 
   const disabled = loading || usageLoading;
 
@@ -195,7 +221,7 @@ export default function CreateClaimVersionButton({
             <div className="text-sm font-semibold text-slate-900">Versioning Action</div>
             <div className="mt-1 text-xs leading-5 text-slate-600">
               Create a new governed claim version instead of overwriting the current record. This
-              preserves lineage, comparison context, and historical traceability.
+              preserves lineage continuity, historical comparability, and downstream audit traceability.
             </div>
           </div>
 
@@ -206,7 +232,7 @@ export default function CreateClaimVersionButton({
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <GovernanceBadge label="Workspace role" value={workspaceRole || "unknown"} />
-          <GovernanceBadge label="Current plan" value={currentPlanName} />
+          <GovernanceBadge label="Configured plan" value={currentPlanName} />
           <GovernanceBadge
             label="Claim usage"
             value={
@@ -238,7 +264,7 @@ export default function CreateClaimVersionButton({
             <div className="text-xs text-slate-500">Root claim</div>
             <div className="mt-1 font-semibold text-slate-900">{rootClaimId ?? claimSchemaId}</div>
             <div className="mt-1 text-xs text-slate-500">
-              Governing lineage anchor for the claim family.
+              Governing lineage anchor for the full claim family.
             </div>
           </div>
 
@@ -248,7 +274,7 @@ export default function CreateClaimVersionButton({
               {parentClaimId ?? "current claim becomes parent"}
             </div>
             <div className="mt-1 text-xs text-slate-500">
-              New versions preserve history instead of mutating prior records.
+              Each new version preserves history instead of mutating prior evidence.
             </div>
           </div>
         </div>
@@ -256,8 +282,8 @@ export default function CreateClaimVersionButton({
         <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-6 text-slate-600">
           <div className="font-semibold text-slate-900">Governance effect</div>
           <div className="mt-2">
-            Creating a version should record lineage continuity, preserve the old claim in history,
-            and allow later version-by-version comparison without destroying prior audit evidence.
+            Creating a version should preserve lineage continuity, keep the prior claim state intact,
+            and support later version-by-version comparison without destroying earlier audit evidence.
           </div>
         </div>
 
@@ -274,14 +300,14 @@ export default function CreateClaimVersionButton({
 
         {!canCloneByRole && workspaceId ? (
           <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            Only workspace owners and operators can create new claim versions.
+            Only workspace owners and operators can create new governed claim versions.
           </div>
         ) : null}
 
         {claimLimitReached ? (
           <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            Claim limit reached on the current workspace plan. Use the version action to open the
-            upgrade path and continue governed claim versioning.
+            Claim capacity has been reached on the current workspace billing tier. Use this action
+            to open the upgrade path and continue governed version creation.
           </div>
         ) : null}
 
