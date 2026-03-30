@@ -41,6 +41,10 @@ function isOperator(role?: string | null) {
   return normalized === "owner" || normalized === "operator";
 }
 
+function isOwner(role?: string | null) {
+  return normalizeText(role) === "owner";
+}
+
 function getActionLabel(action: GateAction) {
   switch (action) {
     case "create_claim_version":
@@ -56,6 +60,102 @@ function getActionLabel(action: GateAction) {
     default:
       return "Governed action";
   }
+}
+
+function getPlanName(usage?: WorkspaceUsageSummary | null, planCode?: string | null) {
+  const normalized = normalizeText(planCode);
+  if (!usage?.plan_catalog?.length) {
+    return planCode || "current plan";
+  }
+
+  const matched = usage.plan_catalog.find(
+    (plan) => normalizeText(plan.code) === normalized
+  );
+
+  return matched?.name || planCode || "current plan";
+}
+
+function buildClaimCapacityMessage(usage?: WorkspaceUsageSummary | null) {
+  const governance = usage?.governance;
+  const upgrade = usage?.upgrade_recommendation;
+
+  const configuredPlanName = getPlanName(
+    usage,
+    governance?.configured_plan_code || usage?.plan_code
+  );
+  const effectivePlanName = getPlanName(
+    usage,
+    governance?.effective_plan_code || usage?.effective_plan_code
+  );
+  const recommendedPlanName =
+    upgrade?.recommended_plan_name ||
+    getPlanName(usage, upgrade?.recommended_plan_code || usage?.plan_code);
+
+  if (governance?.billing_activation_recommended) {
+    return `This workspace is already configured on ${configuredPlanName}, but billing is not active yet. Effective enforcement is still falling back to ${effectivePlanName}. Activate billing to continue governed claim version creation.`;
+  }
+
+  if (upgrade?.upgrade_required_now && upgrade?.recommended_plan_is_distinct) {
+    return `The workspace has reached its governed claim capacity under the current enforced plan posture. Review billing and move to ${recommendedPlanName} to continue governed version creation.`;
+  }
+
+  if (upgrade?.already_at_highest_tier) {
+    return "The workspace has reached governed capacity on its highest available commercial tier. Review billing posture and operational usage before continuing.";
+  }
+
+  return "This workspace has reached its governed claim capacity. Review billing and plan posture before continuing.";
+}
+
+function buildLifecycleBlockedMessage(
+  action: GateAction,
+  claimStatus?: string | null,
+  workspaceRole?: string | null
+) {
+  const normalizedStatus = normalizeText(claimStatus);
+  const owner = isOwner(workspaceRole);
+  const operator = isOperator(workspaceRole);
+
+  if (action === "edit_draft") {
+    if (normalizedStatus !== "draft") {
+      return "Draft editing is only available while the claim remains in draft state.";
+    }
+    if (!operator) {
+      return "Only workspace owners and operators can edit draft claims.";
+    }
+    return "Draft editing is currently blocked for this workspace.";
+  }
+
+  if (action === "verify_claim") {
+    if (normalizedStatus !== "draft") {
+      return "Only draft claims can be verified.";
+    }
+    if (!operator) {
+      return "Only workspace owners and operators can verify claims.";
+    }
+    return "Claim verification is currently blocked for this workspace.";
+  }
+
+  if (action === "publish_claim") {
+    if (normalizedStatus !== "verified") {
+      return "Only verified claims can be published.";
+    }
+    if (!owner) {
+      return "Only workspace owners can publish claims.";
+    }
+    return "Claim publication is currently blocked for this workspace.";
+  }
+
+  if (action === "lock_claim") {
+    if (normalizedStatus !== "published") {
+      return "Only published claims can be locked.";
+    }
+    if (!owner) {
+      return "Only workspace owners can lock claims.";
+    }
+    return "Claim locking is currently blocked for this workspace.";
+  }
+
+  return "This governed workflow action is currently blocked.";
 }
 
 export function useWorkspaceGate() {
@@ -94,11 +194,20 @@ export function useWorkspaceGate() {
     const claimStatus = normalizeText(ctx.claimStatus);
     const actionLabel = getActionLabel(action);
 
-    if (!isOperator(workspaceRole)) {
+    if (action === "publish_claim" || action === "lock_claim") {
+      if (!isOwner(workspaceRole)) {
+        return {
+          allowed: false,
+          reason: "feature_locked",
+          message: buildLifecycleBlockedMessage(action, ctx.claimStatus, workspaceRole),
+          actionLabel,
+        };
+      }
+    } else if (!isOperator(workspaceRole)) {
       return {
         allowed: false,
         reason: "feature_locked",
-        message: "You do not have permission to perform this action.",
+        message: buildLifecycleBlockedMessage(action, ctx.claimStatus, workspaceRole),
         actionLabel,
       };
     }
@@ -117,7 +226,7 @@ export function useWorkspaceGate() {
         return {
           allowed: false,
           reason: "claim_limit_reached",
-          message: "Claim limit reached for this workspace.",
+          message: buildClaimCapacityMessage(usage),
           actionLabel,
         };
       }
@@ -129,8 +238,8 @@ export function useWorkspaceGate() {
       if (claimStatus !== "draft") {
         return {
           allowed: false,
-          reason: "lifecycle_action_locked",
-          message: "Only draft claims can be edited.",
+          reason: "edit_locked",
+          message: buildLifecycleBlockedMessage(action, ctx.claimStatus, workspaceRole),
           actionLabel,
         };
       }
@@ -143,7 +252,7 @@ export function useWorkspaceGate() {
         return {
           allowed: false,
           reason: "lifecycle_action_locked",
-          message: "Only draft claims can be verified.",
+          message: buildLifecycleBlockedMessage(action, ctx.claimStatus, workspaceRole),
           actionLabel,
         };
       }
@@ -156,7 +265,7 @@ export function useWorkspaceGate() {
         return {
           allowed: false,
           reason: "lifecycle_action_locked",
-          message: "Claim must be verified before publishing.",
+          message: buildLifecycleBlockedMessage(action, ctx.claimStatus, workspaceRole),
           actionLabel,
         };
       }
@@ -169,7 +278,7 @@ export function useWorkspaceGate() {
         return {
           allowed: false,
           reason: "lifecycle_action_locked",
-          message: "Only published claims can be locked.",
+          message: buildLifecycleBlockedMessage(action, ctx.claimStatus, workspaceRole),
           actionLabel,
         };
       }
