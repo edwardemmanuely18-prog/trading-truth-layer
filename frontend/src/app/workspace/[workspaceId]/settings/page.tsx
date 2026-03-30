@@ -15,6 +15,8 @@ import {
   type WorkspaceUsageSummary,
 } from "../../../../lib/api";
 
+const PLAN_ORDER = ["starter", "pro", "growth", "business"] as const;
+
 function formatDateTime(value?: string | null) {
   if (!value) return "—";
   try {
@@ -73,6 +75,32 @@ function formatPlanCodeLabel(value?: string | null) {
 
 function formatBooleanLabel(value?: boolean) {
   return value ? "yes" : "no";
+}
+
+function getNextPlanCode(planCode?: string | null): string | null {
+  const normalized = normalizeText(planCode);
+  const index = PLAN_ORDER.findIndex((item) => item === normalized);
+  if (index < 0) return null;
+  return PLAN_ORDER[index + 1] ?? null;
+}
+
+function getPlanFromCatalog(
+  planCatalog: PlanCatalogItem[],
+  planCode?: string | null
+): PlanCatalogItem | null {
+  const normalized = normalizeText(planCode);
+  return planCatalog.find((item) => normalizeText(item.code) === normalized) ?? null;
+}
+
+function getUsageRatio(used?: number, limit?: number): number | null {
+  if (used === undefined || limit === undefined || limit <= 0) return null;
+  return used / limit;
+}
+
+function isNearLimit(used?: number, limit?: number): boolean {
+  const ratio = getUsageRatio(used, limit);
+  if (ratio === null) return false;
+  return ratio >= 0.8 && ratio <= 1;
 }
 
 function PlanBadge({ plan }: { plan?: string | null }) {
@@ -203,16 +231,16 @@ function PriceCard({
 
 function PlanCard({
   plan,
-  currentPlanCode,
+  configuredPlanCode,
   selectedPlanCode,
   onSelect,
 }: {
   plan: PlanCatalogItem;
-  currentPlanCode?: string | null;
+  configuredPlanCode?: string | null;
   selectedPlanCode?: string | null;
   onSelect: (planCode: string) => void;
 }) {
-  const isCurrent = normalizeText(plan.code) === normalizeText(currentPlanCode);
+  const isConfigured = normalizeText(plan.code) === normalizeText(configuredPlanCode);
   const isSelected = normalizeText(plan.code) === normalizeText(selectedPlanCode);
 
   const monthlyPrice = plan.billing?.monthly_price_usd;
@@ -223,14 +251,14 @@ function PlanCard({
       className={`rounded-2xl border p-5 shadow-sm ${
         isSelected
           ? "border-blue-300 bg-blue-50 text-slate-900"
-          : isCurrent
+          : isConfigured
             ? "border-slate-900 bg-slate-900 text-white"
             : "border-slate-200 bg-white text-slate-900"
       }`}
     >
       <div className="flex flex-wrap items-center gap-2">
         <div className="text-lg font-semibold">{plan.name}</div>
-        {isCurrent ? (
+        {isConfigured ? (
           <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold">
             current
           </span>
@@ -242,19 +270,19 @@ function PlanCard({
         ) : null}
       </div>
 
-      <p className={`mt-2 text-sm ${isCurrent && !isSelected ? "text-slate-200" : "text-slate-600"}`}>
+      <p className={`mt-2 text-sm ${isConfigured && !isSelected ? "text-slate-200" : "text-slate-600"}`}>
         {plan.description}
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div className={`rounded-xl p-3 ${isCurrent && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
-          <div className={`text-xs ${isCurrent && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
+        <div className={`rounded-xl p-3 ${isConfigured && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
+          <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
             Monthly
           </div>
           <div className="mt-1 font-semibold">{formatUsd(monthlyPrice)}</div>
         </div>
-        <div className={`rounded-xl p-3 ${isCurrent && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
-          <div className={`text-xs ${isCurrent && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
+        <div className={`rounded-xl p-3 ${isConfigured && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
+          <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
             Annual
           </div>
           <div className="mt-1 font-semibold">{formatUsd(annualPrice)}</div>
@@ -262,26 +290,26 @@ function PlanCard({
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div className={`rounded-xl p-3 ${isCurrent && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
-          <div className={`text-xs ${isCurrent && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
+        <div className={`rounded-xl p-3 ${isConfigured && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
+          <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
             Claims
           </div>
           <div className="mt-1 font-semibold">{plan.limits.claim_limit}</div>
         </div>
-        <div className={`rounded-xl p-3 ${isCurrent && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
-          <div className={`text-xs ${isCurrent && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
+        <div className={`rounded-xl p-3 ${isConfigured && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
+          <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
             Trades
           </div>
           <div className="mt-1 font-semibold">{plan.limits.trade_limit}</div>
         </div>
-        <div className={`rounded-xl p-3 ${isCurrent && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
-          <div className={`text-xs ${isCurrent && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
+        <div className={`rounded-xl p-3 ${isConfigured && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
+          <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
             Members
           </div>
           <div className="mt-1 font-semibold">{plan.limits.member_limit}</div>
         </div>
-        <div className={`rounded-xl p-3 ${isCurrent && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
-          <div className={`text-xs ${isCurrent && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
+        <div className={`rounded-xl p-3 ${isConfigured && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
+          <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
             Storage MB
           </div>
           <div className="mt-1 font-semibold">{plan.limits.storage_limit_mb}</div>
@@ -289,7 +317,7 @@ function PlanCard({
       </div>
 
       <div className="mt-4">
-        <div className={`text-xs ${isCurrent && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
+        <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
           Recommended for
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -297,7 +325,7 @@ function PlanCard({
             <span
               key={`${plan.code}-${item}`}
               className={`rounded-full px-3 py-1 text-xs font-medium ${
-                isCurrent && !isSelected ? "bg-white/10 text-slate-100" : "bg-slate-100 text-slate-700"
+                isConfigured && !isSelected ? "bg-white/10 text-slate-100" : "bg-slate-100 text-slate-700"
               }`}
             >
               {item}
@@ -415,6 +443,8 @@ function ManualPaymentCard({
 function UpgradeSummaryPanel({
   settings,
   usage,
+  planCatalog,
+  configuredPlanItem,
   selectedPlanCode,
   selectedBillingCycle,
   canSeeUpgrade,
@@ -423,28 +453,60 @@ function UpgradeSummaryPanel({
 }: {
   settings: WorkspaceSettings | null;
   usage: WorkspaceUsageSummary | null;
+  planCatalog: PlanCatalogItem[];
+  configuredPlanItem: PlanCatalogItem | null;
   selectedPlanCode: string;
   selectedBillingCycle: string;
   canSeeUpgrade: boolean;
   onStartCheckout: () => void;
   checkoutLoading: boolean;
 }) {
-  const claimUsage = usage?.usage?.claims;
-  const tradeUsage = usage?.usage?.trades;
-  const memberUsage = usage?.usage?.members;
+  const claimUsed = usage?.usage?.claims?.used ?? 0;
+  const tradeUsed = usage?.usage?.trades?.used ?? 0;
+  const memberUsed = usage?.usage?.members?.used ?? 0;
 
-  const recommendedPlanCode = usage?.upgrade_recommendation?.recommended_plan_code;
-  const recommendedPlanName = usage?.upgrade_recommendation?.recommended_plan_name || "Pro or Team";
-  const currentPlanCode = settings?.plan_code || "starter";
+  const configuredPlanCode = settings?.plan_code || "starter";
+  const effectivePlanCode =
+    usage?.effective_plan_code || settings?.effective_plan_code || "starter";
 
+  const configuredPlanName =
+    configuredPlanItem?.name ||
+    settings?.plan_detail?.name ||
+    formatPlanCodeLabel(configuredPlanCode);
+
+  const effectivePlanName =
+    usage?.effective_plan_detail?.name ||
+    settings?.effective_plan_detail?.name ||
+    formatPlanCodeLabel(effectivePlanCode);
+
+  const configuredClaimLimit = configuredPlanItem?.limits.claim_limit ?? usage?.usage?.claims?.limit ?? 0;
+  const configuredTradeLimit = configuredPlanItem?.limits.trade_limit ?? usage?.usage?.trades?.limit ?? 0;
+  const configuredMemberLimit = configuredPlanItem?.limits.member_limit ?? usage?.usage?.members?.limit ?? 0;
+
+  const claimBlocked = isAtOrOverLimit(claimUsed, configuredClaimLimit);
   const selectedMatchesCurrent =
-    normalizeText(selectedPlanCode) === normalizeText(currentPlanCode);
+    normalizeText(selectedPlanCode) === normalizeText(configuredPlanCode);
 
-  const claimBlocked =
-    (claimUsage?.limit ?? 0) > 0 && (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
+  const hasPlanMismatch =
+    normalizeText(configuredPlanCode) !== normalizeText(effectivePlanCode);
 
-  const currentPlanName =
-    settings?.plan_detail?.name || formatPlanCodeLabel(currentPlanCode);
+  const breachedDimensions: string[] = [];
+  const nearLimitDimensions: string[] = [];
+
+  if (isOverLimit(claimUsed, configuredClaimLimit)) breachedDimensions.push("claims");
+  else if (isNearLimit(claimUsed, configuredClaimLimit)) nearLimitDimensions.push("claims");
+
+  if (isOverLimit(tradeUsed, configuredTradeLimit)) breachedDimensions.push("trades");
+  else if (isNearLimit(tradeUsed, configuredTradeLimit)) nearLimitDimensions.push("trades");
+
+  if (isOverLimit(memberUsed, configuredMemberLimit)) breachedDimensions.push("members");
+  else if (isNearLimit(memberUsed, configuredMemberLimit)) nearLimitDimensions.push("members");
+
+  const nextConfiguredPlanCode = getNextPlanCode(configuredPlanCode);
+  const recommendedPlanItem = getPlanFromCatalog(planCatalog, nextConfiguredPlanCode);
+  const recommendedPlanName = recommendedPlanItem?.name || formatPlanCodeLabel(nextConfiguredPlanCode);
+  const showRecommendation =
+    Boolean(nextConfiguredPlanCode) && (breachedDimensions.length > 0 || nearLimitDimensions.length > 0);
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -470,9 +532,9 @@ function UpgradeSummaryPanel({
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <div className="text-xs uppercase tracking-wide text-slate-500">Current plan</div>
-          <div className="mt-1 text-xl font-semibold text-slate-900">{currentPlanName}</div>
+          <div className="mt-1 text-xl font-semibold text-slate-900">{configuredPlanName}</div>
           <div className="mt-2 text-sm text-slate-600">
-            Claims: {claimUsage?.used ?? 0} / {claimUsage?.limit ?? 0}
+            Claims: {claimUsed} / {configuredClaimLimit}
           </div>
         </div>
 
@@ -487,19 +549,34 @@ function UpgradeSummaryPanel({
         </div>
       </div>
 
-      {(usage?.governance?.upgrade_required_now || usage?.governance?.upgrade_recommended_soon) ? (
+      {hasPlanMismatch ? (
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <div className="font-medium">Billing not active yet</div>
+          <div className="mt-2">
+            This workspace is configured as <span className="font-semibold">{configuredPlanName}</span>,
+            but billing is still inactive. Enforcement may currently fall back to{" "}
+            <span className="font-semibold">{effectivePlanName}</span> until billing activates.
+          </div>
+        </div>
+      ) : null}
+
+      {(breachedDimensions.length > 0 || nearLimitDimensions.length > 0) ? (
         <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <div className="font-medium">
-            {usage?.governance?.upgrade_required_now ? "Upgrade required now" : "Upgrade recommended soon"}
+            {breachedDimensions.length > 0 ? "Upgrade required now" : "Upgrade recommended soon"}
           </div>
           <div className="mt-2">
-            {usage?.governance?.upgrade_required_now
-              ? "This workspace has reached or exceeded active capacity in one or more governed dimensions. Some workflows may now be blocked."
-              : "This workspace is approaching governed capacity limits. Upgrading early protects workflow continuity."}
+            {breachedDimensions.length > 0
+              ? "This workspace has reached or exceeded configured plan capacity in one or more governed dimensions. Some workflows may now be blocked."
+              : "This workspace is approaching configured plan capacity limits. Upgrading early protects workflow continuity."}
           </div>
-          {recommendedPlanCode ? (
+          {showRecommendation ? (
             <div className="mt-2">
               Recommended next plan: <span className="font-semibold">{recommendedPlanName}</span>
+            </div>
+          ) : normalizeText(configuredPlanCode) === "business" ? (
+            <div className="mt-2">
+              This workspace is already on the highest commercial tier.
             </div>
           ) : null}
         </div>
@@ -509,7 +586,7 @@ function UpgradeSummaryPanel({
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="text-xs uppercase tracking-wide text-slate-500">Claims</div>
           <div className="mt-1 text-lg font-semibold text-slate-900">
-            {claimUsage?.used ?? 0} / {claimUsage?.limit ?? 0}
+            {claimUsed} / {configuredClaimLimit}
           </div>
           <div className="mt-1 text-xs text-slate-500">Governed versioning capacity</div>
         </div>
@@ -517,7 +594,7 @@ function UpgradeSummaryPanel({
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="text-xs uppercase tracking-wide text-slate-500">Trades</div>
           <div className="mt-1 text-lg font-semibold text-slate-900">
-            {tradeUsage?.used ?? 0} / {tradeUsage?.limit ?? 0}
+            {tradeUsed} / {configuredTradeLimit}
           </div>
           <div className="mt-1 text-xs text-slate-500">Evidence ingestion capacity</div>
         </div>
@@ -525,7 +602,7 @@ function UpgradeSummaryPanel({
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="text-xs uppercase tracking-wide text-slate-500">Members</div>
           <div className="mt-1 text-lg font-semibold text-slate-900">
-            {memberUsage?.used ?? 0} / {memberUsage?.limit ?? 0}
+            {memberUsed} / {configuredMemberLimit}
           </div>
           <div className="mt-1 text-xs text-slate-500">Workspace collaborator capacity</div>
         </div>
@@ -843,30 +920,73 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
-  const membersOverLimit = isOverLimit(usage?.usage.members.used, usage?.usage.members.limit);
-  const tradesOverLimit = isOverLimit(usage?.usage.trades.used, usage?.usage.trades.limit);
-  const claimsOverLimit = isOverLimit(usage?.usage.claims.used, usage?.usage.claims.limit);
-  const storageOverLimit = isOverLimit(usage?.usage.storage_mb.used, usage?.usage.storage_mb.limit);
+  const planCatalog = usage?.plan_catalog ?? [];
+  const configuredPlanCode = settings?.plan_code || "starter";
+  const effectivePlanCode =
+    usage?.effective_plan_code || settings?.effective_plan_code || "starter";
 
-  const membersAtOrOverLimit = isAtOrOverLimit(usage?.usage.members.used, usage?.usage.members.limit);
-  const tradesAtOrOverLimit = isAtOrOverLimit(usage?.usage.trades.used, usage?.usage.trades.limit);
-  const claimsAtOrOverLimit = isAtOrOverLimit(usage?.usage.claims.used, usage?.usage.claims.limit);
-  const storageAtOrOverLimit = isAtOrOverLimit(usage?.usage.storage_mb.used, usage?.usage.storage_mb.limit);
+  const configuredPlanItem = getPlanFromCatalog(planCatalog, configuredPlanCode);
+  const configuredPlanName =
+    configuredPlanItem?.name ||
+    settings?.plan_detail?.name ||
+    formatPlanCodeLabel(configuredPlanCode);
+
+  const effectivePlanName =
+    usage?.effective_plan_detail?.name ||
+    settings?.effective_plan_detail?.name ||
+    formatPlanCodeLabel(effectivePlanCode);
+
+  const configuredClaimLimit = configuredPlanItem?.limits.claim_limit ?? usage?.usage.claims.limit ?? 0;
+  const configuredTradeLimit = configuredPlanItem?.limits.trade_limit ?? usage?.usage.trades.limit ?? 0;
+  const configuredMemberLimit = configuredPlanItem?.limits.member_limit ?? usage?.usage.members.limit ?? 0;
+  const configuredStorageLimit =
+    configuredPlanItem?.limits.storage_limit_mb ?? usage?.usage.storage_mb.limit ?? 0;
+
+  const claimsRatio = getUsageRatio(usage?.usage.claims.used, configuredClaimLimit);
+  const tradesRatio = getUsageRatio(usage?.usage.trades.used, configuredTradeLimit);
+  const membersRatio = getUsageRatio(usage?.usage.members.used, configuredMemberLimit);
+  const storageRatio = getUsageRatio(usage?.usage.storage_mb.used, configuredStorageLimit);
+
+  const membersOverLimit = isOverLimit(usage?.usage.members.used, configuredMemberLimit);
+  const tradesOverLimit = isOverLimit(usage?.usage.trades.used, configuredTradeLimit);
+  const claimsOverLimit = isOverLimit(usage?.usage.claims.used, configuredClaimLimit);
+  const storageOverLimit = isOverLimit(usage?.usage.storage_mb.used, configuredStorageLimit);
+
+  const membersAtOrOverLimit = isAtOrOverLimit(usage?.usage.members.used, configuredMemberLimit);
+  const tradesAtOrOverLimit = isAtOrOverLimit(usage?.usage.trades.used, configuredTradeLimit);
+  const claimsAtOrOverLimit = isAtOrOverLimit(usage?.usage.claims.used, configuredClaimLimit);
+  const storageAtOrOverLimit = isAtOrOverLimit(usage?.usage.storage_mb.used, configuredStorageLimit);
 
   const hasAnyOverLimit =
     membersOverLimit || tradesOverLimit || claimsOverLimit || storageOverLimit;
 
-  const recommendedPlanCode = usage?.upgrade_recommendation?.recommended_plan_code;
-  const recommendedPlanName = usage?.upgrade_recommendation?.recommended_plan_name;
-  const breachedDimensions = usage?.upgrade_recommendation?.breached_dimensions ?? [];
-  const nearLimitDimensions = usage?.upgrade_recommendation?.near_limit_dimensions ?? [];
-  const planCatalog = usage?.plan_catalog ?? [];
+  const breachedDimensions: string[] = [];
+  const nearLimitDimensions: string[] = [];
+
+  if (claimsOverLimit) breachedDimensions.push("claims");
+  else if (isNearLimit(usage?.usage.claims.used, configuredClaimLimit)) nearLimitDimensions.push("claims");
+
+  if (tradesOverLimit) breachedDimensions.push("trades");
+  else if (isNearLimit(usage?.usage.trades.used, configuredTradeLimit)) nearLimitDimensions.push("trades");
+
+  if (membersOverLimit) breachedDimensions.push("members");
+  else if (isNearLimit(usage?.usage.members.used, configuredMemberLimit)) nearLimitDimensions.push("members");
+
+  if (storageOverLimit) breachedDimensions.push("storage_mb");
+  else if (isNearLimit(usage?.usage.storage_mb.used, configuredStorageLimit)) nearLimitDimensions.push("storage_mb");
+
+  const nextConfiguredPlanCode = getNextPlanCode(configuredPlanCode);
+  const recommendedPlanItem = getPlanFromCatalog(planCatalog, nextConfiguredPlanCode);
+  const recommendedPlanName =
+    recommendedPlanItem?.name || formatPlanCodeLabel(nextConfiguredPlanCode);
+
+  const hasPlanMismatch =
+    normalizeText(configuredPlanCode) !== normalizeText(effectivePlanCode);
 
   const hasDistinctRecommendation =
-    !!recommendedPlanCode &&
-    normalizeText(recommendedPlanCode) !== normalizeText(settings?.plan_code);
+    Boolean(nextConfiguredPlanCode) && (breachedDimensions.length > 0 || nearLimitDimensions.length > 0);
 
-  const currentPlanBilling = settings?.plan_detail?.billing;
+  const currentPlanBilling = configuredPlanItem?.billing || settings?.plan_detail?.billing;
   const selectedPlanMatchesCurrent =
     normalizeText(selectedPlanCode) === normalizeText(settings?.plan_code);
 
@@ -944,16 +1064,21 @@ export default function WorkspaceSettingsPage() {
           </div>
         ) : (
           <>
-            <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
               <SummaryCard
-                label="Plan"
-                value={settings?.plan_detail?.name || settings?.plan_code || "starter"}
-                hint="Current monetization tier"
+                label="Configured Plan"
+                value={configuredPlanName}
+                hint="Commercial tier assigned to this workspace"
               />
               <SummaryCard
                 label="Billing Status"
                 value={settings?.billing_status || "inactive"}
                 hint="Subscription state"
+              />
+              <SummaryCard
+                label="Effective Active Plan"
+                value={effectivePlanName}
+                hint="Plan currently enforcing limits and entitlements"
               />
               <SummaryCard
                 label="Billing Mode"
@@ -990,26 +1115,31 @@ export default function WorkspaceSettingsPage() {
               </div>
             )}
 
-            {(hasAnyOverLimit ||
-              usage?.governance?.upgrade_required_now ||
-              usage?.governance?.upgrade_recommended_soon) && (
+            {(hasAnyOverLimit || nearLimitDimensions.length > 0 || hasPlanMismatch) && (
               <div className="mb-6 rounded-3xl border border-amber-200 bg-amber-50 p-6 text-amber-900 shadow-sm">
                 <h2 className="text-xl font-semibold">
-                  {usage?.governance?.upgrade_required_now
+                  {hasAnyOverLimit
                     ? "Upgrade Required"
-                    : "Upgrade Recommendation"}
+                    : nearLimitDimensions.length > 0
+                      ? "Upgrade Recommendation"
+                      : "Billing Not Active Yet"}
                 </h2>
 
                 <p className="mt-2 text-sm">
-                  {usage?.governance?.upgrade_required_now
-                    ? "This workspace is now constrained by current plan limits. Some workflows may be blocked until the plan is upgraded."
-                    : "This workspace is approaching one or more plan ceilings. Upgrading now will protect workflow continuity."}
+                  {hasAnyOverLimit
+                    ? "This workspace is now constrained by configured plan limits. Some workflows may be blocked until the plan is upgraded."
+                    : nearLimitDimensions.length > 0
+                      ? "This workspace is approaching one or more configured plan ceilings. Upgrading now will protect workflow continuity."
+                      : `This workspace is configured as ${configuredPlanName}, but billing is still inactive, so active enforcement may temporarily fall back to ${effectivePlanName}.`}
                 </p>
 
                 {hasDistinctRecommendation && recommendedPlanName ? (
                   <div className="mt-3 text-sm">
-                    Recommended next plan:{" "}
-                    <span className="font-semibold">{recommendedPlanName}</span>
+                    Recommended next plan: <span className="font-semibold">{recommendedPlanName}</span>
+                  </div>
+                ) : normalizeText(configuredPlanCode) === "business" ? (
+                  <div className="mt-3 text-sm">
+                    This workspace is already on the highest commercial tier.
                   </div>
                 ) : null}
 
@@ -1052,6 +1182,8 @@ export default function WorkspaceSettingsPage() {
                 <UpgradeSummaryPanel
                   settings={settings}
                   usage={usage}
+                  planCatalog={planCatalog}
+                  configuredPlanItem={configuredPlanItem}
                   selectedPlanCode={selectedPlanCode}
                   selectedBillingCycle={selectedBillingCycle}
                   canSeeUpgrade={canSeeUpgrade}
@@ -1171,15 +1303,32 @@ export default function WorkspaceSettingsPage() {
 
                   <div className="mt-6 grid gap-4 md:grid-cols-2">
                     <PriceCard
-                      label="Monthly Price"
+                      label="Configured Monthly Price"
                       value={formatUsd(currentPlanBilling?.monthly_price_usd)}
-                      hint="Current plan monthly placeholder"
+                      hint="Commercial tier monthly price"
                     />
                     <PriceCard
-                      label="Annual Price"
+                      label="Configured Annual Price"
                       value={formatUsd(currentPlanBilling?.annual_price_usd)}
-                      hint="Current plan annual placeholder"
+                      hint="Commercial tier annual price"
                     />
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    <div>
+                      <span className="font-medium text-slate-900">Configured plan:</span>{" "}
+                      {configuredPlanName}
+                    </div>
+                    <div className="mt-2">
+                      <span className="font-medium text-slate-900">Effective active plan:</span>{" "}
+                      {effectivePlanName}
+                    </div>
+                    <div className="mt-2">
+                      <span className="font-medium text-slate-900">Entitlement state:</span>{" "}
+                      {hasPlanMismatch
+                        ? "Billing inactive, enforcement may temporarily fall back to the effective active plan"
+                        : "Configured plan and active entitlements aligned"}
+                    </div>
                   </div>
 
                   <div className="mt-6 grid gap-4 md:grid-cols-[1fr_220px]">
@@ -1223,7 +1372,7 @@ export default function WorkspaceSettingsPage() {
 
                   {selectedPlanMatchesCurrent ? (
                     <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                      The selected plan matches the current workspace plan. Choose a different plan to start checkout.
+                      The selected plan matches the current configured workspace plan. Choose a different plan to start checkout.
                     </div>
                   ) : null}
 
@@ -1358,8 +1507,7 @@ export default function WorkspaceSettingsPage() {
 
                       {hasDistinctRecommendation && recommendedPlanName ? (
                         <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                          Recommended next plan:{" "}
-                          <span className="font-semibold">{recommendedPlanName}</span>
+                          Recommended next plan: <span className="font-semibold">{recommendedPlanName}</span>
                         </div>
                       ) : null}
                     </div>
@@ -1369,7 +1517,7 @@ export default function WorkspaceSettingsPage() {
                         <PlanCard
                           key={plan.code}
                           plan={plan}
-                          currentPlanCode={settings?.plan_code}
+                          configuredPlanCode={settings?.plan_code}
                           selectedPlanCode={selectedPlanCode}
                           onSelect={(planCode) => {
                             setSelectedPlanCode(planCode);
@@ -1386,15 +1534,24 @@ export default function WorkspaceSettingsPage() {
                 <div className="rounded-3xl border bg-white p-6 shadow-sm">
                   <h2 className="text-2xl font-semibold">Plan Limits</h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Current usage position against workspace plan ceilings.
+                    Current usage position against configured workspace plan limits.
                   </p>
+
+                  {hasPlanMismatch ? (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                      These cards show the configured commercial plan limits for{" "}
+                      <span className="font-semibold">{configuredPlanName}</span>. Billing is still inactive,
+                      so backend enforcement may temporarily apply the effective active plan{" "}
+                      <span className="font-semibold">{effectivePlanName}</span>.
+                    </div>
+                  ) : null}
 
                   <div className="mt-4 space-y-4">
                     <UsageCard
                       label="Members"
                       used={usage?.usage.members.used}
-                      limit={usage?.usage.members.limit}
-                      ratio={usage?.usage.members.ratio}
+                      limit={configuredMemberLimit}
+                      ratio={membersRatio}
                       atOrOver={membersAtOrOverLimit}
                       hint="Workspace collaborator capacity"
                     />
@@ -1402,8 +1559,8 @@ export default function WorkspaceSettingsPage() {
                     <UsageCard
                       label="Trades"
                       used={usage?.usage.trades.used}
-                      limit={usage?.usage.trades.limit}
-                      ratio={usage?.usage.trades.ratio}
+                      limit={configuredTradeLimit}
+                      ratio={tradesRatio}
                       atOrOver={tradesAtOrOverLimit}
                       hint="Evidence ingestion and operational throughput"
                     />
@@ -1411,8 +1568,8 @@ export default function WorkspaceSettingsPage() {
                     <UsageCard
                       label="Claims"
                       used={usage?.usage.claims.used}
-                      limit={usage?.usage.claims.limit}
-                      ratio={usage?.usage.claims.ratio}
+                      limit={configuredClaimLimit}
+                      ratio={claimsRatio}
                       atOrOver={claimsAtOrOverLimit}
                       hint="Governed claim and versioning capacity"
                     />
@@ -1420,8 +1577,8 @@ export default function WorkspaceSettingsPage() {
                     <UsageCard
                       label="Storage (MB)"
                       used={usage?.usage.storage_mb.used}
-                      limit={usage?.usage.storage_mb.limit}
-                      ratio={usage?.usage.storage_mb.ratio}
+                      limit={configuredStorageLimit}
+                      ratio={storageRatio}
                       atOrOver={storageAtOrOverLimit}
                       hint="Artifact and workspace storage budget"
                     />
