@@ -71,7 +71,15 @@ def normalize_plan_code(plan_code: str | None) -> str:
 
 
 def normalize_billing_status(status: str | None) -> str:
-    allowed = {"inactive", "active", "trialing", "past_due", "canceled", "unpaid"}
+    allowed = {
+        "inactive",
+        "active",
+        "trialing",
+        "past_due",
+        "canceled",
+        "unpaid",
+        "pending_manual_review",
+    }
     value = str(status or "").strip().lower()
     return value if value in allowed else "inactive"
 
@@ -199,29 +207,95 @@ def get_plan_definition(plan_code: str | None):
     return get_plan_catalog()[0]
 
 
+def is_paid_billing_status(status: str | None) -> bool:
+    normalized = normalize_billing_status(status)
+    return normalized in {"active", "trialing"}
+
+
+def resolve_effective_plan_code(workspace: Workspace) -> str:
+    configured_plan = normalize_plan_code(workspace.plan_code)
+    billing_status = normalize_billing_status(workspace.billing_status)
+
+    if configured_plan == "starter":
+        return "starter"
+
+    if is_paid_billing_status(billing_status):
+        return configured_plan
+
+    return "starter"
+
+
+def resolve_effective_plan_definition(workspace: Workspace):
+    return get_plan_definition(resolve_effective_plan_code(workspace))
+
+
 def workspace_limit_snapshot(workspace: Workspace):
-    plan_definition = get_plan_definition(workspace.plan_code)
+    effective_plan = resolve_effective_plan_definition(workspace)
 
     return {
-        "claim_limit": plan_definition["limits"]["claim_limit"],
-        "trade_limit": plan_definition["limits"]["trade_limit"],
-        "member_limit": plan_definition["limits"]["member_limit"],
-        "storage_limit_mb": plan_definition["limits"]["storage_limit_mb"],
+        "claim_limit": effective_plan["limits"]["claim_limit"],
+        "trade_limit": effective_plan["limits"]["trade_limit"],
+        "member_limit": effective_plan["limits"]["member_limit"],
+        "storage_limit_mb": effective_plan["limits"]["storage_limit_mb"],
+    }
+
+
+def build_plan_governance_state(workspace: Workspace):
+    configured_plan_code = normalize_plan_code(workspace.plan_code)
+    effective_plan_code = resolve_effective_plan_code(workspace)
+    billing_status = normalize_billing_status(workspace.billing_status)
+
+    plan_mismatch = configured_plan_code != effective_plan_code
+    paid_access_active = is_paid_billing_status(billing_status)
+
+    if plan_mismatch and configured_plan_code != "starter":
+        if billing_status == "pending_manual_review":
+            reason = "pending_payment_review"
+            message = (
+                "Workspace is assigned to a paid plan target, but paid entitlements are not active "
+                "until manual billing review is approved."
+            )
+        else:
+            reason = "billing_inactive_fallback"
+            message = (
+                "Workspace is assigned to a paid plan target, but paid entitlements are inactive. "
+                "Effective workspace limits fall back to Starter until billing becomes active."
+            )
+    else:
+        reason = "ok"
+        message = "Effective entitlements are aligned with current billing state."
+
+    return {
+        "configured_plan_code": configured_plan_code,
+        "effective_plan_code": effective_plan_code,
+        "billing_status": billing_status,
+        "paid_access_active": paid_access_active,
+        "plan_mismatch": plan_mismatch,
+        "reason": reason,
+        "message": message,
     }
 
 
 def serialize_workspace_settings(workspace: Workspace):
-    normalized_plan = normalize_plan_code(workspace.plan_code)
+    configured_plan = normalize_plan_code(workspace.plan_code)
     normalized_billing = normalize_billing_status(workspace.billing_status)
-    limits = workspace_limit_snapshot(workspace)
-    plan_definition = get_plan_definition(normalized_plan)
+    effective_plan = resolve_effective_plan_definition(workspace)
+    governance_state = build_plan_governance_state(workspace)
+    limits = {
+        "claim_limit": effective_plan["limits"]["claim_limit"],
+        "trade_limit": effective_plan["limits"]["trade_limit"],
+        "member_limit": effective_plan["limits"]["member_limit"],
+        "storage_limit_mb": effective_plan["limits"]["storage_limit_mb"],
+    }
+
+    configured_plan_definition = get_plan_definition(configured_plan)
 
     return {
         "workspace_id": workspace.id,
         "name": workspace.name,
         "description": workspace.description,
         "billing_email": workspace.billing_email,
-        "plan_code": normalized_plan,
+        "plan_code": configured_plan,
         "billing_status": normalized_billing,
         "stripe_customer_id": workspace.stripe_customer_id,
         "stripe_subscription_id": workspace.stripe_subscription_id,
@@ -232,12 +306,22 @@ def serialize_workspace_settings(workspace: Workspace):
         ),
         "limits": limits,
         "plan_detail": {
-            "code": plan_definition["code"],
-            "name": plan_definition["name"],
-            "description": plan_definition["description"],
-            "recommended_for": plan_definition["recommended_for"],
-            "billing": plan_definition["billing"],
+            "code": configured_plan_definition["code"],
+            "name": configured_plan_definition["name"],
+            "description": configured_plan_definition["description"],
+            "recommended_for": configured_plan_definition["recommended_for"],
+            "billing": configured_plan_definition["billing"],
         },
+        "effective_plan_code": governance_state["effective_plan_code"],
+        "effective_plan_detail": {
+            "code": effective_plan["code"],
+            "name": effective_plan["name"],
+            "description": effective_plan["description"],
+            "recommended_for": effective_plan["recommended_for"],
+            "billing": effective_plan["billing"],
+        },
+        "effective_limits": limits,
+        "plan_governance": governance_state,
         "created_at": workspace.created_at.isoformat() if workspace.created_at else None,
         "updated_at": workspace.updated_at.isoformat() if workspace.updated_at else None,
     }
@@ -419,6 +503,7 @@ def get_workspace_usage(
     require_workspace_member(workspace_id, current_user, db)
 
     limits = workspace_limit_snapshot(workspace)
+    governance_state = build_plan_governance_state(workspace)
 
     member_count = (
         db.query(WorkspaceMembership)
@@ -474,12 +559,15 @@ def get_workspace_usage(
         },
     }
 
-    upgrade = build_upgrade_recommendation(workspace.plan_code, usage)
+    upgrade = build_upgrade_recommendation(governance_state["effective_plan_code"], usage)
+    effective_plan_definition = resolve_effective_plan_definition(workspace)
+    configured_plan_definition = get_plan_definition(workspace.plan_code)
 
     return {
         "workspace_id": workspace.id,
         "plan_code": normalize_plan_code(workspace.plan_code),
         "billing_status": normalize_billing_status(workspace.billing_status),
+        "effective_plan_code": governance_state["effective_plan_code"],
         "usage": usage,
         "stripe_ready": {
             "has_customer_id": bool(workspace.stripe_customer_id),
@@ -492,9 +580,29 @@ def get_workspace_usage(
             "has_any_near_limit": any(row["status"] == "near_limit" for row in usage.values()),
             "upgrade_required_now": upgrade["upgrade_required_now"],
             "upgrade_recommended_soon": upgrade["upgrade_recommended_soon"],
+            "configured_plan_code": governance_state["configured_plan_code"],
+            "effective_plan_code": governance_state["effective_plan_code"],
+            "paid_access_active": governance_state["paid_access_active"],
+            "plan_mismatch": governance_state["plan_mismatch"],
+            "plan_mismatch_reason": governance_state["reason"],
+            "plan_mismatch_message": governance_state["message"],
         },
         "upgrade_recommendation": upgrade,
         "plan_catalog": get_plan_catalog(),
+        "configured_plan_detail": {
+            "code": configured_plan_definition["code"],
+            "name": configured_plan_definition["name"],
+            "description": configured_plan_definition["description"],
+            "recommended_for": configured_plan_definition["recommended_for"],
+            "billing": configured_plan_definition["billing"],
+        },
+        "effective_plan_detail": {
+            "code": effective_plan_definition["code"],
+            "name": effective_plan_definition["name"],
+            "description": effective_plan_definition["description"],
+            "recommended_for": effective_plan_definition["recommended_for"],
+            "billing": effective_plan_definition["billing"],
+        },
     }
 
 
