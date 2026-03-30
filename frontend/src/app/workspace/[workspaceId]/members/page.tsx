@@ -70,34 +70,61 @@ function GovernanceBanner({
   const nearLimitDimensions = usage.upgrade_recommendation?.near_limit_dimensions ?? [];
   const recommendedPlanCode = usage.upgrade_recommendation?.recommended_plan_code;
   const recommendedPlanName = usage.upgrade_recommendation?.recommended_plan_name;
-  const currentPlanCode = usage.plan_code;
+  const recommendationBasisPlanCode =
+    (usage.upgrade_recommendation as { recommendation_basis_plan_code?: string } | undefined)
+      ?.recommendation_basis_plan_code || usage.plan_code;
 
   const hasDistinctRecommendation =
     !!recommendedPlanCode &&
-    normalizeText(recommendedPlanCode) !== normalizeText(currentPlanCode);
+    normalizeText(recommendedPlanCode) !== normalizeText(recommendationBasisPlanCode);
 
   const upgradeRequiredNow = Boolean(usage.governance?.upgrade_required_now);
   const upgradeRecommendedSoon = Boolean(usage.governance?.upgrade_recommended_soon);
+  const billingActivationRecommended = Boolean(
+    (usage.governance as { billing_activation_recommended?: boolean } | undefined)
+      ?.billing_activation_recommended
+  );
+  const planMismatch = Boolean(usage.governance?.plan_mismatch);
 
-  if (!upgradeRequiredNow && !upgradeRecommendedSoon) {
+  if (!upgradeRequiredNow && !upgradeRecommendedSoon && !billingActivationRecommended) {
     return null;
   }
 
   const isOwner = workspaceRole === "owner";
+  const configuredPlanName =
+    usage.plan_catalog?.find(
+      (plan) => normalizeText(plan.code) === normalizeText(usage.plan_code)
+    )?.name || usage.plan_code;
+  const effectivePlanName =
+    usage.plan_catalog?.find(
+      (plan) => normalizeText(plan.code) === normalizeText(usage.effective_plan_code)
+    )?.name || usage.effective_plan_code;
 
   return (
     <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-amber-900 shadow-sm">
       <h2 className="text-xl font-semibold">
-        {upgradeRequiredNow ? "Upgrade Required" : "Upgrade Recommendation"}
+        {billingActivationRecommended
+          ? "Billing Activation Needed"
+          : upgradeRequiredNow
+            ? "Upgrade Required"
+            : "Upgrade Recommendation"}
       </h2>
 
       <p className="mt-2 text-sm">
-        {upgradeRequiredNow
-          ? "This workspace is constrained by current plan limits. Some member and invite workflows may be blocked until the plan is upgraded."
-          : "This workspace is approaching one or more plan ceilings. Upgrading now will protect membership workflow continuity."}
+        {billingActivationRecommended
+          ? "This workspace is already configured on a higher commercial tier, but billing is not active yet. Effective enforcement is still falling back to a lower plan."
+          : upgradeRequiredNow
+            ? "This workspace is constrained by current enforced plan limits. Some member and invite workflows may be blocked until the plan posture improves."
+            : "This workspace is approaching one or more enforced plan ceilings. Reviewing plan posture now will protect membership workflow continuity."}
       </p>
 
-      {hasDistinctRecommendation && recommendedPlanName ? (
+      {billingActivationRecommended && planMismatch ? (
+        <div className="mt-3 rounded-xl border border-amber-300 bg-white px-4 py-3 text-sm">
+          Configured plan: <span className="font-semibold">{configuredPlanName}</span>
+          <span className="mx-2">·</span>
+          Effective enforced plan: <span className="font-semibold">{effectivePlanName}</span>
+        </div>
+      ) : hasDistinctRecommendation && recommendedPlanName ? (
         <div className="mt-3 text-sm">
           Recommended next plan: <span className="font-semibold">{recommendedPlanName}</span>
         </div>
@@ -141,12 +168,12 @@ function GovernanceBanner({
             href={`/workspace/${usage.workspace_id}/settings`}
             className="inline-flex rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
           >
-            Review Plan Options
+            {billingActivationRecommended ? "Open Billing & Activation" : "Review Plan Options"}
           </Link>
         </div>
       ) : (
         <div className="mt-4 rounded-xl border border-amber-200 bg-white px-4 py-3 text-sm text-amber-800">
-          Contact a workspace owner to review plan upgrades.
+          Contact a workspace owner to review billing and plan posture.
         </div>
       )}
     </div>
@@ -289,9 +316,29 @@ export default function WorkspaceMembersPage() {
   const pendingInvites = invites.filter((row) => row.status === "pending");
   const acceptedInvites = invites.filter((row) => row.status === "accepted");
   const memberUsage = usage?.usage.members;
-  const currentPlanName = usage?.plan_catalog?.find(
+
+  const configuredPlan = usage?.plan_catalog?.find(
     (plan) => normalizeText(plan.code) === normalizeText(usage.plan_code)
-  )?.name;
+  );
+  const effectivePlan = usage?.plan_catalog?.find(
+    (plan) => normalizeText(plan.code) === normalizeText(usage.effective_plan_code)
+  );
+
+  const configuredPlanName = configuredPlan?.name || usage?.plan_code || "—";
+  const effectivePlanName = effectivePlan?.name || usage?.effective_plan_code || "—";
+
+  const configuredMemberLimit =
+    (configuredPlan?.limits as { member_limit?: number } | undefined)?.member_limit ?? null;
+  const effectiveMemberLimit =
+    (effectivePlan?.limits as { member_limit?: number } | undefined)?.member_limit ??
+    memberUsage?.limit ??
+    null;
+
+  const planMismatch = Boolean(usage?.governance?.plan_mismatch);
+  const billingActivationRecommended = Boolean(
+    (usage?.governance as { billing_activation_recommended?: boolean } | undefined)
+      ?.billing_activation_recommended
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -333,7 +380,7 @@ export default function WorkspaceMembersPage() {
                 value={members.length}
                 hint={
                   memberUsage
-                    ? `${memberUsage.used} / ${memberUsage.limit} used`
+                    ? `${memberUsage.used} / ${effectiveMemberLimit ?? memberUsage.limit} enforced`
                     : "Current directory size"
                 }
               />
@@ -353,9 +400,13 @@ export default function WorkspaceMembersPage() {
                 hint={canManageMembers ? "Completed acceptances" : "Owner-only ledger"}
               />
               <SummaryCard
-                label="Current Plan"
-                value={currentPlanName || usage?.plan_code || "—"}
-                hint="Workspace capacity tier"
+                label="Configured Plan"
+                value={configuredPlanName}
+                hint={
+                  planMismatch
+                    ? `Enforcement currently falling back to ${effectivePlanName}`
+                    : "Workspace commercial tier"
+                }
               />
             </div>
 
@@ -369,7 +420,7 @@ export default function WorkspaceMembersPage() {
                   <div>
                     <h2 className="text-xl font-semibold">Member Capacity</h2>
                     <div className="mt-1 text-sm text-slate-500">
-                      Current member usage against the active workspace plan.
+                      Membership should distinguish configured commercial posture from currently enforced limits.
                     </div>
                   </div>
 
@@ -381,22 +432,53 @@ export default function WorkspaceMembersPage() {
                   </Link>
                 </div>
 
-                <div className="mt-4 grid gap-4 md:grid-cols-3">
+                {planMismatch ? (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                    Configured plan: <span className="font-semibold">{configuredPlanName}</span>
+                    <span className="mx-2">·</span>
+                    Effective enforced plan: <span className="font-semibold">{effectivePlanName}</span>
+                    <div className="mt-2">
+                      Billing is not fully active, so invitation and member-capacity enforcement may
+                      temporarily follow the lower effective plan.
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="mt-4 grid gap-4 md:grid-cols-4">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="text-sm text-slate-500">Members Used</div>
                     <div className="mt-1 text-2xl font-semibold">{memberUsage.used}</div>
                   </div>
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-sm text-slate-500">Member Limit</div>
-                    <div className="mt-1 text-2xl font-semibold">{memberUsage.limit}</div>
+                    <div className="text-sm text-slate-500">Configured Member Limit</div>
+                    <div className="mt-1 text-2xl font-semibold">
+                      {configuredMemberLimit ?? "—"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="text-sm text-slate-500">Effective Member Limit</div>
+                    <div className="mt-1 text-2xl font-semibold">
+                      {effectiveMemberLimit ?? memberUsage.limit}
+                    </div>
                   </div>
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="text-sm text-slate-500">Utilization</div>
-                    <div className="mt-1 text-2xl font-semibold">{formatPercent(memberUsage.ratio)}</div>
+                    <div className="mt-1 text-2xl font-semibold">
+                      {formatPercent(memberUsage.ratio)}
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">Against effective enforcement</div>
                   </div>
                 </div>
+
+                {billingActivationRecommended ? (
+                  <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                    This workspace is already configured on a higher tier. The next operational step
+                    is billing activation, not selecting a lower replacement plan.
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
