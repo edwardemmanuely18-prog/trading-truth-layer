@@ -13,6 +13,9 @@ type Props = {
   status: string;
 };
 
+type LifecycleActionKey = "verify" | "publish" | "lock";
+type GateActionKey = "verify_claim" | "publish_claim" | "lock_claim";
+
 function normalizeText(value?: string | null) {
   return String(value || "").toLowerCase().trim();
 }
@@ -173,6 +176,23 @@ function StepCard({
   );
 }
 
+function getLifecycleActionLabel(action: LifecycleActionKey) {
+  switch (action) {
+    case "verify":
+      return "Verify claim";
+    case "publish":
+      return "Publish claim";
+    case "lock":
+      return "Lock claim";
+    default:
+      return "Claim lifecycle action";
+  }
+}
+
+function getLifecyclePaywallReason(_action: LifecycleActionKey) {
+  return "lifecycle_action_locked" as const;
+}
+
 export default function ClaimLifecycleActions({
   claimSchemaId,
   workspaceId,
@@ -182,7 +202,7 @@ export default function ClaimLifecycleActions({
   const { getWorkspaceRole } = useAuth();
   const { gateAndExecute, paywallState, closePaywall, openPaywall } = useWorkspaceGate();
 
-  const [loadingAction, setLoadingAction] = useState<"verify" | "publish" | "lock" | null>(null);
+  const [loadingAction, setLoadingAction] = useState<LifecycleActionKey | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const workspaceRole = getWorkspaceRole(workspaceId);
@@ -210,54 +230,56 @@ export default function ClaimLifecycleActions({
 
   const lockCompleted = normalizedStatus === "locked";
 
-  const verifyDisabled = loadingAction !== null || !permissions.canVerify;
-  const publishDisabled = loadingAction !== null || !permissions.canPublish;
-  const lockDisabled = loadingAction !== null || !permissions.canLock;
+  const verifyDisabled = loadingAction !== null || !permissions.canVerify || !verifyAvailable;
+  const publishDisabled = loadingAction !== null || !permissions.canPublish || !publishAvailable;
+  const lockDisabled = loadingAction !== null || !permissions.canLock || !lockAvailable;
 
   const verifyReason =
     !permissions.canVerify
       ? "Only workspace owners and operators can verify claims."
       : !verifyAvailable
-        ? "Only draft claims can be verified."
+        ? "Only draft claims can move into verified state."
         : null;
 
   const publishReason =
     !permissions.canPublish
       ? "Only workspace owners can publish claims."
       : !publishAvailable
-        ? "Only verified claims can be published."
+        ? "Only verified claims can move into published state."
         : null;
 
   const lockReason =
     !permissions.canLock
       ? "Only workspace owners can lock claims."
       : !lockAvailable
-        ? "Only published claims can be locked."
+        ? "Only published claims can move into locked state."
         : null;
 
-  async function handleBackendDenied(err: unknown, actionLabel: string) {
+  async function handleBackendDenied(err: unknown, action: LifecycleActionKey) {
+    const actionLabel = getLifecycleActionLabel(action);
+
     if (isApiError(err) && err.status === 403) {
       const errorCode = getApiErrorCode(err);
 
       if (errorCode === "claim_limit_reached") {
         openPaywall({
-          reason: "feature_locked",
+          reason: "claim_limit_reached",
           actionLabel,
           message:
             err.payload?.message ||
             err.payload?.upgrade_hint ||
-            "This action is blocked by current workspace plan limits.",
+            "This action is blocked because the workspace has reached its governed claim capacity.",
         });
         return true;
       }
 
       openPaywall({
-        reason: "lifecycle_action_locked",
+        reason: getLifecyclePaywallReason(action),
         actionLabel,
         message:
           err.payload?.message ||
           err.message ||
-          "This lifecycle action is blocked for the current workspace.",
+          "This lifecycle action is currently blocked for the workspace.",
       });
       return true;
     }
@@ -265,59 +287,25 @@ export default function ClaimLifecycleActions({
     return false;
   }
 
-  const verifyClaim = async () => {
+  async function runLifecycleAction(action: LifecycleActionKey, request: () => Promise<unknown>) {
     try {
-      setLoadingAction("verify");
+      setLoadingAction(action);
       setError(null);
-      await api.verifyClaimSchema(claimSchemaId);
+      await request();
       window.location.reload();
     } catch (err) {
       console.error(err);
 
-      const handled = await handleBackendDenied(err, "Verify claim");
+      const handled = await handleBackendDenied(err, action);
       if (!handled) {
-        setError(err instanceof Error ? err.message : "Failed to verify claim.");
+        setError(
+          err instanceof Error ? err.message : `Failed to ${getLifecycleActionLabel(action).toLowerCase()}.`
+        );
       }
     } finally {
       setLoadingAction(null);
     }
-  };
-
-  const publishClaim = async () => {
-    try {
-      setLoadingAction("publish");
-      setError(null);
-      await api.publishClaimSchema(claimSchemaId);
-      window.location.reload();
-    } catch (err) {
-      console.error(err);
-
-      const handled = await handleBackendDenied(err, "Publish claim");
-      if (!handled) {
-        setError(err instanceof Error ? err.message : "Failed to publish claim.");
-      }
-    } finally {
-      setLoadingAction(null);
-    }
-  };
-
-  const lockClaim = async () => {
-    try {
-      setLoadingAction("lock");
-      setError(null);
-      await api.lockClaimSchema(claimSchemaId);
-      window.location.reload();
-    } catch (err) {
-      console.error(err);
-
-      const handled = await handleBackendDenied(err, "Lock claim");
-      if (!handled) {
-        setError(err instanceof Error ? err.message : "Failed to lock claim.");
-      }
-    } finally {
-      setLoadingAction(null);
-    }
-  };
+  }
 
   async function handleVerify() {
     await gateAndExecute(
@@ -327,7 +315,7 @@ export default function ClaimLifecycleActions({
         claimStatus: status,
       },
       async () => {
-        await verifyClaim();
+        await runLifecycleAction("verify", () => api.verifyClaimSchema(claimSchemaId));
       }
     );
   }
@@ -340,7 +328,7 @@ export default function ClaimLifecycleActions({
         claimStatus: status,
       },
       async () => {
-        await publishClaim();
+        await runLifecycleAction("publish", () => api.publishClaimSchema(claimSchemaId));
       }
     );
   }
@@ -353,7 +341,7 @@ export default function ClaimLifecycleActions({
         claimStatus: status,
       },
       async () => {
-        await lockClaim();
+        await runLifecycleAction("lock", () => api.lockClaimSchema(claimSchemaId));
       }
     );
   }
@@ -480,10 +468,10 @@ export default function ClaimLifecycleActions({
         reason={paywallState.reason}
         actionLabel={paywallState.actionLabel || "Claim lifecycle action"}
         message={paywallState.message}
-        currentPlanName="Current workspace plan"
+        currentPlanName="Configured workspace plan"
         currentPlanCode={null}
-        usageLabel="Controlled by workflow entitlements"
-        recommendedPlanName="Pro or Team"
+        usageLabel="Lifecycle and governed claim capacity"
+        recommendedPlanName="Higher workspace plan"
         onUpgrade={() => {
           router.push(`/workspace/${workspaceId}/settings?tab=billing`);
         }}
