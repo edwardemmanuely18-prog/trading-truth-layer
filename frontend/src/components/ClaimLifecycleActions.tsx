@@ -14,7 +14,6 @@ type Props = {
 };
 
 type LifecycleActionKey = "verify" | "publish" | "lock";
-type GateActionKey = "verify_claim" | "publish_claim" | "lock_claim";
 
 function normalizeText(value?: string | null) {
   return String(value || "").toLowerCase().trim();
@@ -193,28 +192,20 @@ function getLifecyclePaywallReason(_action: LifecycleActionKey) {
   return "lifecycle_action_locked" as const;
 }
 
-export default function ClaimLifecycleActions({
-  claimSchemaId,
-  workspaceId,
-  status,
-}: Props) {
-  const router = useRouter();
-  const { getWorkspaceRole } = useAuth();
-  const { gateAndExecute, paywallState, closePaywall, openPaywall } = useWorkspaceGate();
+function getActionAvailability(params: {
+  action: LifecycleActionKey;
+  normalizedStatus: string;
+  workspaceRole: string | null;
+  loadingAction: LifecycleActionKey | null;
+}) {
+  const { action, normalizedStatus, workspaceRole, loadingAction } = params;
 
-  const [loadingAction, setLoadingAction] = useState<LifecycleActionKey | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const isOwner = workspaceRole === "owner";
+  const isOperator = workspaceRole === "operator";
 
-  const workspaceRole = getWorkspaceRole(workspaceId);
-  const normalizedStatus = normalizeText(status);
-
-  const permissions = useMemo(() => {
-    return {
-      canVerify: workspaceRole === "owner" || workspaceRole === "operator",
-      canPublish: workspaceRole === "owner",
-      canLock: workspaceRole === "owner",
-    };
-  }, [workspaceRole]);
+  const canVerifyByRole = isOwner || isOperator;
+  const canPublishByRole = isOwner;
+  const canLockByRole = isOwner;
 
   const verifyAvailable = normalizedStatus === "draft";
   const publishAvailable = normalizedStatus === "verified";
@@ -230,30 +221,109 @@ export default function ClaimLifecycleActions({
 
   const lockCompleted = normalizedStatus === "locked";
 
-  const verifyDisabled = loadingAction !== null || !permissions.canVerify || !verifyAvailable;
-  const publishDisabled = loadingAction !== null || !permissions.canPublish || !publishAvailable;
-  const lockDisabled = loadingAction !== null || !permissions.canLock || !lockAvailable;
+  if (action === "verify") {
+    const roleAllowed = canVerifyByRole;
+    const stateAvailable = verifyAvailable;
+    const completed = verifyCompleted;
 
-  const verifyReason =
-    !permissions.canVerify
-      ? "Only workspace owners and operators can verify claims."
-      : !verifyAvailable
-        ? "Only draft claims can move into verified state."
-        : null;
+    return {
+      roleAllowed,
+      stateAvailable,
+      completed,
+      disabled: loadingAction !== null || !roleAllowed || !stateAvailable,
+      disabledReason: !roleAllowed
+        ? "Only workspace owners and operators can verify claims."
+        : !stateAvailable
+          ? completed
+            ? "This claim has already moved beyond verification."
+            : "Only draft claims can move into verified state."
+          : null,
+      stateLabel: completed ? "completed" : stateAvailable ? "available" : "not available",
+    };
+  }
 
-  const publishReason =
-    !permissions.canPublish
-      ? "Only workspace owners can publish claims."
-      : !publishAvailable
-        ? "Only verified claims can move into published state."
-        : null;
+  if (action === "publish") {
+    const roleAllowed = canPublishByRole;
+    const stateAvailable = publishAvailable;
+    const completed = publishCompleted;
 
-  const lockReason =
-    !permissions.canLock
+    return {
+      roleAllowed,
+      stateAvailable,
+      completed,
+      disabled: loadingAction !== null || !roleAllowed || !stateAvailable,
+      disabledReason: !roleAllowed
+        ? "Only workspace owners can publish claims."
+        : !stateAvailable
+          ? completed
+            ? "This claim has already moved beyond publication."
+            : "Only verified claims can move into published state."
+          : null,
+      stateLabel: completed ? "completed" : stateAvailable ? "available" : "not available",
+    };
+  }
+
+  const roleAllowed = canLockByRole;
+  const stateAvailable = lockAvailable;
+  const completed = lockCompleted;
+
+  return {
+    roleAllowed,
+    stateAvailable,
+    completed,
+    disabled: loadingAction !== null || !roleAllowed || !stateAvailable,
+    disabledReason: !roleAllowed
       ? "Only workspace owners can lock claims."
-      : !lockAvailable
-        ? "Only published claims can move into locked state."
-        : null;
+      : !stateAvailable
+        ? completed
+          ? "This claim is already locked."
+          : "Only published claims can move into locked state."
+        : null,
+    stateLabel: completed ? "completed" : stateAvailable ? "available" : "not available",
+  };
+}
+
+export default function ClaimLifecycleActions({
+  claimSchemaId,
+  workspaceId,
+  status,
+}: Props) {
+  const router = useRouter();
+  const { getWorkspaceRole } = useAuth();
+  const { gateAndExecute, paywallState, closePaywall, openPaywall } = useWorkspaceGate();
+
+  const [loadingAction, setLoadingAction] = useState<LifecycleActionKey | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const workspaceRole = getWorkspaceRole(workspaceId);
+  const normalizedStatus = normalizeText(status);
+
+  const verifyConfig = useMemo(() => {
+    return getActionAvailability({
+      action: "verify",
+      normalizedStatus,
+      workspaceRole,
+      loadingAction,
+    });
+  }, [normalizedStatus, workspaceRole, loadingAction]);
+
+  const publishConfig = useMemo(() => {
+    return getActionAvailability({
+      action: "publish",
+      normalizedStatus,
+      workspaceRole,
+      loadingAction,
+    });
+  }, [normalizedStatus, workspaceRole, loadingAction]);
+
+  const lockConfig = useMemo(() => {
+    return getActionAvailability({
+      action: "lock",
+      normalizedStatus,
+      workspaceRole,
+      loadingAction,
+    });
+  }, [normalizedStatus, workspaceRole, loadingAction]);
 
   async function handleBackendDenied(err: unknown, action: LifecycleActionKey) {
     const actionLabel = getLifecycleActionLabel(action);
@@ -308,6 +378,8 @@ export default function ClaimLifecycleActions({
   }
 
   async function handleVerify() {
+    if (verifyConfig.disabled) return;
+
     await gateAndExecute(
       {
         action: "verify_claim",
@@ -321,6 +393,8 @@ export default function ClaimLifecycleActions({
   }
 
   async function handlePublish() {
+    if (publishConfig.disabled) return;
+
     await gateAndExecute(
       {
         action: "publish_claim",
@@ -334,6 +408,8 @@ export default function ClaimLifecycleActions({
   }
 
   async function handleLock() {
+    if (lockConfig.disabled) return;
+
     await gateAndExecute(
       {
         action: "lock_claim",
@@ -391,25 +467,25 @@ export default function ClaimLifecycleActions({
               </div>
             </div>
           </div>
+
+          <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-xs leading-6 text-slate-600">
+            Role and lifecycle state determine whether an action is operationally available. Workspace
+            billing and governed capacity are enforced at execution time through the blocked-action and
+            upgrade flow.
+          </div>
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
           <StepCard
             title="Verify"
             description="Moves a draft claim into verified state."
-            stateLabel={
-              verifyCompleted
-                ? "completed"
-                : verifyAvailable
-                  ? "available"
-                  : "not available"
-            }
-            isAvailableNow={verifyAvailable}
-            isCompleted={verifyCompleted}
-            disabled={verifyDisabled}
+            stateLabel={verifyConfig.stateLabel}
+            isAvailableNow={verifyConfig.stateAvailable}
+            isCompleted={verifyConfig.completed}
+            disabled={verifyConfig.disabled}
             loading={loadingAction === "verify"}
             actionLabel="Verify"
-            disabledReason={verifyReason}
+            disabledReason={verifyConfig.disabledReason}
             accent="amber"
             onClick={handleVerify}
           />
@@ -417,19 +493,13 @@ export default function ClaimLifecycleActions({
           <StepCard
             title="Publish"
             description="Makes a verified claim publishable for external use."
-            stateLabel={
-              publishCompleted
-                ? "completed"
-                : publishAvailable
-                  ? "available"
-                  : "not available"
-            }
-            isAvailableNow={publishAvailable}
-            isCompleted={publishCompleted}
-            disabled={publishDisabled}
+            stateLabel={publishConfig.stateLabel}
+            isAvailableNow={publishConfig.stateAvailable}
+            isCompleted={publishConfig.completed}
+            disabled={publishConfig.disabled}
             loading={loadingAction === "publish"}
             actionLabel="Publish"
-            disabledReason={publishReason}
+            disabledReason={publishConfig.disabledReason}
             accent="blue"
             onClick={handlePublish}
           />
@@ -437,19 +507,13 @@ export default function ClaimLifecycleActions({
           <StepCard
             title="Lock"
             description="Finalizes the claim and stores the locked trade-set hash."
-            stateLabel={
-              lockCompleted
-                ? "completed"
-                : lockAvailable
-                  ? "available"
-                  : "not available"
-            }
-            isAvailableNow={lockAvailable}
-            isCompleted={lockCompleted}
-            disabled={lockDisabled}
+            stateLabel={lockConfig.stateLabel}
+            isAvailableNow={lockConfig.stateAvailable}
+            isCompleted={lockConfig.completed}
+            disabled={lockConfig.disabled}
             loading={loadingAction === "lock"}
             actionLabel="Lock"
-            disabledReason={lockReason}
+            disabledReason={lockConfig.disabledReason}
             accent="green"
             onClick={handleLock}
           />
