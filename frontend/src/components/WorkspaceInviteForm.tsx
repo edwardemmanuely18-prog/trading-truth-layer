@@ -105,6 +105,11 @@ export default function WorkspaceInviteForm({
     memberUsage?.limit ??
     null;
 
+  const configuredMemberRatio =
+    configuredMemberLimit && configuredMemberLimit > 0 && memberUsage
+      ? memberUsage.used / configuredMemberLimit
+      : null;
+
   const recommendedPlanCode = usage?.upgrade_recommendation?.recommended_plan_code;
   const recommendedPlanName = usage?.upgrade_recommendation?.recommended_plan_name;
   const recommendationBasisPlanCode =
@@ -251,11 +256,19 @@ export default function WorkspaceInviteForm({
               <div className="mt-2 text-xs text-slate-500">Invite blocking uses this limit</div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-4">
-              <div className="text-sm text-slate-500">Utilization</div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+              <div className="text-sm text-slate-500">Effective Utilization</div>
               <div className="mt-1 text-xl font-semibold">{formatPercent(memberUsage?.ratio)}</div>
               <div className="mt-2 text-xs text-slate-500">
                 Calculated against effective enforcement, not the configured commercial tier.
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+              <div className="text-sm text-slate-500">Configured Utilization</div>
+              <div className="mt-1 text-xl font-semibold">{formatPercent(configuredMemberRatio)}</div>
+              <div className="mt-2 text-xs text-slate-500">
+                Calculated against the configured commercial tier headroom.
               </div>
             </div>
           </div>
