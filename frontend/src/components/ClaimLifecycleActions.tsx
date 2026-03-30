@@ -1,8 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, getApiErrorCode, isApiError } from "../lib/api";
+import {
+  api,
+  getApiErrorCode,
+  isApiError,
+  type WorkspaceUsageSummary,
+} from "../lib/api";
 import { useAuth } from "./AuthProvider";
 import PaywallModal from "./PaywallModal";
 import { useWorkspaceGate } from "../hooks/useWorkspaceGate";
@@ -17,6 +22,11 @@ type LifecycleActionKey = "verify" | "publish" | "lock";
 
 function normalizeText(value?: string | null) {
   return String(value || "").toLowerCase().trim();
+}
+
+function formatPercent(value?: number | null) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return `${(Number(value) * 100).toFixed(1)}%`;
 }
 
 function StatusPill({ status }: { status: string }) {
@@ -216,9 +226,7 @@ function getActionAvailability(params: {
     normalizedStatus === "published" ||
     normalizedStatus === "locked";
 
-  const publishCompleted =
-    normalizedStatus === "published" || normalizedStatus === "locked";
-
+  const publishCompleted = normalizedStatus === "published" || normalizedStatus === "locked";
   const lockCompleted = normalizedStatus === "locked";
 
   if (action === "verify") {
@@ -294,9 +302,31 @@ export default function ClaimLifecycleActions({
 
   const [loadingAction, setLoadingAction] = useState<LifecycleActionKey | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
 
   const workspaceRole = getWorkspaceRole(workspaceId);
   const normalizedStatus = normalizeText(status);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadUsage() {
+      try {
+        const result = await api.getWorkspaceUsage(workspaceId);
+        if (!active) return;
+        setUsage(result);
+      } catch {
+        if (!active) return;
+        setUsage(null);
+      }
+    }
+
+    void loadUsage();
+
+    return () => {
+      active = false;
+    };
+  }, [workspaceId]);
 
   const verifyConfig = useMemo(() => {
     return getActionAvailability({
@@ -324,6 +354,32 @@ export default function ClaimLifecycleActions({
       loadingAction,
     });
   }, [normalizedStatus, workspaceRole, loadingAction]);
+
+  const currentPlanName =
+    usage?.plan_catalog?.find(
+      (plan) => normalizeText(plan.code) === normalizeText(usage.plan_code)
+    )?.name || usage?.plan_code || "—";
+
+  const effectivePlanName =
+    usage?.plan_catalog?.find(
+      (plan) => normalizeText(plan.code) === normalizeText(usage.effective_plan_code)
+    )?.name || usage?.effective_plan_code || currentPlanName;
+
+  const recommendedPlanName =
+    usage?.upgrade_recommendation?.recommended_plan_name ||
+    (usage?.governance as { billing_activation_recommended?: boolean } | undefined)
+      ?.billing_activation_recommended
+      ? currentPlanName
+      : "Review billing posture";
+
+  const claimUsage = usage?.usage?.claims;
+  const usageLabel = claimUsage
+    ? `${claimUsage.used} / ${claimUsage.limit}${
+        claimUsage.ratio !== null && claimUsage.ratio !== undefined
+          ? ` · ${formatPercent(claimUsage.ratio)}`
+          : ""
+      }`
+    : `Effective plan: ${effectivePlanName}`;
 
   async function handleBackendDenied(err: unknown, action: LifecycleActionKey) {
     const actionLabel = getLifecycleActionLabel(action);
@@ -471,7 +527,7 @@ export default function ClaimLifecycleActions({
           <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-xs leading-6 text-slate-600">
             Role and lifecycle state determine whether an action is operationally available. Workspace
             billing and governed capacity are enforced at execution time through the blocked-action and
-            upgrade flow.
+            paywall flow.
           </div>
         </div>
 
@@ -532,10 +588,10 @@ export default function ClaimLifecycleActions({
         reason={paywallState.reason}
         actionLabel={paywallState.actionLabel || "Claim lifecycle action"}
         message={paywallState.message}
-        currentPlanName="Configured workspace plan"
-        currentPlanCode={null}
-        usageLabel="Lifecycle and governed claim capacity"
-        recommendedPlanName="Higher workspace plan"
+        currentPlanName={currentPlanName}
+        currentPlanCode={usage?.plan_code || null}
+        usageLabel={usageLabel}
+        recommendedPlanName={recommendedPlanName}
         onUpgrade={() => {
           router.push(`/workspace/${workspaceId}/settings?tab=billing`);
         }}
