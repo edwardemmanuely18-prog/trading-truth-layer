@@ -2,7 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { api, type ClaimSchemaCreatePayload, type WorkspaceUsageSummary } from "../lib/api";
+import {
+  api,
+  getApiErrorCode,
+  isApiError,
+  type ClaimSchemaCreatePayload,
+  type WorkspaceUsageSummary,
+} from "../lib/api";
+import PaywallModal from "./PaywallModal";
+import { useWorkspaceGate } from "../hooks/useWorkspaceGate";
 
 type Props = {
   workspaceId?: number;
@@ -79,6 +87,15 @@ function splitLines(value: string) {
     .filter(Boolean);
 }
 
+function normalizeText(value?: string | null) {
+  return String(value || "").toLowerCase().trim();
+}
+
+function formatPercent(value?: number | null) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return `${(Number(value) * 100).toFixed(1)}%`;
+}
+
 function Pill({
   children,
   className = "",
@@ -93,8 +110,17 @@ function Pill({
   );
 }
 
+function getPlanName(usage?: WorkspaceUsageSummary | null, planCode?: string | null) {
+  const normalized = normalizeText(planCode);
+  const matched = usage?.plan_catalog?.find(
+    (plan) => normalizeText(plan.code) === normalized
+  );
+  return matched?.name || planCode || "current plan";
+}
+
 export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
   const router = useRouter();
+  const { paywallState, closePaywall, openPaywall, gateAndExecute } = useWorkspaceGate();
 
   const [name, setName] = useState("");
   const [periodStart, setPeriodStart] = useState("");
@@ -139,6 +165,19 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
   const claimUsage = usage?.usage?.claims;
   const claimLimitReached =
     (claimUsage?.limit ?? 0) > 0 && (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
+
+  const configuredPlanName = getPlanName(
+    usage,
+    usage?.governance?.configured_plan_code || usage?.plan_code
+  );
+  const effectivePlanName = getPlanName(
+    usage,
+    usage?.governance?.effective_plan_code || usage?.effective_plan_code
+  );
+  const billingActivationRecommended = Boolean(usage?.governance?.billing_activation_recommended);
+  const recommendedPlanName =
+    usage?.upgrade_recommendation?.recommended_plan_name ||
+    configuredPlanName;
 
   const parsedIncludedMembers = useMemo(() => {
     try {
@@ -289,6 +328,26 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
     return nextErrors;
   }
 
+  async function submitCreateClaim() {
+    const payload: ClaimSchemaCreatePayload = {
+      workspace_id: workspaceId,
+      name: name.trim(),
+      period_start: periodStart.trim(),
+      period_end: periodEnd.trim(),
+      included_member_ids_json: parseNumberListStrict(includedMembers),
+      included_symbols_json: parseStringList(includedSymbols),
+      excluded_trade_ids_json: parseNumberListStrict(excludedTradeIds),
+      methodology_notes: methodologyNotes.trim(),
+      visibility,
+    };
+
+    const created = await api.createClaimSchema(payload);
+
+    setStatus(`Draft claim created successfully. Redirecting to claim #${created.id}...`);
+    router.push(`/workspace/${workspaceId}/claim/${created.id}`);
+    router.refresh();
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus(null);
@@ -303,25 +362,43 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
     setLoading(true);
 
     try {
-      const payload: ClaimSchemaCreatePayload = {
-        workspace_id: workspaceId,
-        name: name.trim(),
-        period_start: periodStart.trim(),
-        period_end: periodEnd.trim(),
-        included_member_ids_json: parseNumberListStrict(includedMembers),
-        included_symbols_json: parseStringList(includedSymbols),
-        excluded_trade_ids_json: parseNumberListStrict(excludedTradeIds),
-        methodology_notes: methodologyNotes.trim(),
-        visibility,
-      };
-
-      const created = await api.createClaimSchema(payload);
-
-      setStatus(`Draft claim created successfully. Redirecting to claim #${created.id}...`);
-
-      router.push(`/workspace/${workspaceId}/claim/${created.id}`);
-      router.refresh();
+      await gateAndExecute(
+        {
+          action: "create_claim_version",
+          usage,
+          workspaceRole: "owner",
+        },
+        async () => {
+          await submitCreateClaim();
+        }
+      );
     } catch (err) {
+      if (isApiError(err) && err.status === 403) {
+        const errorCode = getApiErrorCode(err);
+
+        if (errorCode === "claim_limit_reached") {
+          openPaywall({
+            reason: "claim_limit_reached",
+            actionLabel: "Create draft claim",
+            message:
+              err.payload?.message ||
+              err.payload?.upgrade_hint ||
+              "This workspace has reached its governed claim capacity. Review billing and plan posture to continue creating draft claims.",
+          });
+          return;
+        }
+
+        openPaywall({
+          reason: "feature_locked",
+          actionLabel: "Create draft claim",
+          message:
+            err.payload?.message ||
+            err.message ||
+            "Claim creation is currently blocked for this workspace.",
+        });
+        return;
+      }
+
       setErrors((prev) => ({
         ...prev,
         submit: err instanceof Error ? err.message : "Failed to create claim schema.",
@@ -359,448 +436,475 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
   ];
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-          <div>
-            <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700">
-              Guided claim creation
-            </div>
-
-            <h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-950">
-              Claims Schema Builder
-            </h2>
-
-            <p className="mt-4 max-w-4xl text-base leading-8 text-slate-700">
-              Define the exact scope, evidence universe, methodology, and exposure posture for a
-              lifecycle-governed performance claim. This page is the structured entry point for
-              creating claims that can later be verified, published, locked, and publicly audited.
-            </p>
-
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Pill className="border-slate-200 bg-slate-50 text-slate-700">
-                draft-first workflow
-              </Pill>
-              <Pill className="border-slate-200 bg-slate-50 text-slate-700">
-                scope-controlled evidence
-              </Pill>
-              <Pill className="border-slate-200 bg-slate-50 text-slate-700">
-                public verification compatible
-              </Pill>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-              <div className="text-xl font-semibold text-slate-950">Session State</div>
-              <div className="mt-3 text-base text-slate-700">
-                Signed in and ready to create a governed draft claim.
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-              <div className="text-xl font-semibold text-slate-950">Workspace Readiness</div>
-              {usageLoading ? (
-                <div className="mt-3 text-base text-slate-600">Loading claim usage…</div>
-              ) : (
-                <div className="mt-3 space-y-2 text-base text-slate-700">
-                  <div>Workspace #{workspaceId} available for claim operations.</div>
-                  <div>
-                    Claim usage: {claimUsage?.used ?? 0} / {claimUsage?.limit ?? "—"}
-                  </div>
-                  <div>
-                    Utilization:{" "}
-                    {typeof claimUsage?.ratio === "number"
-                      ? `${(claimUsage.ratio * 100).toFixed(1)}%`
-                      : "—"}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-4">
-        {sequence.map((item) => (
-          <div
-            key={item.step}
-            className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"
-          >
-            <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700">
-              {item.step}
-            </div>
-            <div className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
-              {item.title}
-            </div>
-            <div className="mt-3 text-base leading-7 text-slate-700">{item.detail}</div>
-          </div>
-        ))}
-      </section>
-
-      <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h3 className="text-3xl font-bold tracking-tight text-slate-950">Create Draft Claim</h3>
-            <p className="mt-3 max-w-4xl text-base leading-8 text-slate-700">
-              Define the scope of a verification-ready performance claim. After creation, the draft
-              will open in the internal claim view for preview, editing, verification, publishing,
-              and locking.
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-base text-slate-700">
-            <div className="font-medium">Workspace</div>
-            <div className="mt-2 text-2xl font-semibold text-slate-950">#{workspaceId}</div>
-          </div>
-        </div>
-
-        <div className="mt-5 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={applyPresetMarchWindow}
-            className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-medium text-slate-900 hover:bg-slate-50"
-          >
-            Load March preset
-          </button>
-          <button
-            type="button"
-            onClick={applyPresetAprilWindow}
-            className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-medium text-slate-900 hover:bg-slate-50"
-          >
-            Load April preset
-          </button>
-          <button
-            type="button"
-            onClick={applyBlankTemplate}
-            className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-medium text-slate-900 hover:bg-slate-50"
-          >
-            Start blank
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const today = todayIso();
-              setPeriodStart(today);
-              setPeriodEnd(today);
-              setStatus(null);
-            }}
-            className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-medium text-slate-900 hover:bg-slate-50"
-          >
-            Use today
-          </button>
-        </div>
-
-        {claimLimitReached ? (
-          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-base text-amber-800">
-            <div className="font-semibold">
-              Current claim usage: {claimUsage?.used ?? 0} / {claimUsage?.limit ?? 0}
-            </div>
-            <div className="mt-2">
-              Claim creation is blocked by plan policy in production, but this local UI keeps the
-              form available for workflow testing.
-            </div>
-          </div>
-        ) : null}
-
-        <form onSubmit={handleSubmit} className="mt-6">
-          <div className="grid gap-6 xl:grid-cols-[1.7fr_0.9fr_0.95fr]">
-            <div className="space-y-5">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Claim Name</label>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
-                  placeholder="March Verification Window"
-                />
-                {errors.name ? <div className="mt-2 text-sm text-red-600">{errors.name}</div> : null}
+    <>
+      <div className="space-y-6">
+        <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
+            <div>
+              <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700">
+                Guided claim creation
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Period Start
-                  </label>
-                  <input
-                    type="date"
-                    value={periodStart}
-                    onChange={(e) => setPeriodStart(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
-                  />
-                  {errors.periodStart ? (
-                    <div className="mt-2 text-sm text-red-600">{errors.periodStart}</div>
-                  ) : null}
-                </div>
+              <h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-950">
+                Claims Schema Builder
+              </h2>
 
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Period End
-                  </label>
-                  <input
-                    type="date"
-                    value={periodEnd}
-                    onChange={(e) => setPeriodEnd(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
-                  />
-                  {errors.periodEnd ? (
-                    <div className="mt-2 text-sm text-red-600">{errors.periodEnd}</div>
-                  ) : null}
-                </div>
-              </div>
+              <p className="mt-4 max-w-4xl text-base leading-8 text-slate-700">
+                Define the exact scope, evidence universe, methodology, and exposure posture for a
+                lifecycle-governed performance claim. This page is the structured entry point for
+                creating claims that can later be verified, published, locked, and publicly audited.
+              </p>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Included Member IDs
-                  </label>
-                  <input
-                    value={includedMembers}
-                    onChange={(e) => setIncludedMembers(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
-                    placeholder="201, 202, 203"
-                  />
-                  <div className="mt-2 text-sm text-slate-500">
-                    Leave blank to include all members in workspace scope.
-                  </div>
-                  {errors.includedMembers ? (
-                    <div className="mt-2 text-sm text-red-600">{errors.includedMembers}</div>
-                  ) : null}
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Included Symbols
-                  </label>
-                  <input
-                    value={includedSymbols}
-                    onChange={(e) => setIncludedSymbols(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
-                    placeholder="XAUUSD, SPX, BTCUSD"
-                  />
-                  <div className="mt-2 text-sm text-slate-500">
-                    Symbols are normalized to uppercase automatically.
-                  </div>
-                  {errors.includedSymbols ? (
-                    <div className="mt-2 text-sm text-red-600">{errors.includedSymbols}</div>
-                  ) : null}
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Excluded Trade IDs
-                </label>
-                <input
-                  value={excludedTradeIds}
-                  onChange={(e) => setExcludedTradeIds(e.target.value)}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
-                  placeholder="1, 4, 8"
-                />
-                <div className="mt-2 text-sm text-slate-500">
-                  Use exclusions to remove specific ledger rows from the claim set.
-                </div>
-                {errors.excludedTradeIds ? (
-                  <div className="mt-2 text-sm text-red-600">{errors.excludedTradeIds}</div>
-                ) : null}
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Visibility</label>
-                <select
-                  value={visibility}
-                  onChange={(e) => setVisibility(e.target.value as VisibilityOption)}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
-                >
-                  <option value="private">Private</option>
-                  <option value="unlisted">Unlisted</option>
-                  <option value="public">Public</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Methodology Notes
-                </label>
-                <textarea
-                  value={methodologyNotes}
-                  onChange={(e) => setMethodologyNotes(e.target.value)}
-                  className="min-h-[180px] w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
-                  placeholder="Describe scope, exclusions, normalization logic, and any verification notes."
-                />
-                {errors.methodologyNotes ? (
-                  <div className="mt-2 text-sm text-red-600">{errors.methodologyNotes}</div>
-                ) : null}
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Pill className="border-slate-200 bg-slate-50 text-slate-700">
+                  draft-first workflow
+                </Pill>
+                <Pill className="border-slate-200 bg-slate-50 text-slate-700">
+                  scope-controlled evidence
+                </Pill>
+                <Pill className="border-slate-200 bg-slate-50 text-slate-700">
+                  public verification compatible
+                </Pill>
               </div>
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                <h3 className="text-xl font-semibold text-slate-950">Draft Scope Preview</h3>
-
-                <div className="mt-4 space-y-4 text-sm">
-                  <div>
-                    <div className="text-slate-500">Claim Name</div>
-                    <div className="mt-1 font-medium text-slate-950">{name.trim() || "—"}</div>
-                  </div>
-
-                  <div>
-                    <div className="text-slate-500">Period</div>
-                    <div className="mt-1 font-medium text-slate-950">
-                      {periodStart || "—"} → {periodEnd || "—"}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-slate-500">Included Members</div>
-                    <div className="mt-1 font-medium text-slate-950">{helperSummary.members}</div>
-                  </div>
-
-                  <div>
-                    <div className="text-slate-500">Included Symbols</div>
-                    <div className="mt-1 break-words font-medium text-slate-950">
-                      {helperSummary.symbols}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-slate-500">Excluded Trades</div>
-                    <div className="mt-1 break-words font-medium text-slate-950">
-                      {helperSummary.excluded}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-slate-500">Visibility</div>
-                    <div className="mt-2">
-                      <Pill className={visibilityTone(visibility)}>{visibility}</Pill>
-                    </div>
-                  </div>
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                <div className="text-xl font-semibold text-slate-950">Session State</div>
+                <div className="mt-3 text-base text-slate-700">
+                  Signed in and ready to create a governed draft claim.
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                <h3 className="text-xl font-semibold text-slate-950">Lifecycle Reminder</h3>
-                <div className="mt-4 space-y-2 text-sm text-slate-700">
-                  <div>1. Create draft claim</div>
-                  <div>2. Review internal preview</div>
-                  <div>3. Edit draft if needed</div>
-                  <div>4. Verify claim</div>
-                  <div>5. Publish claim</div>
-                  <div>6. Lock claim</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                <h3 className="text-xl font-semibold text-slate-950">Builder Rules</h3>
-                <div className="mt-3 text-sm leading-7 text-slate-700">
-                  Claims should be created as drafts first. Scope and methodology should be
-                  finalized before verification, because downstream lifecycle transitions depend on
-                  this definition.
-                </div>
-              </div>
-
-              <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                <h3 className="text-xl font-semibold text-slate-950">Visibility Guidance</h3>
-                <div className="mt-3 text-sm leading-7 text-slate-700">
-                  {visibilitySummary(visibility)}
-                </div>
-              </div>
-
-              <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                <h3 className="text-xl font-semibold text-slate-950">Recommended Sequence</h3>
-                <div className="mt-3 text-sm leading-7 text-slate-700">
-                  Create draft → review scope → verify claim → publish claim → lock claim → review
-                  public verification surface.
-                </div>
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                <div className="text-xl font-semibold text-slate-950">Workspace Readiness</div>
+                {usageLoading ? (
+                  <div className="mt-3 text-base text-slate-600">Loading claim usage…</div>
+                ) : (
+                  <div className="mt-3 space-y-2 text-base text-slate-700">
+                    <div>Workspace #{workspaceId} available for claim operations.</div>
+                    <div>
+                      Claim usage: {claimUsage?.used ?? 0} / {claimUsage?.limit ?? "—"}
+                    </div>
+                    <div>Utilization: {formatPercent(claimUsage?.ratio)}</div>
+                    <div>
+                      Effective plan:{" "}
+                      <span className="font-semibold text-slate-950">{effectivePlanName}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
+        </section>
 
-          <div className="mt-6 grid gap-4 xl:grid-cols-[1.7fr_1.15fr]">
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-xl font-semibold text-slate-950">Live Structured Summary</div>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <div>
-                  <div className="text-sm text-slate-500">Included member IDs</div>
-                  <div className="mt-2 text-sm text-slate-900">
-                    {parsedIncludedMembers.length > 0
-                      ? parsedIncludedMembers.join(", ")
-                      : "All workspace members"}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-sm text-slate-500">Included symbols</div>
-                  <div className="mt-2 break-words text-sm text-slate-900">
-                    {parsedIncludedSymbols.length > 0
-                      ? parsedIncludedSymbols.join(", ")
-                      : "All symbols"}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-sm text-slate-500">Excluded trade IDs</div>
-                  <div className="mt-2 break-words text-sm text-slate-900">
-                    {parsedExcludedTradeIds.length > 0
-                      ? parsedExcludedTradeIds.join(", ")
-                      : "No exclusions"}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-sm text-slate-500">Methodology lines</div>
-                  <div className="mt-2 text-sm text-slate-900">
-                    {methodologyLines.length > 0 ? methodologyLines.length : 0}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-xl font-semibold text-slate-950">Creation Outcome</div>
-              <div className="mt-3 text-sm leading-7 text-slate-700">
-                The created record opens immediately in the internal claim page, where you can
-                inspect evidence, verify integrity, review audit events, and progress lifecycle
-                state.
-              </div>
-            </div>
-          </div>
-
-          {errors.submit ? (
-            <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
-              {errors.submit}
-            </div>
-          ) : null}
-
-          {status ? (
-            <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-700">
-              {status}
-            </div>
-          ) : null}
-
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+        <section className="grid gap-4 xl:grid-cols-4">
+          {sequence.map((item) => (
+            <div
+              key={item.step}
+              className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"
             >
-              {loading ? "Creating Draft..." : "Create Draft Claim"}
-            </button>
+              <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700">
+                {item.step}
+              </div>
+              <div className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
+                {item.title}
+              </div>
+              <div className="mt-3 text-base leading-7 text-slate-700">{item.detail}</div>
+            </div>
+          ))}
+        </section>
 
+        <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h3 className="text-3xl font-bold tracking-tight text-slate-950">Create Draft Claim</h3>
+              <p className="mt-3 max-w-4xl text-base leading-8 text-slate-700">
+                Define the scope of a verification-ready performance claim. After creation, the draft
+                will open in the internal claim view for preview, editing, verification, publishing,
+                and locking.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-base text-slate-700">
+              <div className="font-medium">Workspace</div>
+              <div className="mt-2 text-2xl font-semibold text-slate-950">#{workspaceId}</div>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={resetForm}
-              disabled={loading}
-              className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+              onClick={applyPresetMarchWindow}
+              className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-medium text-slate-900 hover:bg-slate-50"
             >
-              Reset
+              Load March preset
+            </button>
+            <button
+              type="button"
+              onClick={applyPresetAprilWindow}
+              className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-medium text-slate-900 hover:bg-slate-50"
+            >
+              Load April preset
+            </button>
+            <button
+              type="button"
+              onClick={applyBlankTemplate}
+              className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-medium text-slate-900 hover:bg-slate-50"
+            >
+              Start blank
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const today = todayIso();
+                setPeriodStart(today);
+                setPeriodEnd(today);
+                setStatus(null);
+              }}
+              className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-medium text-slate-900 hover:bg-slate-50"
+            >
+              Use today
             </button>
           </div>
-        </form>
-      </section>
-    </div>
+
+          {claimLimitReached ? (
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-base text-amber-800">
+              <div className="font-semibold">
+                Current claim usage: {claimUsage?.used ?? 0} / {claimUsage?.limit ?? 0}
+              </div>
+              <div className="mt-2">
+                {billingActivationRecommended
+                  ? `This workspace is already configured on ${configuredPlanName}, but billing is not active yet. Effective enforcement still follows ${effectivePlanName}. Activate billing to continue governed claim creation.`
+                  : `Claim creation is blocked under the current enforced capacity posture. Review billing and ${
+                      recommendedPlanName || configuredPlanName
+                    } to continue governed draft creation.`}
+              </div>
+            </div>
+          ) : null}
+
+          <form onSubmit={handleSubmit} className="mt-6">
+            <div className="grid gap-6 xl:grid-cols-[1.7fr_0.9fr_0.95fr]">
+              <div className="space-y-5">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Claim Name</label>
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
+                    placeholder="March Verification Window"
+                  />
+                  {errors.name ? <div className="mt-2 text-sm text-red-600">{errors.name}</div> : null}
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Period Start
+                    </label>
+                    <input
+                      type="date"
+                      value={periodStart}
+                      onChange={(e) => setPeriodStart(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
+                    />
+                    {errors.periodStart ? (
+                      <div className="mt-2 text-sm text-red-600">{errors.periodStart}</div>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Period End
+                    </label>
+                    <input
+                      type="date"
+                      value={periodEnd}
+                      onChange={(e) => setPeriodEnd(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
+                    />
+                    {errors.periodEnd ? (
+                      <div className="mt-2 text-sm text-red-600">{errors.periodEnd}</div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Included Member IDs
+                    </label>
+                    <input
+                      value={includedMembers}
+                      onChange={(e) => setIncludedMembers(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
+                      placeholder="201, 202, 203"
+                    />
+                    <div className="mt-2 text-sm text-slate-500">
+                      Leave blank to include all members in workspace scope.
+                    </div>
+                    {errors.includedMembers ? (
+                      <div className="mt-2 text-sm text-red-600">{errors.includedMembers}</div>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Included Symbols
+                    </label>
+                    <input
+                      value={includedSymbols}
+                      onChange={(e) => setIncludedSymbols(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
+                      placeholder="XAUUSD, SPX, BTCUSD"
+                    />
+                    <div className="mt-2 text-sm text-slate-500">
+                      Symbols are normalized to uppercase automatically.
+                    </div>
+                    {errors.includedSymbols ? (
+                      <div className="mt-2 text-sm text-red-600">{errors.includedSymbols}</div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Excluded Trade IDs
+                  </label>
+                  <input
+                    value={excludedTradeIds}
+                    onChange={(e) => setExcludedTradeIds(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
+                    placeholder="1, 4, 8"
+                  />
+                  <div className="mt-2 text-sm text-slate-500">
+                    Use exclusions to remove specific ledger rows from the claim set.
+                  </div>
+                  {errors.excludedTradeIds ? (
+                    <div className="mt-2 text-sm text-red-600">{errors.excludedTradeIds}</div>
+                  ) : null}
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Visibility</label>
+                  <select
+                    value={visibility}
+                    onChange={(e) => setVisibility(e.target.value as VisibilityOption)}
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
+                  >
+                    <option value="private">Private</option>
+                    <option value="unlisted">Unlisted</option>
+                    <option value="public">Public</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    Methodology Notes
+                  </label>
+                  <textarea
+                    value={methodologyNotes}
+                    onChange={(e) => setMethodologyNotes(e.target.value)}
+                    className="min-h-[180px] w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
+                    placeholder="Describe scope, exclusions, normalization logic, and any verification notes."
+                  />
+                  {errors.methodologyNotes ? (
+                    <div className="mt-2 text-sm text-red-600">{errors.methodologyNotes}</div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                  <h3 className="text-xl font-semibold text-slate-950">Draft Scope Preview</h3>
+
+                  <div className="mt-4 space-y-4 text-sm">
+                    <div>
+                      <div className="text-slate-500">Claim Name</div>
+                      <div className="mt-1 font-medium text-slate-950">{name.trim() || "—"}</div>
+                    </div>
+
+                    <div>
+                      <div className="text-slate-500">Period</div>
+                      <div className="mt-1 font-medium text-slate-950">
+                        {periodStart || "—"} → {periodEnd || "—"}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-slate-500">Included Members</div>
+                      <div className="mt-1 font-medium text-slate-950">{helperSummary.members}</div>
+                    </div>
+
+                    <div>
+                      <div className="text-slate-500">Included Symbols</div>
+                      <div className="mt-1 break-words font-medium text-slate-950">
+                        {helperSummary.symbols}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-slate-500">Excluded Trades</div>
+                      <div className="mt-1 break-words font-medium text-slate-950">
+                        {helperSummary.excluded}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-slate-500">Visibility</div>
+                      <div className="mt-2">
+                        <Pill className={visibilityTone(visibility)}>{visibility}</Pill>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                  <h3 className="text-xl font-semibold text-slate-950">Lifecycle Reminder</h3>
+                  <div className="mt-4 space-y-2 text-sm text-slate-700">
+                    <div>1. Create draft claim</div>
+                    <div>2. Review internal preview</div>
+                    <div>3. Edit draft if needed</div>
+                    <div>4. Verify claim</div>
+                    <div>5. Publish claim</div>
+                    <div>6. Lock claim</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                  <h3 className="text-xl font-semibold text-slate-950">Builder Rules</h3>
+                  <div className="mt-3 text-sm leading-7 text-slate-700">
+                    Claims should be created as drafts first. Scope and methodology should be
+                    finalized before verification, because downstream lifecycle transitions depend on
+                    this definition.
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                  <h3 className="text-xl font-semibold text-slate-950">Visibility Guidance</h3>
+                  <div className="mt-3 text-sm leading-7 text-slate-700">
+                    {visibilitySummary(visibility)}
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                  <h3 className="text-xl font-semibold text-slate-950">Recommended Sequence</h3>
+                  <div className="mt-3 text-sm leading-7 text-slate-700">
+                    Create draft → review scope → verify claim → publish claim → lock claim → review
+                    public verification surface.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 xl:grid-cols-[1.7fr_1.15fr]">
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xl font-semibold text-slate-950">Live Structured Summary</div>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div>
+                    <div className="text-sm text-slate-500">Included member IDs</div>
+                    <div className="mt-2 text-sm text-slate-900">
+                      {parsedIncludedMembers.length > 0
+                        ? parsedIncludedMembers.join(", ")
+                        : "All workspace members"}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm text-slate-500">Included symbols</div>
+                    <div className="mt-2 break-words text-sm text-slate-900">
+                      {parsedIncludedSymbols.length > 0
+                        ? parsedIncludedSymbols.join(", ")
+                        : "All symbols"}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm text-slate-500">Excluded trade IDs</div>
+                    <div className="mt-2 break-words text-sm text-slate-900">
+                      {parsedExcludedTradeIds.length > 0
+                        ? parsedExcludedTradeIds.join(", ")
+                        : "No exclusions"}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm text-slate-500">Methodology lines</div>
+                    <div className="mt-2 text-sm text-slate-900">
+                      {methodologyLines.length > 0 ? methodologyLines.length : 0}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-xl font-semibold text-slate-950">Creation Outcome</div>
+                <div className="mt-3 text-sm leading-7 text-slate-700">
+                  The created record opens immediately in the internal claim page, where you can
+                  inspect evidence, verify integrity, review audit events, and progress lifecycle
+                  state.
+                </div>
+              </div>
+            </div>
+
+            {errors.submit ? (
+              <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+                {errors.submit}
+              </div>
+            ) : null}
+
+            {status ? (
+              <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-700">
+                {status}
+              </div>
+            ) : null}
+
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button
+                type="submit"
+                disabled={loading || usageLoading}
+                className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? "Creating Draft..." : "Create Draft Claim"}
+              </button>
+
+              <button
+                type="button"
+                onClick={resetForm}
+                disabled={loading}
+                className="rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+              >
+                Reset
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+
+      <PaywallModal
+        open={paywallState.open}
+        onClose={closePaywall}
+        reason={paywallState.reason}
+        actionLabel={paywallState.actionLabel || "Create draft claim"}
+        message={paywallState.message}
+        currentPlanName={configuredPlanName}
+        currentPlanCode={usage?.plan_code || null}
+        usageLabel={
+          claimUsage
+            ? `${claimUsage.used} / ${claimUsage.limit}${
+                claimUsage.ratio !== null && claimUsage.ratio !== undefined
+                  ? ` · ${formatPercent(claimUsage.ratio)}`
+                  : ""
+              }`
+            : `Effective plan: ${effectivePlanName}`
+        }
+        recommendedPlanName={billingActivationRecommended ? configuredPlanName : recommendedPlanName}
+        onUpgrade={() => {
+          router.push(`/workspace/${workspaceId}/settings?tab=billing`);
+        }}
+      />
+    </>
   );
 }
