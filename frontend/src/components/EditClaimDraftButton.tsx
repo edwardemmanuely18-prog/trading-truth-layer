@@ -14,15 +14,19 @@ type Props = {
   onSaved: (updated: ClaimSchema) => Promise<void> | void;
 };
 
+function normalizeText(value?: string | null) {
+  return String(value || "").toLowerCase().trim();
+}
+
 function StatusBadge({ status }: { status: string }) {
-  const normalized = status?.toLowerCase?.() || "";
+  const normalized = normalizeText(status);
 
   const cls =
     normalized === "draft"
-      ? "bg-amber-100 text-amber-800 border-amber-200"
+      ? "border-amber-200 bg-amber-100 text-amber-800"
       : normalized === "locked"
-        ? "bg-emerald-100 text-emerald-800 border-emerald-200"
-        : "bg-slate-100 text-slate-700 border-slate-200";
+        ? "border-emerald-200 bg-emerald-100 text-emerald-800"
+        : "border-slate-200 bg-slate-100 text-slate-700";
 
   return (
     <span
@@ -42,16 +46,16 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
   const workspaceRole = getWorkspaceRole(claim.workspace_id);
 
   const canEditDraft = useMemo(() => {
-    if (claim.status !== "draft") return false;
+    if (normalizeText(claim.status) !== "draft") return false;
     return workspaceRole === "owner" || workspaceRole === "operator";
   }, [claim.status, workspaceRole]);
 
   const disabledReason = useMemo(() => {
-    if (claim.status !== "draft") {
-      return "Editing disabled: claim is no longer in draft state.";
+    if (normalizeText(claim.status) !== "draft") {
+      return "Editing disabled: this claim is no longer in draft state.";
     }
     if (!(workspaceRole === "owner" || workspaceRole === "operator")) {
-      return "Editing restricted: insufficient permissions.";
+      return "Editing restricted: only workspace owners and operators can edit draft claims.";
     }
     return null;
   }, [claim.status, workspaceRole]);
@@ -78,7 +82,7 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
           message:
             err.payload?.message ||
             err.payload?.upgrade_hint ||
-            "This draft action is blocked for the current workspace.",
+            "This draft editing action is currently blocked for the workspace.",
         });
         return;
       }
@@ -89,17 +93,17 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
 
   return (
     <>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <StatusBadge status={claim.status} />
 
         <button
           type="button"
           onClick={() => void handleOpenEditor()}
-          disabled={false}
+          disabled={!canEditDraft}
           className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
             canEditDraft
               ? "bg-slate-900 text-white hover:bg-slate-800"
-              : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              : "cursor-not-allowed border border-slate-300 bg-slate-100 text-slate-500"
           }`}
         >
           Edit Draft
@@ -125,8 +129,8 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
         message={paywallState.message}
         currentPlanName="Current workspace plan"
         currentPlanCode={null}
-        usageLabel="Controlled by workflow entitlements"
-        recommendedPlanName="Pro or Team"
+        usageLabel="Draft editing governed by workflow entitlements"
+        recommendedPlanName="Higher workspace plan"
         onUpgrade={() => {
           router.push(`/workspace/${claim.workspace_id}/settings?tab=billing`);
         }}
