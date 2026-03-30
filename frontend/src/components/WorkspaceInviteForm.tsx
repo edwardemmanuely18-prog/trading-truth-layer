@@ -82,18 +82,44 @@ export default function WorkspaceInviteForm({
   }, [workspaceId]);
 
   const memberUsage = usage?.usage?.members;
-  const currentPlan = useMemo(() => {
+
+  const configuredPlan = useMemo(() => {
     return usage?.plan_catalog?.find(
       (plan) => normalizeText(plan.code) === normalizeText(usage?.plan_code)
     );
   }, [usage]);
 
+  const effectivePlan = useMemo(() => {
+    return usage?.plan_catalog?.find(
+      (plan) => normalizeText(plan.code) === normalizeText(usage?.effective_plan_code)
+    );
+  }, [usage]);
+
+  const configuredPlanName = configuredPlan?.name || usage?.plan_code || "—";
+  const effectivePlanName = effectivePlan?.name || usage?.effective_plan_code || "—";
+
+  const configuredMemberLimit =
+    (configuredPlan?.limits as { member_limit?: number } | undefined)?.member_limit ?? null;
+  const effectiveMemberLimit =
+    (effectivePlan?.limits as { member_limit?: number } | undefined)?.member_limit ??
+    memberUsage?.limit ??
+    null;
+
   const recommendedPlanCode = usage?.upgrade_recommendation?.recommended_plan_code;
   const recommendedPlanName = usage?.upgrade_recommendation?.recommended_plan_name;
+  const recommendationBasisPlanCode =
+    (usage?.upgrade_recommendation as { recommendation_basis_plan_code?: string } | undefined)
+      ?.recommendation_basis_plan_code || usage?.plan_code;
 
   const hasDistinctRecommendation =
     !!recommendedPlanCode &&
-    normalizeText(recommendedPlanCode) !== normalizeText(usage?.plan_code);
+    normalizeText(recommendedPlanCode) !== normalizeText(recommendationBasisPlanCode);
+
+  const billingActivationRecommended = Boolean(
+    (usage?.governance as { billing_activation_recommended?: boolean } | undefined)
+      ?.billing_activation_recommended
+  );
+  const planMismatch = Boolean(usage?.governance?.plan_mismatch);
 
   const memberStatus = memberUsage?.status || "ok";
   const memberAtLimit = memberStatus === "at_limit";
@@ -167,9 +193,9 @@ export default function WorkspaceInviteForm({
           <div className="text-sm text-slate-500">Invitation Control</div>
           <h2 className="mt-2 text-2xl font-semibold">Invite Workspace Member</h2>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            Send a controlled invite into this workspace. Member capacity is governed by the
-            active workspace plan, so invitation creation is blocked when the member ceiling is
-            reached.
+            Send a controlled invite into this workspace. Member capacity enforcement follows the
+            currently effective workspace plan, which may differ from the configured commercial tier
+            when billing is not yet active.
           </p>
         </div>
 
@@ -180,37 +206,87 @@ export default function WorkspaceInviteForm({
       </div>
 
       {usage ? (
-        <div className="mt-6 grid gap-4 md:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-sm text-slate-500">Current Plan</div>
-            <div className="mt-1 text-xl font-semibold">
-              {currentPlan?.name || usage.plan_code || "—"}
+        <>
+          {planMismatch ? (
+            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900">
+              <div className="text-lg font-semibold">Configured vs effective plan</div>
+              <div className="mt-2 text-sm">
+                Configured plan: <span className="font-semibold">{configuredPlanName}</span>
+                <span className="mx-2">·</span>
+                Effective enforced plan: <span className="font-semibold">{effectivePlanName}</span>
+              </div>
+              <p className="mt-3 text-sm">
+                Billing is not fully active, so invite blocking and capacity enforcement currently
+                follow the effective plan.
+              </p>
+            </div>
+          ) : null}
+
+          <div className="mt-6 grid gap-4 md:grid-cols-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm text-slate-500">Configured Plan</div>
+              <div className="mt-1 text-xl font-semibold">{configuredPlanName}</div>
+              {planMismatch ? (
+                <div className="mt-2 text-xs text-slate-500">
+                  Enforcement currently falling back to {effectivePlanName}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm text-slate-500">Members Used</div>
+              <div className="mt-1 text-xl font-semibold">{memberUsage?.used ?? 0}</div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm text-slate-500">Configured Member Limit</div>
+              <div className="mt-1 text-xl font-semibold">{configuredMemberLimit ?? "—"}</div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm text-slate-500">Effective Member Limit</div>
+              <div className="mt-1 text-xl font-semibold">
+                {effectiveMemberLimit ?? memberUsage?.limit ?? "—"}
+              </div>
+              <div className="mt-2 text-xs text-slate-500">Invite blocking uses this limit</div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-4">
+              <div className="text-sm text-slate-500">Utilization</div>
+              <div className="mt-1 text-xl font-semibold">{formatPercent(memberUsage?.ratio)}</div>
+              <div className="mt-2 text-xs text-slate-500">
+                Calculated against effective enforcement, not the configured commercial tier.
+              </div>
             </div>
           </div>
+        </>
+      ) : null}
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-sm text-slate-500">Members Used</div>
-            <div className="mt-1 text-xl font-semibold">{memberUsage?.used ?? 0}</div>
-          </div>
+      {billingActivationRecommended ? (
+        <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-blue-900">
+          <div className="text-lg font-semibold">Billing activation needed</div>
+          <p className="mt-2 text-sm">
+            This workspace is already configured on a higher tier. The next operational step is to
+            activate billing so invite capacity enforcement can match the configured plan.
+          </p>
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-sm text-slate-500">Member Limit</div>
-            <div className="mt-1 text-xl font-semibold">{memberUsage?.limit ?? 0}</div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-sm text-slate-500">Utilization</div>
-            <div className="mt-1 text-xl font-semibold">{formatPercent(memberUsage?.ratio)}</div>
+          <div className="mt-4">
+            <Link
+              href={`/workspace/${workspaceId}/settings`}
+              className="inline-flex rounded-xl border border-blue-300 bg-white px-5 py-3 text-sm font-semibold text-blue-900 hover:bg-blue-100"
+            >
+              Open Settings & Billing
+            </Link>
           </div>
         </div>
       ) : null}
 
-      {usage?.governance?.upgrade_required_now ? (
+      {usage?.governance?.upgrade_required_now && !billingActivationRecommended ? (
         <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900">
           <div className="text-lg font-semibold">Upgrade Required</div>
           <p className="mt-2 text-sm">
-            This workspace is constrained by one or more current plan limits. Member invitation
-            workflows may be blocked until the plan is upgraded.
+            This workspace is constrained by one or more current enforced plan limits. Member
+            invitation workflows may be blocked until plan capacity is increased.
           </p>
 
           {usage.upgrade_recommendation?.breached_dimensions?.length ? (
@@ -246,12 +322,14 @@ export default function WorkspaceInviteForm({
         </div>
       ) : null}
 
-      {!usage?.governance?.upgrade_required_now && usage?.governance?.upgrade_recommended_soon ? (
+      {!usage?.governance?.upgrade_required_now &&
+      !billingActivationRecommended &&
+      usage?.governance?.upgrade_recommended_soon ? (
         <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-blue-900">
           <div className="text-lg font-semibold">Upgrade Recommended Soon</div>
           <p className="mt-2 text-sm">
-            This workspace is nearing one or more plan ceilings. Upgrading now will reduce the risk
-            of interruption in member-management workflows.
+            This workspace is nearing one or more effective plan ceilings. Upgrading now will reduce
+            the risk of interruption in member-management workflows.
           </p>
 
           {usage.upgrade_recommendation?.near_limit_dimensions?.length ? (
@@ -295,22 +373,22 @@ export default function WorkspaceInviteForm({
 
       {memberNearLimit && !inviteBlockedByCapacity ? (
         <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-          Member capacity is nearing the current plan ceiling. You can still invite now, but an
-          upgrade is recommended soon.
+          Member capacity is nearing the currently enforced ceiling. You can still invite now, but
+          plan posture should be reviewed soon.
         </div>
       ) : null}
 
       {memberAtLimit ? (
         <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          Member capacity is fully used. New invites are blocked until the workspace plan is
-          upgraded.
+          Member capacity is fully used under the current effective plan. New invites are blocked
+          until the workspace billing or plan posture improves.
         </div>
       ) : null}
 
       {memberOverLimit ? (
         <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          Member usage is already above the allowed plan ceiling. Upgrade the workspace before
-          inviting more users.
+          Member usage is already above the allowed effective plan ceiling. Improve billing or plan
+          posture before inviting more users.
         </div>
       ) : null}
 
