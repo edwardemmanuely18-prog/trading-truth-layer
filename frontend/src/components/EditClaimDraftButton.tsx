@@ -44,23 +44,29 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
   const { gateAndExecute, paywallState, closePaywall, openPaywall } = useWorkspaceGate();
 
   const workspaceRole = getWorkspaceRole(claim.workspace_id);
+  const normalizedStatus = normalizeText(claim.status);
 
-  const canEditDraft = useMemo(() => {
-    if (normalizeText(claim.status) !== "draft") return false;
-    return workspaceRole === "owner" || workspaceRole === "operator";
-  }, [claim.status, workspaceRole]);
+  const isOwner = workspaceRole === "owner";
+  const isOperator = workspaceRole === "operator";
+
+  const roleAllowed = isOwner || isOperator;
+  const stateAllowed = normalizedStatus === "draft";
+
+  const disabled = !roleAllowed || !stateAllowed;
 
   const disabledReason = useMemo(() => {
-    if (normalizeText(claim.status) !== "draft") {
+    if (!stateAllowed) {
       return "Editing disabled: this claim is no longer in draft state.";
     }
-    if (!(workspaceRole === "owner" || workspaceRole === "operator")) {
+    if (!roleAllowed) {
       return "Editing restricted: only workspace owners and operators can edit draft claims.";
     }
     return null;
-  }, [claim.status, workspaceRole]);
+  }, [stateAllowed, roleAllowed]);
 
   async function handleOpenEditor() {
+    if (disabled) return;
+
     try {
       await gateAndExecute(
         {
@@ -76,13 +82,25 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
       if (isApiError(err) && err.status === 403) {
         const errorCode = getApiErrorCode(err);
 
+        if (errorCode === "claim_limit_reached") {
+          openPaywall({
+            reason: "claim_limit_reached",
+            actionLabel: "Edit draft",
+            message:
+              err.payload?.message ||
+              err.payload?.upgrade_hint ||
+              "This workspace has reached its governed claim capacity.",
+          });
+          return;
+        }
+
         openPaywall({
-          reason: errorCode === "claim_limit_reached" ? "feature_locked" : "edit_locked",
+          reason: "lifecycle_action_locked",
           actionLabel: "Edit draft",
           message:
             err.payload?.message ||
-            err.payload?.upgrade_hint ||
-            "This draft editing action is currently blocked for the workspace.",
+            err.message ||
+            "Draft editing is currently blocked for this workspace.",
         });
         return;
       }
@@ -99,9 +117,9 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
         <button
           type="button"
           onClick={() => void handleOpenEditor()}
-          disabled={!canEditDraft}
+          disabled={disabled}
           className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-            canEditDraft
+            !disabled
               ? "bg-slate-900 text-white hover:bg-slate-800"
               : "cursor-not-allowed border border-slate-300 bg-slate-100 text-slate-500"
           }`}
@@ -109,7 +127,7 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
           Edit Draft
         </button>
 
-        {!canEditDraft && disabledReason ? (
+        {disabled && disabledReason ? (
           <div className="text-xs text-slate-500">{disabledReason}</div>
         ) : null}
 
@@ -127,7 +145,7 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
         reason={paywallState.reason}
         actionLabel={paywallState.actionLabel || "Edit draft"}
         message={paywallState.message}
-        currentPlanName="Current workspace plan"
+        currentPlanName="Configured workspace plan"
         currentPlanCode={null}
         usageLabel="Draft editing governed by workflow entitlements"
         recommendedPlanName="Higher workspace plan"
