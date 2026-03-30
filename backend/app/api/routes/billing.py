@@ -90,6 +90,23 @@ def normalize_billing_status(value: str | None) -> str:
     return normalized if normalized in allowed else "inactive"
 
 
+def is_paid_billing_status(value: str | None) -> bool:
+    return normalize_billing_status(value) in {"active", "trialing"}
+
+
+def resolve_effective_plan_code(workspace: Workspace) -> str:
+    configured_plan = normalize_plan_code(workspace.plan_code)
+    billing_status = normalize_billing_status(workspace.billing_status)
+
+    if configured_plan == "starter":
+        return "starter"
+
+    if is_paid_billing_status(billing_status):
+        return configured_plan
+
+    return "starter"
+
+
 def map_stripe_subscription_status(value: str | None) -> str:
     normalized = str(value or "").strip().lower()
 
@@ -440,6 +457,36 @@ def resolve_stripe_price_id_from_lookup_key(lookup_key: str) -> tuple[str | None
     return price_id, None
 
 
+def can_start_checkout_for_target_plan(workspace: Workspace, target_plan_code: str) -> bool:
+    configured_plan_code = normalize_plan_code(workspace.plan_code)
+    target_normalized = normalize_plan_code(target_plan_code)
+    billing_status = normalize_billing_status(workspace.billing_status)
+
+    if target_normalized != configured_plan_code:
+        return True
+
+    if configured_plan_code == "starter":
+        return False
+
+    return not is_paid_billing_status(billing_status)
+
+
+def checkout_intent_for_target_plan(workspace: Workspace, target_plan_code: str) -> str:
+    configured_plan_code = normalize_plan_code(workspace.plan_code)
+    target_normalized = normalize_plan_code(target_plan_code)
+
+    if target_normalized != configured_plan_code:
+        return "plan_change"
+
+    if target_normalized == "starter":
+        return "no_op"
+
+    if is_paid_billing_status(workspace.billing_status):
+        return "no_op"
+
+    return "billing_activation"
+
+
 def update_workspace_billing_from_subscription(
     workspace: Workspace,
     subscription,
@@ -738,12 +785,18 @@ def get_workspace_billing_foundation(
 
     current_plan = get_plan_definition(workspace.plan_code)
     manual_payment_details = get_manual_payment_details()
+    configured_plan_code = normalize_plan_code(workspace.plan_code)
+    effective_plan_code = resolve_effective_plan_code(workspace)
+    billing_status = normalize_billing_status(workspace.billing_status)
 
     return {
         "workspace_id": workspace.id,
-        "plan_code": normalize_plan_code(workspace.plan_code),
+        "plan_code": configured_plan_code,
         "plan_name": current_plan["name"],
-        "billing_status": normalize_billing_status(workspace.billing_status),
+        "effective_plan_code": effective_plan_code,
+        "billing_status": billing_status,
+        "billing_status_is_paid": is_paid_billing_status(billing_status),
+        "plan_mismatch": configured_plan_code != effective_plan_code,
         "billing_email": workspace.billing_email,
         "stripe_customer_id": workspace.stripe_customer_id,
         "stripe_subscription_id": workspace.stripe_subscription_id,
@@ -823,8 +876,9 @@ def create_billing_checkout_session(
     current_plan_code = normalize_plan_code(workspace.plan_code)
     resolved_plan_code = normalize_plan_code(payload.plan_code)
     billing_cycle = normalize_billing_cycle(payload.billing_cycle)
+    checkout_intent = checkout_intent_for_target_plan(workspace, resolved_plan_code)
 
-    if resolved_plan_code == current_plan_code:
+    if not can_start_checkout_for_target_plan(workspace, resolved_plan_code):
         return {
             "mode": "no_op_same_plan",
             "checkout_url": None,
@@ -833,7 +887,8 @@ def create_billing_checkout_session(
             "current_plan_code": current_plan_code,
             "target_plan_code": resolved_plan_code,
             "billing_cycle": billing_cycle,
-            "message": "Selected plan matches the workspace current plan. Choose a different plan to start checkout.",
+            "checkout_intent": checkout_intent,
+            "message": "Selected plan already matches the active workspace plan posture.",
         }
 
     if paddle_is_ready():
@@ -847,6 +902,7 @@ def create_billing_checkout_session(
                 "current_plan_code": current_plan_code,
                 "target_plan_code": resolved_plan_code,
                 "billing_cycle": billing_cycle,
+                "checkout_intent": checkout_intent,
                 "message": f"No Paddle price id is mapped for {resolved_plan_code} ({billing_cycle}).",
             }
 
@@ -863,6 +919,7 @@ def create_billing_checkout_session(
                 "owner_user_id": str(current_user.id),
                 "target_plan_code": resolved_plan_code,
                 "billing_cycle": billing_cycle,
+                "checkout_intent": checkout_intent,
             },
         }
 
@@ -876,6 +933,7 @@ def create_billing_checkout_session(
                 "current_plan_code": current_plan_code,
                 "target_plan_code": resolved_plan_code,
                 "billing_cycle": billing_cycle,
+                "checkout_intent": checkout_intent,
                 "message": paddle_error,
                 "diagnostics": {
                     "paddle_enabled": bool(getattr(settings, "PADDLE_BILLING_ENABLED", False)),
@@ -899,6 +957,7 @@ def create_billing_checkout_session(
                 "current_plan_code": current_plan_code,
                 "target_plan_code": resolved_plan_code,
                 "billing_cycle": billing_cycle,
+                "checkout_intent": checkout_intent,
                 "message": "Paddle transaction was created but no checkout URL was returned.",
                 "diagnostics": {
                     "paddle_transaction_id": data.get("id"),
@@ -923,6 +982,7 @@ def create_billing_checkout_session(
             "current_plan_code": current_plan_code,
             "target_plan_code": resolved_plan_code,
             "billing_cycle": billing_cycle,
+            "checkout_intent": checkout_intent,
             "paddle_price_id": paddle_price_id,
             "message": "Paddle checkout created successfully.",
         }
@@ -940,6 +1000,7 @@ def create_billing_checkout_session(
                 "current_plan_code": current_plan_code,
                 "target_plan_code": resolved_plan_code,
                 "billing_cycle": billing_cycle,
+                "checkout_intent": checkout_intent,
                 "message": customer_error,
                 "diagnostics": {
                     "stripe_package_installed": stripe is not None,
@@ -959,6 +1020,7 @@ def create_billing_checkout_session(
                 "current_plan_code": current_plan_code,
                 "target_plan_code": resolved_plan_code,
                 "billing_cycle": billing_cycle,
+                "checkout_intent": checkout_intent,
                 "message": price_error,
                 "diagnostics": {
                     "stripe_package_installed": stripe is not None,
@@ -984,6 +1046,7 @@ def create_billing_checkout_session(
                     "owner_user_id": str(current_user.id),
                     "target_plan_code": resolved_plan_code,
                     "billing_cycle": billing_cycle,
+                    "checkout_intent": checkout_intent,
                 },
                 subscription_data={
                     "metadata": {
@@ -992,6 +1055,7 @@ def create_billing_checkout_session(
                         "owner_user_id": str(current_user.id),
                         "target_plan_code": resolved_plan_code,
                         "billing_cycle": billing_cycle,
+                        "checkout_intent": checkout_intent,
                     }
                 },
                 customer=getattr(customer, "id", None),
@@ -1007,6 +1071,7 @@ def create_billing_checkout_session(
                 "current_plan_code": current_plan_code,
                 "target_plan_code": resolved_plan_code,
                 "billing_cycle": billing_cycle,
+                "checkout_intent": checkout_intent,
                 "message": f"Stripe checkout session creation failed: {exc}",
                 "diagnostics": {
                     "stripe_package_installed": stripe is not None,
@@ -1031,6 +1096,7 @@ def create_billing_checkout_session(
             "current_plan_code": current_plan_code,
             "target_plan_code": resolved_plan_code,
             "billing_cycle": billing_cycle,
+            "checkout_intent": checkout_intent,
             "stripe_customer_id": workspace.stripe_customer_id,
             "stripe_price_id": price_id,
             "stripe_price_lookup_key": price_lookup_key,
@@ -1052,6 +1118,7 @@ def create_billing_checkout_session(
             "current_plan_code": current_plan_code,
             "target_plan_code": resolved_plan_code,
             "billing_cycle": billing_cycle,
+            "checkout_intent": checkout_intent,
             "message": (
                 f"Manual billing instructions generated for {resolved_plan_code} "
                 f"({billing_cycle}). Complete payment using the details shown below, "
@@ -1075,6 +1142,7 @@ def create_billing_checkout_session(
         "current_plan_code": current_plan_code,
         "target_plan_code": resolved_plan_code,
         "billing_cycle": billing_cycle,
+        "checkout_intent": checkout_intent,
         "message": (
             "Checkout foundation is ready, but Paddle, Stripe, and manual billing "
             "are not fully configured yet."
