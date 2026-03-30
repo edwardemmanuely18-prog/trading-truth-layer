@@ -109,15 +109,19 @@ export type PlanBilling = {
   annual_price_usd?: number | null;
   currency?: string | null;
   billing_interval?: string | null;
+  stripe_price_lookup_key_monthly?: string | null;
+  stripe_price_lookup_key_annual?: string | null;
 };
 
-export type WorkspacePlanDetail = {
+export type PlanDetail = {
   code: string;
   name: string;
   description: string;
   recommended_for: string[];
-  billing?: PlanBilling;
+  billing: PlanBilling;
 };
+
+export type WorkspacePlanDetail = PlanDetail;
 
 export type WorkspaceSettings = {
   workspace_id: number;
@@ -141,6 +145,23 @@ export type WorkspaceSettings = {
     storage_limit_mb: number;
   };
   plan_detail?: WorkspacePlanDetail;
+  effective_plan_code: string;
+  effective_plan_detail?: PlanDetail;
+  effective_limits?: {
+    claim_limit: number;
+    trade_limit: number;
+    member_limit: number;
+    storage_limit_mb: number;
+  };
+  plan_governance?: {
+    configured_plan_code: string;
+    effective_plan_code: string;
+    billing_status: string;
+    paid_access_active: boolean;
+    plan_mismatch: boolean;
+    reason: string;
+    message: string;
+  };
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -177,6 +198,7 @@ export type UpgradeRecommendation = {
   current_plan_code: string;
   recommended_plan_code: string;
   recommended_plan_name: string;
+  recommended_plan_is_distinct?: boolean;
   upgrade_required_now: boolean;
   upgrade_recommended_soon: boolean;
   breached_dimensions: string[];
@@ -189,6 +211,12 @@ export type WorkspaceGovernance = {
   has_any_near_limit: boolean;
   upgrade_required_now: boolean;
   upgrade_recommended_soon: boolean;
+  configured_plan_code?: string;
+  effective_plan_code?: string;
+  paid_access_active?: boolean;
+  plan_mismatch?: boolean;
+  plan_mismatch_reason?: string;
+  plan_mismatch_message?: string;
 };
 
 export type WorkspaceStripeReadiness = {
@@ -201,6 +229,7 @@ export type WorkspaceUsageSummary = {
   workspace_id: number;
   plan_code: string;
   billing_status: string;
+  effective_plan_code: string;
   usage: {
     members: UsageDimension;
     trades: UsageDimension;
@@ -211,6 +240,8 @@ export type WorkspaceUsageSummary = {
   governance?: WorkspaceGovernance;
   upgrade_recommendation?: UpgradeRecommendation;
   plan_catalog?: PlanCatalogItem[];
+  configured_plan_detail?: PlanDetail;
+  effective_plan_detail?: PlanDetail;
 };
 
 export type BillingDiagnostics = {
@@ -823,6 +854,8 @@ function ensurePlanBilling(row?: Partial<PlanBilling> | null): PlanBilling {
         : row?.annual_price_usd ?? null,
     currency: row?.currency ?? "USD",
     billing_interval: row?.billing_interval ?? "monthly",
+    stripe_price_lookup_key_monthly: row?.stripe_price_lookup_key_monthly ?? null,
+    stripe_price_lookup_key_annual: row?.stripe_price_lookup_key_annual ?? null,
   };
 }
 
@@ -874,6 +907,27 @@ function ensureWorkspaceSettings(row: WorkspaceSettings): WorkspaceSettings {
       storage_limit_mb: Number(row?.limits?.storage_limit_mb ?? 0),
     },
     plan_detail: ensureWorkspacePlanDetail(row?.plan_detail),
+    effective_plan_code: String(row?.effective_plan_code ?? row?.plan_code ?? "starter"),
+    effective_plan_detail: ensureWorkspacePlanDetail(row?.effective_plan_detail),
+    effective_limits: row?.effective_limits
+      ? {
+          claim_limit: Number(row.effective_limits.claim_limit ?? 0),
+          trade_limit: Number(row.effective_limits.trade_limit ?? 0),
+          member_limit: Number(row.effective_limits.member_limit ?? 0),
+          storage_limit_mb: Number(row.effective_limits.storage_limit_mb ?? 0),
+        }
+      : undefined,
+    plan_governance: row?.plan_governance
+      ? {
+          configured_plan_code: String(row.plan_governance.configured_plan_code ?? row.plan_code ?? "starter"),
+          effective_plan_code: String(row.plan_governance.effective_plan_code ?? row.effective_plan_code ?? row.plan_code ?? "starter"),
+          billing_status: String(row.plan_governance.billing_status ?? row.billing_status ?? "inactive"),
+          paid_access_active: Boolean(row.plan_governance.paid_access_active),
+          plan_mismatch: Boolean(row.plan_governance.plan_mismatch),
+          reason: String(row.plan_governance.reason ?? "ok"),
+          message: String(row.plan_governance.message ?? ""),
+        }
+      : undefined,
   };
 }
 
@@ -912,6 +966,7 @@ function ensureUsageDimension(row?: Partial<UsageDimension> | null): UsageDimens
 function ensureWorkspaceUsageSummary(row: WorkspaceUsageSummary): WorkspaceUsageSummary {
   return {
     ...row,
+    effective_plan_code: String(row?.effective_plan_code ?? row?.plan_code ?? "starter"),
     usage: {
       members: ensureUsageDimension(row?.usage?.members),
       trades: ensureUsageDimension(row?.usage?.trades),
@@ -931,6 +986,12 @@ function ensureWorkspaceUsageSummary(row: WorkspaceUsageSummary): WorkspaceUsage
           has_any_near_limit: Boolean(row.governance.has_any_near_limit),
           upgrade_required_now: Boolean(row.governance.upgrade_required_now),
           upgrade_recommended_soon: Boolean(row.governance.upgrade_recommended_soon),
+          configured_plan_code: row.governance.configured_plan_code ?? row.plan_code,
+          effective_plan_code: row.governance.effective_plan_code ?? row.effective_plan_code ?? row.plan_code,
+          paid_access_active: Boolean(row.governance.paid_access_active),
+          plan_mismatch: Boolean(row.governance.plan_mismatch),
+          plan_mismatch_reason: row.governance.plan_mismatch_reason ?? "",
+          plan_mismatch_message: row.governance.plan_mismatch_message ?? "",
         }
       : undefined,
     upgrade_recommendation: row?.upgrade_recommendation
@@ -938,6 +999,7 @@ function ensureWorkspaceUsageSummary(row: WorkspaceUsageSummary): WorkspaceUsage
           current_plan_code: row.upgrade_recommendation.current_plan_code,
           recommended_plan_code: row.upgrade_recommendation.recommended_plan_code,
           recommended_plan_name: row.upgrade_recommendation.recommended_plan_name,
+          recommended_plan_is_distinct: Boolean(row.upgrade_recommendation.recommended_plan_is_distinct),
           upgrade_required_now: Boolean(row.upgrade_recommendation.upgrade_required_now),
           upgrade_recommended_soon: Boolean(row.upgrade_recommendation.upgrade_recommended_soon),
           breached_dimensions: Array.isArray(row.upgrade_recommendation.breached_dimensions)
@@ -951,6 +1013,8 @@ function ensureWorkspaceUsageSummary(row: WorkspaceUsageSummary): WorkspaceUsage
     plan_catalog: Array.isArray(row?.plan_catalog)
       ? row.plan_catalog.map((item) => ensurePlanCatalogItem(item))
       : [],
+    configured_plan_detail: ensureWorkspacePlanDetail(row?.configured_plan_detail),
+    effective_plan_detail: ensureWorkspacePlanDetail(row?.effective_plan_detail),
   };
 }
 
