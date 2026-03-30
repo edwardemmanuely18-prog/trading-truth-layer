@@ -327,10 +327,21 @@ def serialize_workspace_settings(workspace: Workspace):
     }
 
 
-def build_upgrade_recommendation(current_plan_code: str, usage_summary: dict):
+def build_upgrade_recommendation(
+    configured_plan_code: str,
+    effective_plan_code: str,
+    usage_summary: dict,
+    plan_mismatch: bool = False,
+):
     current_order = get_plan_order()
-    current_normalized = normalize_plan_code(current_plan_code)
-    current_index = current_order.index(current_normalized)
+    configured_normalized = normalize_plan_code(configured_plan_code)
+    effective_normalized = normalize_plan_code(effective_plan_code)
+
+    configured_index = current_order.index(configured_normalized)
+    effective_index = current_order.index(effective_normalized)
+
+    recommendation_basis_index = max(configured_index, effective_index)
+    recommendation_basis_plan_code = current_order[recommendation_basis_index]
 
     breached_dimensions = []
     near_limit_dimensions = []
@@ -347,23 +358,29 @@ def build_upgrade_recommendation(current_plan_code: str, usage_summary: dict):
 
     has_breaches = len(breached_dimensions) > 0
     has_near_limits = len(near_limit_dimensions) > 0
+    already_at_highest_tier = recommendation_basis_index >= len(current_order) - 1
 
-    if has_breaches or has_near_limits:
-        recommended_index = min(current_index + 1, len(current_order) - 1)
+    if (has_breaches or has_near_limits) and not already_at_highest_tier:
+        recommended_index = recommendation_basis_index + 1
     else:
-        recommended_index = current_index
+        recommended_index = recommendation_basis_index
 
     recommended_plan_code = current_order[recommended_index]
     recommended_plan = get_plan_definition(recommended_plan_code)
-    has_distinct_recommendation = recommended_plan_code != current_normalized
+    has_distinct_recommendation = recommended_plan_code != recommendation_basis_plan_code
+    billing_activation_recommended = plan_mismatch and configured_index > effective_index
 
     return {
-        "current_plan_code": current_normalized,
+        "current_plan_code": configured_normalized,
+        "effective_plan_code": effective_normalized,
+        "recommendation_basis_plan_code": recommendation_basis_plan_code,
         "recommended_plan_code": recommended_plan_code,
         "recommended_plan_name": recommended_plan["name"],
         "recommended_plan_is_distinct": has_distinct_recommendation,
         "upgrade_required_now": has_breaches and has_distinct_recommendation,
         "upgrade_recommended_soon": (not has_breaches) and has_near_limits and has_distinct_recommendation,
+        "billing_activation_recommended": billing_activation_recommended and not has_distinct_recommendation,
+        "already_at_highest_tier": already_at_highest_tier,
         "breached_dimensions": breached_dimensions,
         "near_limit_dimensions": near_limit_dimensions,
     }
@@ -559,7 +576,12 @@ def get_workspace_usage(
         },
     }
 
-    upgrade = build_upgrade_recommendation(governance_state["effective_plan_code"], usage)
+    upgrade = build_upgrade_recommendation(
+        governance_state["configured_plan_code"],
+        governance_state["effective_plan_code"],
+        usage,
+        plan_mismatch=governance_state["plan_mismatch"],
+    )
     effective_plan_definition = resolve_effective_plan_definition(workspace)
     configured_plan_definition = get_plan_definition(workspace.plan_code)
 
@@ -580,6 +602,7 @@ def get_workspace_usage(
             "has_any_near_limit": any(row["status"] == "near_limit" for row in usage.values()),
             "upgrade_required_now": upgrade["upgrade_required_now"],
             "upgrade_recommended_soon": upgrade["upgrade_recommended_soon"],
+            "billing_activation_recommended": upgrade["billing_activation_recommended"],
             "configured_plan_code": governance_state["configured_plan_code"],
             "effective_plan_code": governance_state["effective_plan_code"],
             "paid_access_active": governance_state["paid_access_active"],
