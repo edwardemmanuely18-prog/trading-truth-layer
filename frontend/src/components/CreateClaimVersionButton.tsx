@@ -49,12 +49,14 @@ function resolveGovernanceState(params: {
   usageLoading: boolean;
   canCloneByRole: boolean;
   claimLimitReached: boolean;
+  billingActivationRecommended: boolean;
 }) {
-  const { loading, usageLoading, canCloneByRole, claimLimitReached } = params;
+  const { loading, usageLoading, canCloneByRole, claimLimitReached, billingActivationRecommended } = params;
 
   if (loading) return "creating version";
   if (usageLoading) return "loading governance";
   if (!canCloneByRole) return "role restricted";
+  if (billingActivationRecommended) return "billing activation needed";
   if (claimLimitReached) return "upgrade required";
   return "available";
 }
@@ -85,6 +87,11 @@ export default function CreateClaimVersionButton({
   const claimLimitReached =
     (claimUsage?.limit ?? 0) > 0 && (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
 
+  const billingActivationRecommended = Boolean(
+    (usage?.governance as { billing_activation_recommended?: boolean } | undefined)
+      ?.billing_activation_recommended
+  );
+
   const nextVersionNumber = useMemo(() => {
     if (typeof currentVersionNumber === "number" && currentVersionNumber > 0) {
       return currentVersionNumber + 1;
@@ -98,8 +105,9 @@ export default function CreateClaimVersionButton({
       usageLoading,
       canCloneByRole,
       claimLimitReached,
+      billingActivationRecommended,
     });
-  }, [loading, usageLoading, canCloneByRole, claimLimitReached]);
+  }, [loading, usageLoading, canCloneByRole, claimLimitReached, billingActivationRecommended]);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -157,7 +165,7 @@ export default function CreateClaimVersionButton({
             message:
               cloneError.payload?.message ||
               cloneError.payload?.upgrade_hint ||
-              "This workspace has reached its governed claim capacity. Upgrade billing to continue version creation.",
+              "This workspace has reached its governed claim capacity. Review billing and plan posture to continue version creation.",
           });
           return;
         }
@@ -208,8 +216,9 @@ export default function CreateClaimVersionButton({
     usage?.effective_plan_code ||
     currentPlanName;
 
-  const recommendedPlanName =
-    usage?.upgrade_recommendation?.recommended_plan_name || "Higher workspace plan";
+  const recommendedPlanName = billingActivationRecommended
+    ? currentPlanName
+    : usage?.upgrade_recommendation?.recommended_plan_name || "Review billing posture";
 
   const disabled = loading || usageLoading || !canCloneByRole;
 
@@ -220,7 +229,7 @@ export default function CreateClaimVersionButton({
             ? ` · ${formatPercent(claimUsage.ratio)}`
             : ""
         }`
-      : "—";
+      : `Effective plan: ${effectivePlanName}`;
 
   const planMismatch =
     normalizeText(usage?.effective_plan_code) &&
@@ -310,6 +319,14 @@ export default function CreateClaimVersionButton({
           </div>
         ) : null}
 
+        {billingActivationRecommended ? (
+          <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+            The configured plan already provides the intended capacity posture. The next operational
+            step is billing activation so effective enforcement can match{" "}
+            <span className="font-semibold">{currentPlanName}</span>.
+          </div>
+        ) : null}
+
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -330,7 +347,7 @@ export default function CreateClaimVersionButton({
         {claimLimitReached ? (
           <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
             Claim capacity has been reached on the current effective workspace plan. Use this action
-            to open the upgrade path and continue governed version creation.
+            to review billing posture and continue governed version creation.
           </div>
         ) : null}
 
