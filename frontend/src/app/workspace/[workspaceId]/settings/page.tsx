@@ -390,7 +390,7 @@ function ManualPaymentCard({
         </div>
 
         <div className="rounded-2xl border border-blue-200 bg-white p-4">
-          <div className="text-sm text-slate-500">Selected Upgrade</div>
+          <div className="text-sm text-slate-500">Selected Billing Target</div>
           <div className="mt-1 text-lg font-semibold text-slate-900">
             {formatPlanCodeLabel(selectedPlanCode)} · {formatPlanCodeLabel(selectedBillingCycle)}
           </div>
@@ -440,6 +440,57 @@ function ManualPaymentCard({
   );
 }
 
+function resolvePrimaryBillingAction(params: {
+  configuredPlanCode: string;
+  selectedPlanCode: string;
+  billingStatus?: string | null;
+  canSeeUpgrade: boolean;
+  checkoutLoading: boolean;
+  selectedPlanMatchesCurrent: boolean;
+}) {
+  const {
+    configuredPlanCode,
+    selectedPlanCode,
+    billingStatus,
+    canSeeUpgrade,
+    checkoutLoading,
+    selectedPlanMatchesCurrent,
+  } = params;
+
+  const configured = normalizeText(configuredPlanCode);
+  const selected = normalizeText(selectedPlanCode);
+  const billing = normalizeText(billingStatus);
+
+  const paidPlan = configured !== "starter";
+  const billingInactive = !["active", "trialing"].includes(billing);
+
+  let label = "Upgrade Workspace";
+  let helper: string | null = null;
+  let disabled = !canSeeUpgrade || checkoutLoading;
+
+  if (paidPlan && billingInactive) {
+    if (selected === configured) {
+      label = "Activate Billing";
+      helper = "Complete billing for the currently configured paid workspace tier.";
+      disabled = !canSeeUpgrade || checkoutLoading;
+    } else if (PLAN_ORDER.findIndex((p) => p === selected) > PLAN_ORDER.findIndex((p) => p === configured)) {
+      label = "Upgrade and Activate";
+      helper = "Move to a higher commercial tier and start billing for that upgraded plan.";
+      disabled = !canSeeUpgrade || checkoutLoading;
+    } else {
+      label = "Change Billing Target";
+      helper = "Select a different target tier before starting checkout.";
+      disabled = !canSeeUpgrade || checkoutLoading;
+    }
+  } else if (selectedPlanMatchesCurrent) {
+    label = "Current Plan Selected";
+    helper = "Choose a different plan to start a new upgrade checkout.";
+    disabled = true;
+  }
+
+  return { label, helper, disabled };
+}
+
 function UpgradeSummaryPanel({
   settings,
   usage,
@@ -484,7 +535,7 @@ function UpgradeSummaryPanel({
   const configuredMemberLimit = configuredPlanItem?.limits.member_limit ?? usage?.usage?.members?.limit ?? 0;
 
   const claimBlocked = isAtOrOverLimit(claimUsed, configuredClaimLimit);
-  const selectedMatchesCurrent =
+  const selectedPlanMatchesCurrent =
     normalizeText(selectedPlanCode) === normalizeText(configuredPlanCode);
 
   const hasPlanMismatch =
@@ -507,6 +558,15 @@ function UpgradeSummaryPanel({
   const recommendedPlanName = recommendedPlanItem?.name || formatPlanCodeLabel(nextConfiguredPlanCode);
   const showRecommendation =
     Boolean(nextConfiguredPlanCode) && (breachedDimensions.length > 0 || nearLimitDimensions.length > 0);
+
+  const primaryAction = resolvePrimaryBillingAction({
+    configuredPlanCode,
+    selectedPlanCode,
+    billingStatus: settings?.billing_status,
+    canSeeUpgrade,
+    checkoutLoading,
+    selectedPlanMatchesCurrent,
+  });
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -539,7 +599,7 @@ function UpgradeSummaryPanel({
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Selected upgrade</div>
+          <div className="text-xs uppercase tracking-wide text-slate-500">Selected billing target</div>
           <div className="mt-1 text-xl font-semibold text-slate-900">
             {formatPlanCodeLabel(selectedPlanCode)}
           </div>
@@ -616,14 +676,20 @@ function UpgradeSummaryPanel({
         </div>
       </div>
 
+      {primaryAction.helper ? (
+        <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          {primaryAction.helper}
+        </div>
+      ) : null}
+
       <div className="mt-5 flex flex-wrap gap-3">
         <button
           type="button"
           onClick={onStartCheckout}
-          disabled={!canSeeUpgrade || checkoutLoading || selectedMatchesCurrent}
+          disabled={primaryAction.disabled}
           className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          {checkoutLoading ? "Starting Checkout..." : "Upgrade Workspace"}
+          {checkoutLoading ? "Preparing Billing..." : primaryAction.label}
         </button>
 
         <button
@@ -878,7 +944,7 @@ export default function WorkspaceSettingsPage() {
       const refreshedBillingFoundation = await api.getWorkspaceBillingFoundation(workspaceId);
       setBillingFoundation(refreshedBillingFoundation);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start upgrade checkout.");
+      setError(err instanceof Error ? err.message : "Failed to start billing checkout.");
     } finally {
       setCheckoutLoading(false);
     }
@@ -989,6 +1055,15 @@ export default function WorkspaceSettingsPage() {
   const currentPlanBilling = configuredPlanItem?.billing || settings?.plan_detail?.billing;
   const selectedPlanMatchesCurrent =
     normalizeText(selectedPlanCode) === normalizeText(settings?.plan_code);
+
+  const primaryAction = resolvePrimaryBillingAction({
+    configuredPlanCode,
+    selectedPlanCode,
+    billingStatus: settings?.billing_status,
+    canSeeUpgrade,
+    checkoutLoading,
+    selectedPlanMatchesCurrent,
+  });
 
   if (!workspaceId) {
     return <div className="p-6 text-red-600">Invalid workspace id.</div>;
@@ -1372,7 +1447,13 @@ export default function WorkspaceSettingsPage() {
 
                   {selectedPlanMatchesCurrent ? (
                     <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                      The selected plan matches the current configured workspace plan. Choose a different plan to start checkout.
+                      The selected plan matches the current configured workspace plan.
+                    </div>
+                  ) : null}
+
+                  {primaryAction.helper ? (
+                    <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                      {primaryAction.helper}
                     </div>
                   ) : null}
 
@@ -1453,10 +1534,10 @@ export default function WorkspaceSettingsPage() {
                     <button
                       type="button"
                       onClick={() => void handleStartCheckout()}
-                      disabled={!canSeeUpgrade || checkoutLoading || selectedPlanMatchesCurrent}
+                      disabled={primaryAction.disabled}
                       className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
                     >
-                      {checkoutLoading ? "Starting Checkout..." : "Start Upgrade Checkout"}
+                      {checkoutLoading ? "Preparing Billing..." : primaryAction.label}
                     </button>
 
                     <button
