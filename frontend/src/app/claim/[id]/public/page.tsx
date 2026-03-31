@@ -46,6 +46,11 @@ async function copyText(value: string) {
   await navigator.clipboard.writeText(value);
 }
 
+function formatRatioPercent(value?: number | null, digits = 2) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return `${(Number(value) * 100).toFixed(digits)}%`;
+}
+
 function StatusBadge({ status }: { status?: string | null }) {
   const normalized = normalizeText(status);
 
@@ -294,7 +299,7 @@ export default function PublicClaimPage() {
               This claim is lifecycle-governed and publicly exposed through Trading Truth Layer.
               {isLocked
                 ? " Its final trade-set fingerprint is cryptographically lockable and independently checkable."
-                : " It has entered public exposure and remains eligible for external review."}
+                : " It has entered public exposure and remains available for independent review."}
             </div>
           </div>
 
@@ -358,7 +363,7 @@ export default function PublicClaimPage() {
             />
             <MetricCard
               label="Win Rate"
-              value={formatNumber(preview.win_rate, 4)}
+              value={formatRatioPercent(preview.win_rate, 2)}
               hint="Winning trades as percentage"
             />
             <MetricCard
@@ -472,7 +477,7 @@ export default function PublicClaimPage() {
                         <td className="px-4 py-4">{row.rank}</td>
                         <td className="px-4 py-4">{row.member}</td>
                         <td className="px-4 py-4">{formatNumber(row.net_pnl, 2)}</td>
-                        <td className="px-4 py-4">{formatNumber(row.win_rate, 4)}</td>
+                        <td className="px-4 py-4">{formatRatioPercent(row.win_rate, 2)}</td>
                         <td className="px-4 py-4">{formatNumber(row.profit_factor, 4)}</td>
                       </tr>
                     ))}
