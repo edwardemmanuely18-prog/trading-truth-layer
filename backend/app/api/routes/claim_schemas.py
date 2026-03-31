@@ -1578,7 +1578,9 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     included_symbols = ", ".join(json.loads(schema.included_symbols_json or "[]")) or "All in scope"
     excluded_trade_ids = ", ".join(str(x) for x in json.loads(schema.excluded_trade_ids_json or "[]")) or "None"
 
-    document_title = f"Claim Report · {schema.name}"
+    verification_path = f"/claim/{schema.id}/public"
+
+    document_title = f"Verified Trading Claim · {schema.name}"
     filename = f"claim_report_{schema.id}_{claim_hash[:12]}.pdf"
 
     buffer = BytesIO()
@@ -1596,19 +1598,24 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     pdf.setFillColor(colors.HexColor("#0F172A"))
     pdf.setFont("Helvetica-Bold", 24)
-    pdf.drawString(PDF_MARGIN_LEFT, y, "Institutional Claim Report")
+    pdf.drawString(PDF_MARGIN_LEFT, y, "Verified Trading Claim")
     y -= 18
 
     pdf.setFillColor(colors.HexColor("#64748B"))
     pdf.setFont("Helvetica", 11)
-    pdf.drawString(PDF_MARGIN_LEFT, y, "Verified Trading Claims OS")
+    pdf.drawString(PDF_MARGIN_LEFT, y, "Trading Truth Layer")
+    y -= 18
+
+    pdf.setFillColor(colors.HexColor("#64748B"))
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(PDF_MARGIN_LEFT, y, f"Verification Path: {verification_path}")
     y -= 22
 
     pdf.setFillColor(colors.HexColor("#475569"))
     pdf.setFont("Helvetica", 11)
     y = draw_pdf_wrapped_text(
         pdf,
-        "Lifecycle-governed trading claim report with evidence-backed performance summary, canonical fingerprints, lineage state, and integrity validation context.",
+        "Lifecycle-governed trading claim report with public-proof framing, canonical fingerprints, integrity validation context, scope explainability, and evidence-backed performance summary.",
         PDF_MARGIN_LEFT,
         y,
         PDF_CONTENT_WIDTH,
@@ -1640,26 +1647,49 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     if schema.status == "locked" and integrity_status == "valid":
         signature_text = "Verified • Locked • Integrity Valid"
-        sub_text = "This report summarizes finalized lifecycle state, integrity state, performance metrics, and canonical claim fingerprinting."
+        sub_text = (
+            "This claim is lifecycle-governed and publicly verifiable. "
+            "The locked trade set fingerprint matches the canonical record, "
+            "and the integrity state is independently checkable via the verification link."
+        )
+        trust_state_text = "Trust State: High-trust finalized record"
     elif schema.status == "published":
         signature_text = "Published Verification Surface"
-        sub_text = "This report summarizes externally visible lifecycle state, current integrity posture, performance metrics, and canonical claim fingerprinting."
+        sub_text = (
+            "This claim is publicly exposed and verification-ready. "
+            "Its canonical identity, scope, and current lifecycle posture are "
+            "available for external review through Trading Truth Layer."
+        )
+        trust_state_text = "Trust State: Publicly reviewable record"
     elif schema.status == "locked" and integrity_status != "valid":
         signature_text = "Locked • Integrity Compromised"
-        sub_text = "This record is locked, but the current in-scope trade fingerprint no longer matches the stored locked fingerprint."
+        sub_text = (
+            "This record is locked, but the current in-scope trade fingerprint no longer "
+            "matches the stored locked fingerprint. External reviewers should treat the "
+            "record as integrity-compromised until reconciled."
+        )
+        trust_state_text = "Trust State: Integrity compromised"
     else:
         signature_text = f"{schema.status.title()} Claim"
-        sub_text = "This report summarizes current lifecycle state and scoped claim evidence."
+        sub_text = (
+            "This report summarizes current lifecycle state, scoped claim evidence, "
+            "and canonical record identity for review."
+        )
+        trust_state_text = f"Trust State: {schema.status.title()} lifecycle record"
 
     pdf.setFont("Helvetica-Bold", 20)
     pdf.drawString(PDF_MARGIN_LEFT + 16, y - 46, signature_text)
+
+    pdf.setFont("Helvetica", 9)
+    pdf.setFillColor(banner_text)
+    pdf.drawString(PDF_MARGIN_LEFT + 16, y - 60, trust_state_text)
 
     pdf.setFont("Helvetica", 10)
     draw_pdf_wrapped_text(
         pdf,
         sub_text,
         PDF_MARGIN_LEFT + 16,
-        y - 68,
+        y - 78,
         PDF_CONTENT_WIDTH - 190,
         12,
         "Helvetica",
@@ -1706,7 +1736,6 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     )
 
     y -= banner_height + 38
-
     y -= 8
 
     pdf.setFillColor(colors.HexColor("#0F172A"))
@@ -1748,9 +1777,6 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     draw_metric_card(pdf, PDF_MARGIN_LEFT + (diag_w + 12) * 3, y, diag_w, 66, "Ending Equity", str(equity_curve["ending_equity"]), "Final cumulative")
     y -= 82
 
-    start_equity = equity_curve["starting_equity"]
-    end_equity = equity_curve["ending_equity"]
-    point_count = equity_curve["point_count"]
     curve_points = equity_curve["curve"]
     first_point = curve_points[0] if curve_points else None
     last_point = curve_points[-1] if curve_points else None
@@ -1809,7 +1835,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         PDF_MARGIN_LEFT,
         y,
         PDF_CONTENT_WIDTH,
-        "This curve mirrors the internal verification surface more closely by showing cumulative path structure, consistent peak and trough annotations, and the deepest drawdown interval only when one exists. Max drawdown remains the primary risk statistic, while peak and trough identify the full performance range.",
+        "This curve mirrors the public proof surface by showing cumulative path structure, consistent peak and trough annotations, and the deepest drawdown interval when one exists. Max drawdown remains the primary risk statistic, while peak and trough identify the full performance range.",
         height=50,
     )
     y -= 74
@@ -2011,15 +2037,18 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     y, page_number = pdf_require_space(
         pdf,
         y,
-        190,
+        210,
         page_number,
         document_title,
         claim_hash,
     )
     y = pdf_section_title(pdf, "Canonical Fingerprints", PDF_MARGIN_LEFT, y)
+
     draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Claim Hash", claim_hash)
     y -= 62
     draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Trade Set Hash", trade_set_hash)
+    y -= 62
+    draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Verification Path", verification_path)
     y -= 62
 
     draw_light_note_box(
@@ -2027,7 +2056,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         PDF_MARGIN_LEFT,
         y,
         PDF_CONTENT_WIDTH,
-        "Generated from the canonical trade ledger and lifecycle-governed claim state in Trading Truth Layer.",
+        "Generated from Trading Truth Layer — a verification infrastructure for trading claims. This record can be independently validated via its verification link and claim hash.",
         height=40,
     )
 
