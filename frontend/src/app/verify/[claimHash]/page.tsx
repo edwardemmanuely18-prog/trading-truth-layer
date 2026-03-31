@@ -55,6 +55,11 @@ async function copyToClipboard(value: string) {
   await nav.clipboard.writeText(value);
 }
 
+function buildQrImageUrl(value: string) {
+  const encoded = encodeURIComponent(value);
+  return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encoded}`;
+}
+
 function StatusBadge({ status }: { status?: string | null }) {
   const normalized = normalizeText(status);
 
@@ -475,6 +480,7 @@ export default function PublicVerifyClaimPage() {
   const verificationUrl =
     typeof window !== "undefined" ? window.location.href : `/verify/${verifiedResult.claim_hash}`;
   const publicViewUrl = `/claim/${verifiedResult.claim_schema_id}/public`;
+  const qrImageUrl = buildQrImageUrl(verificationUrl);
 
   const includedRows = Array.isArray(tradeEvidence?.included_trades)
     ? tradeEvidence.included_trades
@@ -487,6 +493,12 @@ export default function PublicVerifyClaimPage() {
   const publicCurvePoints = Array.isArray(verifiedResult.equity_curve?.curve)
     ? verifiedResult.equity_curve.curve
     : [];
+
+  const trustState = integrityOk
+    ? normalizeText(verifiedResult.verification_status) === "locked"
+      ? "High-trust finalized record"
+      : "Trusted public verification record"
+    : "Integrity review required";
 
   async function handleShare() {
     try {
@@ -564,51 +576,96 @@ export default function PublicVerifyClaimPage() {
           />
         </div>
 
-        <div className="mb-8 rounded-3xl border bg-white p-6 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="max-w-4xl">
-              <div className="text-sm text-slate-500">Public Claim Identity</div>
-              <h2 className="mt-2 text-3xl font-semibold">{verifiedResult.name}</h2>
+        <div className="mb-8 rounded-3xl border border-green-200 bg-green-50 p-6 shadow-sm">
+          <div className="grid gap-6 xl:grid-cols-[1.4fr_0.6fr]">
+            <div>
+              <div className="text-sm font-medium text-green-700">Trust Summary</div>
+              <h2 className="mt-2 text-3xl font-semibold text-green-950">{verifiedResult.name}</h2>
 
               <div className="mt-4 flex flex-wrap gap-2">
                 <StatusBadge status={verifiedResult.verification_status} />
                 <IntegrityBadge integrityStatus={verifiedResult.integrity_status} />
                 <VisibilityBadge visibility={scope.visibility || "—"} />
-                <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-                  claim #{verifiedResult.claim_schema_id}
+                <span className="inline-flex rounded-full border border-green-200 bg-white px-3 py-1 text-sm font-medium text-green-800">
+                  trust state: {trustState}
                 </span>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-5">
-                <div className="text-base font-semibold text-green-900">Verified Trading Claim</div>
+              <div className="mt-5 rounded-2xl border border-green-200 bg-white/70 p-5">
+                <div className="text-base font-semibold text-green-900">Verification Reading</div>
                 <div className="mt-2 text-sm leading-7 text-green-800">
-                  This verification route is designed for external review. It exposes the canonical
-                  claim fingerprint, trade-set fingerprint, lifecycle state, and in-scope evidence
-                  needed to evaluate trustworthiness quickly.
+                  This route is the canonical proof surface for this claim. It exposes the identity
+                  fingerprint, the in-scope trade-set fingerprint, lifecycle milestones, and the
+                  integrity posture needed for external trust, disputes, and audit review.
                 </div>
               </div>
 
               <div className="mt-5 grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="rounded-2xl border border-green-200 bg-white p-4">
                   <div className="text-xs uppercase tracking-wide text-slate-500">Verification path</div>
-                  <div className="mt-2 rounded-xl bg-white p-3 font-mono text-xs break-all text-slate-700">
+                  <div className="mt-2 rounded-xl bg-slate-50 p-3 font-mono text-xs break-all text-slate-700">
                     {verificationUrl}
                   </div>
-                  <div className="mt-3">
+                  <div className="mt-3 flex flex-wrap gap-2">
                     <CopyButton value={verificationUrl} label="Copy Verify Link" />
+                    <button
+                      type="button"
+                      onClick={() => void handleShare()}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Share Proof
+                    </button>
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="rounded-2xl border border-green-200 bg-white p-4">
                   <div className="text-xs uppercase tracking-wide text-slate-500">Public view path</div>
-                  <div className="mt-2 rounded-xl bg-white p-3 font-mono text-xs break-all text-slate-700">
+                  <div className="mt-2 rounded-xl bg-slate-50 p-3 font-mono text-xs break-all text-slate-700">
                     {publicViewUrl}
                   </div>
-                  <div className="mt-3">
+                  <div className="mt-3 flex flex-wrap gap-2">
                     <CopyButton value={publicViewUrl} label="Copy Public Path" />
+                    <Link
+                      href={publicViewUrl}
+                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Open Public View
+                    </Link>
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div className="rounded-2xl border border-green-200 bg-white p-5 shadow-sm">
+              <div className="text-sm font-medium text-slate-500">Scan to verify</div>
+              <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={qrImageUrl}
+                  alt="QR code for verification link"
+                  className="mx-auto h-auto w-full max-w-[220px]"
+                />
+              </div>
+              <div className="mt-4 text-sm leading-6 text-slate-600">
+                Scan this code to open the canonical verification route for this claim.
+              </div>
+
+              <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm">
+                <div className="text-slate-500">Claim hash</div>
+                <div className="mt-1 break-all font-mono text-xs text-slate-800">
+                  {verifiedResult.claim_hash || "—"}
+                </div>
+                <div className="mt-2 text-slate-500">{shortHash(verifiedResult.claim_hash)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-8 rounded-3xl border bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-4xl">
+              <div className="text-sm text-slate-500">Canonical Proof Identity</div>
+              <h2 className="mt-2 text-3xl font-semibold">{verifiedResult.name}</h2>
 
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -640,7 +697,7 @@ export default function PublicVerifyClaimPage() {
                 integrityOk ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
               }`}
             >
-              <div className="text-sm text-slate-500">Public Verification</div>
+              <div className="text-sm text-slate-500">Integrity Posture</div>
               <div className="mt-2 text-lg font-semibold">
                 {integrityOk ? "Integrity Confirmed" : "Integrity Alert"}
               </div>
