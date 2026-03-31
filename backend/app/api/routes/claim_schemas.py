@@ -1942,14 +1942,43 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.setFont("Helvetica-Bold", 15)
     pdf.drawString(panel2_x + 14, y - 22, "Lifecycle & Lineage")
 
-    draw_kv_pair(pdf, panel2_x + 14, y - 48, "Status", schema.status or "—")
-    draw_kv_pair(pdf, panel2_x + 174, y - 48, "Integrity", integrity_status)
-    draw_kv_pair(pdf, panel2_x + 14, y - 110, "Verified At", fmt_dt(schema.verified_at))
-    draw_kv_pair(pdf, panel2_x + 174, y - 110, "Published At", fmt_dt(schema.published_at))
-    draw_kv_pair(pdf, panel2_x + 14, y - 172, "Locked At", fmt_dt(schema.locked_at))
-    draw_kv_pair(pdf, panel2_x + 174, y - 172, "Version Number", str(schema.version_number or "—"))
-    draw_kv_pair(pdf, panel2_x + 14, y - 222, "Root Claim ID", str(schema.root_claim_id or "—"))
-    draw_kv_pair(pdf, panel2_x + 174, y - 222, "Parent Claim ID", str(schema.parent_claim_id or "—"))
+    left_col_x = panel2_x + 14
+    right_col_x = panel2_x + 176
+
+    row_1_y = y - 48
+    row_2_y = y - 96
+    row_3_y = y - 144
+    row_4_y = y - 192
+
+    def draw_lifecycle_cell(cell_x: float, cell_y: float, label: str, value: str):
+        pdf.setFillColor(colors.HexColor("#64748B"))
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(cell_x, cell_y, label)
+
+        pdf.setFillColor(colors.HexColor("#0F172A"))
+        pdf.setFont("Helvetica-Bold", 10)
+        lines = split_wrapped_lines(value or "—", 114, "Helvetica-Bold", 10)
+        if not lines:
+            lines = ["—"]
+
+        value_y = cell_y - 14
+        for line in lines[:2]:
+            pdf.drawString(cell_x, value_y, line)
+            value_y -= 11
+
+        pdf.setFillColor(colors.black)
+
+    draw_lifecycle_cell(left_col_x, row_1_y, "Status", schema.status or "—")
+    draw_lifecycle_cell(right_col_x, row_1_y, "Integrity", integrity_status)
+
+    draw_lifecycle_cell(left_col_x, row_2_y, "Verified At", fmt_dt(schema.verified_at))
+    draw_lifecycle_cell(right_col_x, row_2_y, "Published At", fmt_dt(schema.published_at))
+
+    draw_lifecycle_cell(left_col_x, row_3_y, "Locked At", fmt_dt(schema.locked_at))
+    draw_lifecycle_cell(right_col_x, row_3_y, "Version Number", str(schema.version_number or "—"))
+
+    draw_lifecycle_cell(left_col_x, row_4_y, "Root Claim ID", str(schema.root_claim_id or "—"))
+    draw_lifecycle_cell(right_col_x, row_4_y, "Parent Claim ID", str(schema.parent_claim_id or "—"))
 
     y -= panel_h + 14
 
