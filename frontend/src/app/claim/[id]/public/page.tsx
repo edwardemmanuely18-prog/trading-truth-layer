@@ -186,7 +186,40 @@ export default function PublicClaimPage() {
     };
   }, [claimId]);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <main className="mx-auto max-w-[1200px] px-6 py-10">
+          <section className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
+            <div className="text-xl text-slate-500">Loading public verification…</div>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  if (error || !claim || !preview) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <main className="mx-auto max-w-[1200px] px-6 py-10">
+          <section className="rounded-[32px] border border-red-200 bg-red-50 p-8 shadow-sm">
+            <div className="text-base font-medium text-red-700">
+              {error || "Public claim not available."}
+            </div>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  const isLocked = normalizeText(claim.status) === "locked";
+  const claimHash = claim.claim_hash || preview.claim_hash || "";
   const publicPath = `/claim/${claimId}/public`;
+  const verifyPath = claimHash ? `/verify/${claimHash}` : null;
+  const topEntry =
+    Array.isArray(preview.leaderboard) && preview.leaderboard.length > 0
+      ? preview.leaderboard[0]
+      : null;
 
   async function handleCopyLink() {
     try {
@@ -208,12 +241,31 @@ export default function PublicClaimPage() {
     }
   }
 
-  async function handleCopyClaimHash() {
-    if (!claim?.claim_hash) return;
+  async function handleCopyVerifyLink() {
+    if (!verifyPath) return;
 
     try {
       setLinkMessage(null);
-      await copyText(claim.claim_hash);
+
+      const origin =
+        typeof window !== "undefined" && window.location?.origin
+          ? window.location.origin
+          : "";
+
+      const fullUrl = origin ? `${origin}${verifyPath}` : verifyPath;
+      await copyText(fullUrl);
+      setLinkMessage("Verify link copied.");
+    } catch (err) {
+      setLinkMessage(err instanceof Error ? err.message : "Failed to copy verify link.");
+    }
+  }
+
+  async function handleCopyClaimHash() {
+    if (!claimHash) return;
+
+    try {
+      setLinkMessage(null);
+      await copyText(claimHash);
       setLinkMessage("Claim hash copied.");
     } catch (err) {
       setLinkMessage(err instanceof Error ? err.message : "Failed to copy claim hash.");
@@ -246,38 +298,6 @@ export default function PublicClaimPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 text-slate-900">
-        <main className="mx-auto max-w-[1200px] px-6 py-10">
-          <section className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
-            <div className="text-xl text-slate-500">Loading public verification…</div>
-          </section>
-        </main>
-      </div>
-    );
-  }
-
-  if (error || !claim || !preview) {
-    return (
-      <div className="min-h-screen bg-slate-50 text-slate-900">
-        <main className="mx-auto max-w-[1200px] px-6 py-10">
-          <section className="rounded-[32px] border border-red-200 bg-red-50 p-8 shadow-sm">
-            <div className="text-base font-medium text-red-700">
-              {error || "Public claim not available."}
-            </div>
-          </section>
-        </main>
-      </div>
-    );
-  }
-
-  const isLocked = normalizeText(claim.status) === "locked";
-  const claimHash = claim.claim_hash || preview.claim_hash || "";
-  const topEntry = Array.isArray(preview.leaderboard) && preview.leaderboard.length > 0
-    ? preview.leaderboard[0]
-    : null;
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <main className="mx-auto max-w-[1200px] px-6 py-10">
@@ -293,13 +313,25 @@ export default function PublicClaimPage() {
             <IntegrityBadge integrity={integrity} />
           </div>
 
-          <div className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-5">
-            <div className="text-base font-semibold text-green-900">Verified Trading Claim</div>
-            <div className="mt-2 text-sm leading-7 text-green-800">
-              This claim is lifecycle-governed and publicly exposed through Trading Truth Layer.
-              {isLocked
-                ? " Its final trade-set fingerprint is cryptographically lockable and independently checkable."
-                : " It has entered public exposure and remains available for independent review."}
+          <div className="mt-5 rounded-3xl border border-green-200 bg-green-50 p-6">
+            <div className="text-base font-semibold text-green-900">Trust Summary</div>
+
+            <div className="mt-3 text-sm leading-7 text-green-800">
+              This claim is publicly exposed through Trading Truth Layer. The public page presents
+              performance, scope, and leaderboard context, while the verification route provides
+              canonical proof, integrity validation, and claim fingerprints.
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-green-200 bg-white p-3 text-sm">
+                <div className="text-slate-500">Public surface</div>
+                <div className="mt-1 text-slate-900">Presentation and performance view</div>
+              </div>
+
+              <div className="rounded-xl border border-green-200 bg-white p-3 text-sm">
+                <div className="text-slate-500">Verification route</div>
+                <div className="mt-1 text-slate-900">Canonical proof and integrity validation</div>
+              </div>
             </div>
           </div>
 
@@ -312,6 +344,30 @@ export default function PublicClaimPage() {
             >
               {copying ? "Copying..." : "Copy Public Link"}
             </button>
+
+            {verifyPath ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void handleCopyVerifyLink()}
+                  className="rounded-2xl border border-slate-900 bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                >
+                  Copy Verify Link
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      window.open(verifyPath, "_blank");
+                    }
+                  }}
+                  className="rounded-2xl border border-slate-900 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                >
+                  Open Verify Route
+                </button>
+              </>
+            ) : null}
 
             <button
               type="button"
@@ -331,17 +387,22 @@ export default function PublicClaimPage() {
             </button>
           </div>
 
-          {linkMessage ? (
-            <div className="mt-3 text-sm text-slate-500">{linkMessage}</div>
-          ) : null}
+          {linkMessage ? <div className="mt-3 text-sm text-slate-500">{linkMessage}</div> : null}
 
           <div className="mt-5 grid gap-3 md:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-xs uppercase tracking-wide text-slate-500">Verification path</div>
-              <div className="mt-2 font-mono text-sm text-slate-800">{publicPath}</div>
+              <div className="text-xs uppercase tracking-wide text-slate-500">Public path</div>
+              <div className="mt-2 break-all font-mono text-sm text-slate-800">{publicPath}</div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-xs uppercase tracking-wide text-slate-500">Verify path</div>
+              <div className="mt-2 break-all font-mono text-sm text-slate-800">
+                {verifyPath || "—"}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
               <div className="text-xs uppercase tracking-wide text-slate-500">Claim hash</div>
               <div className="mt-2 break-all font-mono text-sm text-slate-800">
                 {claimHash || "—"}
