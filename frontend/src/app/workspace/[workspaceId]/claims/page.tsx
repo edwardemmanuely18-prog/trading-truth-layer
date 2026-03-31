@@ -313,7 +313,7 @@ function ClaimCard({
 
         <div className="rounded-xl bg-slate-50 p-4">
           <div className="text-sm text-slate-500">Win Rate</div>
-          <div className="mt-1 text-2xl font-semibold">{formatNumber(claim.win_rate, 4)}</div>
+          <div className="mt-1 text-2xl font-semibold">{formatPercent(claim.win_rate)}</div>
         </div>
       </div>
 
