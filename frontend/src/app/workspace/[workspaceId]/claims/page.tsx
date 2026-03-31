@@ -5,7 +5,13 @@ import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Navbar from "../../../../components/Navbar";
 import { useAuth } from "../../../../components/AuthProvider";
-import { api, type PublicClaimDirectoryItem } from "../../../../lib/api";
+import {
+  api,
+  type PublicClaimDirectoryItem,
+  type WorkspaceUsageSummary,
+} from "../../../../lib/api";
+import PaywallModal from "../../../../components/PaywallModal";
+import { useWorkspaceGate } from "../../../../hooks/useWorkspaceGate";
 
 function formatDateTime(value?: string | null) {
   if (!value) return "—";
@@ -19,6 +25,11 @@ function formatDateTime(value?: string | null) {
 function formatNumber(value?: number | null, digits = 2) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
   return Number(value).toFixed(digits);
+}
+
+function formatPercent(value?: number | null) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return `${(Number(value) * 100).toFixed(1)}%`;
 }
 
 function normalizeText(value: unknown) {
@@ -48,6 +59,14 @@ function safeLifecycle(claim: PublicClaimDirectoryItem) {
     locked_at: null,
     locked_trade_set_hash: null,
   };
+}
+
+function getPlanName(usage?: WorkspaceUsageSummary | null, planCode?: string | null) {
+  const normalized = normalizeText(planCode);
+  const matched = usage?.plan_catalog?.find(
+    (plan) => normalizeText(plan.code) === normalized
+  );
+  return matched?.name || planCode || "current plan";
 }
 
 function StatusBadge({ status }: { status?: string | null }) {
@@ -391,7 +410,8 @@ export default function WorkspaceClaimsPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, workspaces, loading: authLoading } = useAuth();
+  const { user, workspaces, loading: authLoading, getWorkspaceRole } = useAuth();
+  const { paywallState, closePaywall, openPaywall, gateAndExecute } = useWorkspaceGate();
 
   const workspaceId = useMemo(() => {
     const raw = Array.isArray(params?.workspaceId) ? params.workspaceId[0] : params?.workspaceId;
@@ -404,8 +424,13 @@ export default function WorkspaceClaimsPage() {
     return workspaces.find((w) => w.workspace_id === workspaceId) ?? null;
   }, [workspaceId, workspaces]);
 
+  const workspaceRole = workspaceId ? getWorkspaceRole(workspaceId) : null;
+
   const [claims, setClaims] = useState<PublicClaimDirectoryItem[]>([]);
+  const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [usageLoading, setUsageLoading] = useState(true);
+  const [createLoading, setCreateLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const q = searchParams.get("q") || "";
@@ -436,6 +461,38 @@ export default function WorkspaceClaimsPage() {
     }
   }, [workspaceId, workspaceMembership, authLoading]);
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadUsage() {
+      if (!workspaceId || !workspaceMembership) {
+        setUsageLoading(false);
+        return;
+      }
+
+      try {
+        setUsageLoading(true);
+        const result = await api.getWorkspaceUsage(workspaceId);
+        if (!active) return;
+        setUsage(result);
+      } catch {
+        if (!active) return;
+        setUsage(null);
+      } finally {
+        if (!active) return;
+        setUsageLoading(false);
+      }
+    }
+
+    if (!authLoading && workspaceMembership) {
+      void loadUsage();
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [workspaceId, workspaceMembership, authLoading]);
+
   const filtered = useMemo(() => {
     return sortClaims(filterClaims(claims, q, status, visibility), sort);
   }, [claims, q, sort, status, visibility]);
@@ -447,6 +504,22 @@ export default function WorkspaceClaimsPage() {
     return statusText === "published" || statusText === "locked";
   }).length;
   const publicRouteReadyCount = claims.filter((claim) => Boolean(claim.is_publicly_accessible)).length;
+
+  const claimUsage = usage?.usage?.claims;
+  const claimLimitReached =
+    (claimUsage?.limit ?? 0) > 0 && (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
+  const billingActivationRecommended = Boolean(usage?.governance?.billing_activation_recommended);
+
+  const configuredPlanName = getPlanName(
+    usage,
+    usage?.governance?.configured_plan_code || usage?.plan_code
+  );
+  const effectivePlanName = getPlanName(
+    usage,
+    usage?.governance?.effective_plan_code || usage?.effective_plan_code
+  );
+  const recommendedPlanName =
+    usage?.upgrade_recommendation?.recommended_plan_name || configuredPlanName;
 
   function setFilters(next: {
     q?: string;
@@ -469,6 +542,35 @@ export default function WorkspaceClaimsPage() {
   function resetFilters() {
     if (!workspaceId) return;
     router.push(`/workspace/${workspaceId}/claims?q=&sort=newest&status=all&visibility=all`);
+  }
+
+  async function handleCreateDraftClick() {
+    if (!workspaceId) return;
+
+    try {
+      setCreateLoading(true);
+
+      await gateAndExecute(
+        {
+          action: "create_claim_version",
+          usage,
+          workspaceRole,
+        },
+        async () => {
+          router.push(`/workspace/${workspaceId}/schema`);
+        }
+      );
+    } catch (err) {
+      if (err instanceof Error) {
+        openPaywall({
+          reason: claimLimitReached ? "claim_limit_reached" : "feature_locked",
+          actionLabel: "Create draft claim",
+          message: err.message,
+        });
+      }
+    } finally {
+      setCreateLoading(false);
+    }
   }
 
   if (!workspaceId) {
@@ -524,196 +626,269 @@ export default function WorkspaceClaimsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <Navbar workspaceId={workspaceId} />
+    <>
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <Navbar workspaceId={workspaceId} />
 
-      <main className="mx-auto max-w-[1400px] px-6 py-10">
-        <div className="mb-8">
-          <div className="text-sm text-slate-500">Trading Truth Layer · Workspace Registry</div>
-          <h1 className="mt-2 text-4xl font-bold tracking-tight">Workspace Claims</h1>
-          <p className="mt-3 max-w-3xl text-slate-600">
-            Internal registry for lifecycle-governed claim records in workspace {workspaceId}, with
-            evidence access, public exposure status, and operator-grade verification routing.
-          </p>
-        </div>
+        <main className="mx-auto max-w-[1400px] px-6 py-10">
+          <div className="mb-8">
+            <div className="text-sm text-slate-500">Trading Truth Layer · Workspace Registry</div>
+            <h1 className="mt-2 text-4xl font-bold tracking-tight">Workspace Claims</h1>
+            <p className="mt-3 max-w-3xl text-slate-600">
+              Internal registry for lifecycle-governed claim records in workspace {workspaceId}, with
+              evidence access, public exposure status, and operator-grade verification routing.
+            </p>
+          </div>
 
-        <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard label="Total Claims" value={claims.length} hint="All records in this workspace" />
-          <SummaryCard
-            label="Draft / Verified"
-            value={`${draftCount} / ${verifiedCount}`}
-            hint="Pre-public lifecycle inventory"
-          />
-          <SummaryCard
-            label="Published / Locked"
-            value={publishedOrLockedCount}
-            hint="Externally presentable records"
-          />
-          <SummaryCard
-            label="Public Route Ready"
-            value={publicRouteReadyCount}
-            hint="Public or unlisted + lifecycle-gated"
-          />
-        </div>
+          <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard label="Total Claims" value={claims.length} hint="All records in this workspace" />
+            <SummaryCard
+              label="Draft / Verified"
+              value={`${draftCount} / ${verifiedCount}`}
+              hint="Pre-public lifecycle inventory"
+            />
+            <SummaryCard
+              label="Published / Locked"
+              value={publishedOrLockedCount}
+              hint="Externally presentable records"
+            />
+            <SummaryCard
+              label="Public Route Ready"
+              value={publicRouteReadyCount}
+              hint="Public or unlisted + lifecycle-gated"
+            />
+          </div>
 
-        <div className="mb-8 rounded-3xl border bg-white p-5 shadow-sm">
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              setFilters({
-                q: String(form.get("q") || ""),
-                sort: String(form.get("sort") || "newest"),
-                status: String(form.get("status") || "all"),
-                visibility: String(form.get("visibility") || "all"),
-              });
-            }}
-            className="space-y-4"
-          >
-            <div className="grid gap-4 lg:grid-cols-4">
+          <div className="mb-6 rounded-3xl border bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Search</label>
-                <input
-                  type="text"
-                  name="q"
-                  defaultValue={q}
-                  placeholder="Search by name, claim id, hash, notes..."
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                />
+                <div className="text-lg font-semibold text-slate-950">Claim Creation Capacity</div>
+                <div className="mt-2 text-sm text-slate-600">
+                  Governed claim creation should reflect the current effective plan posture and route blocked
+                  creation into billing recovery cleanly.
+                </div>
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Sort By</label>
-                <select
-                  name="sort"
-                  defaultValue={sort}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                >
-                  <option value="newest">Newest</option>
-                  <option value="oldest">Oldest</option>
-                  <option value="net_pnl_desc">Net PnL High → Low</option>
-                  <option value="net_pnl_asc">Net PnL Low → High</option>
-                  <option value="profit_factor_desc">Best Profit Factor</option>
-                  <option value="win_rate_desc">Best Win Rate</option>
-                  <option value="name_asc">Name A → Z</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Status</label>
-                <select
-                  name="status"
-                  defaultValue={status}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                >
-                  <option value="all">All statuses</option>
-                  <option value="draft">Draft</option>
-                  <option value="verified">Verified</option>
-                  <option value="published">Published</option>
-                  <option value="locked">Locked</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Visibility</label>
-                <select
-                  name="visibility"
-                  defaultValue={visibility}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                >
-                  <option value="all">All visibility</option>
-                  <option value="public">Public</option>
-                  <option value="unlisted">Unlisted</option>
-                  <option value="private">Private</option>
-                </select>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                <div className="text-slate-500">Claim usage</div>
+                <div className="mt-1 font-semibold text-slate-900">
+                  {usageLoading
+                    ? "Loading..."
+                    : `${claimUsage?.used ?? 0} / ${claimUsage?.limit ?? "—"} · ${formatPercent(
+                        claimUsage?.ratio
+                      )}`}
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="submit"
-                className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+            {claimLimitReached ? (
+              <div
+                className={`mt-4 rounded-2xl border p-4 text-sm ${
+                  billingActivationRecommended
+                    ? "border-blue-200 bg-blue-50 text-blue-900"
+                    : "border-amber-200 bg-amber-50 text-amber-900"
+                }`}
               >
-                Apply Filters
-              </button>
-
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
-              >
-                Reset
-              </button>
-
-              <Link
-                href={`/workspace/${workspaceId}/schema`}
-                className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
-              >
-                Create Draft Claim
-              </Link>
-
-              <div className="text-sm text-slate-500">
-                Showing {filtered.length} of {claims.length} workspace claim
-                {claims.length === 1 ? "" : "s"}.
+                <div className="font-medium">
+                  {billingActivationRecommended ? "Billing activation needed" : "Claim capacity reached"}
+                </div>
+                <div className="mt-2">
+                  {billingActivationRecommended
+                    ? `This workspace is already configured on ${configuredPlanName}, but billing is not active yet. Effective enforcement still follows ${effectivePlanName}. Activate billing to continue governed claim creation.`
+                    : `This workspace has reached governed claim capacity under the current enforced plan posture. Review billing and ${recommendedPlanName} to continue creating draft claims.`}
+                </div>
               </div>
-            </div>
-          </form>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <FilterChip
-              onClick={() => setFilters({ sort: "newest" })}
-              label="Newest"
-              active={sort === "newest"}
-            />
-            <FilterChip
-              onClick={() => setFilters({ sort: "net_pnl_desc" })}
-              label="Best Net PnL"
-              active={sort === "net_pnl_desc"}
-            />
-            <FilterChip
-              onClick={() => setFilters({ sort: "profit_factor_desc" })}
-              label="Best Profit Factor"
-              active={sort === "profit_factor_desc"}
-            />
-            <FilterChip
-              onClick={() => setFilters({ sort: "win_rate_desc" })}
-              label="Best Win Rate"
-              active={sort === "win_rate_desc"}
-            />
-            <FilterChip
-              onClick={() => setFilters({ status: "locked" })}
-              label="Locked Only"
-              active={status === "locked"}
-            />
-            <FilterChip
-              onClick={() => setFilters({ visibility: "public" })}
-              label="Public Only"
-              active={visibility === "public"}
-            />
-            <FilterChip
-              onClick={() => setFilters({ visibility: "private" })}
-              label="Private Only"
-              active={visibility === "private"}
-            />
+            ) : (
+              <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+                Claim creation capacity is currently available under the effective workspace plan posture.
+              </div>
+            )}
           </div>
-        </div>
 
-        {filtered.length === 0 ? (
-          <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="text-slate-600">No claims match the selected filters.</div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {filtered.map((claim) => (
-              <ClaimCard
-                key={`${claim.claim_schema_id}-${claim.claim_hash}`}
-                claim={claim}
-                workspaceId={workspaceId}
+          <div className="mb-8 rounded-3xl border bg-white p-5 shadow-sm">
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                setFilters({
+                  q: String(form.get("q") || ""),
+                  sort: String(form.get("sort") || "newest"),
+                  status: String(form.get("status") || "all"),
+                  visibility: String(form.get("visibility") || "all"),
+                });
+              }}
+              className="space-y-4"
+            >
+              <div className="grid gap-4 lg:grid-cols-4">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Search</label>
+                  <input
+                    type="text"
+                    name="q"
+                    defaultValue={q}
+                    placeholder="Search by name, claim id, hash, notes..."
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Sort By</label>
+                  <select
+                    name="sort"
+                    defaultValue={sort}
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
+                  >
+                    <option value="newest">Newest</option>
+                    <option value="oldest">Oldest</option>
+                    <option value="net_pnl_desc">Net PnL High → Low</option>
+                    <option value="net_pnl_asc">Net PnL Low → High</option>
+                    <option value="profit_factor_desc">Best Profit Factor</option>
+                    <option value="win_rate_desc">Best Win Rate</option>
+                    <option value="name_asc">Name A → Z</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Status</label>
+                  <select
+                    name="status"
+                    defaultValue={status}
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
+                  >
+                    <option value="all">All statuses</option>
+                    <option value="draft">Draft</option>
+                    <option value="verified">Verified</option>
+                    <option value="published">Published</option>
+                    <option value="locked">Locked</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Visibility</label>
+                  <select
+                    name="visibility"
+                    defaultValue={visibility}
+                    className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
+                  >
+                    <option value="all">All visibility</option>
+                    <option value="public">Public</option>
+                    <option value="unlisted">Unlisted</option>
+                    <option value="private">Private</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="submit"
+                  className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+                >
+                  Apply Filters
+                </button>
+
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
+                >
+                  Reset
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void handleCreateDraftClick()}
+                  disabled={createLoading || usageLoading}
+                  className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                >
+                  {createLoading ? "Checking Access..." : "Create Draft Claim"}
+                </button>
+
+                <div className="text-sm text-slate-500">
+                  Showing {filtered.length} of {claims.length} workspace claim
+                  {claims.length === 1 ? "" : "s"}.
+                </div>
+              </div>
+            </form>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <FilterChip
+                onClick={() => setFilters({ sort: "newest" })}
+                label="Newest"
+                active={sort === "newest"}
               />
-            ))}
+              <FilterChip
+                onClick={() => setFilters({ sort: "net_pnl_desc" })}
+                label="Best Net PnL"
+                active={sort === "net_pnl_desc"}
+              />
+              <FilterChip
+                onClick={() => setFilters({ sort: "profit_factor_desc" })}
+                label="Best Profit Factor"
+                active={sort === "profit_factor_desc"}
+              />
+              <FilterChip
+                onClick={() => setFilters({ sort: "win_rate_desc" })}
+                label="Best Win Rate"
+                active={sort === "win_rate_desc"}
+              />
+              <FilterChip
+                onClick={() => setFilters({ status: "locked" })}
+                label="Locked Only"
+                active={status === "locked"}
+              />
+              <FilterChip
+                onClick={() => setFilters({ visibility: "public" })}
+                label="Public Only"
+                active={visibility === "public"}
+              />
+              <FilterChip
+                onClick={() => setFilters({ visibility: "private" })}
+                label="Private Only"
+                active={visibility === "private"}
+              />
+            </div>
           </div>
-        )}
-      </main>
-    </div>
+
+          {filtered.length === 0 ? (
+            <div className="rounded-2xl border bg-white p-6 shadow-sm">
+              <div className="text-slate-600">No claims match the selected filters.</div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {filtered.map((claim) => (
+                <ClaimCard
+                  key={`${claim.claim_schema_id}-${claim.claim_hash}`}
+                  claim={claim}
+                  workspaceId={workspaceId}
+                />
+              ))}
+            </div>
+          )}
+        </main>
+      </div>
+
+      <PaywallModal
+        open={paywallState.open}
+        onClose={closePaywall}
+        reason={paywallState.reason}
+        actionLabel={paywallState.actionLabel || "Create draft claim"}
+        message={paywallState.message}
+        currentPlanName={configuredPlanName}
+        currentPlanCode={usage?.plan_code || null}
+        usageLabel={
+          claimUsage
+            ? `${claimUsage.used} / ${claimUsage.limit}${
+                claimUsage.ratio !== null && claimUsage.ratio !== undefined
+                  ? ` · ${formatPercent(claimUsage.ratio)}`
+                  : ""
+              }`
+            : `Effective plan: ${effectivePlanName}`
+        }
+        recommendedPlanName={billingActivationRecommended ? configuredPlanName : recommendedPlanName}
+        onUpgrade={() => {
+          router.push(`/workspace/${workspaceId}/settings?tab=billing`);
+        }}
+      />
+    </>
   );
 }
