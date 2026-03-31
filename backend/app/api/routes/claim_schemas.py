@@ -1942,8 +1942,8 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.setFont("Helvetica-Bold", 15)
     pdf.drawString(panel2_x + 14, y - 22, "Lifecycle & Lineage")
 
-    left_col_x = panel2_x + 14
-    right_col_x = panel2_x + 164
+    left_col_x = panel2_x + 18
+    right_col_x = panel2_x + 150
 
     row_1_y = y - 48
     row_2_y = y - 96
@@ -1957,7 +1957,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
         pdf.setFillColor(colors.HexColor("#0F172A"))
         pdf.setFont("Helvetica-Bold", 10)
-        lines = split_wrapped_lines(value or "—", 98, "Helvetica-Bold", 10)
+        lines = split_wrapped_lines(value or "—", 112, "Helvetica-Bold", 10)
         if not lines:
             lines = ["—"]
 
