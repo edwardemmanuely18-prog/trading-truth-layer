@@ -1580,6 +1580,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     public_view_path = f"/claim/{schema.id}/public"
     verify_link_path = f"/verify/{claim_hash}"
+    verify_link_short = f"/verify/{short_hash(claim_hash, 14, 8)}"
 
     document_title = f"Verified Trading Claim · {schema.name}"
     filename = f"claim_report_{schema.id}_{claim_hash[:12]}.pdf"
@@ -1631,7 +1632,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.setFont("Helvetica", 10)
     pdf.drawString(PDF_MARGIN_LEFT, y, f"Public View Path: {public_view_path}")
     y -= 14
-    pdf.drawString(PDF_MARGIN_LEFT, y, f"Verify Link Path: {verify_link_path}")
+    pdf.drawString(PDF_MARGIN_LEFT, y, f"Verify Link Path: {verify_link_short}")
     y -= 22
 
     pdf.setFillColor(colors.HexColor("#475569"))
@@ -1646,9 +1647,9 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         "Helvetica",
         11,
     )
-    y -= 16
+    y -= 18
 
-    banner_height = 156
+    banner_height = 174
     banner_fill = colors.HexColor("#ECFDF5") if integrity_status == "valid" else colors.HexColor("#FEF2F2")
     banner_stroke = colors.HexColor("#A7F3D0") if integrity_status == "valid" else colors.HexColor("#FECACA")
     banner_text = colors.HexColor("#166534") if integrity_status == "valid" else colors.HexColor("#991B1B")
@@ -1711,8 +1712,8 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf,
         sub_text,
         PDF_MARGIN_LEFT + 16,
-        y - 78,
-        PDF_CONTENT_WIDTH - 210,
+        y - 80,
+        PDF_CONTENT_WIDTH - 220,
         12,
         "Helvetica",
         10,
@@ -1722,26 +1723,26 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf_round_box(
         pdf,
         chip_x,
-        y - 14,
+        y - 18,
         160,
-        62,
+        70,
         colors.white,
         colors.HexColor("#D1D5DB"),
         radius=10,
     )
     pdf.setFillColor(colors.HexColor("#0F172A"))
     pdf.setFont("Helvetica", 10)
-    pdf.drawString(chip_x + 12, y - 30, f"status: {schema.status}")
-    pdf.drawString(chip_x + 12, y - 44, f"integrity: {integrity_status}")
+    pdf.drawString(chip_x + 12, y - 34, f"status: {schema.status}")
+    pdf.drawString(chip_x + 12, y - 48, f"integrity: {integrity_status}")
     pdf.drawString(
         chip_x + 12,
-        y - 58,
+        y - 62,
         "trust: high" if integrity_status == "valid" else "trust: alert",
     )
 
     inner_gap = 14
     hash_box_w = (PDF_CONTENT_WIDTH - 32 - inner_gap) / 2
-    hash_row_top = y - 96
+    hash_row_top = y - 116
 
     draw_label_value_box(
         pdf,
@@ -1762,7 +1763,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         short_hash(trade_set_hash, 18, 10),
     )
 
-    y -= banner_height + 40
+    y -= banner_height + 44
 
     pdf.setFillColor(colors.HexColor("#0F172A"))
     pdf.setFont("Helvetica-Bold", 18)
@@ -1826,42 +1827,22 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     row_left = PDF_MARGIN_LEFT
 
     draw_label_value_box(
-        pdf,
-        row_left,
-        y,
-        note_w,
-        row_h,
-        "First Point",
+        pdf, row_left, y, note_w, row_h, "First Point",
         f"Trade #{first_point['trade_id']} · {first_point['symbol']} · {fmt_dt(first_point['opened_at'])}" if first_point else "—",
         value_font_size=8,
     )
     draw_label_value_box(
-        pdf,
-        row_left + note_w + mini_gap,
-        y,
-        note_w,
-        row_h,
-        "Last Point",
+        pdf, row_left + note_w + mini_gap, y, note_w, row_h, "Last Point",
         f"Trade #{last_point['trade_id']} · {last_point['symbol']} · {fmt_dt(last_point['opened_at'])}" if last_point else "—",
         value_font_size=8,
     )
     draw_label_value_box(
-        pdf,
-        row_left + (note_w + mini_gap) * 2,
-        y,
-        note_w,
-        row_h,
-        "Peak Point",
+        pdf, row_left + (note_w + mini_gap) * 2, y, note_w, row_h, "Peak Point",
         f"Trade #{peak_point['trade_id']} · {peak_point['symbol']} · {fmt_dt(peak_point['opened_at'])}" if peak_point else "—",
         value_font_size=8,
     )
     draw_label_value_box(
-        pdf,
-        row_left + (note_w + mini_gap) * 3,
-        y,
-        note_w,
-        row_h,
-        "Trough Point",
+        pdf, row_left + (note_w + mini_gap) * 3, y, note_w, row_h, "Trough Point",
         f"Trade #{trough_point['trade_id']} · {trough_point['symbol']} · {fmt_dt(trough_point['opened_at'])}" if trough_point else "—",
         value_font_size=8,
     )
@@ -1908,7 +1889,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     panel_gap = 16
     panel_w = (PDF_CONTENT_WIDTH - panel_gap) / 2
-    panel_h = 206
+    panel_h = 220
 
     pdf_round_box(
         pdf,
@@ -1955,7 +1936,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     draw_kv_pair(pdf, panel2_x + 14, y - 192, "Root Claim ID", str(schema.root_claim_id or "—"))
     draw_kv_pair(pdf, panel2_x + 174, y - 192, "Parent Claim ID", str(schema.parent_claim_id or "—"))
 
-    y -= panel_h + 16
+    y -= panel_h + 14
 
     y, page_number = draw_dynamic_note_box(
         pdf,
@@ -1969,7 +1950,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         label="Methodology Notes",
     )
 
-    y -= 8
+    y -= 12
 
     y, page_number = pdf_require_space(
         pdf,
