@@ -29,6 +29,18 @@ function formatPercent(value?: number | null) {
   return `${(Number(value) * 100).toFixed(1)}%`;
 }
 
+function canExposePublicView(status?: string | null) {
+  const normalized = normalizeText(status);
+  return normalized === "published" || normalized === "locked";
+}
+
+async function copyText(value: string) {
+  if (typeof navigator === "undefined" || !navigator.clipboard) {
+    throw new Error("Clipboard is not available in this browser.");
+  }
+  await navigator.clipboard.writeText(value);
+}
+
 function StatusPill({ status }: { status: string }) {
   const normalized = normalizeText(status);
 
@@ -303,9 +315,13 @@ export default function ClaimLifecycleActions({
   const [loadingAction, setLoadingAction] = useState<LifecycleActionKey | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
+  const [linkMessage, setLinkMessage] = useState<string | null>(null);
+  const [copyingLink, setCopyingLink] = useState(false);
 
   const workspaceRole = getWorkspaceRole(workspaceId);
   const normalizedStatus = normalizeText(status);
+  const publicViewAvailable = canExposePublicView(status);
+  const publicViewPath = `/claim/${claimSchemaId}/public`;
 
   useEffect(() => {
     let active = true;
@@ -365,12 +381,14 @@ export default function ClaimLifecycleActions({
       (plan) => normalizeText(plan.code) === normalizeText(usage.effective_plan_code)
     )?.name || usage?.effective_plan_code || currentPlanName;
 
-  const recommendedPlanName =
-    usage?.upgrade_recommendation?.recommended_plan_name ||
+  const governanceBillingActivationRecommended = Boolean(
     (usage?.governance as { billing_activation_recommended?: boolean } | undefined)
       ?.billing_activation_recommended
-      ? currentPlanName
-      : "Review billing posture";
+  );
+
+  const recommendedPlanName = governanceBillingActivationRecommended
+    ? currentPlanName
+    : usage?.upgrade_recommendation?.recommended_plan_name || "Review billing posture";
 
   const claimUsage = usage?.usage?.claims;
   const usageLabel = claimUsage
@@ -417,6 +435,7 @@ export default function ClaimLifecycleActions({
     try {
       setLoadingAction(action);
       setError(null);
+      setLinkMessage(null);
       await request();
       window.location.reload();
     } catch (err) {
@@ -478,6 +497,35 @@ export default function ClaimLifecycleActions({
     );
   }
 
+  function handleOpenPublicView() {
+    if (!publicViewAvailable) return;
+    router.push(publicViewPath);
+  }
+
+  async function handleCopyPublicLink() {
+    if (!publicViewAvailable) return;
+
+    try {
+      setCopyingLink(true);
+      setLinkMessage(null);
+
+      const origin =
+        typeof window !== "undefined" && window.location?.origin
+          ? window.location.origin
+          : "";
+
+      const fullUrl = origin ? `${origin}${publicViewPath}` : publicViewPath;
+      await copyText(fullUrl);
+      setLinkMessage("Public link copied.");
+    } catch (err) {
+      setLinkMessage(
+        err instanceof Error ? err.message : "Failed to copy public link."
+      );
+    } finally {
+      setCopyingLink(false);
+    }
+  }
+
   return (
     <>
       <div className="space-y-4">
@@ -528,6 +576,45 @@ export default function ClaimLifecycleActions({
             Role and lifecycle state determine whether an action is operationally available. Workspace
             billing and governed capacity are enforced at execution time through the blocked-action and
             paywall flow.
+          </div>
+
+          <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Public trust surface</div>
+
+            {publicViewAvailable ? (
+              <>
+                <div className="mt-2 text-sm text-slate-700">
+                  This claim is eligible for public viewing and shareable distribution.
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleOpenPublicView}
+                    className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Open Public View
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyPublicLink()}
+                    disabled={copyingLink}
+                    className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {copyingLink ? "Copying..." : "Copy Public Link"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="mt-2 text-sm text-slate-500">
+                Public link becomes available after the claim reaches published or locked state.
+              </div>
+            )}
+
+            {linkMessage ? (
+              <div className="mt-3 text-xs text-slate-500">{linkMessage}</div>
+            ) : null}
           </div>
         </div>
 
