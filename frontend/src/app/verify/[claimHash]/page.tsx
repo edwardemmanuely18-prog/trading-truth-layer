@@ -35,6 +35,26 @@ function normalizeText(value: unknown) {
   return String(value ?? "").toLowerCase().trim();
 }
 
+function shortHash(value?: string | null, head = 16, tail = 10) {
+  const text = String(value ?? "").trim();
+  if (!text) return "—";
+  if (text.length <= head + tail + 3) return text;
+  return `${text.slice(0, head)}...${text.slice(-tail)}`;
+}
+
+async function copyToClipboard(value: string) {
+  if (typeof window === "undefined") {
+    throw new Error("Clipboard is not available in this environment.");
+  }
+
+  const nav = window.navigator;
+  if (!nav?.clipboard?.writeText) {
+    throw new Error("Clipboard is not available in this browser.");
+  }
+
+  await nav.clipboard.writeText(value);
+}
+
 function StatusBadge({ status }: { status?: string | null }) {
   const normalized = normalizeText(status);
 
@@ -126,7 +146,7 @@ function CopyButton({
   async function handleCopy() {
     if (!value) return;
     try {
-      await navigator.clipboard.writeText(value);
+      await copyToClipboard(value);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1200);
     } catch {
@@ -341,6 +361,7 @@ export default function PublicVerifyClaimPage() {
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -425,7 +446,9 @@ export default function PublicVerifyClaimPage() {
     );
   }
 
-  const scope = result.scope ?? {
+  const verifiedResult = result;
+
+  const scope = verifiedResult.scope ?? {
     period_start: "—",
     period_end: "—",
     included_members: [],
@@ -434,23 +457,24 @@ export default function PublicVerifyClaimPage() {
     visibility: "—",
   };
 
-  const lifecycle = result.lifecycle ?? {
-    status: result.verification_status || "unknown",
+  const lifecycle = verifiedResult.lifecycle ?? {
+    status: verifiedResult.verification_status || "unknown",
     verified_at: null,
     published_at: null,
     locked_at: null,
   };
 
-  const lineage = result.lineage ?? {
+  const lineage = verifiedResult.lineage ?? {
     parent_claim_id: null,
     root_claim_id: null,
     version_number: null,
   };
 
-  const leaderboard = Array.isArray(result.leaderboard) ? result.leaderboard : [];
-  const integrityOk = normalizeText(result.integrity_status) === "valid";
+  const leaderboard = Array.isArray(verifiedResult.leaderboard) ? verifiedResult.leaderboard : [];
+  const integrityOk = normalizeText(verifiedResult.integrity_status) === "valid";
   const verificationUrl =
-    typeof window !== "undefined" ? window.location.href : `/verify/${result.claim_hash}`;
+    typeof window !== "undefined" ? window.location.href : `/verify/${verifiedResult.claim_hash}`;
+  const publicViewUrl = `/claim/${verifiedResult.claim_schema_id}/public`;
 
   const includedRows = Array.isArray(tradeEvidence?.included_trades)
     ? tradeEvidence.included_trades
@@ -460,9 +484,29 @@ export default function PublicVerifyClaimPage() {
     : [];
   const evidenceSummary = tradeEvidence?.summary;
 
-  const publicCurvePoints = Array.isArray(result.equity_curve?.curve)
-    ? result.equity_curve.curve
+  const publicCurvePoints = Array.isArray(verifiedResult.equity_curve?.curve)
+    ? verifiedResult.equity_curve.curve
     : [];
+
+  async function handleShare() {
+    try {
+      setShareMessage(null);
+
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        await navigator.share({
+          title: verifiedResult.name || "Verified Claim Record",
+          text: "View this verified trading claim record.",
+          url: verificationUrl,
+        });
+        return;
+      }
+
+      await copyToClipboard(verificationUrl);
+      setShareMessage("Share not available here. Verification link copied instead.");
+    } catch {
+      // native share may be cancelled
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -472,9 +516,9 @@ export default function PublicVerifyClaimPage() {
             <div className="text-sm text-slate-500">Trading Truth Layer · Public Verification Surface</div>
             <h1 className="mt-2 text-4xl font-bold tracking-tight">Verified Claim Record</h1>
             <p className="mt-3 max-w-3xl text-slate-600">
-              Public verification view for a lifecycle-governed trading claim, including integrity
-              state, canonical fingerprints, scope definition, lifecycle history, leaderboard
-              snapshot, verified trade evidence, and equity-curve inspection.
+              Canonical verification route for a lifecycle-governed trading claim, including
+              integrity state, fingerprints, scope, lifecycle history, leaderboard snapshot,
+              verified trade evidence, and equity-curve inspection.
             </p>
           </div>
 
@@ -487,22 +531,34 @@ export default function PublicVerifyClaimPage() {
             </Link>
 
             <Link
-              href="/"
+              href={publicViewUrl}
               className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
             >
-              Home
+              Open Public View
             </Link>
 
             <CopyButton value={verificationUrl} label="Copy Verify Link" />
+
+            <button
+              type="button"
+              onClick={() => void handleShare()}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
+            >
+              Share
+            </button>
           </div>
         </div>
 
+        {shareMessage ? (
+          <div className="mb-6 text-sm text-slate-500">{shareMessage}</div>
+        ) : null}
+
         <div className="mb-8">
           <ClaimVerificationSignature
-            status={result.verification_status}
-            integrityStatus={result.integrity_status}
-            claimHash={result.claim_hash}
-            tradeSetHash={result.trade_set_hash}
+            status={verifiedResult.verification_status}
+            integrityStatus={verifiedResult.integrity_status}
+            claimHash={verifiedResult.claim_hash}
+            tradeSetHash={verifiedResult.trade_set_hash}
             verifiedAt={lifecycle.verified_at}
             lockedAt={lifecycle.locked_at}
           />
@@ -512,35 +568,68 @@ export default function PublicVerifyClaimPage() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-4xl">
               <div className="text-sm text-slate-500">Public Claim Identity</div>
-              <h2 className="mt-2 text-3xl font-semibold">{result.name}</h2>
+              <h2 className="mt-2 text-3xl font-semibold">{verifiedResult.name}</h2>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <StatusBadge status={result.verification_status} />
-                <IntegrityBadge integrityStatus={result.integrity_status} />
+                <StatusBadge status={verifiedResult.verification_status} />
+                <IntegrityBadge integrityStatus={verifiedResult.integrity_status} />
                 <VisibilityBadge visibility={scope.visibility || "—"} />
                 <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-                  claim #{result.claim_schema_id}
+                  claim #{verifiedResult.claim_schema_id}
                 </span>
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-5">
+                <div className="text-base font-semibold text-green-900">Verified Trading Claim</div>
+                <div className="mt-2 text-sm leading-7 text-green-800">
+                  This verification route is designed for external review. It exposes the canonical
+                  claim fingerprint, trade-set fingerprint, lifecycle state, and in-scope evidence
+                  needed to evaluate trustworthiness quickly.
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Verification path</div>
+                  <div className="mt-2 rounded-xl bg-white p-3 font-mono text-xs break-all text-slate-700">
+                    {verificationUrl}
+                  </div>
+                  <div className="mt-3">
+                    <CopyButton value={verificationUrl} label="Copy Verify Link" />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Public view path</div>
+                  <div className="mt-2 rounded-xl bg-white p-3 font-mono text-xs break-all text-slate-700">
+                    {publicViewUrl}
+                  </div>
+                  <div className="mt-3">
+                    <CopyButton value={publicViewUrl} label="Copy Public Path" />
+                  </div>
+                </div>
               </div>
 
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="text-sm text-slate-500">Claim Hash</div>
                   <div className="mt-2 rounded-xl bg-white p-3 font-mono text-xs break-all text-slate-700">
-                    {result.claim_hash || "—"}
+                    {verifiedResult.claim_hash || "—"}
                   </div>
+                  <div className="mt-2 text-sm text-slate-500">{shortHash(verifiedResult.claim_hash)}</div>
                   <div className="mt-3">
-                    <CopyButton value={result.claim_hash} label="Copy Claim Hash" />
+                    <CopyButton value={verifiedResult.claim_hash} label="Copy Claim Hash" />
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="text-sm text-slate-500">Trade Set Hash</div>
                   <div className="mt-2 rounded-xl bg-white p-3 font-mono text-xs break-all text-slate-700">
-                    {result.trade_set_hash || "—"}
+                    {verifiedResult.trade_set_hash || "—"}
                   </div>
+                  <div className="mt-2 text-sm text-slate-500">{shortHash(verifiedResult.trade_set_hash)}</div>
                   <div className="mt-3">
-                    <CopyButton value={result.trade_set_hash} label="Copy Trade Set Hash" />
+                    <CopyButton value={verifiedResult.trade_set_hash} label="Copy Trade Set Hash" />
                   </div>
                 </div>
               </div>
@@ -566,22 +655,22 @@ export default function PublicVerifyClaimPage() {
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MetricCard
               label="Trade Count"
-              value={String(result.trade_count)}
+              value={String(verifiedResult.trade_count)}
               hint="In-scope trades used for this record"
             />
             <MetricCard
               label="Net PnL"
-              value={formatNumber(result.net_pnl)}
+              value={formatNumber(verifiedResult.net_pnl)}
               hint="Aggregate net trading result"
             />
             <MetricCard
               label="Profit Factor"
-              value={formatNumber(result.profit_factor, 4)}
+              value={formatNumber(verifiedResult.profit_factor, 4)}
               hint="Gross profit ÷ gross loss"
             />
             <MetricCard
               label="Win Rate"
-              value={formatPercent(result.win_rate, 2)}
+              value={formatPercent(verifiedResult.win_rate, 2)}
               hint="Winning trades as percentage"
             />
           </div>
@@ -626,7 +715,7 @@ export default function PublicVerifyClaimPage() {
 
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 <DetailRow label="Status" value={lifecycle.status || "—"} />
-                <DetailRow label="Integrity" value={result.integrity_status || "—"} />
+                <DetailRow label="Integrity" value={verifiedResult.integrity_status || "—"} />
                 <DetailRow label="Verified At" value={formatDateTime(lifecycle.verified_at)} />
                 <DetailRow label="Published At" value={formatDateTime(lifecycle.published_at)} />
                 <DetailRow label="Locked At" value={formatDateTime(lifecycle.locked_at)} />
@@ -767,6 +856,10 @@ export default function PublicVerifyClaimPage() {
               showExclusionColumns
             />
           </div>
+        </div>
+
+        <div className="text-center text-xs text-slate-400">
+          Verified by Trading Truth Layer — Trust Infrastructure for Trading Claims
         </div>
       </main>
     </div>
