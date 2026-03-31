@@ -91,6 +91,11 @@ function buildVerifyHref(row: any) {
   return claimHash ? `/verify/${claimHash}` : "/claims";
 }
 
+function buildPublicViewHref(row: any) {
+  const claimId = row?.claim_schema_id ?? row?.id;
+  return claimId ? `/claim/${claimId}/public` : "/claims";
+}
+
 function statusTone(status: string) {
   const value = normalize(status);
   if (value === "locked") return "border-green-200 bg-green-50 text-green-800";
@@ -494,6 +499,7 @@ export default function ClaimsPageClient() {
               const topEntry = extractTopLeaderboardEntry(row);
               const routeState = getVerificationRouteState(row);
               const verifyHref = buildVerifyHref(row);
+              const publicViewHref = buildPublicViewHref(row);
               const resolvedVisibility = resolveVisibility(row);
               const resolvedStatus = resolveStatus(row);
               const resolvedIntegrity = normalize(row?.integrity_status ?? "unknown");
@@ -518,6 +524,9 @@ export default function ClaimsPageClient() {
                         <Pill className={routeTone(routeState)}>
                           verification route {routeState}
                         </Pill>
+                        <Pill className={integrityTone(resolvedIntegrity)}>
+                          integrity: {resolvedIntegrity}
+                        </Pill>
                         <Pill className="border-slate-200 bg-slate-100 text-slate-700">
                           claim #{safeString(row?.claim_schema_id ?? row?.id, "—")}
                         </Pill>
@@ -530,12 +539,23 @@ export default function ClaimsPageClient() {
                       </p>
                     </div>
 
-                    <Link
-                      href={verifyHref}
-                      className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50"
-                    >
-                      Open Verification Surface
-                    </Link>
+                    <div className="flex flex-wrap gap-2">
+                      <Link
+                        href={publicViewHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50"
+                      >
+                        View Public
+                      </Link>
+
+                      <Link
+                        href={verifyHref}
+                        className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50"
+                      >
+                        Open Verification Surface
+                      </Link>
+                    </div>
                   </div>
 
                   <div className="mt-6">
@@ -616,7 +636,7 @@ export default function ClaimsPageClient() {
                         <div className="mt-3 whitespace-pre-wrap text-base leading-7 text-slate-700">
                           {safeString(
                             row?.methodology_notes,
-                            "No methodology notes were supplied for this public claim.",
+                            "No methodology notes were supplied for this public claim."
                           )}
                         </div>
                       </div>
@@ -629,7 +649,7 @@ export default function ClaimsPageClient() {
                           {topEntry
                             ? `${safeString(topEntry?.member, "Member")} · ${formatNumber(
                                 topEntry?.net_pnl,
-                                2,
+                                2
                               )}`
                             : "No leaderboard data"}
                         </div>
@@ -654,7 +674,7 @@ export default function ClaimsPageClient() {
                           {shortHash(
                             String(row?.trade_set_hash ?? row?.locked_trade_set_hash ?? ""),
                             16,
-                            10,
+                            10
                           )}
                         </div>
                       </div>
