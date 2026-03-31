@@ -1029,9 +1029,9 @@ def format_pdf_datetime(value) -> str:
             except ValueError:
                 continue
         if dt is None:
-            return shorten_text(text, 22)
+            return shorten_text(text, 24)
 
-    return dt.strftime("%Y-%m-%d %H:%M")
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def draw_pdf_wrapped_text(
@@ -1228,15 +1228,19 @@ def draw_kv_pair(pdf: canvas.Canvas, x: float, y: float, label: str, value: str)
     pdf.setFillColor(colors.HexColor("#64748B"))
     pdf.setFont("Helvetica", 9)
     pdf.drawString(x, y, label)
+
     pdf.setFillColor(colors.HexColor("#0F172A"))
-    pdf.setFont("Helvetica-Bold", 10)
-    lines = split_wrapped_lines(value or "—", 136, "Helvetica-Bold", 10)
+    pdf.setFont("Helvetica-Bold", 9)
+
+    lines = split_wrapped_lines(value or "—", 108, "Helvetica-Bold", 9)
     if not lines:
         lines = ["—"]
+
     current_y = y - 14
-    for line in lines[:2]:
+    for line in lines[:3]:
         pdf.drawString(x, current_y, line)
-        current_y -= 11
+        current_y -= 10
+
     pdf.setFillColor(colors.black)
 
 
@@ -1516,13 +1520,24 @@ def draw_equity_curve_preview(
     pdf.setFillColor(colors.black)
 
 
-def draw_table_header(pdf: canvas.Canvas, x: float, y: float, headers: list[tuple[float, str]], font_size: int = 9):
+def draw_table_header(
+    pdf: canvas.Canvas,
+    x: float,
+    y: float,
+    headers: list[tuple[float, str]],
+    font_size: int = 9,
+    table_width: float | None = None,
+):
     pdf.setFont("Helvetica-Bold", font_size)
     pdf.setFillColor(colors.HexColor("#64748B"))
     for offset, label in headers:
         pdf.drawString(x + offset, y, label)
+
+    line_right = x + table_width if table_width is not None else PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT
+
     pdf.setStrokeColor(colors.HexColor("#CBD5E1"))
-    pdf.line(x, y - 8, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT, y - 8)
+    pdf.line(x, y - 8, line_right, y - 8)
+
     pdf.setFillColor(colors.black)
     pdf.setStrokeColor(colors.black)
     return y - 22
@@ -1889,7 +1904,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     panel_gap = 16
     panel_w = (PDF_CONTENT_WIDTH - panel_gap) / 2
-    panel_h = 220
+    panel_h = 244
 
     pdf_round_box(
         pdf,
@@ -1907,10 +1922,10 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     draw_kv_pair(pdf, PDF_MARGIN_LEFT + 14, y - 48, "Period Start", schema.period_start or "—")
     draw_kv_pair(pdf, PDF_MARGIN_LEFT + 174, y - 48, "Period End", schema.period_end or "—")
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 14, y - 96, "Included Members", included_members)
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 174, y - 96, "Included Symbols", included_symbols)
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 14, y - 144, "Excluded Trade IDs", excluded_trade_ids)
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 174, y - 144, "Visibility", schema.visibility or "—")
+    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 14, y - 110, "Included Members", included_members)
+    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 174, y - 110, "Included Symbols", included_symbols)
+    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 14, y - 172, "Excluded Trade IDs", excluded_trade_ids)
+    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 174, y - 172, "Visibility", schema.visibility or "—")
 
     panel2_x = PDF_MARGIN_LEFT + panel_w + panel_gap
     pdf_round_box(
@@ -1929,12 +1944,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     draw_kv_pair(pdf, panel2_x + 14, y - 48, "Status", schema.status or "—")
     draw_kv_pair(pdf, panel2_x + 174, y - 48, "Integrity", integrity_status)
-    draw_kv_pair(pdf, panel2_x + 14, y - 96, "Verified At", fmt_dt(schema.verified_at))
-    draw_kv_pair(pdf, panel2_x + 174, y - 96, "Published At", fmt_dt(schema.published_at))
-    draw_kv_pair(pdf, panel2_x + 14, y - 144, "Locked At", fmt_dt(schema.locked_at))
-    draw_kv_pair(pdf, panel2_x + 174, y - 144, "Version Number", str(schema.version_number or "—"))
-    draw_kv_pair(pdf, panel2_x + 14, y - 192, "Root Claim ID", str(schema.root_claim_id or "—"))
-    draw_kv_pair(pdf, panel2_x + 174, y - 192, "Parent Claim ID", str(schema.parent_claim_id or "—"))
+    draw_kv_pair(pdf, panel2_x + 14, y - 110, "Verified At", fmt_dt(schema.verified_at))
+    draw_kv_pair(pdf, panel2_x + 174, y - 110, "Published At", fmt_dt(schema.published_at))
+    draw_kv_pair(pdf, panel2_x + 14, y - 172, "Locked At", fmt_dt(schema.locked_at))
+    draw_kv_pair(pdf, panel2_x + 174, y - 172, "Version Number", str(schema.version_number or "—"))
+    draw_kv_pair(pdf, panel2_x + 14, y - 222, "Root Claim ID", str(schema.root_claim_id or "—"))
+    draw_kv_pair(pdf, panel2_x + 174, y - 222, "Parent Claim ID", str(schema.parent_claim_id or "—"))
 
     y -= panel_h + 14
 
@@ -1962,17 +1977,23 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     )
 
     y = pdf_section_title(pdf, "Leaderboard Snapshot", PDF_MARGIN_LEFT, y)
+
+    leaderboard_x = PDF_MARGIN_LEFT + 18
+    leaderboard_width = 440
+
     y = draw_table_header(
         pdf,
-        PDF_MARGIN_LEFT,
+        leaderboard_x,
         y,
         [
             (0, "Rank"),
-            (96, "Member"),
-            (300, "Net PnL"),
-            (410, "Win Rate"),
-            (500, "Profit Factor"),
+            (72, "Member"),
+            (220, "Net PnL"),
+            (310, "Win Rate"),
+            (390, "Profit Factor"),
         ],
+        font_size=9,
+        table_width=leaderboard_width,
     )
 
     pdf.setFont("Helvetica", 9)
@@ -1980,16 +2001,16 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     if leaderboard:
         for row in leaderboard[:8]:
             y, page_number = pdf_require_space(pdf, y, 24, page_number, document_title, claim_hash)
-            pdf.drawString(PDF_MARGIN_LEFT, y, str(row["rank"]))
-            pdf.drawString(PDF_MARGIN_LEFT + 96, y, shorten_text(str(row["member"]), 24))
-            pdf.drawString(PDF_MARGIN_LEFT + 300, y, fmt_num(row["net_pnl"], 2))
-            pdf.drawString(PDF_MARGIN_LEFT + 410, y, fmt_pct_ratio(float(row["win_rate"]), 2))
-            pdf.drawString(PDF_MARGIN_LEFT + 500, y, fmt_num(row["profit_factor"], 4))
+            pdf.drawString(leaderboard_x, y, str(row["rank"]))
+            pdf.drawString(leaderboard_x + 72, y, shorten_text(str(row["member"]), 18))
+            pdf.drawString(leaderboard_x + 220, y, fmt_num(row["net_pnl"], 2))
+            pdf.drawString(leaderboard_x + 310, y, fmt_pct_ratio(float(row["win_rate"]), 2))
+            pdf.drawString(leaderboard_x + 390, y, fmt_num(row["profit_factor"], 4))
             pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
-            pdf.line(PDF_MARGIN_LEFT, y - 8, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT, y - 8)
+            pdf.line(leaderboard_x, y - 8, leaderboard_x + leaderboard_width, y - 8)
             y -= 18
     else:
-        pdf.drawString(PDF_MARGIN_LEFT, y, "No leaderboard data available.")
+        pdf.drawString(leaderboard_x, y, "No leaderboard data available.")
         y -= 18
 
     y -= 12
