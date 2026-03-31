@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Navbar from "../../../../components/Navbar";
 import { useAuth } from "../../../../components/AuthProvider";
 import {
@@ -11,6 +11,8 @@ import {
   type PublicClaimDirectoryItem,
   type WorkspaceUsageSummary,
 } from "../../../../lib/api";
+import PaywallModal from "../../../../components/PaywallModal";
+import { useWorkspaceGate } from "../../../../hooks/useWorkspaceGate";
 
 function formatNumber(value?: number | null) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
@@ -30,6 +32,29 @@ function isAtOrOverLimit(used?: number, limit?: number) {
   if (used === undefined || limit === undefined) return false;
   if (limit <= 0) return false;
   return used >= limit;
+}
+
+function formatDimensionLabel(value: string) {
+  switch (value) {
+    case "storage_mb":
+      return "Storage";
+    case "claims":
+      return "Claims";
+    case "trades":
+      return "Trades";
+    case "members":
+      return "Members";
+    default:
+      return value;
+  }
+}
+
+function getPlanName(usage?: WorkspaceUsageSummary | null, planCode?: string | null) {
+  const normalized = normalizeText(planCode);
+  const matched = usage?.plan_catalog?.find(
+    (plan) => normalizeText(plan.code) === normalized
+  );
+  return matched?.name || planCode || "current plan";
 }
 
 function SummaryCard({
@@ -95,6 +120,29 @@ function ActionLink({
     >
       {label}
     </Link>
+  );
+}
+
+function ActionButton({
+  onClick,
+  label,
+  loading = false,
+  disabled = false,
+}: {
+  onClick: () => void;
+  label: string;
+  loading?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="block w-full rounded-xl border border-slate-300 px-5 py-3 text-center text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+    >
+      {loading ? "Checking Access..." : label}
+    </button>
   );
 }
 
@@ -166,31 +214,53 @@ function GovernanceBanner({
   const hasAnyAtOrOverLimit =
     membersAtOrOverLimit || tradesAtOrOverLimit || claimsAtOrOverLimit || storageAtOrOverLimit;
 
-  const upgradeRequiredNow = Boolean(usage?.governance?.upgrade_required_now);
-  const upgradeRecommendedSoon = Boolean(usage?.governance?.upgrade_recommended_soon);
-  const recommendedPlanName = usage?.upgrade_recommendation?.recommended_plan_name;
-  const breachedDimensions = usage?.upgrade_recommendation?.breached_dimensions ?? [];
-  const nearLimitDimensions = usage?.upgrade_recommendation?.near_limit_dimensions ?? [];
+  const governance = usage?.governance;
+  const upgrade = usage?.upgrade_recommendation;
 
-  if (!hasAnyAtOrOverLimit && !upgradeRequiredNow && !upgradeRecommendedSoon) {
+  const upgradeRequiredNow = Boolean(governance?.upgrade_required_now);
+  const upgradeRecommendedSoon = Boolean(governance?.upgrade_recommended_soon);
+  const billingActivationRecommended = Boolean(governance?.billing_activation_recommended);
+
+  const configuredPlanName = getPlanName(
+    usage,
+    governance?.configured_plan_code || usage?.plan_code
+  );
+  const effectivePlanName = getPlanName(
+    usage,
+    governance?.effective_plan_code || usage?.effective_plan_code
+  );
+  const recommendedPlanName = upgrade?.recommended_plan_name;
+  const breachedDimensions = upgrade?.breached_dimensions ?? [];
+  const nearLimitDimensions = upgrade?.near_limit_dimensions ?? [];
+
+  if (
+    !hasAnyAtOrOverLimit &&
+    !upgradeRequiredNow &&
+    !upgradeRecommendedSoon &&
+    !billingActivationRecommended
+  ) {
     return null;
   }
 
   return (
     <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900 shadow-sm">
       <h2 className="text-xl font-semibold">
-        {upgradeRequiredNow || hasAnyAtOrOverLimit
-          ? "Workspace At / Over Plan Limits"
-          : "Workspace Upgrade Recommendation"}
+        {billingActivationRecommended
+          ? "Billing Activation Needed"
+          : upgradeRequiredNow || hasAnyAtOrOverLimit
+            ? "Workspace At / Over Plan Limits"
+            : "Workspace Upgrade Recommendation"}
       </h2>
 
       <p className="mt-2 text-sm">
-        {upgradeRequiredNow || hasAnyAtOrOverLimit
-          ? "This workspace has reached or exceeded one or more plan limits. Some write actions may now be blocked until the workspace is upgraded or usage is reduced."
-          : "This workspace is approaching one or more plan ceilings. Upgrading early will protect operational continuity."}
+        {billingActivationRecommended
+          ? `This workspace is already configured on ${configuredPlanName}, but billing is not active yet. Effective enforcement is still falling back to ${effectivePlanName}.`
+          : upgradeRequiredNow || hasAnyAtOrOverLimit
+            ? "This workspace has reached or exceeded one or more plan limits. Some write actions may now be blocked until billing is activated or the workspace is upgraded."
+            : "This workspace is approaching one or more plan ceilings. Upgrading early will protect operational continuity."}
       </p>
 
-      {recommendedPlanName ? (
+      {recommendedPlanName && !billingActivationRecommended ? (
         <div className="mt-3 text-sm">
           Recommended next plan: <span className="font-semibold">{recommendedPlanName}</span>
         </div>
@@ -205,7 +275,7 @@ function GovernanceBanner({
                 key={`breached-${item}`}
                 className="rounded-full border border-amber-300 bg-white px-3 py-1 text-sm font-medium"
               >
-                {item}
+                {formatDimensionLabel(item)}
               </span>
             ))}
           </div>
@@ -221,7 +291,7 @@ function GovernanceBanner({
                 key={`near-${item}`}
                 className="rounded-full border border-amber-300 bg-white px-3 py-1 text-sm font-medium"
               >
-                {item}
+                {formatDimensionLabel(item)}
               </span>
             ))}
           </div>
@@ -230,10 +300,10 @@ function GovernanceBanner({
 
       <div className="mt-4">
         <Link
-          href={`/workspace/${workspaceId}/settings`}
+          href={`/workspace/${workspaceId}/settings?tab=billing`}
           className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
         >
-          Review Plan & Billing
+          {billingActivationRecommended ? "Activate Billing" : "Review Plan & Billing"}
         </Link>
       </div>
     </div>
@@ -242,7 +312,9 @@ function GovernanceBanner({
 
 export default function WorkspaceDashboardPage() {
   const params = useParams();
+  const router = useRouter();
   const { user, workspaces, loading: authLoading, getWorkspaceRole } = useAuth();
+  const { paywallState, closePaywall, gateAndExecute } = useWorkspaceGate();
 
   const workspaceId = useMemo(() => {
     const raw = Array.isArray(params?.workspaceId) ? params.workspaceId[0] : params?.workspaceId;
@@ -263,6 +335,7 @@ export default function WorkspaceDashboardPage() {
   const [claims, setClaims] = useState<PublicClaimDirectoryItem[]>([]);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [createChecking, setCreateChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -291,6 +364,27 @@ export default function WorkspaceDashboardPage() {
 
     void load();
   }, [workspaceId, workspaceMembership]);
+
+  async function handleCreateDraftClick() {
+    if (!workspaceId) return;
+
+    try {
+      setCreateChecking(true);
+
+      await gateAndExecute(
+        {
+          action: "create_claim_version",
+          usage,
+          workspaceRole,
+        },
+        async () => {
+          router.push(`/workspace/${workspaceId}/schema`);
+        }
+      );
+    } finally {
+      setCreateChecking(false);
+    }
+  }
 
   if (!workspaceId) {
     return <div className="p-6 text-red-600">Invalid workspace id.</div>;
@@ -363,150 +457,200 @@ export default function WorkspaceDashboardPage() {
   const claimsUsage = usage?.usage?.claims ?? { used: 0, limit: 0, ratio: 0 };
   const storageUsage = usage?.usage?.storage_mb ?? { used: 0, limit: 0, ratio: 0 };
 
+  const configuredPlanName = getPlanName(
+    usage,
+    usage?.governance?.configured_plan_code || usage?.plan_code
+  );
+  const effectivePlanName = getPlanName(
+    usage,
+    usage?.governance?.effective_plan_code || usage?.effective_plan_code
+  );
+  const billingActivationRecommended = Boolean(usage?.governance?.billing_activation_recommended);
+  const recommendedPlanName =
+    usage?.upgrade_recommendation?.recommended_plan_name || configuredPlanName;
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <Navbar workspaceId={workspaceId} />
+    <>
+      <div className="min-h-screen bg-slate-50 text-slate-900">
+        <Navbar workspaceId={workspaceId} />
 
-      <main className="mx-auto max-w-[1400px] px-6 py-10">
-        <div className="mb-8">
-          <div className="text-sm text-slate-500">Trading Truth Layer · Workspace Operations</div>
-          <h1 className="mt-2 text-4xl font-bold">Workspace Dashboard</h1>
-          <p className="mt-3 max-w-3xl text-slate-600">
-            Control center for workspace {workspaceId}, including claim activity, ledger volume,
-            plan usage, and quick access to creation, evidence, and verification workflows.
-          </p>
-        </div>
+        <main className="mx-auto max-w-[1400px] px-6 py-10">
+          <div className="mb-8">
+            <div className="text-sm text-slate-500">Trading Truth Layer · Workspace Operations</div>
+            <h1 className="mt-2 text-4xl font-bold">Workspace Dashboard</h1>
+            <p className="mt-3 max-w-3xl text-slate-600">
+              Control center for workspace {workspaceId}, including claim activity, ledger volume,
+              plan usage, and quick access to creation, evidence, and verification workflows.
+            </p>
+          </div>
 
-        <RoleBanner workspaceId={workspaceId} workspaceRole={workspaceRole} />
-        <GovernanceBanner workspaceId={workspaceId} usage={usage} />
+          <RoleBanner workspaceId={workspaceId} workspaceRole={workspaceRole} />
+          <GovernanceBanner workspaceId={workspaceId} usage={usage} />
 
-        <div className="mb-8 grid gap-4 md:grid-cols-4">
-          <SummaryCard
-            label="Workspace Members"
-            value={formatNumber(dashboard.member_count)}
-            hint={`${formatNumber(membersUsage.used)} / ${formatNumber(membersUsage.limit)} · ${formatPercent(membersUsage.ratio)}`}
-          />
-          <SummaryCard
-            label="Total Trades"
-            value={formatNumber(dashboard.trade_count)}
-            hint={`${formatNumber(tradesUsage.used)} / ${formatNumber(tradesUsage.limit)} · ${formatPercent(tradesUsage.ratio)}`}
-          />
-          <SummaryCard
-            label="Total Claims"
-            value={formatNumber(dashboard.claim_count)}
-            hint={`${formatNumber(claimsUsage.used)} / ${formatNumber(claimsUsage.limit)} · ${formatPercent(claimsUsage.ratio)}`}
-          />
-          <SummaryCard
-            label="Locked / Public"
-            value={`${lockedClaims} / ${publicClaims}`}
-            hint={`Plan: ${usage?.plan_code || "—"} · Billing: ${usage?.billing_status || "—"}`}
-          />
-        </div>
+          <div className="mb-8 grid gap-4 md:grid-cols-4">
+            <SummaryCard
+              label="Workspace Members"
+              value={formatNumber(dashboard.member_count)}
+              hint={`${formatNumber(membersUsage.used)} / ${formatNumber(membersUsage.limit)} · ${formatPercent(membersUsage.ratio)}`}
+            />
+            <SummaryCard
+              label="Total Trades"
+              value={formatNumber(dashboard.trade_count)}
+              hint={`${formatNumber(tradesUsage.used)} / ${formatNumber(tradesUsage.limit)} · ${formatPercent(tradesUsage.ratio)}`}
+            />
+            <SummaryCard
+              label="Total Claims"
+              value={formatNumber(dashboard.claim_count)}
+              hint={`${formatNumber(claimsUsage.used)} / ${formatNumber(claimsUsage.limit)} · ${formatPercent(claimsUsage.ratio)}`}
+            />
+            <SummaryCard
+              label="Locked / Public"
+              value={`${lockedClaims} / ${publicClaims}`}
+              hint={`Configured: ${configuredPlanName} · Effective: ${effectivePlanName}`}
+            />
+          </div>
 
-        <div className="mb-8 grid gap-4 md:grid-cols-4">
-          <CapacityCard
-            label="Member Capacity"
-            ratio={membersUsage.ratio}
-            used={membersUsage.used}
-            limit={membersUsage.limit}
-          />
-          <CapacityCard
-            label="Trade Capacity"
-            ratio={tradesUsage.ratio}
-            used={tradesUsage.used}
-            limit={tradesUsage.limit}
-          />
-          <CapacityCard
-            label="Claim Capacity"
-            ratio={claimsUsage.ratio}
-            used={claimsUsage.used}
-            limit={claimsUsage.limit}
-          />
-          <CapacityCard
-            label="Storage Capacity"
-            ratio={storageUsage.ratio}
-            used={storageUsage.used}
-            limit={storageUsage.limit}
-            suffix=" MB"
-          />
-        </div>
+          <div className="mb-8 grid gap-4 md:grid-cols-4">
+            <CapacityCard
+              label="Member Capacity"
+              ratio={membersUsage.ratio}
+              used={membersUsage.used}
+              limit={membersUsage.limit}
+            />
+            <CapacityCard
+              label="Trade Capacity"
+              ratio={tradesUsage.ratio}
+              used={tradesUsage.used}
+              limit={tradesUsage.limit}
+            />
+            <CapacityCard
+              label="Claim Capacity"
+              ratio={claimsUsage.ratio}
+              used={claimsUsage.used}
+              limit={claimsUsage.limit}
+            />
+            <CapacityCard
+              label="Storage Capacity"
+              ratio={storageUsage.ratio}
+              used={storageUsage.used}
+              limit={storageUsage.limit}
+              suffix=" MB"
+            />
+          </div>
 
-        <div className="mb-8 grid gap-6 lg:grid-cols-[1.3fr_1fr]">
-          <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <h2 className="text-2xl font-semibold">Recent Claims</h2>
+          <div className="mb-8 grid gap-6 lg:grid-cols-[1.3fr_1fr]">
+            <div className="rounded-2xl border bg-white p-6 shadow-sm">
+              <h2 className="text-2xl font-semibold">Recent Claims</h2>
 
-            {recentClaims.length === 0 ? (
-              <div className="mt-4 text-slate-500">No claims available yet.</div>
-            ) : (
-              <div className="mt-4 space-y-3">
-                {recentClaims.map((claim) => (
-                  <div
-                    key={claim?.claim_schema_id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4"
-                  >
-                    <div>
-                      <div className="font-medium">{claim?.name || "Unnamed claim"}</div>
-                      <div className="mt-1 text-sm text-slate-500">
-                        claim #{claim?.claim_schema_id} · {claim?.verification_status} ·{" "}
-                        {claim?.scope?.visibility || "private"}
+              {recentClaims.length === 0 ? (
+                <div className="mt-4 text-slate-500">No claims available yet.</div>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  {recentClaims.map((claim) => (
+                    <div
+                      key={claim?.claim_schema_id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4"
+                    >
+                      <div>
+                        <div className="font-medium">{claim?.name || "Unnamed claim"}</div>
+                        <div className="mt-1 text-sm text-slate-500">
+                          claim #{claim?.claim_schema_id} · {claim?.verification_status} ·{" "}
+                          {claim?.scope?.visibility || "private"}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Link
+                          href={`/workspace/${workspaceId}/claim/${claim?.claim_schema_id}`}
+                          className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+                        >
+                          Open
+                        </Link>
+
+                        <Link
+                          href={`/workspace/${workspaceId}/evidence?claimId=${claim?.claim_schema_id}`}
+                          className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+                        >
+                          Evidence
+                        </Link>
                       </div>
                     </div>
-
-                    <div className="flex gap-2">
-                      <Link
-                        href={`/workspace/${workspaceId}/claim/${claim?.claim_schema_id}`}
-                        className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-                      >
-                        Open
-                      </Link>
-
-                      <Link
-                        href={`/workspace/${workspaceId}/evidence?claimId=${claim?.claim_schema_id}`}
-                        className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-                      >
-                        Evidence
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <h2 className="text-2xl font-semibold">Quick Actions</h2>
-
-            <div className="mt-4 space-y-3">
-              {canCreateClaim ? (
-                <ActionLink href={`/workspace/${workspaceId}/schema`} label="Create Draft Claim" />
-              ) : (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-3 text-center text-sm font-medium text-slate-500">
-                  Claim creation available to owner/operator only
+                  ))}
                 </div>
               )}
-
-              {canImportTrades ? (
-                <ActionLink href={`/workspace/${workspaceId}/import`} label="Import Trades" />
-              ) : (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-3 text-center text-sm font-medium text-slate-500">
-                  Trade import available to owner/operator only
-                </div>
-              )}
-
-              <ActionLink href={`/workspace/${workspaceId}/ledger`} label="Open Ledger" />
-              <ActionLink href={`/workspace/${workspaceId}/claims`} label="Open Claims Registry" />
-              <ActionLink href={`/workspace/${workspaceId}/settings`} label="Open Settings & Billing" />
             </div>
 
-            {!canCreateClaim || !canImportTrades ? (
-              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                Your current role is <span className="font-medium">{workspaceRole}</span>. Some
-                workspace write actions are restricted by role.
+            <div className="rounded-2xl border bg-white p-6 shadow-sm">
+              <h2 className="text-2xl font-semibold">Quick Actions</h2>
+
+              <div className="mt-4 space-y-3">
+                {canCreateClaim ? (
+                  <ActionButton
+                    onClick={() => void handleCreateDraftClick()}
+                    label="Create Draft Claim"
+                    loading={createChecking}
+                  />
+                ) : (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-3 text-center text-sm font-medium text-slate-500">
+                    Claim creation available to owner/operator only
+                  </div>
+                )}
+
+                {canImportTrades ? (
+                  <ActionLink href={`/workspace/${workspaceId}/import`} label="Import Trades" />
+                ) : (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-3 text-center text-sm font-medium text-slate-500">
+                    Trade import available to owner/operator only
+                  </div>
+                )}
+
+                <ActionLink href={`/workspace/${workspaceId}/ledger`} label="Open Ledger" />
+                <ActionLink href={`/workspace/${workspaceId}/claims`} label="Open Claims Registry" />
+                <ActionLink href={`/workspace/${workspaceId}/settings`} label="Open Settings & Billing" />
               </div>
-            ) : null}
+
+              {billingActivationRecommended ? (
+                <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                  This workspace is already configured on <span className="font-semibold">{configuredPlanName}</span>,
+                  but billing is not active yet. Effective claim enforcement still follows{" "}
+                  <span className="font-semibold">{effectivePlanName}</span>.
+                </div>
+              ) : null}
+
+              {Boolean(usage?.governance?.upgrade_required_now) ? (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  Governed capacity is currently constrained. Review billing and{" "}
+                  <span className="font-semibold">{recommendedPlanName}</span> to protect workflow continuity.
+                </div>
+              ) : null}
+
+              {!canCreateClaim || !canImportTrades ? (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                  Your current role is <span className="font-medium">{workspaceRole}</span>. Some
+                  workspace write actions are restricted by role.
+                </div>
+              ) : null}
+            </div>
           </div>
-        </div>
-      </main>
-    </div>
+        </main>
+      </div>
+
+      <PaywallModal
+        open={paywallState.open}
+        onClose={closePaywall}
+        reason={paywallState.reason}
+        actionLabel={paywallState.actionLabel || "Create draft claim"}
+        message={paywallState.message}
+        currentPlanName={configuredPlanName}
+        currentPlanCode={usage?.plan_code || null}
+        usageLabel={`${formatNumber(claimsUsage.used)} / ${formatNumber(claimsUsage.limit)} · ${formatPercent(
+          claimsUsage.ratio
+        )}`}
+        recommendedPlanName={billingActivationRecommended ? configuredPlanName : recommendedPlanName}
+        onUpgrade={() => {
+          router.push(`/workspace/${workspaceId}/settings?tab=billing`);
+        }}
+      />
+    </>
   );
 }
