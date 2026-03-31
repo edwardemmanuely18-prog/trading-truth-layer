@@ -1578,10 +1578,31 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     included_symbols = ", ".join(json.loads(schema.included_symbols_json or "[]")) or "All in scope"
     excluded_trade_ids = ", ".join(str(x) for x in json.loads(schema.excluded_trade_ids_json or "[]")) or "None"
 
-    verification_path = f"/claim/{schema.id}/public"
+    public_view_path = f"/claim/{schema.id}/public"
+    verify_link_path = f"/verify/{claim_hash}"
 
     document_title = f"Verified Trading Claim · {schema.name}"
     filename = f"claim_report_{schema.id}_{claim_hash[:12]}.pdf"
+
+    def fmt_num(value, digits=2):
+        try:
+            return f"{float(value):.{digits}f}"
+        except Exception:
+            return "—"
+
+    def fmt_pct_ratio(value, digits=2):
+        try:
+            return f"{float(value) * 100:.{digits}f}%"
+        except Exception:
+            return "—"
+
+    def fmt_dt(value):
+        if not value:
+            return "—"
+        try:
+            return value.strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return format_pdf_datetime(value)
 
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=letter)
@@ -1604,11 +1625,13 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.setFillColor(colors.HexColor("#64748B"))
     pdf.setFont("Helvetica", 11)
     pdf.drawString(PDF_MARGIN_LEFT, y, "Trading Truth Layer")
-    y -= 18
+    y -= 16
 
     pdf.setFillColor(colors.HexColor("#64748B"))
     pdf.setFont("Helvetica", 10)
-    pdf.drawString(PDF_MARGIN_LEFT, y, f"Verification Path: {verification_path}")
+    pdf.drawString(PDF_MARGIN_LEFT, y, f"Public View Path: {public_view_path}")
+    y -= 14
+    pdf.drawString(PDF_MARGIN_LEFT, y, f"Verify Link Path: {verify_link_path}")
     y -= 22
 
     pdf.setFillColor(colors.HexColor("#475569"))
@@ -1623,9 +1646,9 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         "Helvetica",
         11,
     )
-    y -= 14
+    y -= 16
 
-    banner_height = 134
+    banner_height = 156
     banner_fill = colors.HexColor("#ECFDF5") if integrity_status == "valid" else colors.HexColor("#FEF2F2")
     banner_stroke = colors.HexColor("#A7F3D0") if integrity_status == "valid" else colors.HexColor("#FECACA")
     banner_text = colors.HexColor("#166534") if integrity_status == "valid" else colors.HexColor("#991B1B")
@@ -1649,24 +1672,23 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         signature_text = "Verified • Locked • Integrity Valid"
         sub_text = (
             "This claim is lifecycle-governed and publicly verifiable. "
-            "The locked trade set fingerprint matches the canonical record, "
-            "and the integrity state is independently checkable via the verification link."
+            "The locked trade-set fingerprint matches the canonical record, "
+            "and integrity can be independently checked through the verify route."
         )
         trust_state_text = "Trust State: High-trust finalized record"
     elif schema.status == "published":
         signature_text = "Published Verification Surface"
         sub_text = (
             "This claim is publicly exposed and verification-ready. "
-            "Its canonical identity, scope, and current lifecycle posture are "
-            "available for external review through Trading Truth Layer."
+            "Its canonical identity, scope, and lifecycle posture are available "
+            "for external review through Trading Truth Layer."
         )
         trust_state_text = "Trust State: Publicly reviewable record"
     elif schema.status == "locked" and integrity_status != "valid":
         signature_text = "Locked • Integrity Compromised"
         sub_text = (
-            "This record is locked, but the current in-scope trade fingerprint no longer "
-            "matches the stored locked fingerprint. External reviewers should treat the "
-            "record as integrity-compromised until reconciled."
+            "This record is locked, but the current in-scope trade-set fingerprint "
+            "no longer matches the stored locked fingerprint."
         )
         trust_state_text = "Trust State: Integrity compromised"
     else:
@@ -1678,11 +1700,11 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         trust_state_text = f"Trust State: {schema.status.title()} lifecycle record"
 
     pdf.setFont("Helvetica-Bold", 20)
-    pdf.drawString(PDF_MARGIN_LEFT + 16, y - 46, signature_text)
+    pdf.drawString(PDF_MARGIN_LEFT + 16, y - 44, signature_text)
 
     pdf.setFont("Helvetica", 9)
     pdf.setFillColor(banner_text)
-    pdf.drawString(PDF_MARGIN_LEFT + 16, y - 60, trust_state_text)
+    pdf.drawString(PDF_MARGIN_LEFT + 16, y - 58, trust_state_text)
 
     pdf.setFont("Helvetica", 10)
     draw_pdf_wrapped_text(
@@ -1690,38 +1712,43 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         sub_text,
         PDF_MARGIN_LEFT + 16,
         y - 78,
-        PDF_CONTENT_WIDTH - 190,
+        PDF_CONTENT_WIDTH - 210,
         12,
         "Helvetica",
         10,
     )
 
-    chip_x = PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT - 150
+    chip_x = PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT - 160
     pdf_round_box(
         pdf,
         chip_x,
-        y - 10,
-        150,
-        52,
+        y - 14,
+        160,
+        62,
         colors.white,
         colors.HexColor("#D1D5DB"),
         radius=10,
     )
     pdf.setFillColor(colors.HexColor("#0F172A"))
     pdf.setFont("Helvetica", 10)
-    pdf.drawString(chip_x + 12, y - 28, f"status: {schema.status}")
-    pdf.drawString(chip_x + 12, y - 42, f"integrity: {integrity_status}")
-    pdf.setFillColor(colors.black)
+    pdf.drawString(chip_x + 12, y - 30, f"status: {schema.status}")
+    pdf.drawString(chip_x + 12, y - 44, f"integrity: {integrity_status}")
+    pdf.drawString(
+        chip_x + 12,
+        y - 58,
+        "trust: high" if integrity_status == "valid" else "trust: alert",
+    )
 
     inner_gap = 14
     hash_box_w = (PDF_CONTENT_WIDTH - 32 - inner_gap) / 2
-    hash_row_top = y - 86
+    hash_row_top = y - 96
+
     draw_label_value_box(
         pdf,
         PDF_MARGIN_LEFT + 16,
         hash_row_top,
         hash_box_w,
-        54,
+        52,
         "Claim Hash Fingerprint",
         short_hash(claim_hash, 18, 10),
     )
@@ -1730,13 +1757,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         PDF_MARGIN_LEFT + 16 + hash_box_w + inner_gap,
         hash_row_top,
         hash_box_w,
-        54,
+        52,
         "Trade Set Hash Fingerprint",
         short_hash(trade_set_hash, 18, 10),
     )
 
-    y -= banner_height + 38
-    y -= 8
+    y -= banner_height + 40
 
     pdf.setFillColor(colors.HexColor("#0F172A"))
     pdf.setFont("Helvetica-Bold", 18)
@@ -1754,13 +1780,24 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     card_w = (PDF_CONTENT_WIDTH - (card_gap * 3)) / 4
     card_h = 66
 
-    draw_metric_card(pdf, PDF_MARGIN_LEFT, y, card_w, card_h, "Trade Count", str(metrics["trade_count"]), "In-scope rows")
-    draw_metric_card(pdf, PDF_MARGIN_LEFT + card_w + card_gap, y, card_w, card_h, "Net PnL", str(metrics["net_pnl"]), "Aggregate result")
-    draw_metric_card(pdf, PDF_MARGIN_LEFT + (card_w + card_gap) * 2, y, card_w, card_h, "Profit Factor", str(metrics["profit_factor"]), "Gross profit / loss")
-    draw_metric_card(pdf, PDF_MARGIN_LEFT + (card_w + card_gap) * 3, y, card_w, card_h, "Win Rate", f"{round(metrics['win_rate'] * 100, 2)}%", "Winning trades %")
-    y -= card_h + 24
+    draw_metric_card(
+        pdf, PDF_MARGIN_LEFT, y, card_w, card_h,
+        "Trade Count", str(metrics["trade_count"]), "In-scope rows"
+    )
+    draw_metric_card(
+        pdf, PDF_MARGIN_LEFT + card_w + card_gap, y, card_w, card_h,
+        "Net PnL", fmt_num(metrics["net_pnl"], 2), "Aggregate result"
+    )
+    draw_metric_card(
+        pdf, PDF_MARGIN_LEFT + (card_w + card_gap) * 2, y, card_w, card_h,
+        "Profit Factor", fmt_num(metrics["profit_factor"], 4), "Gross profit / loss"
+    )
+    draw_metric_card(
+        pdf, PDF_MARGIN_LEFT + (card_w + card_gap) * 3, y, card_w, card_h,
+        "Win Rate", fmt_pct_ratio(metrics["win_rate"], 2), "Winning trades %"
+    )
+    y -= card_h + 28
 
-    # Hard stop: page 1 ends after executive summary cards
     page_number += 1
     y = pdf_new_page(pdf, page_number, document_title, claim_hash)
 
@@ -1771,10 +1808,10 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     y = pdf_section_title(pdf, "Performance Diagnostics", PDF_MARGIN_LEFT, y)
 
     diag_w = (PDF_CONTENT_WIDTH - 36) / 4
-    draw_metric_card(pdf, PDF_MARGIN_LEFT, y, diag_w, 66, "Best Trade", str(metrics["best_trade"]), "Highest PnL")
-    draw_metric_card(pdf, PDF_MARGIN_LEFT + diag_w + 12, y, diag_w, 66, "Worst Trade", str(metrics["worst_trade"]), "Lowest PnL")
-    draw_metric_card(pdf, PDF_MARGIN_LEFT + (diag_w + 12) * 2, y, diag_w, 66, "Max Drawdown", str(drawdown_stats["max_drawdown"]), "Peak-to-trough")
-    draw_metric_card(pdf, PDF_MARGIN_LEFT + (diag_w + 12) * 3, y, diag_w, 66, "Ending Equity", str(equity_curve["ending_equity"]), "Final cumulative")
+    draw_metric_card(pdf, PDF_MARGIN_LEFT, y, diag_w, 66, "Best Trade", fmt_num(metrics["best_trade"], 2), "Highest PnL")
+    draw_metric_card(pdf, PDF_MARGIN_LEFT + diag_w + 12, y, diag_w, 66, "Worst Trade", fmt_num(metrics["worst_trade"], 2), "Lowest PnL")
+    draw_metric_card(pdf, PDF_MARGIN_LEFT + (diag_w + 12) * 2, y, diag_w, 66, "Max Drawdown", fmt_num(drawdown_stats["max_drawdown"], 2), "Peak-to-trough")
+    draw_metric_card(pdf, PDF_MARGIN_LEFT + (diag_w + 12) * 3, y, diag_w, 66, "Ending Equity", fmt_num(equity_curve["ending_equity"], 2), "Final cumulative")
     y -= 82
 
     curve_points = equity_curve["curve"]
@@ -1795,8 +1832,8 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         note_w,
         row_h,
         "First Point",
-        f"Trade #{first_point['trade_id']} · {first_point['symbol']} · {format_pdf_datetime(first_point['opened_at'])}" if first_point else "—",
-        value_font_size=9,
+        f"Trade #{first_point['trade_id']} · {first_point['symbol']} · {fmt_dt(first_point['opened_at'])}" if first_point else "—",
+        value_font_size=8,
     )
     draw_label_value_box(
         pdf,
@@ -1805,8 +1842,8 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         note_w,
         row_h,
         "Last Point",
-        f"Trade #{last_point['trade_id']} · {last_point['symbol']} · {format_pdf_datetime(last_point['opened_at'])}" if last_point else "—",
-        value_font_size=9,
+        f"Trade #{last_point['trade_id']} · {last_point['symbol']} · {fmt_dt(last_point['opened_at'])}" if last_point else "—",
+        value_font_size=8,
     )
     draw_label_value_box(
         pdf,
@@ -1815,8 +1852,8 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         note_w,
         row_h,
         "Peak Point",
-        f"Trade #{peak_point['trade_id']} · {peak_point['symbol']} · {format_pdf_datetime(peak_point['opened_at'])}" if peak_point else "—",
-        value_font_size=9,
+        f"Trade #{peak_point['trade_id']} · {peak_point['symbol']} · {fmt_dt(peak_point['opened_at'])}" if peak_point else "—",
+        value_font_size=8,
     )
     draw_label_value_box(
         pdf,
@@ -1825,8 +1862,8 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         note_w,
         row_h,
         "Trough Point",
-        f"Trade #{trough_point['trade_id']} · {trough_point['symbol']} · {format_pdf_datetime(trough_point['opened_at'])}" if trough_point else "—",
-        value_font_size=9,
+        f"Trade #{trough_point['trade_id']} · {trough_point['symbol']} · {fmt_dt(trough_point['opened_at'])}" if trough_point else "—",
+        value_font_size=8,
     )
     y -= row_h + 18
 
@@ -1860,11 +1897,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     )
     y -= curve_box_h + 18
 
+    page_number += 1
+    y = pdf_new_page(pdf, page_number, document_title, claim_hash)
+
     # =========================
     # PAGE 3 — CONTEXT / EVIDENCE
     # =========================
-    page_number += 1
-    y = pdf_new_page(pdf, page_number, document_title, claim_hash)
 
     y = pdf_section_title(pdf, "Verification Context", PDF_MARGIN_LEFT, y)
 
@@ -1872,7 +1910,6 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     panel_w = (PDF_CONTENT_WIDTH - panel_gap) / 2
     panel_h = 206
 
-    # Left panel
     pdf_round_box(
         pdf,
         PDF_MARGIN_LEFT,
@@ -1894,7 +1931,6 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     draw_kv_pair(pdf, PDF_MARGIN_LEFT + 14, y - 144, "Excluded Trade IDs", excluded_trade_ids)
     draw_kv_pair(pdf, PDF_MARGIN_LEFT + 174, y - 144, "Visibility", schema.visibility or "—")
 
-    # Right panel
     panel2_x = PDF_MARGIN_LEFT + panel_w + panel_gap
     pdf_round_box(
         pdf,
@@ -1912,9 +1948,9 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     draw_kv_pair(pdf, panel2_x + 14, y - 48, "Status", schema.status or "—")
     draw_kv_pair(pdf, panel2_x + 174, y - 48, "Integrity", integrity_status)
-    draw_kv_pair(pdf, panel2_x + 14, y - 96, "Verified At", format_pdf_datetime(schema.verified_at))
-    draw_kv_pair(pdf, panel2_x + 174, y - 96, "Published At", format_pdf_datetime(schema.published_at))
-    draw_kv_pair(pdf, panel2_x + 14, y - 144, "Locked At", format_pdf_datetime(schema.locked_at))
+    draw_kv_pair(pdf, panel2_x + 14, y - 96, "Verified At", fmt_dt(schema.verified_at))
+    draw_kv_pair(pdf, panel2_x + 174, y - 96, "Published At", fmt_dt(schema.published_at))
+    draw_kv_pair(pdf, panel2_x + 14, y - 144, "Locked At", fmt_dt(schema.locked_at))
     draw_kv_pair(pdf, panel2_x + 174, y - 144, "Version Number", str(schema.version_number or "—"))
     draw_kv_pair(pdf, panel2_x + 14, y - 192, "Root Claim ID", str(schema.root_claim_id or "—"))
     draw_kv_pair(pdf, panel2_x + 174, y - 192, "Parent Claim ID", str(schema.parent_claim_id or "—"))
@@ -1933,24 +1969,17 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         label="Methodology Notes",
     )
 
+    y -= 8
+
     y, page_number = pdf_require_space(
         pdf,
         y,
-        220,
+        210,
         page_number,
         document_title,
         claim_hash,
     )
 
-    # Leaderboard
-    y, page_number = pdf_require_space(
-        pdf,
-        y,
-        120,
-        page_number,
-        document_title,
-        claim_hash,
-    )
     y = pdf_section_title(pdf, "Leaderboard Snapshot", PDF_MARGIN_LEFT, y)
     y = draw_table_header(
         pdf,
@@ -1972,9 +2001,9 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             y, page_number = pdf_require_space(pdf, y, 24, page_number, document_title, claim_hash)
             pdf.drawString(PDF_MARGIN_LEFT, y, str(row["rank"]))
             pdf.drawString(PDF_MARGIN_LEFT + 96, y, shorten_text(str(row["member"]), 24))
-            pdf.drawString(PDF_MARGIN_LEFT + 300, y, str(row["net_pnl"]))
-            pdf.drawString(PDF_MARGIN_LEFT + 410, y, f"{round(float(row['win_rate']) * 100, 2)}%")
-            pdf.drawString(PDF_MARGIN_LEFT + 500, y, str(row["profit_factor"]))
+            pdf.drawString(PDF_MARGIN_LEFT + 300, y, fmt_num(row["net_pnl"], 2))
+            pdf.drawString(PDF_MARGIN_LEFT + 410, y, fmt_pct_ratio(float(row["win_rate"]), 2))
+            pdf.drawString(PDF_MARGIN_LEFT + 500, y, fmt_num(row["profit_factor"], 4))
             pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
             pdf.line(PDF_MARGIN_LEFT, y - 8, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT, y - 8)
             y -= 18
@@ -1982,13 +2011,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.drawString(PDF_MARGIN_LEFT, y, "No leaderboard data available.")
         y -= 18
 
-    y -= 10
+    y -= 12
 
-    # Trade evidence snapshot
     y, page_number = pdf_require_space(
         pdf,
         y,
-        120,
+        150,
         page_number,
         document_title,
         claim_hash,
@@ -2018,12 +2046,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             y, page_number = pdf_require_space(pdf, y, 22, page_number, document_title, claim_hash)
             pdf.drawString(PDF_MARGIN_LEFT, y, str(row["index"]))
             pdf.drawString(PDF_MARGIN_LEFT + 34, y, str(row["trade_id"]))
-            pdf.drawString(PDF_MARGIN_LEFT + 100, y, shorten_text(format_pdf_datetime(row["opened_at"]), 20))
+            pdf.drawString(PDF_MARGIN_LEFT + 100, y, shorten_text(fmt_dt(row["opened_at"]), 22))
             pdf.drawString(PDF_MARGIN_LEFT + 230, y, shorten_text(str(row["symbol"]), 10))
             pdf.drawString(PDF_MARGIN_LEFT + 302, y, shorten_text(str(row["side"]), 6))
             pdf.drawString(PDF_MARGIN_LEFT + 360, y, str(row["member_id"]))
-            pdf.drawString(PDF_MARGIN_LEFT + 426, y, str(row["net_pnl"]))
-            pdf.drawString(PDF_MARGIN_LEFT + 492, y, str(row["cumulative_pnl"]))
+            pdf.drawString(PDF_MARGIN_LEFT + 426, y, fmt_num(row["net_pnl"], 2))
+            pdf.drawString(PDF_MARGIN_LEFT + 492, y, fmt_num(row["cumulative_pnl"], 2))
             pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
             pdf.line(PDF_MARGIN_LEFT, y - 8, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT, y - 8)
             y -= 16
@@ -2031,38 +2059,37 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.drawString(PDF_MARGIN_LEFT, y, "No trade evidence rows available.")
         y -= 18
 
-    y -= 12
+    page_number += 1
+    y = pdf_new_page(pdf, page_number, document_title, claim_hash)
 
-    # Fingerprints
-    y, page_number = pdf_require_space(
-        pdf,
-        y,
-        210,
-        page_number,
-        document_title,
-        claim_hash,
-    )
+    # =========================
+    # PAGE 4 — FINGERPRINTS & VALIDATION
+    # =========================
+
     y = pdf_section_title(pdf, "Canonical Fingerprints", PDF_MARGIN_LEFT, y)
 
     draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Claim Hash", claim_hash)
     y -= 62
     draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Trade Set Hash", trade_set_hash)
     y -= 62
-    draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Verification Path", verification_path)
+    draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Public View Path", public_view_path)
     y -= 62
+    draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Verify Link Path", verify_link_path)
+    y -= 70
 
     draw_light_note_box(
         pdf,
         PDF_MARGIN_LEFT,
         y,
         PDF_CONTENT_WIDTH,
-        "Generated from Trading Truth Layer — a verification infrastructure for trading claims. This record can be independently validated via its verification link and claim hash.",
-        height=40,
+        "Generated from Trading Truth Layer — a verification infrastructure for trading claims. This record can be independently validated via its verify link, public view path, claim hash, and trade-set hash.",
+        height=44,
     )
 
     pdf.save()
     buffer.seek(0)
     return buffer, filename
+
 
 def draw_dynamic_note_box(
     pdf: canvas.Canvas,
