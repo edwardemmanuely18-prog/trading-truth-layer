@@ -47,9 +47,43 @@ function safeString(value: unknown, fallback = "—") {
   return text || fallback;
 }
 
+function safeCount(value: unknown, fallback = 0) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
 function extractTopLeaderboardEntry(row: any) {
   const leaderboard = toArray(row?.leaderboard);
   return leaderboard.length > 0 ? leaderboard[0] : null;
+}
+
+function resolveVisibility(row: any) {
+  const candidates = [
+    row?.visibility,
+    row?.claim_visibility,
+    row?.public_visibility,
+    row?.exposure_visibility,
+  ];
+
+  for (const candidate of candidates) {
+    const value = normalize(candidate);
+    if (value === "public" || value === "unlisted" || value === "private") {
+      return value;
+    }
+  }
+
+  const status = normalize(row?.verification_status ?? row?.status);
+  const hasClaimHash = Boolean(String(row?.claim_hash ?? "").trim());
+
+  if (status === "locked" || status === "published") {
+    if (hasClaimHash) return "unlisted";
+  }
+
+  return "unknown";
+}
+
+function resolveStatus(row: any) {
+  return normalize(row?.verification_status ?? row?.status) || "unknown";
 }
 
 function buildVerifyHref(row: any) {
@@ -61,7 +95,7 @@ function statusTone(status: string) {
   const value = normalize(status);
   if (value === "locked") return "border-green-200 bg-green-50 text-green-800";
   if (value === "published") return "border-blue-200 bg-blue-50 text-blue-800";
-  if (value === "verified") return "border-indigo-200 bg-indigo-50 text-indigo-800";
+  if (value === "verified") return "border-amber-200 bg-amber-50 text-amber-800";
   if (value === "draft") return "border-slate-200 bg-slate-50 text-slate-700";
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
@@ -69,7 +103,7 @@ function statusTone(status: string) {
 function visibilityTone(value: string) {
   const normalized = normalize(value);
   if (normalized === "public") return "border-emerald-200 bg-emerald-50 text-emerald-800";
-  if (normalized === "unlisted") return "border-amber-200 bg-amber-50 text-amber-800";
+  if (normalized === "unlisted") return "border-violet-200 bg-violet-50 text-violet-800";
   if (normalized === "private") return "border-slate-200 bg-slate-50 text-slate-700";
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
@@ -78,6 +112,9 @@ function integrityTone(value: string) {
   const normalized = normalize(value);
   if (normalized === "valid") return "border-green-200 bg-green-50 text-green-800";
   if (normalized === "compromised") return "border-red-200 bg-red-50 text-red-800";
+  if (normalized === "not_checked" || normalized === "not checked" || normalized === "unknown") {
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  }
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
@@ -85,6 +122,7 @@ function routeTone(value: string) {
   const normalized = normalize(value);
   if (normalized === "active") return "border-green-200 bg-green-50 text-green-800";
   if (normalized === "pending lock") return "border-amber-200 bg-amber-50 text-amber-800";
+  if (normalized === "internal only") return "border-slate-200 bg-slate-50 text-slate-700";
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
@@ -103,18 +141,16 @@ function Pill({
 }
 
 function getVerificationRouteState(row: any) {
-  const status = normalize(row?.verification_status ?? row?.status);
-  const visibility = normalize(row?.visibility);
+  const status = resolveStatus(row);
+  const visibility = resolveVisibility(row);
 
-  if (status === "locked" && (visibility === "public" || visibility === "unlisted")) {
-    return "active";
+  if (
+    (status === "locked" || status === "published") &&
+    (visibility === "public" || visibility === "unlisted")
+  ) {
+    return status === "locked" ? "active" : "pending lock";
   }
-  if (status === "published" && (visibility === "public" || visibility === "unlisted")) {
-    return "pending lock";
-  }
-  if (status === "locked") {
-    return "active";
-  }
+
   return "internal only";
 }
 
@@ -143,7 +179,7 @@ function sortRows(rows: any[], sortBy: string) {
 export default function ClaimsPageClient() {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>("");
+  const [error, setError] = useState("");
 
   const [searchInput, setSearchInput] = useState("");
   const [statusInput, setStatusInput] = useState("all");
@@ -183,18 +219,9 @@ export default function ClaimsPageClient() {
   }, []);
 
   const summary = useMemo(() => {
-    const locked = rows.filter(
-      (row) => normalize(row?.verification_status ?? row?.status) === "locked",
-    ).length;
-
-    const published = rows.filter(
-      (row) => normalize(row?.verification_status ?? row?.status) === "published",
-    ).length;
-
-    const tradeCount = rows.reduce((sum, row) => {
-      const value = Number(row?.trade_count);
-      return sum + (Number.isFinite(value) ? value : 0);
-    }, 0);
+    const locked = rows.filter((row) => resolveStatus(row) === "locked").length;
+    const published = rows.filter((row) => resolveStatus(row) === "published").length;
+    const tradeCount = rows.reduce((sum, row) => sum + safeCount(row?.trade_count, 0), 0);
 
     return {
       total: rows.length,
@@ -217,7 +244,9 @@ export default function ClaimsPageClient() {
           row?.locked_trade_set_hash,
           row?.methodology_notes,
           row?.visibility,
+          row?.claim_visibility,
           row?.verification_status,
+          row?.status,
           ...(toArray(row?.included_symbols) as any[]),
         ]
           .map((value) => String(value ?? ""))
@@ -229,21 +258,17 @@ export default function ClaimsPageClient() {
     }
 
     if (statusApplied !== "all") {
-      next = next.filter(
-        (row) => normalize(row?.verification_status ?? row?.status) === normalize(statusApplied),
-      );
+      next = next.filter((row) => resolveStatus(row) === normalize(statusApplied));
     }
 
     if (visibilityApplied !== "all") {
-      next = next.filter((row) => normalize(row?.visibility) === normalize(visibilityApplied));
+      next = next.filter((row) => resolveVisibility(row) === normalize(visibilityApplied));
     }
 
     if (quickFilter === "locked only") {
-      next = next.filter(
-        (row) => normalize(row?.verification_status ?? row?.status) === "locked",
-      );
+      next = next.filter((row) => resolveStatus(row) === "locked");
     } else if (quickFilter === "public only") {
-      next = next.filter((row) => normalize(row?.visibility) === "public");
+      next = next.filter((row) => resolveVisibility(row) === "public");
     }
 
     const effectiveSort =
@@ -289,10 +314,10 @@ export default function ClaimsPageClient() {
       <main className="mx-auto max-w-[1400px] px-6 py-10">
         <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="text-sm text-slate-500">Trading Truth Layer · Public Claim Directory</div>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">
             Verified Claims
           </h1>
-          <p className="mt-4 max-w-5xl text-base leading-7 text-slate-600">
+          <p className="mt-4 max-w-5xl text-base leading-8 text-slate-700">
             Public registry of lifecycle-governed, hash-verifiable trading claims that are
             published or locked and eligible for external credibility, verification, and evidence
             review.
@@ -301,32 +326,40 @@ export default function ClaimsPageClient() {
           <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-3xl bg-slate-50 p-5">
               <div className="text-sm text-slate-500">Public claims</div>
-              <div className="mt-2 text-2xl font-semibold text-slate-950">{summary.total}</div>
-              <div className="mt-2 text-sm text-slate-500">Claims shown in this public directory</div>
+              <div className="mt-2 text-4xl font-bold leading-none text-slate-950 md:text-5xl">
+                {summary.total}
+              </div>
+              <div className="mt-3 text-sm leading-6 text-slate-500">
+                Claims shown in this public directory
+              </div>
             </div>
 
             <div className="rounded-3xl bg-slate-50 p-5">
               <div className="text-sm text-slate-500">Locked</div>
-              <div className="mt-2 text-2xl font-semibold text-slate-950">{summary.locked}</div>
-              <div className="mt-2 text-sm text-slate-500">
+              <div className="mt-2 text-4xl font-bold leading-none text-slate-950 md:text-5xl">
+                {summary.locked}
+              </div>
+              <div className="mt-3 text-sm leading-6 text-slate-500">
                 Finalized claims with locked trade-set state
               </div>
             </div>
 
             <div className="rounded-3xl bg-slate-50 p-5">
               <div className="text-sm text-slate-500">Published</div>
-              <div className="mt-2 text-2xl font-semibold text-slate-950">{summary.published}</div>
-              <div className="mt-2 text-sm text-slate-500">
+              <div className="mt-2 text-4xl font-bold leading-none text-slate-950 md:text-5xl">
+                {summary.published}
+              </div>
+              <div className="mt-3 text-sm leading-6 text-slate-500">
                 Externally visible but not yet locked
               </div>
             </div>
 
             <div className="rounded-3xl bg-slate-50 p-5">
               <div className="text-sm text-slate-500">In-scope trades</div>
-              <div className="mt-2 text-2xl font-semibold text-slate-950">
+              <div className="mt-2 text-4xl font-bold leading-none text-slate-950 md:text-5xl">
                 {summary.tradeCount}
               </div>
-              <div className="mt-2 text-sm text-slate-500">
+              <div className="mt-3 text-sm leading-6 text-slate-500">
                 Aggregate public trade evidence count
               </div>
             </div>
@@ -461,6 +494,9 @@ export default function ClaimsPageClient() {
               const topEntry = extractTopLeaderboardEntry(row);
               const routeState = getVerificationRouteState(row);
               const verifyHref = buildVerifyHref(row);
+              const resolvedVisibility = resolveVisibility(row);
+              const resolvedStatus = resolveStatus(row);
+              const resolvedIntegrity = normalize(row?.integrity_status ?? "unknown");
 
               return (
                 <section
@@ -470,16 +506,14 @@ export default function ClaimsPageClient() {
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="max-w-5xl">
                       <div className="text-sm text-slate-500">Public Verified Claim</div>
-                      <h2 className="mt-2 text-xl font-semibold tracking-tight text-slate-950">
+                      <h2 className="mt-3 text-3xl font-bold leading-tight tracking-tight text-slate-950">
                         {safeString(row?.name, "Unnamed Claim")}
                       </h2>
 
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <Pill className={statusTone(String(row?.verification_status ?? row?.status))}>
-                          {safeString(row?.verification_status ?? row?.status, "unknown")}
-                        </Pill>
-                        <Pill className={visibilityTone(String(row?.visibility))}>
-                          visibility: {safeString(row?.visibility, "unknown")}
+                      <div className="mt-5 flex flex-wrap gap-2">
+                        <Pill className={statusTone(resolvedStatus)}>{resolvedStatus}</Pill>
+                        <Pill className={visibilityTone(resolvedVisibility)}>
+                          visibility: {resolvedVisibility}
                         </Pill>
                         <Pill className={routeTone(routeState)}>
                           verification route {routeState}
@@ -489,7 +523,7 @@ export default function ClaimsPageClient() {
                         </Pill>
                       </div>
 
-                      <p className="mt-4 max-w-5xl text-base leading-7 text-slate-600">
+                      <p className="mt-5 max-w-5xl text-base leading-8 text-slate-700">
                         Public trust surface for lifecycle-governed trading performance with claim
                         fingerprinting, trade-set fingerprinting, methodology scope, and
                         verification-ready metric snapshots.
@@ -507,8 +541,8 @@ export default function ClaimsPageClient() {
                   <div className="mt-6">
                     <ClaimVerificationSignature
                       compact
-                      status={String(row?.verification_status ?? row?.status ?? "")}
-                      integrityStatus={String(row?.integrity_status ?? "")}
+                      status={resolvedStatus}
+                      integrityStatus={resolvedIntegrity}
                       claimHash={String(row?.claim_hash ?? "")}
                       tradeSetHash={String(row?.trade_set_hash ?? row?.locked_trade_set_hash ?? "")}
                       verifiedAt={String(row?.verified_at ?? "")}
@@ -519,7 +553,7 @@ export default function ClaimsPageClient() {
                   <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-3xl bg-slate-50 p-4">
                       <div className="text-sm text-slate-500">Trade Count</div>
-                      <div className="mt-2 text-2xl font-semibold text-slate-950">
+                      <div className="mt-2 text-[24px] font-bold leading-none text-slate-950">
                         {safeString(row?.trade_count, "0")}
                       </div>
                       <div className="mt-2 text-sm text-slate-500">In-scope evidence rows</div>
@@ -527,7 +561,7 @@ export default function ClaimsPageClient() {
 
                     <div className="rounded-3xl bg-slate-50 p-4">
                       <div className="text-sm text-slate-500">Net PnL</div>
-                      <div className="mt-2 text-2xl font-semibold text-slate-950">
+                      <div className="mt-2 text-[24px] font-bold leading-none text-slate-950">
                         {formatNumber(row?.net_pnl, 2)}
                       </div>
                       <div className="mt-2 text-sm text-slate-500">Aggregate net performance</div>
@@ -535,7 +569,7 @@ export default function ClaimsPageClient() {
 
                     <div className="rounded-3xl bg-slate-50 p-4">
                       <div className="text-sm text-slate-500">Profit Factor</div>
-                      <div className="mt-2 text-2xl font-semibold text-slate-950">
+                      <div className="mt-2 text-[24px] font-bold leading-none text-slate-950">
                         {formatNumber(row?.profit_factor, 4)}
                       </div>
                       <div className="mt-2 text-sm text-slate-500">Gross profit ÷ gross loss</div>
@@ -543,7 +577,7 @@ export default function ClaimsPageClient() {
 
                     <div className="rounded-3xl bg-slate-50 p-4">
                       <div className="text-sm text-slate-500">Win Rate</div>
-                      <div className="mt-2 text-2xl font-semibold text-slate-950">
+                      <div className="mt-2 text-[24px] font-bold leading-none text-slate-950">
                         {formatPercent(row?.win_rate, 2)}
                       </div>
                       <div className="mt-2 text-sm text-slate-500">
@@ -628,7 +662,9 @@ export default function ClaimsPageClient() {
                   </div>
 
                   <div className="mt-6">
-                    <div className="text-lg font-semibold text-slate-900">Top Leaderboard Entries</div>
+                    <div className="text-lg font-semibold text-slate-900">
+                      Top Leaderboard Entries
+                    </div>
                     {leaderboard.length === 0 ? (
                       <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
                         No leaderboard snapshot available for this claim.
@@ -648,11 +684,15 @@ export default function ClaimsPageClient() {
                           <tbody className="divide-y divide-slate-200 bg-white text-sm text-slate-900">
                             {leaderboard.map((entry: any, index: number) => (
                               <tr key={`${row?.claim_hash}-leaderboard-${index}`}>
-                                <td className="px-4 py-4">{safeString(entry?.rank, String(index + 1))}</td>
+                                <td className="px-4 py-4">
+                                  {safeString(entry?.rank, String(index + 1))}
+                                </td>
                                 <td className="px-4 py-4">{safeString(entry?.member, "Member")}</td>
                                 <td className="px-4 py-4">{formatNumber(entry?.net_pnl, 2)}</td>
                                 <td className="px-4 py-4">{formatPercent(entry?.win_rate, 2)}</td>
-                                <td className="px-4 py-4">{formatNumber(entry?.profit_factor, 4)}</td>
+                                <td className="px-4 py-4">
+                                  {formatNumber(entry?.profit_factor, 4)}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
