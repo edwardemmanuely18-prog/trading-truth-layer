@@ -326,7 +326,7 @@ export default function ClaimsPageClient() {
           <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-3xl bg-slate-50 p-5">
               <div className="text-sm text-slate-500">Public claims</div>
-              <div className="mt-2 text-4xl font-bold leading-none text-slate-950 md:text-5xl">
+              <div className="mt-2 text-[24px] font-bold leading-none text-slate-950">
                 {summary.total}
               </div>
               <div className="mt-3 text-sm leading-6 text-slate-500">
@@ -336,7 +336,7 @@ export default function ClaimsPageClient() {
 
             <div className="rounded-3xl bg-slate-50 p-5">
               <div className="text-sm text-slate-500">Locked</div>
-              <div className="mt-2 text-4xl font-bold leading-none text-slate-950 md:text-5xl">
+              <div className="mt-2 text-[24px] font-bold leading-none text-slate-950">
                 {summary.locked}
               </div>
               <div className="mt-3 text-sm leading-6 text-slate-500">
@@ -346,7 +346,7 @@ export default function ClaimsPageClient() {
 
             <div className="rounded-3xl bg-slate-50 p-5">
               <div className="text-sm text-slate-500">Published</div>
-              <div className="mt-2 text-4xl font-bold leading-none text-slate-950 md:text-5xl">
+              <div className="mt-2 text-[24px] font-bold leading-none text-slate-950">
                 {summary.published}
               </div>
               <div className="mt-3 text-sm leading-6 text-slate-500">
@@ -356,7 +356,7 @@ export default function ClaimsPageClient() {
 
             <div className="rounded-3xl bg-slate-50 p-5">
               <div className="text-sm text-slate-500">In-scope trades</div>
-              <div className="mt-2 text-4xl font-bold leading-none text-slate-950 md:text-5xl">
+              <div className="mt-2 text-[24px] font-bold leading-none text-slate-950">
                 {summary.tradeCount}
               </div>
               <div className="mt-3 text-sm leading-6 text-slate-500">
