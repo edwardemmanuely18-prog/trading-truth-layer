@@ -29,3 +29,4 @@ class ClaimSchema(Base):
     locked_at = Column(DateTime, nullable=True)
 
     locked_trade_set_hash = Column(String, nullable=True)
+    locked_trade_ids_json = Column(Text, nullable=False, default="[]")
