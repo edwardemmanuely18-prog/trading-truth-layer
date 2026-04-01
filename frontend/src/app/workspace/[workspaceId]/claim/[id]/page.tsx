@@ -1064,7 +1064,9 @@ export default function WorkspaceClaimDetailPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
+            {normalizeText(claim.status) === "draft" && canEditDraft ? (
               <EditClaimDraftButton claim={claim} onSaved={handleDraftSaved} />
+            ) : null}
 
               <button
                 type="button"
