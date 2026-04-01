@@ -890,7 +890,11 @@ export default function WorkspaceClaimDetailPage() {
 
   const internalHref = `/workspace/${workspaceId}/claim/${claimId}`;
   const evidenceHref = `/workspace/${workspaceId}/evidence?claimId=${claimId}`;
-  const publicHref = claim?.claim_hash ? `/verify/${claim.claim_hash}` : null;
+  const verifyRouteHref = claim?.claim_hash ? `/verify/${claim.claim_hash}` : null;
+  const publicViewHref =
+    claimStatusNormalized === "published" || claimStatusNormalized === "locked"
+      ? `/claim/${claimId}/public`
+      : null;
 
   const isInternalActive = pathname === internalHref;
   const isEvidenceActive = pathname === `/workspace/${workspaceId}/evidence`;
@@ -1064,9 +1068,9 @@ export default function WorkspaceClaimDetailPage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-            {normalizeText(claim.status) === "draft" && canEditDraft ? (
-              <EditClaimDraftButton claim={claim} onSaved={handleDraftSaved} />
-            ) : null}
+              {normalizeText(claim.status) === "draft" && canEditDraft ? (
+                <EditClaimDraftButton claim={claim} onSaved={handleDraftSaved} />
+              ) : null}
 
               <button
                 type="button"
@@ -1088,8 +1092,11 @@ export default function WorkspaceClaimDetailPage() {
 
               <PageNavButton href={internalHref} label="Internal View" active={isInternalActive} />
               <PageNavButton href={evidenceHref} label="Evidence" active={isEvidenceActive} />
-              {publicHref ? (
-                <PageNavButton href={publicHref} label="Public Verify" active={false} />
+              {publicViewHref ? (
+                <PageNavButton href={publicViewHref} label="Public View" active={false} />
+              ) : null}
+              {verifyRouteHref ? (
+                <PageNavButton href={verifyRouteHref} label="Verify Route" active={false} />
               ) : null}
             </div>
           </div>
