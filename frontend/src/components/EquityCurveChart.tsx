@@ -205,10 +205,7 @@ export default function EquityCurveChart({
     return minValue + ((maxValue - minValue) / yTicks) * i;
   });
 
-  const xTicks =
-    points.length <= 8
-      ? points.map((_, i) => i)
-      : [0, Math.floor((points.length - 1) / 2), points.length - 1];
+  const xTicks = points.map((_, i) => i);
 
   const linePath = points
     .map((point, i) => `${i === 0 ? "M" : "L"} ${xFor(i)} ${yFor(point.cumulative_pnl)}`)
@@ -351,17 +348,17 @@ export default function EquityCurveChart({
                 />
                 <text
                   x={x}
-                  y={height - padding.bottom + 18}
+                  y={height - padding.bottom + 16}
                   textAnchor="middle"
-                  className="fill-slate-500 text-[11px]"
+                  className="fill-slate-500 text-[10px]"
                 >
                   {point.index}
                 </text>
                 <text
                   x={x}
-                  y={height - padding.bottom + 32}
+                  y={height - padding.bottom + 30}
                   textAnchor="middle"
-                  className="fill-slate-400 text-[10px]"
+                  className="fill-slate-400 text-[9px]"
                 >
                   {formatDateShort(point.opened_at)}
                 </text>
