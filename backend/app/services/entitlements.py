@@ -15,11 +15,39 @@ ACTIVE_BILLING_STATUSES = {"active", "trialing"}
 SOFT_WARNING_BILLING_STATUSES = {"past_due"}
 RESTRICTED_BILLING_STATUSES = {"inactive", "canceled", "unpaid", "pending_manual_review"}
 
+ALLOWED_PLAN_CODES = {"starter", "pro", "growth", "business"}
+
+PLAN_DEFAULTS: dict[str, dict[str, int]] = {
+    "starter": {
+        "claims": 5,
+        "trades": 1000,
+        "members": 3,
+        "storage_mb": 500,
+    },
+    "pro": {
+        "claims": 25,
+        "trades": 10000,
+        "members": 10,
+        "storage_mb": 5000,
+    },
+    "growth": {
+        "claims": 100,
+        "trades": 100000,
+        "members": 50,
+        "storage_mb": 25000,
+    },
+    "business": {
+        "claims": 500,
+        "trades": 1000000,
+        "members": 250,
+        "storage_mb": 100000,
+    },
+}
+
 
 def normalize_plan_code(plan_code: str | None) -> str:
     normalized = str(plan_code or "").strip().lower()
-    allowed = {"starter", "pro", "growth", "business"}
-    return normalized if normalized in allowed else "starter"
+    return normalized if normalized in ALLOWED_PLAN_CODES else "starter"
 
 
 def normalize_billing_status(status: str | None) -> str:
@@ -66,56 +94,86 @@ def workspace_is_restricted(workspace: Workspace) -> bool:
     return normalize_billing_status(workspace.billing_status) in RESTRICTED_BILLING_STATUSES
 
 
+def _candidate_plan_fields(workspace: Workspace) -> list[str]:
+    return [
+        "effective_plan_code",
+        "effective_active_plan_code",
+        "effective_plan",
+        "active_plan_code",
+        "current_plan_code",
+        "configured_plan_code",
+        "configured_plan",
+        "plan_code",
+        "plan",
+    ]
+
+
+def resolve_workspace_plan_code(workspace: Workspace) -> str:
+    """
+    Resolve the commercial plan that should control enforcement.
+
+    Why this exists:
+    - your UI can show a configured/effective plan such as Business
+    - stale numeric columns like claim_limit=5 may remain from an older plan
+    - enforcement must match the plan currently presented to the user
+
+    Strategy:
+    1. Prefer explicit effective/configured plan code fields if present
+    2. Fall back to legacy plan_code / plan
+    3. Default to starter only if nothing valid exists
+    """
+    for field_name in _candidate_plan_fields(workspace):
+        value = getattr(workspace, field_name, None)
+        normalized = normalize_plan_code(value)
+        if normalized != "starter" or str(value or "").strip().lower() == "starter":
+            if str(value or "").strip():
+                return normalized
+
+    return "starter"
+
+
+def _positive_int_or_none(value: Any) -> int | None:
+    try:
+        int_value = int(value)
+    except (TypeError, ValueError):
+        return None
+    return int_value if int_value > 0 else None
+
+
 def get_workspace_plan_limits(workspace: Workspace) -> dict[str, int]:
     """
-    Source of truth for operational limits.
+    Source of truth for operational enforcement.
 
-    We prefer explicit workspace fields if they exist and are > 0, because your
-    current app already persists those values on the workspace row. If any are
-    missing or zero, we fall back to plan defaults.
+    Important change:
+    We now enforce the resolved plan defaults directly so the limits applied by
+    backend match the plan shown in the product. This avoids stale workspace
+    numeric columns (for example claim_limit=5 left behind from Starter) from
+    incorrectly overriding Business/Growth/Pro defaults.
+
+    We still expose raw workspace limit columns through diagnostics snapshots,
+    but they no longer silently overrule plan enforcement.
     """
-    plan_code = normalize_plan_code(getattr(workspace, "plan_code", None))
-
-    defaults = {
-        "starter": {
-            "claims": 5,
-            "trades": 1000,
-            "members": 3,
-            "storage_mb": 500,
-        },
-        "pro": {
-            "claims": 25,
-            "trades": 10000,
-            "members": 10,
-            "storage_mb": 5000,
-        },
-        "growth": {
-            "claims": 100,
-            "trades": 100000,
-            "members": 50,
-            "storage_mb": 25000,
-        },
-        "business": {
-            "claims": 500,
-            "trades": 1000000,
-            "members": 250,
-            "storage_mb": 100000,
-        },
-    }
-
-    plan_defaults = defaults[plan_code]
-
-    claim_limit = int(getattr(workspace, "claim_limit", 0) or 0)
-    trade_limit = int(getattr(workspace, "trade_limit", 0) or 0)
-    member_limit = int(getattr(workspace, "member_limit", 0) or 0)
-    storage_limit_mb = int(getattr(workspace, "storage_limit_mb", 0) or 0)
+    plan_code = resolve_workspace_plan_code(workspace)
+    plan_defaults = PLAN_DEFAULTS[plan_code]
 
     return {
-        "claims": claim_limit if claim_limit > 0 else plan_defaults["claims"],
-        "trades": trade_limit if trade_limit > 0 else plan_defaults["trades"],
-        "members": member_limit if member_limit > 0 else plan_defaults["members"],
-        "storage_mb": (
-            storage_limit_mb if storage_limit_mb > 0 else plan_defaults["storage_mb"]
+        "claims": plan_defaults["claims"],
+        "trades": plan_defaults["trades"],
+        "members": plan_defaults["members"],
+        "storage_mb": plan_defaults["storage_mb"],
+    }
+
+
+def get_workspace_raw_limit_columns(workspace: Workspace) -> dict[str, int | None]:
+    """
+    Optional diagnostics to help detect stale or mismatched persisted limits.
+    """
+    return {
+        "claim_limit": _positive_int_or_none(getattr(workspace, "claim_limit", None)),
+        "trade_limit": _positive_int_or_none(getattr(workspace, "trade_limit", None)),
+        "member_limit": _positive_int_or_none(getattr(workspace, "member_limit", None)),
+        "storage_limit_mb": _positive_int_or_none(
+            getattr(workspace, "storage_limit_mb", None)
         ),
     }
 
@@ -139,7 +197,6 @@ def get_workspace_usage_counts(workspace_id: int, db: Session) -> dict[str, int]
         .count()
     )
 
-    # Storage calculation is not wired in your current schema yet.
     storage_mb_used = 0
 
     return {
@@ -152,13 +209,14 @@ def get_workspace_usage_counts(workspace_id: int, db: Session) -> dict[str, int]
 
 def build_entitlement_snapshot(workspace_id: int, db: Session) -> dict[str, Any]:
     workspace = get_workspace_or_404(workspace_id, db)
+    resolved_plan_code = resolve_workspace_plan_code(workspace)
     limits = get_workspace_plan_limits(workspace)
     usage = get_workspace_usage_counts(workspace_id, db)
     billing_status = normalize_billing_status(workspace.billing_status)
 
     return {
         "workspace_id": workspace.id,
-        "plan_code": normalize_plan_code(workspace.plan_code),
+        "plan_code": resolved_plan_code,
         "billing_status": billing_status,
         "access": {
             "has_active_access": workspace_has_active_access(workspace),
@@ -167,6 +225,11 @@ def build_entitlement_snapshot(workspace_id: int, db: Session) -> dict[str, Any]
         },
         "limits": limits,
         "usage": usage,
+        "diagnostics": {
+            "resolved_plan_code": resolved_plan_code,
+            "raw_limit_columns": get_workspace_raw_limit_columns(workspace),
+            "defaults_for_resolved_plan": PLAN_DEFAULTS[resolved_plan_code],
+        },
     }
 
 
