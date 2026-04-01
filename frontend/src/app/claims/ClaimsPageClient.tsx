@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "../../components/Navbar";
 import ClaimVerificationSignature from "../../components/ClaimVerificationSignature";
 import { api } from "../../lib/api";
@@ -135,7 +136,7 @@ function Pill({
   children,
   className = "",
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 }) {
   return (
@@ -181,7 +182,18 @@ function sortRows(rows: any[], sortBy: string) {
   return next;
 }
 
+function compareMetricTone(left: number, right: number, isLeft: boolean) {
+  if (!Number.isFinite(left) || !Number.isFinite(right) || left === right) {
+    return "text-slate-900";
+  }
+  const wins = isLeft ? left > right : right > left;
+  return wins ? "text-green-700" : "text-slate-900";
+}
+
 export default function ClaimsPageClient() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -196,6 +208,8 @@ export default function ClaimsPageClient() {
   const [visibilityApplied, setVisibilityApplied] = useState("all");
   const [sortApplied, setSortApplied] = useState("newest");
   const [quickFilter, setQuickFilter] = useState("newest");
+
+  const [selectedCompareHashes, setSelectedCompareHashes] = useState<string[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -222,6 +236,22 @@ export default function ClaimsPageClient() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    const compareParam = searchParams.get("compare");
+    if (!compareParam) {
+      setSelectedCompareHashes([]);
+      return;
+    }
+
+    const hashes = compareParam
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .slice(0, 2);
+
+    setSelectedCompareHashes(hashes);
+  }, [searchParams]);
 
   const summary = useMemo(() => {
     const locked = rows.filter((row) => resolveStatus(row) === "locked").length;
@@ -288,6 +318,18 @@ export default function ClaimsPageClient() {
     return sortRows(next, effectiveSort);
   }, [rows, searchApplied, statusApplied, visibilityApplied, sortApplied, quickFilter]);
 
+  const compareCandidates = useMemo(() => {
+    if (selectedCompareHashes.length === 0) return [];
+    return rows.filter((row) =>
+      selectedCompareHashes.includes(String(row?.claim_hash ?? "").trim())
+    );
+  }, [rows, selectedCompareHashes]);
+
+  const compareReady = compareCandidates.length === 2;
+
+  const compareLeft = compareReady ? compareCandidates[0] : null;
+  const compareRight = compareReady ? compareCandidates[1] : null;
+
   function applyFilters() {
     setSearchApplied(searchInput);
     setStatusApplied(statusInput);
@@ -310,6 +352,40 @@ export default function ClaimsPageClient() {
 
   function setQuickMode(value: string) {
     setQuickFilter(value);
+  }
+
+  function updateCompareInUrl(nextHashes: string[]) {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (nextHashes.length === 0) {
+      params.delete("compare");
+    } else {
+      params.set("compare", nextHashes.join(","));
+    }
+
+    const query = params.toString();
+    router.push(query ? `/claims?${query}` : "/claims");
+  }
+
+  function toggleCompare(hash: string) {
+    const normalizedHash = String(hash || "").trim();
+    if (!normalizedHash) return;
+
+    if (selectedCompareHashes.includes(normalizedHash)) {
+      updateCompareInUrl(selectedCompareHashes.filter((item) => item !== normalizedHash));
+      return;
+    }
+
+    if (selectedCompareHashes.length >= 2) {
+      updateCompareInUrl([selectedCompareHashes[1], normalizedHash]);
+      return;
+    }
+
+    updateCompareInUrl([...selectedCompareHashes, normalizedHash]);
+  }
+
+  function clearCompare() {
+    updateCompareInUrl([]);
   }
 
   return (
@@ -478,6 +554,182 @@ export default function ClaimsPageClient() {
           </div>
         </section>
 
+        <section className="mt-8 rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="text-sm text-slate-500">Claim Comparison</div>
+              <div className="mt-1 text-lg font-semibold text-slate-950">
+                Select two public claims for side-by-side comparison
+              </div>
+              <div className="mt-2 text-sm text-slate-600">
+                Comparison uses the canonical public claim records already exposed in the trust
+                layer.
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
+                Selected: {selectedCompareHashes.length}/2
+              </div>
+              <button
+                type="button"
+                onClick={clearCompare}
+                disabled={selectedCompareHashes.length === 0}
+                className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Clear Compare
+              </button>
+            </div>
+          </div>
+
+          {selectedCompareHashes.length === 0 ? (
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              Use the Compare button on any claim card below to begin building a side-by-side trust comparison.
+            </div>
+          ) : null}
+
+          {selectedCompareHashes.length === 1 ? (
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              One claim selected. Choose one more to activate the comparison surface.
+            </div>
+          ) : null}
+
+          {compareReady && compareLeft && compareRight ? (
+            <div className="mt-6 space-y-5">
+              <div className="grid gap-4 xl:grid-cols-[180px_1fr_1fr]">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm font-medium text-slate-500">Comparison Mode</div>
+                  <div className="mt-2 text-base font-semibold text-slate-950">
+                    Side-by-side trust view
+                  </div>
+                </div>
+
+                {[compareLeft, compareRight].map((row) => (
+                  <div
+                    key={String(row?.claim_hash ?? "")}
+                    className="rounded-2xl border border-slate-200 bg-white p-4"
+                  >
+                    <div className="text-sm text-slate-500">Selected Claim</div>
+                    <div className="mt-2 text-xl font-semibold text-slate-950">
+                      {safeString(row?.name, "Unnamed Claim")}
+                    </div>
+                    <div className="mt-2 text-sm text-slate-500">
+                      {shortHash(String(row?.claim_hash ?? ""), 16, 10)}
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Pill className={statusTone(resolveStatus(row))}>{resolveStatus(row)}</Pill>
+                      <Pill className={visibilityTone(resolveVisibility(row))}>
+                        visibility: {resolveVisibility(row)}
+                      </Pill>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="min-w-full bg-white text-sm text-slate-900">
+                  <thead className="bg-slate-50 text-left text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Metric</th>
+                      <th className="px-4 py-3 font-medium">{safeString(compareLeft?.name)}</th>
+                      <th className="px-4 py-3 font-medium">{safeString(compareRight?.name)}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    <tr>
+                      <td className="px-4 py-4 font-medium">Net PnL</td>
+                      <td
+                        className={`px-4 py-4 font-semibold ${compareMetricTone(
+                          Number(compareLeft?.net_pnl),
+                          Number(compareRight?.net_pnl),
+                          true
+                        )}`}
+                      >
+                        {formatNumber(compareLeft?.net_pnl, 2)}
+                      </td>
+                      <td
+                        className={`px-4 py-4 font-semibold ${compareMetricTone(
+                          Number(compareLeft?.net_pnl),
+                          Number(compareRight?.net_pnl),
+                          false
+                        )}`}
+                      >
+                        {formatNumber(compareRight?.net_pnl, 2)}
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="px-4 py-4 font-medium">Win Rate</td>
+                      <td
+                        className={`px-4 py-4 font-semibold ${compareMetricTone(
+                          Number(compareLeft?.win_rate),
+                          Number(compareRight?.win_rate),
+                          true
+                        )}`}
+                      >
+                        {formatPercent(compareLeft?.win_rate, 2)}
+                      </td>
+                      <td
+                        className={`px-4 py-4 font-semibold ${compareMetricTone(
+                          Number(compareLeft?.win_rate),
+                          Number(compareRight?.win_rate),
+                          false
+                        )}`}
+                      >
+                        {formatPercent(compareRight?.win_rate, 2)}
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="px-4 py-4 font-medium">Profit Factor</td>
+                      <td
+                        className={`px-4 py-4 font-semibold ${compareMetricTone(
+                          Number(compareLeft?.profit_factor),
+                          Number(compareRight?.profit_factor),
+                          true
+                        )}`}
+                      >
+                        {formatNumber(compareLeft?.profit_factor, 4)}
+                      </td>
+                      <td
+                        className={`px-4 py-4 font-semibold ${compareMetricTone(
+                          Number(compareLeft?.profit_factor),
+                          Number(compareRight?.profit_factor),
+                          false
+                        )}`}
+                      >
+                        {formatNumber(compareRight?.profit_factor, 4)}
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="px-4 py-4 font-medium">Trade Count</td>
+                      <td className="px-4 py-4 font-semibold">
+                        {safeString(compareLeft?.trade_count, "0")}
+                      </td>
+                      <td className="px-4 py-4 font-semibold">
+                        {safeString(compareRight?.trade_count, "0")}
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="px-4 py-4 font-medium">Status</td>
+                      <td className="px-4 py-4">{resolveStatus(compareLeft)}</td>
+                      <td className="px-4 py-4">{resolveStatus(compareRight)}</td>
+                    </tr>
+
+                    <tr>
+                      <td className="px-4 py-4 font-medium">Visibility</td>
+                      <td className="px-4 py-4">{resolveVisibility(compareLeft)}</td>
+                      <td className="px-4 py-4">{resolveVisibility(compareRight)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+        </section>
+
         {loading ? (
           <section className="mt-8 rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
             <div className="text-base text-slate-500">Loading public claims…</div>
@@ -503,6 +755,8 @@ export default function ClaimsPageClient() {
               const resolvedVisibility = resolveVisibility(row);
               const resolvedStatus = resolveStatus(row);
               const resolvedIntegrity = normalize(row?.integrity_status ?? "unknown");
+              const compareHash = String(row?.claim_hash ?? "").trim();
+              const compareSelected = selectedCompareHashes.includes(compareHash);
 
               return (
                 <section
@@ -540,6 +794,19 @@ export default function ClaimsPageClient() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleCompare(compareHash)}
+                        disabled={!compareHash}
+                        className={`rounded-2xl px-4 py-2 text-sm font-medium ${
+                          compareSelected
+                            ? "border border-blue-300 bg-blue-50 text-blue-800"
+                            : "border border-slate-300 bg-white text-slate-900 hover:bg-slate-50"
+                        } disabled:cursor-not-allowed disabled:opacity-50`}
+                      >
+                        {compareSelected ? "Selected for Compare" : "Compare"}
+                      </button>
+
                       <Link
                         href={publicViewHref}
                         target="_blank"
