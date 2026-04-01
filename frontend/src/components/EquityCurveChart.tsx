@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type EquityCurvePoint = {
   index: number;
@@ -10,6 +10,10 @@ type EquityCurvePoint = {
   opened_at: string;
   net_pnl: number;
   cumulative_pnl: number;
+};
+
+type EnrichedEquityCurvePoint = EquityCurvePoint & {
+  timestamp: number;
 };
 
 type Props = {
@@ -25,8 +29,23 @@ function formatNumber(value?: number | null, digits = 2) {
 function formatDateShort(value?: string | null) {
   if (!value) return "—";
   try {
-    const date = new Date(value);
-    return date.toLocaleDateString();
+    return new Date(value).toLocaleDateString(undefined, {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return value;
+  }
+}
+
+function formatDateTick(value?: string | null) {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleDateString(undefined, {
+      day: "2-digit",
+      month: "2-digit",
+    });
   } catch {
     return value;
   }
@@ -39,6 +58,10 @@ function formatDateTime(value?: string | null) {
   } catch {
     return value;
   }
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function getSeriesStats(points: EquityCurvePoint[]) {
@@ -127,6 +150,45 @@ function getSeriesStats(points: EquityCurvePoint[]) {
   };
 }
 
+function buildTimeTickIndexes(points: EnrichedEquityCurvePoint[], maxLabels = 6) {
+  if (points.length <= maxLabels) {
+    return points.map((_, i) => i);
+  }
+
+  const indexes = new Set<number>();
+
+  for (let i = 0; i < maxLabels; i += 1) {
+    const index = Math.round((i / (maxLabels - 1)) * (points.length - 1));
+    indexes.add(index);
+  }
+
+  return Array.from(indexes).sort((a, b) => a - b);
+}
+
+function ZoomButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
+        active
+          ? "border border-slate-900 bg-slate-900 text-white"
+          : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
 function StatTile({
   label,
   value,
@@ -164,15 +226,58 @@ export default function EquityCurveChart({
   title = "Equity Curve",
   points,
 }: Props) {
-  const width = 960;
-  const height = 380;
-  const padding = { top: 28, right: 28, bottom: 52, left: 72 };
+  const width = 1100;
+  const height = 420;
+  const padding = { top: 28, right: 28, bottom: 70, left: 72 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
-  const stats = useMemo(() => getSeriesStats(points), [points]);
+  const orderedPoints = useMemo<EnrichedEquityCurvePoint[]>(() => {
+    return [...points]
+      .map((point) => ({
+        ...point,
+        timestamp: new Date(point.opened_at).getTime(),
+      }))
+      .sort((a, b) => {
+        if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+        if (a.index !== b.index) return a.index - b.index;
+        return a.trade_id - b.trade_id;
+      });
+  }, [points]);
 
-  if (!points.length) {
+  const [zoomStartIndex, setZoomStartIndex] = useState(0);
+  const [zoomEndIndex, setZoomEndIndex] = useState(Math.max(orderedPoints.length - 1, 0));
+  const [hoveredTradeId, setHoveredTradeId] = useState<number | null>(null);
+
+  useEffect(() => {
+    setZoomStartIndex(0);
+    setZoomEndIndex(Math.max(orderedPoints.length - 1, 0));
+    setHoveredTradeId(null);
+  }, [orderedPoints.length]);
+
+  const visiblePoints = useMemo(() => {
+    if (!orderedPoints.length) return [];
+    const start = clamp(zoomStartIndex, 0, Math.max(orderedPoints.length - 1, 0));
+    const end = clamp(zoomEndIndex, start, Math.max(orderedPoints.length - 1, 0));
+    return orderedPoints.slice(start, end + 1);
+  }, [orderedPoints, zoomStartIndex, zoomEndIndex]);
+
+  const stats = useMemo(() => getSeriesStats(visiblePoints), [visiblePoints]);
+
+  const firstPoint = visiblePoints[0] ?? null;
+  const lastPoint = visiblePoints[visiblePoints.length - 1] ?? null;
+  const peakPoint = visiblePoints[stats.maxIndex] ?? null;
+  const troughPoint = visiblePoints[stats.minIndex] ?? null;
+
+  const hoveredPoint =
+    visiblePoints.find((point) => point.trade_id === hoveredTradeId) ?? null;
+  const hoveredIndex = hoveredPoint
+    ? visiblePoints.findIndex((point) => point.trade_id === hoveredPoint.trade_id)
+    : -1;
+  const previousHoveredPoint =
+    hoveredIndex > 0 ? visiblePoints[hoveredIndex - 1] ?? null : null;
+
+  if (!orderedPoints.length) {
     return (
       <div className="rounded-2xl border bg-white p-5 shadow-sm">
         <h2 className="text-xl font-semibold">{title}</h2>
@@ -181,19 +286,21 @@ export default function EquityCurveChart({
     );
   }
 
-  const values = points.map((p) => p.cumulative_pnl);
-  const minValue = Math.min(...values, 0);
-  const maxValue = Math.max(...values, 0);
+  const visibleValues = visiblePoints.map((p) => p.cumulative_pnl);
+  const minValue = Math.min(...visibleValues, 0);
+  const maxValue = Math.max(...visibleValues, 0);
   const range = maxValue - minValue || 1;
 
-  const firstPoint = points[0] ?? null;
-  const lastPoint = points[points.length - 1] ?? null;
-  const peakPoint = points[stats.maxIndex] ?? null;
-  const troughPoint = points[stats.minIndex] ?? null;
+  const minTimestamp = visiblePoints[0]?.timestamp ?? 0;
+  const maxTimestamp = visiblePoints[visiblePoints.length - 1]?.timestamp ?? minTimestamp;
+  const timeRange = maxTimestamp - minTimestamp || 1;
 
-  const xFor = (index: number) => {
-    if (points.length <= 1) return padding.left + chartWidth / 2;
-    return padding.left + (index / (points.length - 1)) * chartWidth;
+  const xFor = (point: EnrichedEquityCurvePoint, visibleIndex: number) => {
+    if (visiblePoints.length <= 1) return padding.left + chartWidth / 2;
+    if (timeRange <= 0) {
+      return padding.left + (visibleIndex / (visiblePoints.length - 1)) * chartWidth;
+    }
+    return padding.left + ((point.timestamp - minTimestamp) / timeRange) * chartWidth;
   };
 
   const yFor = (value: number) => {
@@ -205,16 +312,16 @@ export default function EquityCurveChart({
     return minValue + ((maxValue - minValue) / yTicks) * i;
   });
 
-  const xTicks = points.map((_, i) => i);
+  const xTickIndexes = buildTimeTickIndexes(visiblePoints, 6);
 
-  const linePath = points
-    .map((point, i) => `${i === 0 ? "M" : "L"} ${xFor(i)} ${yFor(point.cumulative_pnl)}`)
+  const linePath = visiblePoints
+    .map((point, i) => `${i === 0 ? "M" : "L"} ${xFor(point, i)} ${yFor(point.cumulative_pnl)}`)
     .join(" ");
 
   const areaPath = [
     linePath,
-    `L ${xFor(points.length - 1)} ${height - padding.bottom}`,
-    `L ${xFor(0)} ${height - padding.bottom}`,
+    `L ${xFor(visiblePoints[visiblePoints.length - 1], visiblePoints.length - 1)} ${height - padding.bottom}`,
+    `L ${xFor(visiblePoints[0], 0)} ${height - padding.bottom}`,
     "Z",
   ].join(" ");
 
@@ -225,19 +332,25 @@ export default function EquityCurveChart({
     stats.drawdownPeakValue !== null &&
     stats.drawdownTroughValue !== null;
 
-  const drawdownShadePath = hasDrawdown
-    ? [
-        `M ${xFor(stats.drawdownPeakIndex!)} ${yFor(stats.drawdownPeakValue!)}`,
-        `L ${xFor(stats.drawdownTroughIndex!)} ${yFor(stats.drawdownTroughValue!)}`,
-        `L ${xFor(stats.drawdownTroughIndex!)} ${yFor(stats.drawdownPeakValue!)}`,
-        `L ${xFor(stats.drawdownPeakIndex!)} ${yFor(stats.drawdownPeakValue!)}`,
-        "Z",
-      ].join(" ")
-    : null;
+  const drawdownPeakPoint =
+    stats.drawdownPeakIndex !== null ? visiblePoints[stats.drawdownPeakIndex] ?? null : null;
+  const drawdownTroughPoint =
+    stats.drawdownTroughIndex !== null ? visiblePoints[stats.drawdownTroughIndex] ?? null : null;
 
-  const peakX = xFor(stats.maxIndex);
+  const drawdownShadePath =
+    hasDrawdown && drawdownPeakPoint && drawdownTroughPoint
+      ? [
+          `M ${xFor(drawdownPeakPoint, stats.drawdownPeakIndex!)} ${yFor(stats.drawdownPeakValue!)}`,
+          `L ${xFor(drawdownTroughPoint, stats.drawdownTroughIndex!)} ${yFor(stats.drawdownTroughValue!)}`,
+          `L ${xFor(drawdownTroughPoint, stats.drawdownTroughIndex!)} ${yFor(stats.drawdownPeakValue!)}`,
+          `L ${xFor(drawdownPeakPoint, stats.drawdownPeakIndex!)} ${yFor(stats.drawdownPeakValue!)}`,
+          "Z",
+        ].join(" ")
+      : null;
+
+  const peakX = peakPoint ? xFor(peakPoint, stats.maxIndex) : padding.left;
   const peakY = yFor(stats.max);
-  const troughX = xFor(stats.minIndex);
+  const troughX = troughPoint ? xFor(troughPoint, stats.minIndex) : padding.left;
   const troughY = yFor(stats.min);
 
   const peakEqualsTrough = stats.maxIndex === stats.minIndex;
@@ -249,23 +362,69 @@ export default function EquityCurveChart({
         ? `Net change ${formatNumber(stats.netChange, 4)}`
         : `Net change ${formatNumber(stats.netChange, 4)}`;
 
+  const zoomMode =
+    zoomStartIndex === 0 && zoomEndIndex === orderedPoints.length - 1
+      ? "all"
+      : zoomEndIndex - zoomStartIndex + 1 <= Math.max(2, Math.ceil(orderedPoints.length * 0.25))
+        ? "last25"
+        : zoomEndIndex - zoomStartIndex + 1 <= Math.max(2, Math.ceil(orderedPoints.length * 0.5))
+          ? "last50"
+          : zoomEndIndex - zoomStartIndex + 1 <= Math.max(2, Math.ceil(orderedPoints.length * 0.75))
+            ? "last75"
+            : "custom";
+
+  function applyZoomPreset(ratio: number) {
+    const windowSize = Math.max(2, Math.ceil(orderedPoints.length * ratio));
+    const start = Math.max(0, orderedPoints.length - windowSize);
+    setZoomStartIndex(start);
+    setZoomEndIndex(orderedPoints.length - 1);
+    setHoveredTradeId(null);
+  }
+
+  function handleStartSlider(nextStart: number) {
+    const safeStart = clamp(nextStart, 0, Math.max(orderedPoints.length - 2, 0));
+    const safeEnd = Math.max(safeStart + 1, zoomEndIndex);
+    setZoomStartIndex(safeStart);
+    setZoomEndIndex(clamp(safeEnd, safeStart + 1, Math.max(orderedPoints.length - 1, 0)));
+    setHoveredTradeId(null);
+  }
+
+  function handleEndSlider(nextEnd: number) {
+    const safeEnd = clamp(nextEnd, 1, Math.max(orderedPoints.length - 1, 1));
+    const safeStart = Math.min(zoomStartIndex, safeEnd - 1);
+    setZoomStartIndex(clamp(safeStart, 0, safeEnd - 1));
+    setZoomEndIndex(safeEnd);
+    setHoveredTradeId(null);
+  }
+
+  const hoveredDelta =
+    hoveredPoint && previousHoveredPoint
+      ? hoveredPoint.cumulative_pnl - previousHoveredPoint.cumulative_pnl
+      : hoveredPoint?.cumulative_pnl ?? null;
+
+  const hoveredGapDays =
+    hoveredPoint && previousHoveredPoint
+      ? (hoveredPoint.timestamp - previousHoveredPoint.timestamp) / (1000 * 60 * 60 * 24)
+      : null;
+
   return (
     <div className="rounded-2xl border bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-2xl">
           <h2 className="text-xl font-semibold">{title}</h2>
           <div className="mt-1 text-sm text-slate-500">
-            Ordered by trade open time and cumulative net PnL across the claim evidence set.
+            Time-scale equity path ordered by trade open time and cumulative net PnL across the
+            claim evidence set.
           </div>
         </div>
 
         <div className="grid gap-2 text-sm sm:grid-cols-3">
           <div className="rounded-xl bg-slate-50 px-4 py-3">
-            <div className="text-slate-500">Start</div>
+            <div className="text-slate-500">Window Start</div>
             <div className="mt-1 font-semibold">{formatNumber(stats.start, 4)}</div>
           </div>
           <div className="rounded-xl bg-slate-50 px-4 py-3">
-            <div className="text-slate-500">End</div>
+            <div className="text-slate-500">Window End</div>
             <div className="mt-1 font-semibold">{formatNumber(stats.end, 4)}</div>
           </div>
           <div className="rounded-xl bg-slate-50 px-4 py-3">
@@ -279,199 +438,391 @@ export default function EquityCurveChart({
         <StatTile
           label="Peak"
           value={formatNumber(stats.max, 4)}
-          hint="Highest cumulative point"
+          hint="Highest visible cumulative point"
         />
         <StatTile
           label="Trough"
           value={formatNumber(stats.min, 4)}
-          hint="Lowest cumulative point"
+          hint="Lowest visible cumulative point"
         />
         <StatTile
           label="Average Trade PnL"
           value={formatNumber(stats.avgTradePnl, 4)}
-          hint="Mean net PnL per trade"
+          hint="Mean net PnL in current zoom window"
         />
         <StatTile
           label="Positive / Negative"
           value={`${stats.positiveTrades}/${stats.negativeTrades}`}
-          hint="Trade count balance"
+          hint="Visible trade count balance"
         />
       </div>
 
-      <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <svg viewBox={`0 0 ${width} ${height}`} className="h-[380px] min-w-[760px] w-full">
-          <defs>
-            <linearGradient id="equityAreaFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgba(15,23,42,0.10)" />
-              <stop offset="100%" stopColor="rgba(15,23,42,0.02)" />
-            </linearGradient>
-          </defs>
+      <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">Zoom Window</div>
+            <div className="mt-1 text-xs text-slate-500">
+              True timestamp spacing with quick zoom presets and manual window controls.
+            </div>
+          </div>
 
-          {yTickValues.map((tick, i) => {
-            const y = yFor(tick);
-            return (
-              <g key={`y-tick-${i}`}>
-                <line
-                  x1={padding.left}
-                  y1={y}
-                  x2={width - padding.right}
-                  y2={y}
-                  stroke="#F1F5F9"
-                  strokeWidth="1"
-                />
-                <text
-                  x={padding.left - 12}
-                  y={y + 4}
-                  textAnchor="end"
-                  className="fill-slate-500 text-[11px]"
-                >
-                  {formatNumber(tick, 1)}
-                </text>
-              </g>
-            );
-          })}
-
-          {xTicks.map((tickIndex) => {
-            const point = points[tickIndex];
-            if (!point) return null;
-            const x = xFor(tickIndex);
-
-            return (
-              <g key={`x-tick-${tickIndex}`}>
-                <line
-                  x1={x}
-                  y1={padding.top}
-                  x2={x}
-                  y2={height - padding.bottom}
-                  stroke="#F8FAFC"
-                  strokeWidth="1"
-                />
-                <text
-                  x={x}
-                  y={height - padding.bottom + 16}
-                  textAnchor="middle"
-                  className="fill-slate-500 text-[10px]"
-                >
-                  {point.index}
-                </text>
-                <text
-                  x={x}
-                  y={height - padding.bottom + 30}
-                  textAnchor="middle"
-                  className="fill-slate-400 text-[9px]"
-                >
-                  {formatDateShort(point.opened_at)}
-                </text>
-              </g>
-            );
-          })}
-
-          <line
-            x1={padding.left}
-            y1={padding.top}
-            x2={padding.left}
-            y2={height - padding.bottom}
-            stroke="#CBD5E1"
-            strokeWidth="1"
-          />
-          <line
-            x1={padding.left}
-            y1={height - padding.bottom}
-            x2={width - padding.right}
-            y2={height - padding.bottom}
-            stroke="#CBD5E1"
-            strokeWidth="1"
-          />
-
-          <path d={areaPath} fill="url(#equityAreaFill)" stroke="none" />
-
-          {drawdownShadePath ? (
-            <path d={drawdownShadePath} fill="rgba(220,38,38,0.08)" stroke="none" />
-          ) : null}
-
-          <path
-            d={linePath}
-            fill="none"
-            stroke="rgba(15,23,42,0.15)"
-            strokeWidth="6"
-          />
-
-          <path
-            d={linePath}
-            fill="none"
-            stroke="#0F172A"
-            strokeWidth="3.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-
-          {hasDrawdown ? (
-            <line
-              x1={xFor(stats.drawdownPeakIndex!)}
-              y1={yFor(stats.drawdownPeakValue!)}
-              x2={xFor(stats.drawdownTroughIndex!)}
-              y2={yFor(stats.drawdownTroughValue!)}
-              stroke="#94A3B8"
-              strokeWidth="1.5"
-              strokeDasharray="4 4"
+          <div className="flex flex-wrap gap-2">
+            <ZoomButton
+              label="All"
+              active={zoomMode === "all"}
+              onClick={() => {
+                setZoomStartIndex(0);
+                setZoomEndIndex(orderedPoints.length - 1);
+                setHoveredTradeId(null);
+              }}
             />
-          ) : null}
+            <ZoomButton
+              label="Last 75%"
+              active={zoomMode === "last75"}
+              onClick={() => applyZoomPreset(0.75)}
+            />
+            <ZoomButton
+              label="Last 50%"
+              active={zoomMode === "last50"}
+              onClick={() => applyZoomPreset(0.5)}
+            />
+            <ZoomButton
+              label="Last 25%"
+              active={zoomMode === "last25"}
+              onClick={() => applyZoomPreset(0.25)}
+            />
+          </div>
+        </div>
 
-          {points.map((point, i) => (
-            <circle
-              key={`${point.trade_id}-${i}`}
-              cx={xFor(i)}
-              cy={yFor(point.cumulative_pnl)}
-              r="3.5"
-              fill="#0F172A"
-            >
-              <title>{`Trade #${point.trade_id} | ${point.symbol} | ${formatDateTime(point.opened_at)} | PnL ${point.net_pnl} | Cum ${point.cumulative_pnl}`}</title>
-            </circle>
-          ))}
+        {orderedPoints.length > 2 ? (
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
+                <span>Window start</span>
+                <span>
+                  {zoomStartIndex + 1} · {formatDateShort(orderedPoints[zoomStartIndex]?.opened_at)}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={Math.max(orderedPoints.length - 2, 0)}
+                value={zoomStartIndex}
+                onChange={(event) => handleStartSlider(Number(event.target.value))}
+                className="w-full"
+              />
+            </div>
 
-          {peakEqualsTrough ? (
-            <>
-              <circle cx={peakX} cy={peakY} r="6" fill="#16A34A" />
-              <text
-                x={peakX + 12}
-                y={peakY - 12}
-                className="fill-green-600 text-[10px] font-semibold"
-              >
-                Peak / Trough {formatNumber(stats.max, 2)}
-              </text>
-            </>
-          ) : (
-            <>
-              <circle cx={peakX} cy={peakY} r="6" fill="#16A34A" />
-              <text
-                x={peakX + 12}
-                y={peakY - 12}
-                className="fill-green-600 text-[10px] font-semibold"
-              >
-                Peak {formatNumber(stats.max, 2)}
-              </text>
+            <div>
+              <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
+                <span>Window end</span>
+                <span>
+                  {zoomEndIndex + 1} · {formatDateShort(orderedPoints[zoomEndIndex]?.opened_at)}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={Math.max(orderedPoints.length - 1, 1)}
+                value={zoomEndIndex}
+                onChange={(event) => handleEndSlider(Number(event.target.value))}
+                className="w-full"
+              />
+            </div>
+          </div>
+        ) : null}
+      </div>
 
-              <circle cx={troughX} cy={troughY} r="6" fill="#DC2626" />
-              <text
-                x={troughX - 14}
-                y={troughY - 12}
-                textAnchor="end"
-                className="fill-red-700 text-[10px] font-semibold"
-              >
-                Trough {formatNumber(stats.min, 2)}
-              </text>
-            </>
-          )}
-
-          <text
-            x={width - padding.right}
-            y={padding.top - 6}
-            textAnchor="end"
-            className="fill-slate-400 text-[10px]"
+      <div className="mt-5 grid gap-4 xl:grid-cols-[1.3fr_0.9fr]">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <svg
+            viewBox={`0 0 ${width} ${height}`}
+            className="h-[420px] min-w-[820px] w-full"
+            onMouseLeave={() => setHoveredTradeId(null)}
           >
-            {netChangeLabel}
-          </text>
-        </svg>
+            <defs>
+              <linearGradient id="equityAreaFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="rgba(15,23,42,0.10)" />
+                <stop offset="100%" stopColor="rgba(15,23,42,0.02)" />
+              </linearGradient>
+            </defs>
+
+            {yTickValues.map((tick, i) => {
+              const y = yFor(tick);
+              return (
+                <g key={`y-tick-${i}`}>
+                  <line
+                    x1={padding.left}
+                    y1={y}
+                    x2={width - padding.right}
+                    y2={y}
+                    stroke="#F1F5F9"
+                    strokeWidth="1"
+                  />
+                  <text
+                    x={padding.left - 12}
+                    y={y + 4}
+                    textAnchor="end"
+                    className="fill-slate-500 text-[11px]"
+                  >
+                    {formatNumber(tick, 1)}
+                  </text>
+                </g>
+              );
+            })}
+
+            {xTickIndexes.map((tickIndex) => {
+              const point = visiblePoints[tickIndex];
+              if (!point) return null;
+
+              const x = xFor(point, tickIndex);
+
+              return (
+                <g key={`x-tick-${tickIndex}`}>
+                  <line
+                    x1={x}
+                    y1={padding.top}
+                    x2={x}
+                    y2={height - padding.bottom}
+                    stroke="#F8FAFC"
+                    strokeWidth="1"
+                  />
+                  <text
+                    x={x}
+                    y={height - padding.bottom + 20}
+                    textAnchor="middle"
+                    className="fill-slate-500 text-[10px]"
+                  >
+                    {formatDateTick(point.opened_at)}
+                  </text>
+                </g>
+              );
+            })}
+
+            <line
+              x1={padding.left}
+              y1={padding.top}
+              x2={padding.left}
+              y2={height - padding.bottom}
+              stroke="#CBD5E1"
+              strokeWidth="1"
+            />
+            <line
+              x1={padding.left}
+              y1={height - padding.bottom}
+              x2={width - padding.right}
+              y2={height - padding.bottom}
+              stroke="#CBD5E1"
+              strokeWidth="1"
+            />
+
+            <path d={areaPath} fill="url(#equityAreaFill)" stroke="none" />
+
+            {drawdownShadePath ? (
+              <path d={drawdownShadePath} fill="rgba(220,38,38,0.08)" stroke="none" />
+            ) : null}
+
+            <path d={linePath} fill="none" stroke="rgba(15,23,42,0.15)" strokeWidth="6" />
+
+            <path
+              d={linePath}
+              fill="none"
+              stroke="#0F172A"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+
+            {hasDrawdown && drawdownPeakPoint && drawdownTroughPoint ? (
+              <line
+                x1={xFor(drawdownPeakPoint, stats.drawdownPeakIndex!)}
+                y1={yFor(stats.drawdownPeakValue!)}
+                x2={xFor(drawdownTroughPoint, stats.drawdownTroughIndex!)}
+                y2={yFor(stats.drawdownTroughValue!)}
+                stroke="#94A3B8"
+                strokeWidth="1.5"
+                strokeDasharray="4 4"
+              />
+            ) : null}
+
+            {hoveredPoint && hoveredIndex >= 0 ? (
+              <line
+                x1={xFor(hoveredPoint, hoveredIndex)}
+                y1={padding.top}
+                x2={xFor(hoveredPoint, hoveredIndex)}
+                y2={height - padding.bottom}
+                stroke="#64748B"
+                strokeWidth="1.5"
+                strokeDasharray="4 4"
+              />
+            ) : null}
+
+            {visiblePoints.map((point, i) => {
+              const isPeak = i === stats.maxIndex;
+              const isTrough = i === stats.minIndex;
+              const isHovered = hoveredPoint?.trade_id === point.trade_id;
+
+              const radius = isHovered ? 7 : isPeak || isTrough ? 6 : 4;
+              const fill = isHovered
+                ? "#2563EB"
+                : isPeak
+                  ? "#16A34A"
+                  : isTrough
+                    ? "#DC2626"
+                    : "#0F172A";
+
+              return (
+                <g key={`${point.trade_id}-${i}`}>
+                  <circle
+                    cx={xFor(point, i)}
+                    cy={yFor(point.cumulative_pnl)}
+                    r={radius}
+                    fill={fill}
+                    className="cursor-pointer"
+                    onMouseEnter={() => setHoveredTradeId(point.trade_id)}
+                  >
+                    <title>
+                      {`Trade #${point.trade_id} | ${point.symbol} | ${formatDateTime(
+                        point.opened_at
+                      )} | PnL ${point.net_pnl} | Cum ${point.cumulative_pnl}`}
+                    </title>
+                  </circle>
+
+                  <circle
+                    cx={xFor(point, i)}
+                    cy={yFor(point.cumulative_pnl)}
+                    r={14}
+                    fill="transparent"
+                    className="cursor-pointer"
+                    onMouseEnter={() => setHoveredTradeId(point.trade_id)}
+                  />
+                </g>
+              );
+            })}
+
+            {peakEqualsTrough ? (
+              <>
+                <text
+                  x={peakX + 12}
+                  y={peakY - 12}
+                  className="fill-green-600 text-[10px] font-semibold"
+                >
+                  Peak / Trough {formatNumber(stats.max, 2)}
+                </text>
+              </>
+            ) : (
+              <>
+                <text
+                  x={peakX + 12}
+                  y={peakY - 12}
+                  className="fill-green-600 text-[10px] font-semibold"
+                >
+                  Peak {formatNumber(stats.max, 2)}
+                </text>
+
+                <text
+                  x={troughX - 14}
+                  y={troughY - 12}
+                  textAnchor="end"
+                  className="fill-red-700 text-[10px] font-semibold"
+                >
+                  Trough {formatNumber(stats.min, 2)}
+                </text>
+              </>
+            )}
+
+            <text
+              x={width - padding.right}
+              y={padding.top - 6}
+              textAnchor="end"
+              className="fill-slate-400 text-[10px]"
+            >
+              {netChangeLabel}
+            </text>
+          </svg>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-sm font-semibold text-slate-900">Hover Analytics</div>
+          <div className="mt-1 text-xs text-slate-500">
+            Move across points to inspect trade-level evidence and cumulative progression.
+          </div>
+
+          {hoveredPoint ? (
+            <div className="mt-4 space-y-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="text-xs uppercase tracking-wide text-slate-500">Focused point</div>
+                <div className="mt-1 text-base font-semibold text-slate-900">
+                  Trade #{hoveredPoint.trade_id} · {hoveredPoint.symbol}
+                </div>
+                <div className="mt-2 text-sm text-slate-600">
+                  {formatDateTime(hoveredPoint.opened_at)}
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Member</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900">
+                    {hoveredPoint.member_id}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Trade PnL</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900">
+                    {formatNumber(hoveredPoint.net_pnl, 4)}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">
+                    Cumulative PnL
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900">
+                    {formatNumber(hoveredPoint.cumulative_pnl, 4)}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">
+                    Step Change
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900">
+                    {hoveredDelta === null
+                      ? "—"
+                      : hoveredDelta > 0
+                        ? `+${formatNumber(hoveredDelta, 4)}`
+                        : formatNumber(hoveredDelta, 4)}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">
+                    Gap From Prior
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900">
+                    {hoveredGapDays === null ? "—" : `${formatNumber(hoveredGapDays, 2)} days`}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">
+                    Sequence Position
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900">
+                    {hoveredIndex >= 0 ? `${hoveredIndex + 1} of ${visiblePoints.length}` : "—"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">
+              Hover a point on the chart to inspect trade ID, timestamp, PnL step change, gap from
+              prior trade, and cumulative progression in the current zoom window.
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -479,7 +830,8 @@ export default function EquityCurveChart({
           label="First point"
           value={
             <>
-              Trade #{firstPoint?.trade_id} · {firstPoint?.symbol} · {formatDateTime(firstPoint?.opened_at)}
+              Trade #{firstPoint?.trade_id} · {firstPoint?.symbol} ·{" "}
+              {formatDateTime(firstPoint?.opened_at)}
             </>
           }
         />
@@ -488,7 +840,8 @@ export default function EquityCurveChart({
           label="Last point"
           value={
             <>
-              Trade #{lastPoint?.trade_id} · {lastPoint?.symbol} · {formatDateTime(lastPoint?.opened_at)}
+              Trade #{lastPoint?.trade_id} · {lastPoint?.symbol} ·{" "}
+              {formatDateTime(lastPoint?.opened_at)}
             </>
           }
         />
@@ -497,7 +850,8 @@ export default function EquityCurveChart({
           label="Peak point"
           value={
             <>
-              Trade #{peakPoint?.trade_id} · {peakPoint?.symbol} · {formatDateTime(peakPoint?.opened_at)}
+              Trade #{peakPoint?.trade_id} · {peakPoint?.symbol} ·{" "}
+              {formatDateTime(peakPoint?.opened_at)}
             </>
           }
         />
@@ -506,7 +860,8 @@ export default function EquityCurveChart({
           label="Trough point"
           value={
             <>
-              Trade #{troughPoint?.trade_id} · {troughPoint?.symbol} · {formatDateTime(troughPoint?.opened_at)}
+              Trade #{troughPoint?.trade_id} · {troughPoint?.symbol} ·{" "}
+              {formatDateTime(troughPoint?.opened_at)}
             </>
           }
         />
@@ -515,9 +870,9 @@ export default function EquityCurveChart({
       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <div className="text-sm font-semibold text-slate-900">Risk path note</div>
         <div className="mt-2 text-sm text-slate-600">
-          This curve uses consistent peak and trough labeling across all claim shapes, while max
-          drawdown remains available as a separate risk statistic. For smaller evidence sets, every
-          point is shown on the sequence axis to keep review context complete.
+          This chart now uses a true time-scale axis instead of equal-spacing every point. Zoom
+          controls narrow the review window, hover analytics surface trade-level context, and peak,
+          trough, and drawdown remain explicitly highlighted for evidence-grade inspection.
         </div>
       </div>
     </div>
