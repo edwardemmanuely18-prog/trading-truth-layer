@@ -150,19 +150,8 @@ function getSeriesStats(points: EquityCurvePoint[]) {
   };
 }
 
-function buildTimeTickIndexes(points: EnrichedEquityCurvePoint[], maxLabels = 6) {
-  if (points.length <= maxLabels) {
-    return points.map((_, i) => i);
-  }
-
-  const indexes = new Set<number>();
-
-  for (let i = 0; i < maxLabels; i += 1) {
-    const index = Math.round((i / (maxLabels - 1)) * (points.length - 1));
-    indexes.add(index);
-  }
-
-  return Array.from(indexes).sort((a, b) => a - b);
+function buildTimeTickIndexes(points: EnrichedEquityCurvePoint[]) {
+  return points.map((_, i) => i);
 }
 
 function ZoomButton({
@@ -226,7 +215,7 @@ export default function EquityCurveChart({
   title = "Equity Curve",
   points,
 }: Props) {
-  const width = 1100;
+  const width = 1200;
   const height = 460;
   const padding = { top: 28, right: 28, bottom: 70, left: 72 };
   const chartWidth = width - padding.left - padding.right;
@@ -273,13 +262,12 @@ export default function EquityCurveChart({
 
   const activeTradeId = pinnedTradeId ?? hoveredTradeId;
 
-const hoveredPoint =
-  visiblePoints.find((point) => point.trade_id === activeTradeId) ?? null;
-const hoveredIndex = hoveredPoint
-  ? visiblePoints.findIndex((point) => point.trade_id === hoveredPoint.trade_id)
-  : -1;
-const previousHoveredPoint =
-  hoveredIndex > 0 ? visiblePoints[hoveredIndex - 1] ?? null : null;
+  const hoveredPoint = visiblePoints.find((point) => point.trade_id === activeTradeId) ?? null;
+  const hoveredIndex = hoveredPoint
+    ? visiblePoints.findIndex((point) => point.trade_id === hoveredPoint.trade_id)
+    : -1;
+  const previousHoveredPoint =
+    hoveredIndex > 0 ? visiblePoints[hoveredIndex - 1] ?? null : null;
 
   if (!orderedPoints.length) {
     return (
@@ -316,7 +304,7 @@ const previousHoveredPoint =
     return minValue + ((maxValue - minValue) / yTicks) * i;
   });
 
-  const xTickIndexes = buildTimeTickIndexes(visiblePoints, 6);
+  const xTickIndexes = buildTimeTickIndexes(visiblePoints);
 
   const linePath = visiblePoints
     .map((point, i) => `${i === 0 ? "M" : "L"} ${xFor(point, i)} ${yFor(point.cumulative_pnl)}`)
@@ -541,12 +529,12 @@ const previousHoveredPoint =
         <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <svg
             viewBox={`0 0 ${width} ${height}`}
-            className="h-[460px] min-w-[900px] w-full"
+            className="h-[460px] min-w-[980px] w-full"
             onMouseLeave={() => {
               if (pinnedTradeId === null) {
                 setHoveredTradeId(null);
               }
-            }} 
+            }}
           >
             <defs>
               <linearGradient id="equityAreaFill" x1="0" y1="0" x2="0" y2="1">
@@ -697,7 +685,9 @@ const previousHoveredPoint =
                       }
                     }}
                     onClick={() => {
-                      setPinnedTradeId((current) => (current === point.trade_id ? null : point.trade_id));
+                      setPinnedTradeId((current) =>
+                        current === point.trade_id ? null : point.trade_id
+                      );
                       setHoveredTradeId(point.trade_id);
                     }}
                   >
@@ -720,7 +710,9 @@ const previousHoveredPoint =
                       }
                     }}
                     onClick={() => {
-                      setPinnedTradeId((current) => (current === point.trade_id ? null : point.trade_id));
+                      setPinnedTradeId((current) =>
+                        current === point.trade_id ? null : point.trade_id
+                      );
                       setHoveredTradeId(point.trade_id);
                     }}
                   />
@@ -729,15 +721,13 @@ const previousHoveredPoint =
             })}
 
             {peakEqualsTrough ? (
-              <>
-                <text
-                  x={peakX + 12}
-                  y={peakY - 12}
-                  className="fill-green-600 text-[10px] font-semibold"
-                >
-                  Peak / Trough {formatNumber(stats.max, 2)}
-                </text>
-              </>
+              <text
+                x={peakX + 12}
+                y={peakY - 12}
+                className="fill-green-600 text-[10px] font-semibold"
+              >
+                Peak / Trough {formatNumber(stats.max, 2)}
+              </text>
             ) : (
               <>
                 <text
@@ -774,9 +764,9 @@ const previousHoveredPoint =
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-900">Hover Analytics</div>
-                <div className="mt-1 text-xs text-slate-500">
-                  Hover previews a point. Click a point to pin its analytics while you scroll and inspect details.
-                </div>
+              <div className="mt-1 text-xs text-slate-500">
+                Hover previews a point. Click a point to pin its analytics while you scroll and inspect details.
+              </div>
             </div>
 
             {pinnedTradeId !== null ? (
@@ -794,13 +784,13 @@ const previousHoveredPoint =
           </div>
 
           {hoveredPoint ? (
-            <div className="mt-4 space-y-3">
+            <div className="mt-4 space-y-4">
               <div className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-xs uppercase tracking-wide text-slate-500">Focused point</div>
                   <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600">
                     {pinnedTradeId !== null ? "Pinned" : "Hover"}
-                   </span>
+                  </span>
                 </div>
                 <div className="mt-1 text-base font-semibold text-slate-900">
                   Trade #{hoveredPoint.trade_id} · {hoveredPoint.symbol}
@@ -810,7 +800,7 @@ const previousHoveredPoint =
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-xl border border-slate-200 bg-white p-4">
                   <div className="text-xs uppercase tracking-wide text-slate-500">Member</div>
                   <div className="mt-1 text-lg font-semibold text-slate-900">
