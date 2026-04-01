@@ -2,6 +2,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 
 from app.core.db import Base, engine, SessionLocal
 from app.models import (
@@ -34,6 +35,24 @@ def parse_cors_origins() -> list[str]:
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
+def ensure_claim_schema_columns():
+    inspector = inspect(engine)
+
+    if "claim_schemas" not in inspector.get_table_names():
+        return
+
+    existing_columns = {col["name"] for col in inspector.get_columns("claim_schemas")}
+
+    if "locked_trade_ids_json" not in existing_columns:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "ALTER TABLE claim_schemas "
+                    "ADD COLUMN locked_trade_ids_json TEXT NOT NULL DEFAULT '[]'"
+                )
+            )
+
+
 app = FastAPI(title="Trading Truth Layer API")
 
 app.add_middleware(
@@ -48,6 +67,7 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
+    ensure_claim_schema_columns()
 
     db = SessionLocal()
     try:
