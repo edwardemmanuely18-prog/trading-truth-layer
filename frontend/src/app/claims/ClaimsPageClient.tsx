@@ -59,23 +59,23 @@ function extractTopLeaderboardEntry(row: any) {
 }
 
 function resolveVisibility(row: any) {
-  // 1. PRIORITY: canonical visibility from backend
   const primary = normalize(
     row?.visibility ??
-    row?.claim_visibility ??
-    row?.public_visibility ??
-    row?.exposure_visibility
+      row?.scope?.visibility ??
+      row?.claim_visibility ??
+      row?.public_visibility ??
+      row?.exposure_visibility
   );
 
   if (primary === "public" || primary === "unlisted" || primary === "private") {
     return primary;
   }
 
-  // 2. FALLBACK: infer ONLY if truly missing
-  const status = normalize(row?.verification_status ?? row?.status);
+  const status = normalize(
+    row?.verification_status ?? row?.status ?? row?.lifecycle?.status
+  );
   const hasClaimHash = Boolean(String(row?.claim_hash ?? "").trim());
 
-  // locked/published + hash → at least unlisted (but do NOT override real data)
   if ((status === "locked" || status === "published") && hasClaimHash) {
     return "unlisted";
   }
@@ -84,7 +84,33 @@ function resolveVisibility(row: any) {
 }
 
 function resolveStatus(row: any) {
-  return normalize(row?.verification_status ?? row?.status) || "unknown";
+  return normalize(
+    row?.verification_status ?? row?.status ?? row?.lifecycle?.status
+  ) || "unknown";
+}
+
+function resolvePeriodStart(row: any) {
+  return row?.period_start ?? row?.scope?.period_start ?? "—";
+}
+
+function resolvePeriodEnd(row: any) {
+  return row?.period_end ?? row?.scope?.period_end ?? "—";
+}
+
+function resolveVerifiedAt(row: any) {
+  return row?.verified_at ?? row?.lifecycle?.verified_at ?? null;
+}
+
+function resolveLockedAt(row: any) {
+  return row?.locked_at ?? row?.lifecycle?.locked_at ?? null;
+}
+
+function resolveMethodologyNotes(row: any) {
+  return (
+    row?.methodology_notes ??
+    row?.scope?.methodology_notes ??
+    "No methodology notes were supplied for this public claim."
+  );
 }
 
 function buildVerifyHref(row: any) {
@@ -278,11 +304,16 @@ export default function ClaimsPageClient() {
           row?.trade_set_hash,
           row?.locked_trade_set_hash,
           row?.methodology_notes,
+          row?.scope?.methodology_notes,
           row?.visibility,
+          row?.scope?.visibility,
           row?.claim_visibility,
           row?.verification_status,
           row?.status,
+          row?.scope?.period_start,
+          row?.scope?.period_end,
           ...(toArray(row?.included_symbols) as any[]),
+          ...(toArray(row?.scope?.included_symbols) as any[]),
         ]
           .map((value) => String(value ?? ""))
           .join(" ")
@@ -755,6 +786,11 @@ export default function ClaimsPageClient() {
               const resolvedVisibility = resolveVisibility(row);
               const resolvedStatus = resolveStatus(row);
               const resolvedIntegrity = normalize(row?.integrity_status ?? "unknown");
+              const resolvedPeriodStart = resolvePeriodStart(row);
+              const resolvedPeriodEnd = resolvePeriodEnd(row);
+              const resolvedVerifiedAt = resolveVerifiedAt(row);
+              const resolvedLockedAt = resolveLockedAt(row);
+              const resolvedMethodologyNotes = resolveMethodologyNotes(row);
               const compareHash = String(row?.claim_hash ?? "").trim();
               const compareSelected = selectedCompareHashes.includes(compareHash);
 
@@ -832,8 +868,8 @@ export default function ClaimsPageClient() {
                       integrityStatus={resolvedIntegrity}
                       claimHash={String(row?.claim_hash ?? "")}
                       tradeSetHash={String(row?.trade_set_hash ?? row?.locked_trade_set_hash ?? "")}
-                      verifiedAt={String(row?.verified_at ?? "")}
-                      lockedAt={String(row?.locked_at ?? "")}
+                      verifiedAt={String(resolveVerifiedAt(row) ?? "")}
+                      lockedAt={String(resolveLockedAt(row) ?? "")}
                     />
                   </div>
 
@@ -878,7 +914,7 @@ export default function ClaimsPageClient() {
                       <div>
                         <div className="text-sm text-slate-500">Verification Period</div>
                         <div className="mt-1 text-lg font-medium text-slate-950">
-                          {safeString(row?.period_start)} → {safeString(row?.period_end)}
+                          {safeString(resolvedPeriodStart)} → {safeString(resolvedPeriodEnd)}
                         </div>
                       </div>
 
@@ -886,14 +922,14 @@ export default function ClaimsPageClient() {
                         <div className="rounded-2xl bg-slate-50 p-4">
                           <div className="text-sm text-slate-500">Verified At</div>
                           <div className="mt-2 text-base text-slate-950">
-                            {formatDateTime(row?.verified_at)}
+                            {formatDateTime(resolvedVerifiedAt)}
                           </div>
                         </div>
 
                         <div className="rounded-2xl bg-slate-50 p-4">
                           <div className="text-sm text-slate-500">Locked At</div>
                           <div className="mt-2 text-base text-slate-950">
-                            {formatDateTime(row?.locked_at)}
+                            {formatDateTime(resolvedLockedAt)}
                           </div>
                         </div>
                       </div>
@@ -902,7 +938,7 @@ export default function ClaimsPageClient() {
                         <div className="text-sm text-slate-500">Methodology</div>
                         <div className="mt-3 whitespace-pre-wrap text-base leading-7 text-slate-700">
                           {safeString(
-                            row?.methodology_notes,
+                            resolvedMethodologyNotes,
                             "No methodology notes were supplied for this public claim."
                           )}
                         </div>
