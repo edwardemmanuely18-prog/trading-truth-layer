@@ -248,11 +248,13 @@ export default function EquityCurveChart({
   const [zoomStartIndex, setZoomStartIndex] = useState(0);
   const [zoomEndIndex, setZoomEndIndex] = useState(Math.max(orderedPoints.length - 1, 0));
   const [hoveredTradeId, setHoveredTradeId] = useState<number | null>(null);
+  const [pinnedTradeId, setPinnedTradeId] = useState<number | null>(null);
 
   useEffect(() => {
     setZoomStartIndex(0);
     setZoomEndIndex(Math.max(orderedPoints.length - 1, 0));
     setHoveredTradeId(null);
+    setPinnedTradeId(null);
   }, [orderedPoints.length]);
 
   const visiblePoints = useMemo(() => {
@@ -269,13 +271,15 @@ export default function EquityCurveChart({
   const peakPoint = visiblePoints[stats.maxIndex] ?? null;
   const troughPoint = visiblePoints[stats.minIndex] ?? null;
 
-  const hoveredPoint =
-    visiblePoints.find((point) => point.trade_id === hoveredTradeId) ?? null;
-  const hoveredIndex = hoveredPoint
-    ? visiblePoints.findIndex((point) => point.trade_id === hoveredPoint.trade_id)
-    : -1;
-  const previousHoveredPoint =
-    hoveredIndex > 0 ? visiblePoints[hoveredIndex - 1] ?? null : null;
+  const activeTradeId = pinnedTradeId ?? hoveredTradeId;
+
+const hoveredPoint =
+  visiblePoints.find((point) => point.trade_id === activeTradeId) ?? null;
+const hoveredIndex = hoveredPoint
+  ? visiblePoints.findIndex((point) => point.trade_id === hoveredPoint.trade_id)
+  : -1;
+const previousHoveredPoint =
+  hoveredIndex > 0 ? visiblePoints[hoveredIndex - 1] ?? null : null;
 
   if (!orderedPoints.length) {
     return (
@@ -538,7 +542,11 @@ export default function EquityCurveChart({
           <svg
             viewBox={`0 0 ${width} ${height}`}
             className="h-[460px] min-w-[900px] w-full"
-            onMouseLeave={() => setHoveredTradeId(null)}
+            onMouseLeave={() => {
+              if (pinnedTradeId === null) {
+                setHoveredTradeId(null);
+              }
+            }} 
           >
             <defs>
               <linearGradient id="equityAreaFill" x1="0" y1="0" x2="0" y2="1">
@@ -660,16 +668,20 @@ export default function EquityCurveChart({
             {visiblePoints.map((point, i) => {
               const isPeak = i === stats.maxIndex;
               const isTrough = i === stats.minIndex;
-              const isHovered = hoveredPoint?.trade_id === point.trade_id;
+              const isHovered = hoveredTradeId === point.trade_id;
+              const isPinned = pinnedTradeId === point.trade_id;
+              const isActive = hoveredPoint?.trade_id === point.trade_id;
 
-              const radius = isHovered ? 7 : isPeak || isTrough ? 6 : 4;
-              const fill = isHovered
-                ? "#2563EB"
-                : isPeak
-                  ? "#16A34A"
-                  : isTrough
-                    ? "#DC2626"
-                    : "#0F172A";
+              const radius = isPinned ? 8 : isActive ? 7 : isPeak || isTrough ? 6 : 4;
+              const fill = isPinned
+                ? "#1D4ED8"
+                : isActive
+                  ? "#2563EB"
+                  : isPeak
+                    ? "#16A34A"
+                    : isTrough
+                      ? "#DC2626"
+                      : "#0F172A";
 
               return (
                 <g key={`${point.trade_id}-${i}`}>
@@ -679,7 +691,15 @@ export default function EquityCurveChart({
                     r={radius}
                     fill={fill}
                     className="cursor-pointer"
-                    onMouseEnter={() => setHoveredTradeId(point.trade_id)}
+                    onMouseEnter={() => {
+                      if (pinnedTradeId === null) {
+                        setHoveredTradeId(point.trade_id);
+                      }
+                    }}
+                    onClick={() => {
+                      setPinnedTradeId((current) => (current === point.trade_id ? null : point.trade_id));
+                      setHoveredTradeId(point.trade_id);
+                    }}
                   >
                     <title>
                       {`Trade #${point.trade_id} | ${point.symbol} | ${formatDateTime(
@@ -694,7 +714,15 @@ export default function EquityCurveChart({
                     r={14}
                     fill="transparent"
                     className="cursor-pointer"
-                    onMouseEnter={() => setHoveredTradeId(point.trade_id)}
+                    onMouseEnter={() => {
+                      if (pinnedTradeId === null) {
+                        setHoveredTradeId(point.trade_id);
+                      }
+                    }}
+                    onClick={() => {
+                      setPinnedTradeId((current) => (current === point.trade_id ? null : point.trade_id));
+                      setHoveredTradeId(point.trade_id);
+                    }}
                   />
                 </g>
               );
@@ -743,15 +771,37 @@ export default function EquityCurveChart({
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-sm font-semibold text-slate-900">Hover Analytics</div>
-          <div className="mt-1 text-xs text-slate-500">
-            Move across points to inspect trade-level evidence and cumulative progression.
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-slate-900">Hover Analytics</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  Hover previews a point. Click a point to pin its analytics while you scroll and inspect details.
+                </div>
+            </div>
+
+            {pinnedTradeId !== null ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setPinnedTradeId(null);
+                  setHoveredTradeId(null);
+                }}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Clear Selection
+              </button>
+            ) : null}
           </div>
 
           {hoveredPoint ? (
             <div className="mt-4 space-y-3">
               <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <div className="text-xs uppercase tracking-wide text-slate-500">Focused point</div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs uppercase tracking-wide text-slate-500">Focused point</div>
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-600">
+                    {pinnedTradeId !== null ? "Pinned" : "Hover"}
+                   </span>
+                </div>
                 <div className="mt-1 text-base font-semibold text-slate-900">
                   Trade #{hoveredPoint.trade_id} · {hoveredPoint.symbol}
                 </div>
