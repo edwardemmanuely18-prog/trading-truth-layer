@@ -202,6 +202,7 @@ export default function PublicClaimPage() {
   const [error, setError] = useState<string | null>(null);
   const [linkMessage, setLinkMessage] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
+  const [verifyLinkCopied, setVerifyLinkCopied] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -336,8 +337,11 @@ export default function PublicClaimPage() {
 
       const fullUrl = origin ? `${origin}${verifyPath}` : verifyPath;
       await copyText(fullUrl);
+      setVerifyLinkCopied(true);
       setLinkMessage("Verify link copied.");
+      window.setTimeout(() => setVerifyLinkCopied(false), 1200);
     } catch (err) {
+      setVerifyLinkCopied(false);
       setLinkMessage(err instanceof Error ? err.message : "Failed to copy verify link.");
     }
   }
@@ -432,9 +436,9 @@ export default function PublicClaimPage() {
                 <button
                   type="button"
                   onClick={() => void handleCopyVerifyLink()}
-                  className="rounded-2xl border border-slate-900 bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                  className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
                 >
-                  Copy Verify Link
+                  {verifyLinkCopied ? "Copied" : "Copy Verify Link"}
                 </button>
 
                 <button
@@ -444,7 +448,7 @@ export default function PublicClaimPage() {
                       window.open(verifyPath, "_blank");
                     }
                   }}
-                  className="rounded-2xl border border-slate-900 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+                  className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
                 >
                   Open Verify Route
                 </button>
