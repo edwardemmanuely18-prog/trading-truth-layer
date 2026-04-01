@@ -33,48 +33,23 @@ def build_trade_fingerprint(
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def parse_claim_period_start(date_str: str | None):
-    from datetime import datetime
+def build_trade_fingerprint_from_trade(trade: Trade) -> str:
+    if trade.trade_fingerprint:
+        return trade.trade_fingerprint
 
-    if not date_str:
-        return None
-    return datetime.fromisoformat(date_str)
-
-
-def parse_claim_period_end(date_str: str | None):
-    from datetime import datetime, timedelta
-
-    if not date_str:
-        return None
-    return datetime.fromisoformat(date_str) + timedelta(days=1)
-
-
-def trade_matches_locked_claim(claim: ClaimSchema, row: NormalizedTradeRow) -> bool:
-    import json
-
-    included_members = json.loads(claim.included_member_ids_json or "[]")
-    included_symbols = [s.upper() for s in json.loads(claim.included_symbols_json or "[]")]
-
-    period_start = parse_claim_period_start(claim.period_start)
-    period_end = parse_claim_period_end(claim.period_end)
-
-    if period_start is not None and row.opened_at < period_start:
-        return False
-
-    if period_end is not None and row.opened_at >= period_end:
-        return False
-
-    if included_members and row.member_id not in included_members:
-        return False
-
-    if included_symbols and row.symbol.upper() not in included_symbols:
-        return False
-
-    return True
+    return build_trade_fingerprint(
+        workspace_id=trade.workspace_id,
+        member_id=trade.member_id,
+        symbol=trade.symbol,
+        side=trade.side,
+        opened_at=trade.opened_at,
+        entry_price=trade.entry_price,
+        quantity=trade.quantity,
+    )
 
 
-def find_locked_claim_conflict(db: Session, workspace_id: int, row: NormalizedTradeRow):
-    locked_claims = (
+def get_locked_claims(db: Session, workspace_id: int) -> list[ClaimSchema]:
+    return (
         db.query(ClaimSchema)
         .filter(
             ClaimSchema.workspace_id == workspace_id,
@@ -83,11 +58,60 @@ def find_locked_claim_conflict(db: Session, workspace_id: int, row: NormalizedTr
         .all()
     )
 
-    for claim in locked_claims:
-        if trade_matches_locked_claim(claim, row):
-            return claim
 
-    return None
+def build_locked_trade_lookup(db: Session, workspace_id: int) -> dict[str, ClaimSchema]:
+    import json
+
+    locked_claims = get_locked_claims(db, workspace_id)
+    locked_trade_ids: set[int] = set()
+
+    for claim in locked_claims:
+        claim_trade_ids = json.loads(claim.locked_trade_ids_json or "[]")
+        for trade_id in claim_trade_ids:
+            try:
+                locked_trade_ids.add(int(trade_id))
+            except Exception:
+                continue
+
+    if not locked_trade_ids:
+        return {}
+
+    locked_trades = (
+        db.query(Trade)
+        .filter(
+            Trade.workspace_id == workspace_id,
+            Trade.id.in_(locked_trade_ids),
+        )
+        .all()
+    )
+
+    trade_by_id = {trade.id: trade for trade in locked_trades}
+    fingerprint_to_claim: dict[str, ClaimSchema] = {}
+
+    for claim in locked_claims:
+        claim_trade_ids = json.loads(claim.locked_trade_ids_json or "[]")
+        for raw_trade_id in claim_trade_ids:
+            try:
+                trade_id = int(raw_trade_id)
+            except Exception:
+                continue
+
+            trade = trade_by_id.get(trade_id)
+            if not trade:
+                continue
+
+            fingerprint = build_trade_fingerprint_from_trade(trade)
+            if fingerprint not in fingerprint_to_claim:
+                fingerprint_to_claim[fingerprint] = claim
+
+    return fingerprint_to_claim
+
+
+def find_locked_claim_conflict_for_fingerprint(
+    locked_trade_lookup: dict[str, ClaimSchema],
+    fingerprint: str,
+) -> ClaimSchema | None:
+    return locked_trade_lookup.get(fingerprint)
 
 
 def import_csv_trades(
@@ -107,14 +131,13 @@ def import_csv_trades(
     rows_skipped_duplicates = 0
     errors: list[str] = []
 
+    locked_trade_lookup = build_locked_trade_lookup(db, workspace_id)
+
+    # Prevent duplicate inserts within the same uploaded file before commit.
+    seen_in_file: set[str] = set()
+
     for idx, row in enumerate(normalized_rows, start=1):
         try:
-            conflict = find_locked_claim_conflict(db, workspace_id, row)
-            if conflict:
-                rows_rejected += 1
-                errors.append(f"Row {idx}: conflicts with locked claim {conflict.id}")
-                continue
-
             fingerprint = build_trade_fingerprint(
                 workspace_id=workspace_id,
                 member_id=row.member_id,
@@ -124,6 +147,21 @@ def import_csv_trades(
                 entry_price=row.entry_price,
                 quantity=row.quantity,
             )
+
+            conflict = find_locked_claim_conflict_for_fingerprint(
+                locked_trade_lookup=locked_trade_lookup,
+                fingerprint=fingerprint,
+            )
+            if conflict:
+                rows_rejected += 1
+                errors.append(
+                    f"Row {idx}: conflicts with locked claim {conflict.id} by exact locked trade match"
+                )
+                continue
+
+            if fingerprint in seen_in_file:
+                rows_skipped_duplicates += 1
+                continue
 
             existing = (
                 db.query(Trade)
@@ -136,6 +174,7 @@ def import_csv_trades(
 
             if existing:
                 rows_skipped_duplicates += 1
+                seen_in_file.add(fingerprint)
                 continue
 
             trade = Trade(
@@ -156,6 +195,7 @@ def import_csv_trades(
             )
             db.add(trade)
             rows_imported += 1
+            seen_in_file.add(fingerprint)
 
         except Exception as e:
             rows_rejected += 1
