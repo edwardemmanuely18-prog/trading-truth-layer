@@ -227,7 +227,7 @@ export default function EquityCurveChart({
   points,
 }: Props) {
   const width = 1100;
-  const height = 420;
+  const height = 460;
   const padding = { top: 28, right: 28, bottom: 70, left: 72 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
@@ -533,11 +533,11 @@ export default function EquityCurveChart({
         ) : null}
       </div>
 
-      <div className="mt-5 grid gap-4 xl:grid-cols-[1.3fr_0.9fr]">
+      <div className="mt-5 space-y-4">
         <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <svg
             viewBox={`0 0 ${width} ${height}`}
-            className="h-[420px] min-w-[820px] w-full"
+            className="h-[460px] min-w-[900px] w-full"
             onMouseLeave={() => setHoveredTradeId(null)}
           >
             <defs>
