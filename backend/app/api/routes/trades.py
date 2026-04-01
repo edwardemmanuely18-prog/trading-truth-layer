@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 import csv
 import hashlib
 import io
@@ -184,53 +184,23 @@ def build_trade_fingerprint(
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def parse_period_start(date_str: str | None):
-    if not date_str:
-        return None
-    return datetime.fromisoformat(date_str)
+def build_trade_fingerprint_from_trade(trade: Trade) -> str:
+    if trade.trade_fingerprint:
+        return trade.trade_fingerprint
+
+    return build_trade_fingerprint(
+        workspace_id=trade.workspace_id,
+        member_id=trade.member_id,
+        symbol=trade.symbol,
+        side=trade.side,
+        opened_at=trade.opened_at,
+        entry_price=trade.entry_price,
+        quantity=trade.quantity,
+    )
 
 
-def parse_period_end(date_str: str | None):
-    if not date_str:
-        return None
-    return datetime.fromisoformat(date_str) + timedelta(days=1)
-
-
-def trade_matches_locked_claim(
-    claim: ClaimSchema,
-    member_id: int,
-    symbol: str,
-    opened_at: datetime,
-) -> bool:
-    included_members = json.loads(claim.included_member_ids_json or "[]")
-    included_symbols = [s.upper() for s in json.loads(claim.included_symbols_json or "[]")]
-
-    period_start = parse_period_start(claim.period_start)
-    period_end = parse_period_end(claim.period_end)
-
-    if period_start is not None and opened_at < period_start:
-        return False
-
-    if period_end is not None and opened_at >= period_end:
-        return False
-
-    if included_members and member_id not in included_members:
-        return False
-
-    if included_symbols and symbol.upper() not in included_symbols:
-        return False
-
-    return True
-
-
-def find_locked_claim_conflict(
-    db: Session,
-    workspace_id: int,
-    member_id: int,
-    symbol: str,
-    opened_at: datetime,
-):
-    locked_claims = (
+def get_locked_claims(db: Session, workspace_id: int) -> list[ClaimSchema]:
+    return (
         db.query(ClaimSchema)
         .filter(
             ClaimSchema.workspace_id == workspace_id,
@@ -239,26 +209,71 @@ def find_locked_claim_conflict(
         .all()
     )
 
+
+def build_locked_trade_protection_maps(
+    db: Session,
+    workspace_id: int,
+) -> tuple[dict[str, ClaimSchema], dict[int, ClaimSchema]]:
+    locked_claims = get_locked_claims(db, workspace_id)
+    locked_trade_ids: set[int] = set()
+
     for claim in locked_claims:
-        if trade_matches_locked_claim(
-            claim=claim,
-            member_id=member_id,
-            symbol=symbol,
-            opened_at=opened_at,
-        ):
-            return claim
+        for raw_trade_id in json.loads(claim.locked_trade_ids_json or "[]"):
+            try:
+                locked_trade_ids.add(int(raw_trade_id))
+            except Exception:
+                continue
 
-    return None
+    if not locked_trade_ids:
+        return {}, {}
 
-
-def trade_is_protected_by_locked_claim(db: Session, trade: Trade):
-    return find_locked_claim_conflict(
-        db=db,
-        workspace_id=trade.workspace_id,
-        member_id=trade.member_id,
-        symbol=trade.symbol,
-        opened_at=trade.opened_at,
+    locked_trades = (
+        db.query(Trade)
+        .filter(
+            Trade.workspace_id == workspace_id,
+            Trade.id.in_(locked_trade_ids),
+        )
+        .all()
     )
+
+    trade_by_id = {trade.id: trade for trade in locked_trades}
+    fingerprint_to_claim: dict[str, ClaimSchema] = {}
+    trade_id_to_claim: dict[int, ClaimSchema] = {}
+
+    for claim in locked_claims:
+        claim_trade_ids = json.loads(claim.locked_trade_ids_json or "[]")
+
+        for raw_trade_id in claim_trade_ids:
+            try:
+                trade_id = int(raw_trade_id)
+            except Exception:
+                continue
+
+            trade = trade_by_id.get(trade_id)
+            if not trade:
+                continue
+
+            trade_id_to_claim[trade_id] = claim
+
+            fingerprint = build_trade_fingerprint_from_trade(trade)
+            if fingerprint not in fingerprint_to_claim:
+                fingerprint_to_claim[fingerprint] = claim
+
+    return fingerprint_to_claim, trade_id_to_claim
+
+
+def find_locked_claim_conflict_for_fingerprint(
+    fingerprint_to_claim: dict[str, ClaimSchema],
+    fingerprint: str,
+) -> ClaimSchema | None:
+    return fingerprint_to_claim.get(fingerprint)
+
+
+def find_locked_claim_protecting_trade_id(
+    trade_id_to_claim: dict[int, ClaimSchema],
+    trade_id: int,
+) -> ClaimSchema | None:
+    return trade_id_to_claim.get(trade_id)
 
 
 def serialize_trade(trade: Trade):
@@ -307,23 +322,6 @@ def create_trade(
     require_workspace_operator_or_owner(workspace_id, current_user, db)
     enforce_trade_import_allowed(workspace_id, db, additional_trades=1)
 
-    conflict = find_locked_claim_conflict(
-        db=db,
-        workspace_id=workspace_id,
-        member_id=payload.member_id,
-        symbol=payload.symbol.strip().upper(),
-        opened_at=payload.opened_at,
-    )
-
-    if conflict:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Trade conflicts with locked claim {conflict.id}. "
-                "Create a new claim version or use a trade outside the locked claim scope."
-            ),
-        )
-
     fingerprint = build_trade_fingerprint(
         workspace_id=workspace_id,
         member_id=payload.member_id,
@@ -333,6 +331,21 @@ def create_trade(
         entry_price=payload.entry_price,
         quantity=payload.quantity,
     )
+
+    fingerprint_to_claim, _ = build_locked_trade_protection_maps(db, workspace_id)
+    conflict = find_locked_claim_conflict_for_fingerprint(
+        fingerprint_to_claim=fingerprint_to_claim,
+        fingerprint=fingerprint,
+    )
+
+    if conflict:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Trade conflicts with locked claim {conflict.id}. "
+                "This exact trade evidence is already protected by a locked claim."
+            ),
+        )
 
     existing = (
         db.query(Trade)
@@ -389,7 +402,9 @@ def update_trade(
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
 
-    protected_claim = trade_is_protected_by_locked_claim(db, trade)
+    fingerprint_to_claim, trade_id_to_claim = build_locked_trade_protection_maps(db, workspace_id)
+
+    protected_claim = find_locked_claim_protecting_trade_id(trade_id_to_claim, trade.id)
     if protected_claim:
         raise HTTPException(
             status_code=400,
@@ -399,12 +414,19 @@ def update_trade(
             ),
         )
 
-    new_conflict = find_locked_claim_conflict(
-        db=db,
+    new_fingerprint = build_trade_fingerprint(
         workspace_id=workspace_id,
         member_id=payload.member_id,
-        symbol=payload.symbol.strip().upper(),
+        symbol=payload.symbol,
+        side=payload.side,
         opened_at=payload.opened_at,
+        entry_price=payload.entry_price,
+        quantity=payload.quantity,
+    )
+
+    new_conflict = find_locked_claim_conflict_for_fingerprint(
+        fingerprint_to_claim=fingerprint_to_claim,
+        fingerprint=new_fingerprint,
     )
     if new_conflict:
         raise HTTPException(
@@ -414,6 +436,20 @@ def update_trade(
                 "and cannot be saved."
             ),
         )
+
+    existing = (
+        db.query(Trade)
+        .filter(
+            Trade.workspace_id == workspace_id,
+            Trade.trade_fingerprint == new_fingerprint,
+            Trade.id != trade.id,
+        )
+        .first()
+    )
+    if existing:
+        result = serialize_trade(existing)
+        result["duplicate_skipped"] = True
+        return result
 
     trade.member_id = payload.member_id
     trade.symbol = payload.symbol.strip().upper()
@@ -425,19 +461,14 @@ def update_trade(
     trade.net_pnl = payload.net_pnl
     trade.strategy_tag = payload.strategy_tag
     trade.source_system = payload.source_system
-    trade.trade_fingerprint = build_trade_fingerprint(
-        workspace_id=workspace_id,
-        member_id=payload.member_id,
-        symbol=payload.symbol,
-        side=payload.side,
-        opened_at=payload.opened_at,
-        entry_price=payload.entry_price,
-        quantity=payload.quantity,
-    )
+    trade.trade_fingerprint = new_fingerprint
 
     db.commit()
     db.refresh(trade)
-    return serialize_trade(trade)
+
+    result = serialize_trade(trade)
+    result["duplicate_skipped"] = False
+    return result
 
 
 @router.delete("/workspaces/{workspace_id}/trades/{trade_id}")
@@ -457,7 +488,8 @@ def delete_trade(
     if not trade:
         raise HTTPException(status_code=404, detail="Trade not found")
 
-    protected_claim = trade_is_protected_by_locked_claim(db, trade)
+    _, trade_id_to_claim = build_locked_trade_protection_maps(db, workspace_id)
+    protected_claim = find_locked_claim_protecting_trade_id(trade_id_to_claim, trade.id)
     if protected_claim:
         raise HTTPException(
             status_code=400,
