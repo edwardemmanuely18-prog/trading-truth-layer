@@ -51,6 +51,80 @@ function formatRatioPercent(value?: number | null, digits = 2) {
   return `${(Number(value) * 100).toFixed(digits)}%`;
 }
 
+function firstNonEmpty(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function resolveVisibility(claim: ClaimSchema | null, preview: ClaimSchemaPreview | null) {
+  return (
+    firstNonEmpty(
+      (claim as any)?.visibility,
+      (preview as any)?.visibility,
+      (preview as any)?.scope?.visibility,
+      (claim as any)?.scope?.visibility
+    ) || "—"
+  );
+}
+
+function resolveMethodologyNotes(claim: ClaimSchema | null, preview: ClaimSchemaPreview | null) {
+  return (
+    firstNonEmpty(
+      (claim as any)?.methodology_notes,
+      (preview as any)?.methodology_notes,
+      (preview as any)?.scope?.methodology_notes,
+      (claim as any)?.scope?.methodology_notes
+    ) || "No methodology notes were supplied for this public claim."
+  );
+}
+
+function resolveVerifiedAt(claim: ClaimSchema | null, preview: ClaimSchemaPreview | null) {
+  return firstNonEmpty(
+    (claim as any)?.verified_at,
+    (preview as any)?.verified_at,
+    (preview as any)?.lifecycle?.verified_at
+  );
+}
+
+function resolvePublishedAt(claim: ClaimSchema | null, preview: ClaimSchemaPreview | null) {
+  return firstNonEmpty(
+    (claim as any)?.published_at,
+    (preview as any)?.published_at,
+    (preview as any)?.lifecycle?.published_at
+  );
+}
+
+function resolveLockedAt(claim: ClaimSchema | null, preview: ClaimSchemaPreview | null) {
+  return firstNonEmpty(
+    (claim as any)?.locked_at,
+    (preview as any)?.locked_at,
+    (preview as any)?.lifecycle?.locked_at
+  );
+}
+
+function resolvePeriodStart(claim: ClaimSchema | null, preview: ClaimSchemaPreview | null) {
+  return (
+    firstNonEmpty(
+      (claim as any)?.period_start,
+      (preview as any)?.period_start,
+      (preview as any)?.scope?.period_start
+    ) || "—"
+  );
+}
+
+function resolvePeriodEnd(claim: ClaimSchema | null, preview: ClaimSchemaPreview | null) {
+  return (
+    firstNonEmpty(
+      (claim as any)?.period_end,
+      (preview as any)?.period_end,
+      (preview as any)?.scope?.period_end
+    ) || "—"
+  );
+}
+
 function StatusBadge({ status }: { status?: string | null }) {
   const normalized = normalizeText(status);
 
@@ -213,13 +287,21 @@ export default function PublicClaimPage() {
   }
 
   const isLocked = normalizeText(claim.status) === "locked";
-  const claimHash = claim.claim_hash || preview.claim_hash || "";
+  const claimHash = claim.claim_hash || (preview as any).claim_hash || "";
   const publicPath = `/claim/${claimId}/public`;
   const verifyPath = claimHash ? `/verify/${claimHash}` : null;
   const topEntry =
-    Array.isArray(preview.leaderboard) && preview.leaderboard.length > 0
-      ? preview.leaderboard[0]
+    Array.isArray((preview as any).leaderboard) && (preview as any).leaderboard.length > 0
+      ? (preview as any).leaderboard[0]
       : null;
+
+  const resolvedVisibility = resolveVisibility(claim, preview);
+  const resolvedMethodologyNotes = resolveMethodologyNotes(claim, preview);
+  const resolvedVerifiedAt = resolveVerifiedAt(claim, preview);
+  const resolvedPublishedAt = resolvePublishedAt(claim, preview);
+  const resolvedLockedAt = resolveLockedAt(claim, preview);
+  const resolvedPeriodStart = resolvePeriodStart(claim, preview);
+  const resolvedPeriodEnd = resolvePeriodEnd(claim, preview);
 
   async function handleCopyLink() {
     try {
@@ -294,7 +376,7 @@ export default function PublicClaimPage() {
       await copyText(fullUrl);
       setLinkMessage("Share not available here. Public link copied instead.");
     } catch {
-      // user may cancel native share; ignore
+      //
     }
   }
 
@@ -414,22 +496,22 @@ export default function PublicClaimPage() {
           <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MetricCard
               label="Trades"
-              value={preview.trade_count ?? 0}
+              value={(preview as any).trade_count ?? 0}
               hint="In-scope evidence rows"
             />
             <MetricCard
               label="Net PnL"
-              value={formatNumber(preview.net_pnl, 2)}
+              value={formatNumber((preview as any).net_pnl, 2)}
               hint="Aggregate net performance"
             />
             <MetricCard
               label="Win Rate"
-              value={formatRatioPercent(preview.win_rate, 2)}
+              value={formatRatioPercent((preview as any).win_rate, 2)}
               hint="Winning trades as percentage"
             />
             <MetricCard
               label="Profit Factor"
-              value={formatNumber(preview.profit_factor, 4)}
+              value={formatNumber((preview as any).profit_factor, 4)}
               hint="Gross profit ÷ gross loss"
             />
           </div>
@@ -452,14 +534,14 @@ export default function PublicClaimPage() {
                   <div>
                     <div className="text-sm text-slate-500">Period</div>
                     <div className="mt-2 text-base font-medium text-slate-950">
-                      {preview.scope?.period_start || "—"} → {preview.scope?.period_end || "—"}
+                      {resolvedPeriodStart} → {resolvedPeriodEnd}
                     </div>
                   </div>
 
                   <div>
                     <div className="text-sm text-slate-500">Visibility</div>
                     <div className="mt-2 text-base font-medium capitalize text-slate-950">
-                      {claim.visibility || preview.scope?.visibility || "—"}
+                      {resolvedVisibility}
                     </div>
                   </div>
                 </div>
@@ -467,9 +549,7 @@ export default function PublicClaimPage() {
                 <div className="mt-4">
                   <div className="text-sm text-slate-500">Methodology</div>
                   <div className="mt-2 whitespace-pre-wrap text-base leading-7 text-slate-700">
-                    {preview.scope?.methodology_notes?.trim()
-                      ? preview.scope.methodology_notes
-                      : "No methodology notes were supplied for this public claim."}
+                    {resolvedMethodologyNotes}
                   </div>
                 </div>
               </div>
@@ -483,9 +563,9 @@ export default function PublicClaimPage() {
                 </div>
 
                 <div className="mt-4 space-y-3 text-sm text-slate-700">
-                  <div>Verified at: {formatDateTime(claim.verified_at)}</div>
-                  <div>Published at: {formatDateTime(claim.published_at)}</div>
-                  <div>Locked at: {formatDateTime(claim.locked_at)}</div>
+                  <div>Verified at: {formatDateTime(resolvedVerifiedAt)}</div>
+                  <div>Published at: {formatDateTime(resolvedPublishedAt)}</div>
+                  <div>Locked at: {formatDateTime(resolvedLockedAt)}</div>
                 </div>
               </div>
 
@@ -520,7 +600,7 @@ export default function PublicClaimPage() {
           <div className="mt-8">
             <div className="text-2xl font-semibold text-slate-950">Leaderboard</div>
 
-            {Array.isArray(preview.leaderboard) && preview.leaderboard.length > 0 ? (
+            {Array.isArray((preview as any).leaderboard) && (preview as any).leaderboard.length > 0 ? (
               <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
                 <table className="min-w-full">
                   <thead className="bg-slate-50 text-left text-sm text-slate-500">
@@ -533,7 +613,7 @@ export default function PublicClaimPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white text-sm text-slate-900">
-                    {preview.leaderboard.map((row, index) => (
+                    {(preview as any).leaderboard.map((row: any, index: number) => (
                       <tr key={`${row.member}-${index}`}>
                         <td className="px-4 py-4">{row.rank}</td>
                         <td className="px-4 py-4">{row.member}</td>
