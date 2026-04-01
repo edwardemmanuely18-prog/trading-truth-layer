@@ -459,7 +459,7 @@ export default function PublicClaimPage() {
                   <div>
                     <div className="text-sm text-slate-500">Visibility</div>
                     <div className="mt-2 text-base font-medium capitalize text-slate-950">
-                      {preview.scope?.visibility || claim.visibility || "—"}
+                      {claim.visibility || preview.scope?.visibility || "—"}
                     </div>
                   </div>
                 </div>
