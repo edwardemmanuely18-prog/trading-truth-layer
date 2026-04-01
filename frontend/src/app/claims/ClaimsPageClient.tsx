@@ -59,25 +59,25 @@ function extractTopLeaderboardEntry(row: any) {
 }
 
 function resolveVisibility(row: any) {
-  const candidates = [
-    row?.visibility,
-    row?.claim_visibility,
-    row?.public_visibility,
-    row?.exposure_visibility,
-  ];
+  // 1. PRIORITY: canonical visibility from backend
+  const primary = normalize(
+    row?.visibility ??
+    row?.claim_visibility ??
+    row?.public_visibility ??
+    row?.exposure_visibility
+  );
 
-  for (const candidate of candidates) {
-    const value = normalize(candidate);
-    if (value === "public" || value === "unlisted" || value === "private") {
-      return value;
-    }
+  if (primary === "public" || primary === "unlisted" || primary === "private") {
+    return primary;
   }
 
+  // 2. FALLBACK: infer ONLY if truly missing
   const status = normalize(row?.verification_status ?? row?.status);
   const hasClaimHash = Boolean(String(row?.claim_hash ?? "").trim());
 
-  if (status === "locked" || status === "published") {
-    if (hasClaimHash) return "unlisted";
+  // locked/published + hash → at least unlisted (but do NOT override real data)
+  if ((status === "locked" || status === "published") && hasClaimHash) {
+    return "unlisted";
   }
 
   return "unknown";
