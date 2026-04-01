@@ -2579,6 +2579,9 @@ def lock_claim_schema(
 
     filtered_trades = resolve_schema_trades(schema, db)
 
+    # ✅ NEW: snapshot exact trade IDs
+    locked_trade_ids = [t.id for t in filtered_trades]
+
     old_state = {
         "status": schema.status,
         "locked_at": schema.locked_at.isoformat() if schema.locked_at else None,
@@ -2587,6 +2590,7 @@ def lock_claim_schema(
     }
 
     schema.locked_trade_set_hash = compute_trade_set_hash(filtered_trades)
+    schema.locked_trade_ids_json = json.dumps(locked_trade_ids)  # ✅ NEW
     schema.status = "locked"
     schema.locked_at = datetime.utcnow()
 
@@ -2604,6 +2608,7 @@ def lock_claim_schema(
             "status": schema.status,
             "locked_at": schema.locked_at.isoformat() if schema.locked_at else None,
             "locked_trade_set_hash": schema.locked_trade_set_hash,
+            "locked_trade_ids_count": len(locked_trade_ids),  # optional but useful
             "claim_hash": compute_claim_hash(schema),
         },
         metadata={
@@ -2902,8 +2907,19 @@ def verify_claim_schema_integrity(
     if not schema.locked_trade_set_hash:
         raise HTTPException(status_code=400, detail="Locked claim has no stored trade set hash")
 
-    filtered_trades = resolve_schema_trades(schema, db)
-    recomputed_hash = compute_trade_set_hash(filtered_trades)
+    # ✅ NEW: use snapshot instead of live scope
+    locked_ids = set(json.loads(schema.locked_trade_ids_json or "[]"))
+
+    trades = (
+        db.query(Trade)
+        .filter(
+            Trade.workspace_id == schema.workspace_id,
+            Trade.id.in_(locked_ids) if locked_ids else False
+        )
+        .all()
+    )
+
+    recomputed_hash = compute_trade_set_hash(trades)
     integrity_ok = recomputed_hash == schema.locked_trade_set_hash
 
     return {
@@ -2912,7 +2928,7 @@ def verify_claim_schema_integrity(
         "name": schema.name,
         "status": schema.status,
         "integrity_status": "valid" if integrity_ok else "compromised",
-        "trade_count": len(filtered_trades),
+        "trade_count": len(trades),
         "stored_hash": schema.locked_trade_set_hash,
         "recomputed_hash": recomputed_hash,
         "hash_match": integrity_ok,
