@@ -482,7 +482,7 @@ def update_trade(
         )
         .first()
     )
-        if existing:
+    if existing:
         result = serialize_trade(existing)
         result["duplicate_skipped"] = True
         return result
