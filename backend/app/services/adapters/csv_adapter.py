@@ -38,6 +38,30 @@ class CSVTradeAdapter:
             return None
         return float(text)
 
+    @staticmethod
+    def _parse_optional_datetime(value):
+        if value is None:
+            return None
+        text = str(value).strip()
+        if text == "":
+            return None
+        return datetime.fromisoformat(text)
+
+    @staticmethod
+    def _compute_net_pnl(side: str, entry_price: float, exit_price: float | None, quantity: float):
+        if exit_price is None:
+            return None
+
+        normalized_side = side.strip().upper()
+
+        if normalized_side == "BUY":
+            return (exit_price - entry_price) * quantity
+
+        if normalized_side == "SELL":
+            return (entry_price - exit_price) * quantity
+
+        return None
+
     def detect_format(self, fieldnames: list[str] | None) -> str:
         if not fieldnames:
             raise ValueError("CSV file has no header row")
@@ -63,16 +87,32 @@ class CSVTradeAdapter:
 
         for idx, row in enumerate(reader, start=2):
             try:
+                side = row["side"].strip().upper()
                 opened_at = datetime.fromisoformat(row["opened_at"])
+                entry_price = float(row["entry_price"])
+                quantity = float(row["quantity"])
+                closed_at = self._parse_optional_datetime(row.get("closed_at"))
+                exit_price = self._parse_optional_float(row.get("exit_price"))
+
+                supplied_net_pnl = self._parse_optional_float(row.get("net_pnl"))
+                computed_net_pnl = self._compute_net_pnl(
+                    side=side,
+                    entry_price=entry_price,
+                    exit_price=exit_price,
+                    quantity=quantity,
+                )
+
                 normalized = NormalizedTradeRow(
                     member_id=int(row["member_id"]),
                     symbol=row["symbol"].strip().upper(),
-                    side=row["side"].strip().upper(),
+                    side=side,
                     opened_at=opened_at,
-                    entry_price=float(row["entry_price"]),
-                    quantity=float(row["quantity"]),
+                    entry_price=entry_price,
+                    quantity=quantity,
                     currency=row["currency"].strip().upper(),
-                    net_pnl=self._parse_optional_float(row.get("net_pnl")),
+                    closed_at=closed_at,
+                    exit_price=exit_price,
+                    net_pnl=supplied_net_pnl if supplied_net_pnl is not None else computed_net_pnl,
                     strategy_tag=(row.get("strategy_tag") or "").strip() or None,
                     source_system=(row.get("source_system") or "").strip() or None,
                 )
