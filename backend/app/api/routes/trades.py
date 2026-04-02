@@ -3,8 +3,6 @@ import csv
 import hashlib
 import io
 import json
-import os
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -85,10 +83,6 @@ def get_workspace_or_404(workspace_id: int, db: Session) -> Workspace:
     return workspace
 
 
-def get_workspace_trade_count(workspace_id: int, db: Session) -> int:
-    return db.query(Trade).filter(Trade.workspace_id == workspace_id).count()
-
-
 def increment_workspace_trades_consumed(
     workspace: Workspace,
     db: Session,
@@ -103,64 +97,6 @@ def increment_workspace_trades_consumed(
     db.add(workspace)
 
 
-def parse_bool_like(value: str | None) -> bool:
-    if value is None:
-        return False
-    return str(value).strip().lower() in {"1", "true", "yes", "on"}
-
-
-def read_env_value_from_backend_dotenv(key: str) -> str | None:
-    try:
-        env_path = Path(__file__).resolve().parents[3] / ".env"
-        if not env_path.exists():
-            return None
-
-        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
-            line = raw_line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-
-            env_key, env_value = line.split("=", 1)
-            if env_key.strip() != key:
-                continue
-
-            return env_value.strip().strip('"').strip("'")
-    except Exception:
-        return None
-
-    return None
-
-
-def workspace_limits_disabled() -> bool:
-    direct_env_value = os.getenv("DISABLE_WORKSPACE_LIMITS")
-    if direct_env_value is not None:
-        return parse_bool_like(direct_env_value)
-
-    dotenv_value = read_env_value_from_backend_dotenv("DISABLE_WORKSPACE_LIMITS")
-    return parse_bool_like(dotenv_value)
-
-
-def enforce_workspace_trade_limit(workspace_id: int, db: Session, additional_needed: int = 1):
-    if workspace_limits_disabled():
-        return
-
-    workspace = get_workspace_or_404(workspace_id, db)
-    trade_limit = workspace.trade_limit or 0
-    current_trade_count = get_workspace_trade_count(workspace_id, db)
-
-    if trade_limit > 0 and (current_trade_count + additional_needed) > trade_limit:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                f"Trade limit reached for workspace {workspace_id}. "
-                f"Current trades: {current_trade_count}. "
-                f"Requested additional trades: {additional_needed}. "
-                f"Plan limit: {trade_limit}. "
-                f"Upgrade workspace plan to add more trades."
-            ),
-        )
-
-
 def estimate_csv_row_count(content: bytes) -> int:
     try:
         text = content.decode("utf-8-sig")
@@ -170,13 +106,15 @@ def estimate_csv_row_count(content: bytes) -> int:
     reader = csv.reader(io.StringIO(text))
     rows = list(reader)
 
-    if not rows:
-        return 0
-
-    if len(rows) == 1:
+    if not rows or len(rows) == 1:
         return 0
 
     return max(len(rows) - 1, 0)
+
+
+def normalize_optional_text(value: str | None) -> str | None:
+    cleaned = (value or "").strip()
+    return cleaned or None
 
 
 def build_trade_fingerprint(
@@ -362,12 +300,16 @@ def create_trade(
     enforce_trade_import_allowed(workspace_id, db, additional_trades=1)
 
     workspace = get_workspace_or_404(workspace_id, db)
+    normalized_symbol = payload.symbol.strip().upper()
     normalized_side = payload.side.strip().upper()
+    normalized_currency = payload.currency.strip().upper()
+    normalized_strategy_tag = normalize_optional_text(payload.strategy_tag)
+    normalized_source_system = normalize_optional_text(payload.source_system) or "MANUAL"
 
     fingerprint = build_trade_fingerprint(
         workspace_id=workspace_id,
         member_id=payload.member_id,
-        symbol=payload.symbol.strip().upper(),
+        symbol=normalized_symbol,
         side=normalized_side,
         opened_at=payload.opened_at,
         entry_price=payload.entry_price,
@@ -411,7 +353,7 @@ def create_trade(
     trade = Trade(
         workspace_id=workspace_id,
         member_id=payload.member_id,
-        symbol=payload.symbol.strip().upper(),
+        symbol=normalized_symbol,
         side=normalized_side,
         opened_at=payload.opened_at,
         closed_at=payload.closed_at,
@@ -419,9 +361,9 @@ def create_trade(
         exit_price=payload.exit_price,
         quantity=payload.quantity,
         net_pnl=computed_net_pnl,
-        currency=payload.currency.strip().upper(),
-        strategy_tag=payload.strategy_tag,
-        source_system=payload.source_system,
+        currency=normalized_currency,
+        strategy_tag=normalized_strategy_tag,
+        source_system=normalized_source_system,
         trade_fingerprint=fingerprint,
     )
 
@@ -467,11 +409,17 @@ def update_trade(
             ),
         )
 
+    normalized_symbol = payload.symbol.strip().upper()
+    normalized_side = payload.side.strip().upper()
+    normalized_currency = payload.currency.strip().upper()
+    normalized_strategy_tag = normalize_optional_text(payload.strategy_tag)
+    normalized_source_system = normalize_optional_text(payload.source_system) or "MANUAL"
+
     new_fingerprint = build_trade_fingerprint(
         workspace_id=workspace_id,
         member_id=payload.member_id,
-        symbol=payload.symbol,
-        side=payload.side,
+        symbol=normalized_symbol,
+        side=normalized_side,
         opened_at=payload.opened_at,
         entry_price=payload.entry_price,
         quantity=payload.quantity,
@@ -504,7 +452,6 @@ def update_trade(
         result["duplicate_skipped"] = True
         return result
 
-    normalized_side = payload.side.strip().upper()
     computed_net_pnl = compute_trade_net_pnl(
         side=normalized_side,
         entry_price=payload.entry_price,
@@ -514,17 +461,17 @@ def update_trade(
     )
 
     trade.member_id = payload.member_id
-    trade.symbol = payload.symbol.strip().upper()
+    trade.symbol = normalized_symbol
     trade.side = normalized_side
     trade.opened_at = payload.opened_at
     trade.closed_at = payload.closed_at
     trade.entry_price = payload.entry_price
     trade.exit_price = payload.exit_price
     trade.quantity = payload.quantity
-    trade.currency = payload.currency.strip().upper()
+    trade.currency = normalized_currency
     trade.net_pnl = computed_net_pnl
-    trade.strategy_tag = payload.strategy_tag
-    trade.source_system = payload.source_system
+    trade.strategy_tag = normalized_strategy_tag
+    trade.source_system = normalized_source_system
     trade.trade_fingerprint = new_fingerprint
 
     db.commit()
@@ -625,7 +572,7 @@ async def import_trades_csv(
     except ValueError as e:
         return {
             "workspace_id": workspace_id,
-            "filename": file.filename,
+            "filename": file.filename or "",
             "rows_received": 0,
             "rows_imported": 0,
             "rows_rejected": 1,
