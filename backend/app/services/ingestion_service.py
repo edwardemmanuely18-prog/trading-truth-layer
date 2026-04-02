@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from app.models.trade import Trade
 from app.models.import_batch import ImportBatch
 from app.models.claim_schema import ClaimSchema
-from app.services.adapters.base import NormalizedTradeRow
 from app.services.adapters.csv_adapter import CSVTradeAdapter
 from app.services.audit_service import log_audit_event
 
@@ -133,7 +132,6 @@ def import_csv_trades(
 
     locked_trade_lookup = build_locked_trade_lookup(db, workspace_id)
 
-    # Prevent duplicate inserts within the same uploaded file before commit.
     seen_in_file: set[str] = set()
 
     for idx, row in enumerate(normalized_rows, start=1):
@@ -183,9 +181,9 @@ def import_csv_trades(
                 symbol=row.symbol,
                 side=row.side,
                 opened_at=row.opened_at,
-                closed_at=None,
+                closed_at=row.closed_at,
                 entry_price=row.entry_price,
-                exit_price=None,
+                exit_price=row.exit_price,
                 quantity=row.quantity,
                 net_pnl=row.net_pnl,
                 currency=row.currency,
