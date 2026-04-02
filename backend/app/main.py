@@ -30,9 +30,15 @@ from app.core.security import hash_password
 def parse_cors_origins() -> list[str]:
     raw = os.getenv(
         "CORS_ALLOW_ORIGINS",
-        "http://localhost:3000,http://127.0.0.1:3000",
+        ",".join(
+            [
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                "https://impartial-empathy-production-0186.up.railway.app",
+            ]
+        ),
     )
-    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
 
 
 def ensure_claim_schema_columns():
