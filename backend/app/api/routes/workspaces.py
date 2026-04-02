@@ -628,7 +628,8 @@ def get_workspace_usage(
         .filter(WorkspaceMembership.workspace_id == workspace_id)
         .count()
     )
-    trade_count = db.query(Trade).filter(Trade.workspace_id == workspace_id).count()
+    active_trade_count = db.query(Trade).filter(Trade.workspace_id == workspace_id).count()
+    consumed_trade_count = int(getattr(workspace, "trades_consumed_count", 0) or 0)
     claim_count = db.query(ClaimSchema).filter(ClaimSchema.workspace_id == workspace_id).count()
 
     storage_used_mb = 0
@@ -658,10 +659,16 @@ def get_workspace_usage(
             "status": status(member_count, limits["member_limit"]),
         },
         "trades": {
-            "used": trade_count,
+            "used": consumed_trade_count,
             "limit": limits["trade_limit"],
-            "ratio": ratio(trade_count, limits["trade_limit"]),
-            "status": status(trade_count, limits["trade_limit"]),
+            "ratio": ratio(consumed_trade_count, limits["trade_limit"]),
+            "status": status(consumed_trade_count, limits["trade_limit"]),
+        },
+        "active_trades": {
+            "used": active_trade_count,
+            "limit": limits["trade_limit"],
+            "ratio": ratio(active_trade_count, limits["trade_limit"]),
+            "status": status(active_trade_count, limits["trade_limit"]),
         },
         "claims": {
             "used": claim_count,
