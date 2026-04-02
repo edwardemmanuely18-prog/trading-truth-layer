@@ -29,7 +29,9 @@ class TradeCreate(BaseModel):
     symbol: str
     side: str
     opened_at: datetime
+    closed_at: datetime | None = None
     entry_price: float
+    exit_price: float | None = None
     quantity: float
     fees: float = 0
     swap: float = 0
@@ -44,7 +46,9 @@ class TradeUpdate(BaseModel):
     symbol: str
     side: str
     opened_at: datetime
+    closed_at: datetime | None = None
     entry_price: float
+    exit_price: float | None = None
     quantity: float
     currency: str = "USD"
     net_pnl: float | None = None
@@ -276,6 +280,27 @@ def find_locked_claim_protecting_trade_id(
     return trade_id_to_claim.get(trade_id)
 
 
+def compute_trade_net_pnl(
+    side: str,
+    entry_price: float,
+    exit_price: float | None,
+    quantity: float,
+    fallback_net_pnl: float | None = None,
+) -> float | None:
+    if exit_price is None:
+        return fallback_net_pnl
+
+    normalized_side = side.strip().upper()
+
+    if normalized_side == "BUY":
+        return (exit_price - entry_price) * quantity
+
+    if normalized_side == "SELL":
+        return (entry_price - exit_price) * quantity
+
+    return fallback_net_pnl
+
+
 def serialize_trade(trade: Trade):
     return {
         "id": trade.id,
@@ -358,17 +383,26 @@ def create_trade(
         result["duplicate_skipped"] = True
         return result
 
+        normalized_side = payload.side.strip().upper()
+    computed_net_pnl = compute_trade_net_pnl(
+        side=normalized_side,
+        entry_price=payload.entry_price,
+        exit_price=payload.exit_price,
+        quantity=payload.quantity,
+        fallback_net_pnl=payload.net_pnl,
+    )
+
     trade = Trade(
         workspace_id=workspace_id,
         member_id=payload.member_id,
         symbol=payload.symbol.strip().upper(),
-        side=payload.side.strip().upper(),
+        side=normalized_side,
         opened_at=payload.opened_at,
-        closed_at=None,
+        closed_at=payload.closed_at,
         entry_price=payload.entry_price,
-        exit_price=None,
+        exit_price=payload.exit_price,
         quantity=payload.quantity,
-        net_pnl=payload.net_pnl,
+        net_pnl=computed_net_pnl,
         currency=payload.currency.strip().upper(),
         strategy_tag=payload.strategy_tag,
         source_system=payload.source_system,
@@ -451,14 +485,25 @@ def update_trade(
         result["duplicate_skipped"] = True
         return result
 
+        normalized_side = payload.side.strip().upper()
+    computed_net_pnl = compute_trade_net_pnl(
+        side=normalized_side,
+        entry_price=payload.entry_price,
+        exit_price=payload.exit_price,
+        quantity=payload.quantity,
+        fallback_net_pnl=payload.net_pnl,
+    )
+
     trade.member_id = payload.member_id
     trade.symbol = payload.symbol.strip().upper()
-    trade.side = payload.side.strip().upper()
+    trade.side = normalized_side
     trade.opened_at = payload.opened_at
+    trade.closed_at = payload.closed_at
     trade.entry_price = payload.entry_price
+    trade.exit_price = payload.exit_price
     trade.quantity = payload.quantity
     trade.currency = payload.currency.strip().upper()
-    trade.net_pnl = payload.net_pnl
+    trade.net_pnl = computed_net_pnl
     trade.strategy_tag = payload.strategy_tag
     trade.source_system = payload.source_system
     trade.trade_fingerprint = new_fingerprint
