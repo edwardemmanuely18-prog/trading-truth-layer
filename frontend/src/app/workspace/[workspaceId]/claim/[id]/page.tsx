@@ -844,6 +844,7 @@ export default function WorkspaceClaimDetailPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [checkingIntegrity, setCheckingIntegrity] = useState(false);
+  const [integrityMessage, setIntegrityMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const claimUsage = usage?.usage?.claims;
@@ -983,10 +984,17 @@ export default function WorkspaceClaimDetailPage() {
     if (!claimId) return;
     setCheckingIntegrity(true);
     setError(null);
+    setIntegrityMessage(null);
 
     try {
       const integrityRes = await api.getClaimIntegrity(claimId);
       setIntegrity(integrityRes);
+
+      if (integrityRes.hash_match && integrityRes.integrity_status === "valid") {
+        setIntegrityMessage("Integrity verified successfully. Stored and recomputed hashes match.");
+      } else {
+        setIntegrityMessage("Integrity check completed. Review the result carefully.");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Integrity verification failed");
     } finally {
@@ -1610,6 +1618,12 @@ export default function WorkspaceClaimDetailPage() {
             />
           </div>
         </div>
+
+        {integrityMessage ? (
+          <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+            {integrityMessage}
+          </div>
+        ) : null}
 
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
