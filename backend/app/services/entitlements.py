@@ -109,19 +109,6 @@ def _candidate_plan_fields(workspace: Workspace) -> list[str]:
 
 
 def resolve_workspace_plan_code(workspace: Workspace) -> str:
-    """
-    Resolve the commercial plan that should control enforcement.
-
-    Why this exists:
-    - your UI can show a configured/effective plan such as Business
-    - stale numeric columns like claim_limit=5 may remain from an older plan
-    - enforcement must match the plan currently presented to the user
-
-    Strategy:
-    1. Prefer explicit effective/configured plan code fields if present
-    2. Fall back to legacy plan_code / plan
-    3. Default to starter only if nothing valid exists
-    """
     for field_name in _candidate_plan_fields(workspace):
         value = getattr(workspace, field_name, None)
         normalized = normalize_plan_code(value)
@@ -141,18 +128,6 @@ def _positive_int_or_none(value: Any) -> int | None:
 
 
 def get_workspace_plan_limits(workspace: Workspace) -> dict[str, int]:
-    """
-    Source of truth for operational enforcement.
-
-    Important change:
-    We now enforce the resolved plan defaults directly so the limits applied by
-    backend match the plan shown in the product. This avoids stale workspace
-    numeric columns (for example claim_limit=5 left behind from Starter) from
-    incorrectly overriding Business/Growth/Pro defaults.
-
-    We still expose raw workspace limit columns through diagnostics snapshots,
-    but they no longer silently overrule plan enforcement.
-    """
     plan_code = resolve_workspace_plan_code(workspace)
     plan_defaults = PLAN_DEFAULTS[plan_code]
 
@@ -165,9 +140,6 @@ def get_workspace_plan_limits(workspace: Workspace) -> dict[str, int]:
 
 
 def get_workspace_raw_limit_columns(workspace: Workspace) -> dict[str, int | None]:
-    """
-    Optional diagnostics to help detect stale or mismatched persisted limits.
-    """
     return {
         "claim_limit": _positive_int_or_none(getattr(workspace, "claim_limit", None)),
         "trade_limit": _positive_int_or_none(getattr(workspace, "trade_limit", None)),
@@ -178,18 +150,32 @@ def get_workspace_raw_limit_columns(workspace: Workspace) -> dict[str, int | Non
     }
 
 
+def get_active_trade_count(workspace_id: int, db: Session) -> int:
+    return (
+        db.query(Trade)
+        .filter(Trade.workspace_id == workspace_id)
+        .count()
+    )
+
+
+def get_consumed_trade_count(workspace: Workspace) -> int:
+    value = getattr(workspace, "trades_consumed_count", 0)
+    try:
+        return max(int(value or 0), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def get_workspace_usage_counts(workspace_id: int, db: Session) -> dict[str, int]:
+    workspace = get_workspace_or_404(workspace_id, db)
+
     member_count = (
         db.query(WorkspaceMembership)
         .filter(WorkspaceMembership.workspace_id == workspace_id)
         .count()
     )
 
-    trade_count = (
-        db.query(Trade)
-        .filter(Trade.workspace_id == workspace_id)
-        .count()
-    )
+    active_trade_count = get_active_trade_count(workspace_id, db)
 
     claim_count = (
         db.query(ClaimSchema)
@@ -201,7 +187,8 @@ def get_workspace_usage_counts(workspace_id: int, db: Session) -> dict[str, int]
 
     return {
         "members": member_count,
-        "trades": trade_count,
+        "trades": get_consumed_trade_count(workspace),
+        "active_trades": active_trade_count,
         "claims": claim_count,
         "storage_mb": storage_mb_used,
     }
@@ -240,13 +227,6 @@ def enforce_workspace_billing_access(
     allow_past_due: bool = True,
     action_label: str = "perform this action",
 ) -> Workspace:
-    """
-    Hard gate for paid operations.
-
-    active / trialing => allowed
-    past_due => allowed only if allow_past_due=True
-    inactive / canceled / unpaid / pending_manual_review => blocked
-    """
     workspace = get_workspace_or_404(workspace_id, db)
     billing_status = normalize_billing_status(workspace.billing_status)
 
@@ -362,11 +342,11 @@ def enforce_trade_import_allowed(
         action_label="import or create more trades",
     )
 
-    usage = get_workspace_usage_counts(workspace_id, db)
     limits = get_workspace_plan_limits(workspace)
+    consumed_trade_count = get_consumed_trade_count(workspace)
 
     enforce_limit_not_reached(
-        used=usage["trades"],
+        used=consumed_trade_count,
         limit=limits["trades"],
         resource_label="trade",
         workspace_id=workspace_id,
@@ -380,8 +360,4 @@ def enforce_readonly_access_allowed(
     workspace_id: int,
     db: Session,
 ) -> Workspace:
-    """
-    Read-only access remains allowed even when billing is inactive/canceled.
-    This keeps dashboards, evidence, and history visible.
-    """
     return get_workspace_or_404(workspace_id, db)
