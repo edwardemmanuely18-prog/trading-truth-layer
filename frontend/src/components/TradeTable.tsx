@@ -2,6 +2,10 @@ import { Trade } from "../lib/api";
 
 type Props = {
   trades: Trade[];
+  canWriteTrades?: boolean;
+  onEditTrade?: (trade: Trade) => void;
+  onDeleteTrade?: (trade: Trade) => void;
+  deletingTradeId?: number | null;
 };
 
 function formatDateTime(value?: string | null) {
@@ -18,7 +22,15 @@ function formatNumber(value?: number | null, digits = 4) {
   return Number(value).toFixed(digits);
 }
 
-export default function TradeTable({ trades }: Props) {
+export default function TradeTable({
+  trades,
+  canWriteTrades = false,
+  onEditTrade,
+  onDeleteTrade,
+  deletingTradeId = null,
+}: Props) {
+  const showActions = canWriteTrades && (Boolean(onEditTrade) || Boolean(onDeleteTrade));
+
   return (
     <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
       <table className="min-w-full text-sm">
@@ -37,12 +49,13 @@ export default function TradeTable({ trades }: Props) {
             <th className="px-4 py-3">Currency</th>
             <th className="px-4 py-3">Strategy</th>
             <th className="px-4 py-3">Source</th>
+            {showActions ? <th className="px-4 py-3">Actions</th> : null}
           </tr>
         </thead>
         <tbody>
           {trades.length === 0 ? (
             <tr>
-              <td className="px-4 py-6 text-slate-500" colSpan={13}>
+              <td className="px-4 py-6 text-slate-500" colSpan={showActions ? 14 : 13}>
                 No trades found in this workspace.
               </td>
             </tr>
@@ -62,6 +75,32 @@ export default function TradeTable({ trades }: Props) {
                 <td className="px-4 py-3">{trade.currency || "—"}</td>
                 <td className="px-4 py-3">{trade.strategy_tag || "—"}</td>
                 <td className="px-4 py-3">{trade.source_system || "—"}</td>
+                {showActions ? (
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      {onEditTrade ? (
+                        <button
+                          type="button"
+                          onClick={() => onEditTrade(trade)}
+                          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          Edit
+                        </button>
+                      ) : null}
+
+                      {onDeleteTrade ? (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteTrade(trade)}
+                          disabled={deletingTradeId === trade.id}
+                          className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {deletingTradeId === trade.id ? "Deleting..." : "Delete"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                ) : null}
               </tr>
             ))
           )}
