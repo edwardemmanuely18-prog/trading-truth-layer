@@ -83,7 +83,9 @@ export default function WorkspaceLedgerPage() {
     symbol: "",
     side: "BUY",
     opened_at: "",
+    closed_at: "",
     entry_price: "",
+    exit_price: "",
     quantity: "",
     currency: "USD",
     net_pnl: "",
@@ -129,7 +131,15 @@ export default function WorkspaceLedgerPage() {
         symbol: manualTradeForm.symbol.trim().toUpperCase(),
         side: manualTradeForm.side.trim().toUpperCase(),
         opened_at: new Date(manualTradeForm.opened_at).toISOString(),
+        closed_at:
+          manualTradeForm.closed_at.trim() === ""
+            ? null
+            : new Date(manualTradeForm.closed_at).toISOString(),
         entry_price: Number(manualTradeForm.entry_price),
+        exit_price:
+          manualTradeForm.exit_price.trim() === ""
+            ? null
+            : Number(manualTradeForm.exit_price),
         quantity: Number(manualTradeForm.quantity),
         currency: manualTradeForm.currency.trim().toUpperCase(),
         net_pnl:
@@ -153,6 +163,31 @@ export default function WorkspaceLedgerPage() {
         throw new Error("Please fill all required manual trade fields correctly.");
       }
 
+      if (
+        payload.closed_at &&
+        Number.isNaN(new Date(payload.closed_at).getTime())
+      ) {
+        throw new Error("Closed At is invalid.");
+      }
+
+      if (Number.isNaN(new Date(payload.opened_at).getTime())) {
+        throw new Error("Opened At is invalid.");
+      }
+
+      if (
+        manualTradeForm.exit_price.trim() !== "" &&
+        !Number.isFinite(Number(manualTradeForm.exit_price))
+      ) {
+        throw new Error("Exit Price must be a valid number.");
+      }
+
+      if (
+        manualTradeForm.net_pnl.trim() !== "" &&
+        !Number.isFinite(Number(manualTradeForm.net_pnl))
+      ) {
+        throw new Error("Net PnL must be a valid number.");
+      }
+
       await api.createTrade(workspaceId, payload);
       await reloadLedgerData(workspaceId);
 
@@ -162,7 +197,9 @@ export default function WorkspaceLedgerPage() {
         symbol: "",
         side: "BUY",
         opened_at: "",
+        closed_at: "",
         entry_price: "",
+        exit_price: "",
         quantity: "",
         currency: "USD",
         net_pnl: "",
@@ -289,7 +326,9 @@ export default function WorkspaceLedgerPage() {
       <div className="min-h-screen bg-slate-50 text-slate-900">
         <Navbar workspaceId={workspaceId} />
         <div className="p-6">
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+            {error}
+          </div>
         </div>
       </div>
     );
@@ -625,12 +664,32 @@ export default function WorkspaceLedgerPage() {
                 </div>
 
                 <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Closed At</label>
+                  <input
+                    type="datetime-local"
+                    value={manualTradeForm.closed_at}
+                    onChange={(e) => updateManualTradeField("closed_at", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Entry Price</label>
                   <input
                     value={manualTradeForm.entry_price}
                     onChange={(e) => updateManualTradeField("entry_price", e.target.value)}
                     className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                     placeholder="1.0840"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Exit Price</label>
+                  <input
+                    value={manualTradeForm.exit_price}
+                    onChange={(e) => updateManualTradeField("exit_price", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Optional"
                   />
                 </div>
 
