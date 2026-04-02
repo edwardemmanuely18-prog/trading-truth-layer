@@ -33,6 +33,8 @@ class Workspace(Base):
     member_limit = Column(Integer, nullable=False, default=3)
     storage_limit_mb = Column(Integer, nullable=False, default=500)
 
+    trades_consumed_count = Column(Integer, nullable=False, default=0)
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime,
