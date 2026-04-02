@@ -89,6 +89,20 @@ def get_workspace_trade_count(workspace_id: int, db: Session) -> int:
     return db.query(Trade).filter(Trade.workspace_id == workspace_id).count()
 
 
+def increment_workspace_trades_consumed(
+    workspace: Workspace,
+    db: Session,
+    additional_trades: int,
+) -> None:
+    increment = max(int(additional_trades), 0)
+    if increment <= 0:
+        return
+
+    current_value = getattr(workspace, "trades_consumed_count", 0) or 0
+    workspace.trades_consumed_count = int(current_value) + increment
+    db.add(workspace)
+
+
 def parse_bool_like(value: str | None) -> bool:
     if value is None:
         return False
@@ -347,6 +361,7 @@ def create_trade(
     require_workspace_operator_or_owner(workspace_id, current_user, db)
     enforce_trade_import_allowed(workspace_id, db, additional_trades=1)
 
+    workspace = get_workspace_or_404(workspace_id, db)
     normalized_side = payload.side.strip().upper()
 
     fingerprint = build_trade_fingerprint(
@@ -393,7 +408,6 @@ def create_trade(
         result["duplicate_skipped"] = True
         return result
 
-
     trade = Trade(
         workspace_id=workspace_id,
         member_id=payload.member_id,
@@ -412,11 +426,14 @@ def create_trade(
     )
 
     db.add(trade)
+    increment_workspace_trades_consumed(workspace, db, 1)
     db.commit()
     db.refresh(trade)
+    db.refresh(workspace)
 
     result = serialize_trade(trade)
     result["duplicate_skipped"] = False
+    result["trades_consumed_count"] = workspace.trades_consumed_count
     return result
 
 
@@ -588,13 +605,23 @@ async def import_trades_csv(
     enforce_trade_import_allowed(workspace_id, db, additional_trades=estimated_rows)
 
     try:
-        return import_csv_trades(
+        result = import_csv_trades(
             db=db,
             workspace_id=workspace_id,
             filename=file.filename,
             content=content,
             actor_user_id=current_user.id,
         )
+
+        rows_imported = int(result.get("rows_imported", 0) or 0)
+        if rows_imported > 0:
+            workspace = get_workspace_or_404(workspace_id, db)
+            increment_workspace_trades_consumed(workspace, db, rows_imported)
+            db.commit()
+            db.refresh(workspace)
+            result["trades_consumed_count"] = workspace.trades_consumed_count
+
+        return result
     except ValueError as e:
         return {
             "workspace_id": workspace_id,
