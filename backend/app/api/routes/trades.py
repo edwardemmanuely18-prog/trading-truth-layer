@@ -347,14 +347,24 @@ def create_trade(
     require_workspace_operator_or_owner(workspace_id, current_user, db)
     enforce_trade_import_allowed(workspace_id, db, additional_trades=1)
 
+    normalized_side = payload.side.strip().upper()
+
     fingerprint = build_trade_fingerprint(
         workspace_id=workspace_id,
         member_id=payload.member_id,
-        symbol=payload.symbol,
-        side=payload.side,
+        symbol=payload.symbol.strip().upper(),
+        side=normalized_side,
         opened_at=payload.opened_at,
         entry_price=payload.entry_price,
         quantity=payload.quantity,
+    )
+
+    computed_net_pnl = compute_trade_net_pnl(
+        side=normalized_side,
+        entry_price=payload.entry_price,
+        exit_price=payload.exit_price,
+        quantity=payload.quantity,
+        fallback_net_pnl=payload.net_pnl,
     )
 
     fingerprint_to_claim, _ = build_locked_trade_protection_maps(db, workspace_id)
