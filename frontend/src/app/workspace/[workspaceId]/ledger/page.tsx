@@ -722,6 +722,154 @@ export default function WorkspaceLedgerPage() {
             </div>
           ) : null}
 
+          {showManualTradeForm && canWriteTrades ? (
+            <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="text-lg font-semibold text-slate-900">Add Manual Trade</div>
+              <div className="mt-1 text-sm text-slate-500">
+                Create a canonical trade record directly in the ledger.
+              </div>
+
+              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Member ID</label>
+                  <input
+                    value={manualTradeForm.member_id}
+                    onChange={(e) => updateManualTradeField("member_id", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="3001"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Symbol</label>
+                  <input
+                    value={manualTradeForm.symbol}
+                    onChange={(e) => updateManualTradeField("symbol", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="EURUSD"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Side</label>
+                  <select
+                    value={manualTradeForm.side}
+                    onChange={(e) => updateManualTradeField("side", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  >
+                    <option value="BUY">BUY</option>
+                    <option value="SELL">SELL</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Opened At</label>
+                  <input
+                    type="datetime-local"
+                    value={manualTradeForm.opened_at}
+                    onChange={(e) => updateManualTradeField("opened_at", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Entry Price</label>
+                  <input
+                    value={manualTradeForm.entry_price}
+                    onChange={(e) => updateManualTradeField("entry_price", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="1.0840"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Quantity</label>
+                  <input
+                    value={manualTradeForm.quantity}
+                    onChange={(e) => updateManualTradeField("quantity", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="1.0"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Currency</label>
+                  <input
+                    value={manualTradeForm.currency}
+                    onChange={(e) => updateManualTradeField("currency", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="USD"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Net PnL</label>
+                  <input
+                    value={manualTradeForm.net_pnl}
+                    onChange={(e) => updateManualTradeField("net_pnl", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Optional"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Strategy Tag</label>
+                  <input
+                    value={manualTradeForm.strategy_tag}
+                    onChange={(e) => updateManualTradeField("strategy_tag", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="manual_entry"
+                  />
+                </div>
+
+                <div className="md:col-span-2 xl:col-span-3">
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Source System</label>
+                  <input
+                    value={manualTradeForm.source_system}
+                    onChange={(e) => updateManualTradeField("source_system", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="MANUAL"
+                  />
+                </div>
+              </div>
+
+              {manualTradeError ? (
+                <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {manualTradeError}
+                </div>
+              ) : null}
+
+              {manualTradeSuccess ? (
+                <div className="mt-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                  {manualTradeSuccess}
+                </div>
+              ) : null}
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => void handleCreateManualTrade()}
+                  disabled={manualTradeSubmitting}
+                  className="rounded-xl border border-slate-900 bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {manualTradeSubmitting ? "Creating..." : "Create Manual Trade"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowManualTradeForm(false);
+                    setManualTradeError(null);
+                    setManualTradeSuccess(null);
+                  }}
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <TradeTable trades={trades} />
         </div>
       </main>
