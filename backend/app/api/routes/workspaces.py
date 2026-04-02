@@ -333,6 +333,7 @@ def usage_row_for_plan(plan_code: str, used: int, dimension: str):
     limit_key_map = {
         "members": "member_limit",
         "trades": "trade_limit",
+        "active_trades": "trade_limit",
         "claims": "claim_limit",
         "storage_mb": "storage_limit_mb",
     }
@@ -379,6 +380,8 @@ def build_upgrade_recommendation(
     configured_near_limit_dimensions = []
 
     for key, row in usage_summary.items():
+        if key == "active_trades":
+            continue
         configured_row = usage_row_for_plan(configured_normalized, row["used"], key)
 
         if configured_row["status"] == "over_limit":
@@ -449,6 +452,8 @@ def build_upgrade_recommendation(
     near_limit_dimensions = []
 
     for key, row in usage_summary.items():
+        if key == "active_trades":
+            continue
         used = row["used"]
         limit = row["limit"]
         ratio = row["ratio"]
