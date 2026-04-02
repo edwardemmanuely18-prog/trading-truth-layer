@@ -393,14 +393,6 @@ def create_trade(
         result["duplicate_skipped"] = True
         return result
 
-        normalized_side = payload.side.strip().upper()
-    computed_net_pnl = compute_trade_net_pnl(
-        side=normalized_side,
-        entry_price=payload.entry_price,
-        exit_price=payload.exit_price,
-        quantity=payload.quantity,
-        fallback_net_pnl=payload.net_pnl,
-    )
 
     trade = Trade(
         workspace_id=workspace_id,
@@ -428,7 +420,7 @@ def create_trade(
     return result
 
 
-@router.put("/workspaces/{workspace_id}/trades/{trade_id}")
+@router.patch("/workspaces/{workspace_id}/trades/{trade_id}")
 def update_trade(
     workspace_id: int,
     trade_id: int,
@@ -490,12 +482,12 @@ def update_trade(
         )
         .first()
     )
-    if existing:
+        if existing:
         result = serialize_trade(existing)
         result["duplicate_skipped"] = True
         return result
 
-        normalized_side = payload.side.strip().upper()
+    normalized_side = payload.side.strip().upper()
     computed_net_pnl = compute_trade_net_pnl(
         side=normalized_side,
         entry_price=payload.entry_price,
