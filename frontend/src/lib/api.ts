@@ -1435,11 +1435,34 @@ export const api = {
     });
   },
 
-  createTrade: async (workspaceId: number, payload: unknown): Promise<Trade> => {
+    createTrade: async (workspaceId: number, payload: unknown): Promise<Trade> => {
     return apiFetch<Trade>(withDevUser(`/workspaces/${workspaceId}/trades`), {
       method: "POST",
       body: JSON.stringify(payload),
     });
+  },
+
+  updateTrade: async (
+    workspaceId: number,
+    tradeId: number,
+    payload: unknown
+  ): Promise<Trade> => {
+    return apiFetch<Trade>(withDevUser(`/workspaces/${workspaceId}/trades/${tradeId}`), {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deleteTrade: async (
+    workspaceId: number,
+    tradeId: number
+  ): Promise<{ status: string; trade_id: number }> => {
+    return apiFetch<{ status: string; trade_id: number }>(
+      withDevUser(`/workspaces/${workspaceId}/trades/${tradeId}`),
+      {
+        method: "DELETE",
+      }
+    );
   },
 
   importTradesCsv: async (workspaceId: number, file: File): Promise<ImportCsvResult> => {
