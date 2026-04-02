@@ -47,6 +47,54 @@ function summarizeJson(value?: string | null) {
   }
 }
 
+const EMPTY_TRADE_FORM = {
+  member_id: "",
+  symbol: "",
+  side: "BUY",
+  opened_at: "",
+  closed_at: "",
+  entry_price: "",
+  exit_price: "",
+  quantity: "",
+  currency: "USD",
+  net_pnl: "",
+  strategy_tag: "",
+  source_system: "MANUAL",
+};
+
+type TradeFormState = typeof EMPTY_TRADE_FORM;
+
+function tradeToFormState(trade: Trade): TradeFormState {
+  const toLocalDateTime = (value?: string | null) => {
+    if (!value) return "";
+    try {
+      const date = new Date(value);
+      const offset = date.getTimezoneOffset();
+      const local = new Date(date.getTime() - offset * 60 * 1000);
+      return local.toISOString().slice(0, 16);
+    } catch {
+      return "";
+    }
+  };
+
+  return {
+    member_id: String(trade.member_id ?? ""),
+    symbol: trade.symbol ?? "",
+    side: trade.side ?? "BUY",
+    opened_at: toLocalDateTime(trade.opened_at),
+    closed_at: toLocalDateTime(trade.closed_at),
+    entry_price:
+      trade.entry_price === null || trade.entry_price === undefined ? "" : String(trade.entry_price),
+    exit_price:
+      trade.exit_price === null || trade.exit_price === undefined ? "" : String(trade.exit_price),
+    quantity: trade.quantity === null || trade.quantity === undefined ? "" : String(trade.quantity),
+    currency: trade.currency ?? "USD",
+    net_pnl: trade.net_pnl === null || trade.net_pnl === undefined ? "" : String(trade.net_pnl),
+    strategy_tag: trade.strategy_tag ?? "",
+    source_system: trade.source_system ?? "MANUAL",
+  };
+}
+
 export default function WorkspaceLedgerPage() {
   const params = useParams();
   const { user, workspaces, loading: authLoading } = useAuth();
@@ -77,21 +125,15 @@ export default function WorkspaceLedgerPage() {
   const [manualTradeSubmitting, setManualTradeSubmitting] = useState(false);
   const [manualTradeError, setManualTradeError] = useState<string | null>(null);
   const [manualTradeSuccess, setManualTradeSuccess] = useState<string | null>(null);
+  const [manualTradeForm, setManualTradeForm] = useState<TradeFormState>(EMPTY_TRADE_FORM);
 
-  const [manualTradeForm, setManualTradeForm] = useState({
-    member_id: "",
-    symbol: "",
-    side: "BUY",
-    opened_at: "",
-    closed_at: "",
-    entry_price: "",
-    exit_price: "",
-    quantity: "",
-    currency: "USD",
-    net_pnl: "",
-    strategy_tag: "",
-    source_system: "MANUAL",
-  });
+  const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
+  const [editTradeForm, setEditTradeForm] = useState<TradeFormState>(EMPTY_TRADE_FORM);
+  const [editTradeSubmitting, setEditTradeSubmitting] = useState(false);
+  const [editTradeError, setEditTradeError] = useState<string | null>(null);
+  const [editTradeSuccess, setEditTradeSuccess] = useState<string | null>(null);
+
+  const [deletingTradeId, setDeletingTradeId] = useState<number | null>(null);
 
   const tradeUsage = usage?.usage?.trades;
   const tradeLimitReached =
@@ -111,11 +153,65 @@ export default function WorkspaceLedgerPage() {
     setUsage(usageRes);
   }
 
-  function updateManualTradeField(field: keyof typeof manualTradeForm, value: string) {
+  function updateManualTradeField(field: keyof TradeFormState, value: string) {
     setManualTradeForm((current) => ({
       ...current,
       [field]: value,
     }));
+  }
+
+  function updateEditTradeField(field: keyof TradeFormState, value: string) {
+    setEditTradeForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function buildTradePayload(form: TradeFormState) {
+    const payload = {
+      member_id: Number(form.member_id),
+      symbol: form.symbol.trim().toUpperCase(),
+      side: form.side.trim().toUpperCase(),
+      opened_at: new Date(form.opened_at).toISOString(),
+      closed_at: form.closed_at.trim() === "" ? null : new Date(form.closed_at).toISOString(),
+      entry_price: Number(form.entry_price),
+      exit_price: form.exit_price.trim() === "" ? null : Number(form.exit_price),
+      quantity: Number(form.quantity),
+      currency: form.currency.trim().toUpperCase(),
+      net_pnl: form.net_pnl.trim() === "" ? null : Number(form.net_pnl),
+      strategy_tag: form.strategy_tag.trim() || null,
+      source_system: form.source_system.trim() || "MANUAL",
+    };
+
+    if (
+      !Number.isFinite(payload.member_id) ||
+      !payload.symbol ||
+      !payload.side ||
+      !form.opened_at ||
+      !Number.isFinite(payload.entry_price) ||
+      !Number.isFinite(payload.quantity) ||
+      !payload.currency
+    ) {
+      throw new Error("Please fill all required trade fields correctly.");
+    }
+
+    if (Number.isNaN(new Date(payload.opened_at).getTime())) {
+      throw new Error("Opened At is invalid.");
+    }
+
+    if (payload.closed_at && Number.isNaN(new Date(payload.closed_at).getTime())) {
+      throw new Error("Closed At is invalid.");
+    }
+
+    if (form.exit_price.trim() !== "" && !Number.isFinite(Number(form.exit_price))) {
+      throw new Error("Exit Price must be a valid number.");
+    }
+
+    if (form.net_pnl.trim() !== "" && !Number.isFinite(Number(form.net_pnl))) {
+      throw new Error("Net PnL must be a valid number.");
+    }
+
+    return payload;
   }
 
   async function handleCreateManualTrade() {
@@ -127,85 +223,16 @@ export default function WorkspaceLedgerPage() {
       setManualTradeSuccess(null);
 
       const payload = {
-        member_id: Number(manualTradeForm.member_id),
-        symbol: manualTradeForm.symbol.trim().toUpperCase(),
-        side: manualTradeForm.side.trim().toUpperCase(),
-        opened_at: new Date(manualTradeForm.opened_at).toISOString(),
-        closed_at:
-          manualTradeForm.closed_at.trim() === ""
-            ? null
-            : new Date(manualTradeForm.closed_at).toISOString(),
-        entry_price: Number(manualTradeForm.entry_price),
-        exit_price:
-          manualTradeForm.exit_price.trim() === ""
-            ? null
-            : Number(manualTradeForm.exit_price),
-        quantity: Number(manualTradeForm.quantity),
-        currency: manualTradeForm.currency.trim().toUpperCase(),
-        net_pnl:
-          manualTradeForm.net_pnl.trim() === ""
-            ? null
-            : Number(manualTradeForm.net_pnl),
-        strategy_tag: manualTradeForm.strategy_tag.trim() || null,
-        source_system: manualTradeForm.source_system.trim() || "MANUAL",
+        ...buildTradePayload(manualTradeForm),
         source_type: "manual",
       };
 
-      if (
-        !Number.isFinite(payload.member_id) ||
-        !payload.symbol ||
-        !payload.side ||
-        !manualTradeForm.opened_at ||
-        !Number.isFinite(payload.entry_price) ||
-        !Number.isFinite(payload.quantity) ||
-        !payload.currency
-      ) {
-        throw new Error("Please fill all required manual trade fields correctly.");
-      }
-
-      if (
-        payload.closed_at &&
-        Number.isNaN(new Date(payload.closed_at).getTime())
-      ) {
-        throw new Error("Closed At is invalid.");
-      }
-
-      if (Number.isNaN(new Date(payload.opened_at).getTime())) {
-        throw new Error("Opened At is invalid.");
-      }
-
-      if (
-        manualTradeForm.exit_price.trim() !== "" &&
-        !Number.isFinite(Number(manualTradeForm.exit_price))
-      ) {
-        throw new Error("Exit Price must be a valid number.");
-      }
-
-      if (
-        manualTradeForm.net_pnl.trim() !== "" &&
-        !Number.isFinite(Number(manualTradeForm.net_pnl))
-      ) {
-        throw new Error("Net PnL must be a valid number.");
-      }
-
+      await api.updateTrade; // type guard for next api step
       await api.createTrade(workspaceId, payload);
       await reloadLedgerData(workspaceId);
 
       setManualTradeSuccess("Manual trade created successfully.");
-      setManualTradeForm({
-        member_id: "",
-        symbol: "",
-        side: "BUY",
-        opened_at: "",
-        closed_at: "",
-        entry_price: "",
-        exit_price: "",
-        quantity: "",
-        currency: "USD",
-        net_pnl: "",
-        strategy_tag: "",
-        source_system: "MANUAL",
-      });
+      setManualTradeForm(EMPTY_TRADE_FORM);
       setShowManualTradeForm(false);
     } catch (err) {
       setManualTradeError(
@@ -213,6 +240,74 @@ export default function WorkspaceLedgerPage() {
       );
     } finally {
       setManualTradeSubmitting(false);
+    }
+  }
+
+  function handleEditTrade(trade: Trade) {
+    setEditingTrade(trade);
+    setEditTradeForm(tradeToFormState(trade));
+    setEditTradeError(null);
+    setEditTradeSuccess(null);
+    setManualTradeError(null);
+    setManualTradeSuccess(null);
+    setShowManualTradeForm(false);
+  }
+
+  function handleCancelEditTrade() {
+    setEditingTrade(null);
+    setEditTradeForm(EMPTY_TRADE_FORM);
+    setEditTradeError(null);
+    setEditTradeSuccess(null);
+  }
+
+  async function handleSaveEditedTrade() {
+    if (!workspaceId || !editingTrade) return;
+
+    try {
+      setEditTradeSubmitting(true);
+      setEditTradeError(null);
+      setEditTradeSuccess(null);
+
+      const payload = buildTradePayload(editTradeForm);
+      await api.updateTrade(workspaceId, editingTrade.id, payload);
+      await reloadLedgerData(workspaceId);
+
+      setEditTradeSuccess("Trade updated successfully.");
+      setEditingTrade(null);
+      setEditTradeForm(EMPTY_TRADE_FORM);
+    } catch (err) {
+      setEditTradeError(err instanceof Error ? err.message : "Failed to update trade.");
+    } finally {
+      setEditTradeSubmitting(false);
+    }
+  }
+
+  async function handleDeleteTrade(trade: Trade) {
+    if (!workspaceId) return;
+
+    const confirmed = window.confirm(
+      `Delete trade #${trade.id}? This action should remain governed and may be blocked if the trade is part of locked evidence.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setDeletingTradeId(trade.id);
+      setError(null);
+      setManualTradeError(null);
+      setEditTradeError(null);
+
+      await api.deleteTrade(workspaceId, trade.id);
+      await reloadLedgerData(workspaceId);
+
+      if (editingTrade?.id === trade.id) {
+        handleCancelEditTrade();
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to delete trade.";
+      setError(message);
+    } finally {
+      setDeletingTradeId(null);
     }
   }
 
@@ -321,19 +416,6 @@ export default function WorkspaceLedgerPage() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-slate-50 text-slate-900">
-        <Navbar workspaceId={workspaceId} />
-        <div className="p-6">
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
-            {error}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <Navbar workspaceId={workspaceId} />
@@ -356,6 +438,12 @@ export default function WorkspaceLedgerPage() {
             <div className="mt-1 font-semibold">{workspaceRole}</div>
           </div>
         </div>
+
+        {error ? (
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+            {error}
+          </div>
+        ) : null}
 
         {!canWriteTrades ? (
           <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900 shadow-sm">
@@ -410,6 +498,7 @@ export default function WorkspaceLedgerPage() {
                         setManualTradeError(null);
                         setManualTradeSuccess(null);
                         setShowManualTradeForm((current) => !current);
+                        handleCancelEditTrade();
                       }}
                       className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
                     >
@@ -596,6 +685,7 @@ export default function WorkspaceLedgerPage() {
                       setManualTradeError(null);
                       setManualTradeSuccess(null);
                       setShowManualTradeForm((current) => !current);
+                      handleCancelEditTrade();
                     }}
                     className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
                   >
@@ -781,7 +871,170 @@ export default function WorkspaceLedgerPage() {
             </div>
           ) : null}
 
-          <TradeTable trades={trades} />
+          {editingTrade ? (
+            <div className="mb-5 rounded-2xl border border-blue-200 bg-blue-50 p-5">
+              <div className="text-lg font-semibold text-slate-900">
+                Edit Trade #{editingTrade.id}
+              </div>
+              <div className="mt-1 text-sm text-slate-500">
+                Update the canonical trade record. Governed delete remains separate.
+              </div>
+
+              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Member ID</label>
+                  <input
+                    value={editTradeForm.member_id}
+                    onChange={(e) => updateEditTradeField("member_id", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Symbol</label>
+                  <input
+                    value={editTradeForm.symbol}
+                    onChange={(e) => updateEditTradeField("symbol", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Side</label>
+                  <select
+                    value={editTradeForm.side}
+                    onChange={(e) => updateEditTradeField("side", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  >
+                    <option value="BUY">BUY</option>
+                    <option value="SELL">SELL</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Opened At</label>
+                  <input
+                    type="datetime-local"
+                    value={editTradeForm.opened_at}
+                    onChange={(e) => updateEditTradeField("opened_at", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Closed At</label>
+                  <input
+                    type="datetime-local"
+                    value={editTradeForm.closed_at}
+                    onChange={(e) => updateEditTradeField("closed_at", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Entry Price</label>
+                  <input
+                    value={editTradeForm.entry_price}
+                    onChange={(e) => updateEditTradeField("entry_price", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Exit Price</label>
+                  <input
+                    value={editTradeForm.exit_price}
+                    onChange={(e) => updateEditTradeField("exit_price", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Quantity</label>
+                  <input
+                    value={editTradeForm.quantity}
+                    onChange={(e) => updateEditTradeField("quantity", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Currency</label>
+                  <input
+                    value={editTradeForm.currency}
+                    onChange={(e) => updateEditTradeField("currency", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Net PnL</label>
+                  <input
+                    value={editTradeForm.net_pnl}
+                    onChange={(e) => updateEditTradeField("net_pnl", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Strategy Tag</label>
+                  <input
+                    value={editTradeForm.strategy_tag}
+                    onChange={(e) => updateEditTradeField("strategy_tag", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+
+                <div className="md:col-span-2 xl:col-span-3">
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Source System</label>
+                  <input
+                    value={editTradeForm.source_system}
+                    onChange={(e) => updateEditTradeField("source_system", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+
+              {editTradeError ? (
+                <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {editTradeError}
+                </div>
+              ) : null}
+
+              {editTradeSuccess ? (
+                <div className="mt-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                  {editTradeSuccess}
+                </div>
+              ) : null}
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => void handleSaveEditedTrade()}
+                  disabled={editTradeSubmitting}
+                  className="rounded-xl border border-slate-900 bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {editTradeSubmitting ? "Saving..." : "Save Trade"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCancelEditTrade}
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+                >
+                  Cancel Edit
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <TradeTable
+            trades={trades}
+            canWriteTrades={canWriteTrades}
+            onEditTrade={handleEditTrade}
+            onDeleteTrade={handleDeleteTrade}
+            deletingTradeId={deletingTradeId}
+          />
         </div>
       </main>
     </div>
