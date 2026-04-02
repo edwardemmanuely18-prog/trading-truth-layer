@@ -1109,6 +1109,18 @@ export default function WorkspaceClaimDetailPage() {
             </div>
           </div>
 
+          {integrityMessage ? (
+            <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+              {integrityMessage}
+            </div>
+          ) : null}
+
+          {error ? (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {error}
+            </div>
+          ) : null}
+
           <div className="mt-6 grid gap-4 lg:grid-cols-[1.5fr_1fr_1fr]">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
               <div className="text-sm text-slate-500">Claim fingerprint</div>
@@ -1618,18 +1630,6 @@ export default function WorkspaceClaimDetailPage() {
             />
           </div>
         </div>
-
-        {integrityMessage ? (
-          <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
-            {integrityMessage}
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {error}
-          </div>
-        ) : null}
       </main>
     </div>
   );
