@@ -2300,10 +2300,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.drawString(PDF_MARGIN_LEFT + 24, y - 22, "Verification Signature")
 
     chip_w = 190
-    chip_h = 108
+    chip_h = 102
     chip_x = PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT - chip_w
+    chip_top_y = y - 8
+
     content_x = PDF_MARGIN_LEFT + 24
-    content_w = chip_x - content_x - 18
+    content_w = chip_x - content_x - 26
     content_y = y - 48
 
     pdf.setFont("Helvetica-Bold", 24)
@@ -2330,7 +2332,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     draw_info_chip(
         chip_x,
-        y - 22,
+        chip_top_y,
         chip_w,
         chip_h,
         chip_rows,
@@ -2514,15 +2516,15 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     y -= BLOCK_GAP
 
     equity_point_columns = [
-        {"label": "Seq", "key": "sequence", "x": 0, "w": 34, "align": "left"},
-        {"label": "Trade", "key": "trade_id", "x": 34, "w": 50, "align": "left"},
-        {"label": "Opened", "key": "opened_at", "x": 84, "w": 116, "align": "left"},
-        {"label": "Symbol", "key": "symbol", "x": 200, "w": 64, "align": "left"},
-        {"label": "Member", "key": "member_id", "x": 264, "w": 58, "align": "left"},
-        {"label": "Trade PnL", "key": "trade_pnl", "x": 322, "w": 58, "align": "right"},
-        {"label": "Cumulative", "key": "cumulative_pnl", "x": 380, "w": 62, "align": "right"},
-        {"label": "Step", "key": "step_change", "x": 442, "w": 44, "align": "right"},
-        {"label": "Gap", "key": "gap_from_prior", "x": 486, "w": 50, "align": "right"},
+        {"label": "Seq", "key": "sequence", "x": 0, "w": 30, "align": "left"},
+        {"label": "Trade", "key": "trade_id", "x": 30, "w": 44, "align": "left"},
+        {"label": "Opened", "key": "opened_at", "x": 74, "w": 116, "align": "left"},
+        {"label": "Symbol", "key": "symbol", "x": 190, "w": 58, "align": "left"},
+        {"label": "Member", "key": "member_id", "x": 248, "w": 54, "align": "left"},
+        {"label": "Trade PnL", "key": "trade_pnl", "x": 302, "w": 66, "align": "right", "font_size": 8},
+        {"label": "Cumulative", "key": "cumulative_pnl", "x": 368, "w": 68, "align": "right", "font_size": 8},
+        {"label": "Step", "key": "step_change", "x": 436, "w": 48, "align": "right", "font_size": 8},
+        {"label": "Gap", "key": "gap_from_prior", "x": 484, "w": 56, "align": "center", "font_size": 8},
     ]
     equity_point_rows = build_equity_point_rows(curve_points)
 
