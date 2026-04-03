@@ -289,8 +289,12 @@ export default function PublicClaimPage() {
 
   const isLocked = normalizeText(claim.status) === "locked";
   const claimHash = claim.claim_hash || (preview as any).claim_hash || "";
-  const publicPath = `/claim/${claimId}/public`;
-  const verifyPath = claimHash ? `/verify/${claimHash}` : null;
+  const publicPath =
+    (claim as ClaimSchema & { public_view_path?: string | null }).public_view_path ||
+    `/claim/${claimId}/public`;
+  const verifyPath =
+    (claim as ClaimSchema & { verify_path?: string | null }).verify_path ||
+    (claimHash ? `/verify/${claimHash}` : null);
   const topEntry =
     Array.isArray((preview as any).leaderboard) && (preview as any).leaderboard.length > 0
       ? (preview as any).leaderboard[0]
@@ -404,8 +408,8 @@ export default function PublicClaimPage() {
 
             <div className="mt-3 text-sm leading-7 text-green-800">
               This claim is publicly exposed through Trading Truth Layer. The public page presents
-              performance, scope, and leaderboard context, while the verification route provides
-              canonical proof, integrity validation, and claim fingerprints.
+              performance, scope, methodology, and leaderboard context, while the verification route
+              provides canonical proof, lifecycle state, integrity validation, and claim fingerprints.
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -444,8 +448,8 @@ export default function PublicClaimPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (typeof window !== "undefined") {
-                      window.open(verifyPath, "_blank");
+                    if (typeof window !== "undefined" && verifyPath) {
+                      window.open(verifyPath, "_blank", "noopener,noreferrer");
                     }
                   }}
                   className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
@@ -486,6 +490,18 @@ export default function PublicClaimPage() {
               <div className="mt-2 break-all font-mono text-sm text-slate-800">
                 {verifyPath || "—"}
               </div>
+              {verifyPath ? (
+                <div className="mt-3">
+                  <a
+                    href={verifyPath}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Open verification route
+                  </a>
+                </div>
+              ) : null}
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
