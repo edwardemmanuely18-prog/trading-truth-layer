@@ -1653,6 +1653,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     BLOCK_GAP = 18
     CARD_GAP = 12
     MINI_GAP = 10
+    PAGE_BOTTOM_SAFE = 72
 
     COLOR_INK = colors.HexColor("#0F172A")
     COLOR_TEXT = colors.HexColor("#334155")
@@ -1682,6 +1683,25 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     TEXT_M = 10
     TEXT_S = 9
     TEXT_XS = 8
+
+    TABLE_TOTAL_W = PDF_PAGE_WIDTH - PDF_MARGIN_LEFT - PDF_MARGIN_RIGHT
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    pdf.setTitle(filename)
+    pdf.setAuthor("Trading Truth Layer")
+    pdf.setSubject("Verified Trading Claim Report")
+
+    page_number = 1
+    y = pdf_start_page(pdf, page_number, document_title, claim_hash)
+    y -= PAGE_TOP_GAP
+
+    def ensure_space(required_height: float):
+        nonlocal y, page_number
+        if y - required_height < PAGE_BOTTOM_SAFE:
+            page_number += 1
+            y = pdf_new_page(pdf, page_number, document_title, claim_hash)
+            y -= PAGE_TOP_GAP
 
     def draw_hr(y_pos, stroke=COLOR_LINE_SOFT):
         pdf.setStrokeColor(stroke)
@@ -1720,7 +1740,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.drawString(x + 14, top_y - 20, label)
 
         value_lines = split_wrapped_lines(str(value), w - 28, "Helvetica-Bold", 17) or ["—"]
-        pdf.setFillColor(colors.HexColor("#020617"))
+        pdf.setFillColor(value_color)
         pdf.setFont("Helvetica-Bold", 18)
         value_y = top_y - 44
         for line in value_lines[:2]:
@@ -1770,12 +1790,13 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.setFont("Helvetica", TEXT_M)
         pdf.drawString(x, top_y - 2, label)
 
-        h = 44
+        lines = split_wrapped_lines(str(value or "—"), w - 24, "Courier", 8.5) or ["—"]
+        h = max(44, 20 + (len(lines[:3]) * 10) + 10)
+
         pdf.setLineWidth(1.5 if emphasize else 1)
         draw_soft_panel(x, top_y - 16, w, h, radius=13, fill=fill, stroke=stroke)
         pdf.setFillColor(COLOR_INK)
         pdf.setFont("Courier", 8.5)
-        lines = split_wrapped_lines(str(value or "—"), w - 24, "Courier", 8.5) or ["—"]
         yy = top_y - 34
         for line in lines[:3]:
             pdf.drawString(x + 12, yy, line)
@@ -1828,15 +1849,22 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     def draw_info_chip(x, top_y, w, h, rows, fill=colors.white, stroke=COLOR_LINE):
         draw_soft_panel(x, top_y, w, h, radius=12, fill=fill, stroke=stroke)
-        yy = top_y - 20
+        yy = top_y - 24
         for label, value in rows:
             pdf.setFillColor(COLOR_MUTED)
             pdf.setFont("Helvetica", TEXT_M)
-            pdf.drawString(x + 12, yy, f"{label}:")
+            pdf.drawString(x + 14, yy, f"{label}:")
             pdf.setFillColor(COLOR_INK)
-            pdf.setFont("Helvetica-Bold", TEXT_M)
-            pdf.drawString(x + 64, yy, value)
-            yy -= 16
+            pdf.setFont("Helvetica-Bold", 11)
+            pdf.drawString(x + 72, yy, value)
+            yy -= 20
+
+    def estimate_verification_banner_height(signature_text, trust_state_text, sub_text):
+        title_lines = split_wrapped_lines(signature_text, PDF_CONTENT_WIDTH - 280, "Helvetica-Bold", 24) or [signature_text]
+        trust_lines = split_wrapped_lines(trust_state_text, PDF_CONTENT_WIDTH - 280, "Helvetica", TEXT_L) or [trust_state_text]
+        desc_lines = split_wrapped_lines(sub_text, PDF_CONTENT_WIDTH - 280, "Helvetica", TEXT_M) or [sub_text]
+        content_height = 22 + (len(title_lines[:2]) * 26) + 6 + (len(trust_lines[:2]) * 14) + 8 + (len(desc_lines) * 13) + 18
+        return max(230, content_height + 72)
 
     def draw_equity_curve_preview_v2(x, top_y, w, h, curve_points):
         draw_soft_panel(x, top_y, w, h, radius=16, fill=colors.white, stroke=COLOR_BLUE_LINE)
@@ -1851,9 +1879,9 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             return
 
         chart_x = x + 26
-        chart_y = top_y - h + 30
+        chart_y = top_y - h + 40
         chart_w = w - 50
-        chart_h = h - 72
+        chart_h = h - 90
 
         values = [float(p.get("cumulative_pnl", 0) or 0) for p in curve_points]
         xs = list(range(1, len(values) + 1))
@@ -1876,8 +1904,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
                 return chart_x + (chart_w / 2)
             return chart_x + ((i - 1) / (len(xs) - 1)) * chart_w
 
-        # background grid
-        pdf.setStrokeColor(colors.HexColor("#E8EEF6"))
+        pdf.setStrokeColor(colors.HexColor("#F1F5F9"))
         pdf.setLineWidth(1)
         grid_steps = 5
         for step in range(grid_steps + 1):
@@ -1889,13 +1916,11 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             pdf.setFont("Helvetica", 8)
             pdf.drawRightString(chart_x - 6, gy - 2, fmt_num(val, 1))
 
-        # axes
         pdf.setStrokeColor(COLOR_LINE)
         pdf.setLineWidth(1.2)
         pdf.line(chart_x, chart_y, chart_x, chart_y + chart_h)
         pdf.line(chart_x, chart_y, chart_x + chart_w, chart_y)
 
-        # x-axis markers
         marker_count = min(4, len(xs))
         if marker_count == 1:
             marker_indexes = [0]
@@ -1921,12 +1946,6 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             if date_label:
                 pdf.drawCentredString(px, chart_y - 24, date_label)
 
-        # area fill approximation
-        polygon_points = []
-        for i, v in zip(xs, values):
-            polygon_points.extend([scale_x(i), scale_y(v)])
-        polygon_points.extend([scale_x(xs[-1]), chart_y, scale_x(xs[0]), chart_y])
-
         path = pdf.beginPath()
         path.moveTo(scale_x(xs[0]), chart_y)
         for i, v in zip(xs, values):
@@ -1938,7 +1957,6 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
         pdf.drawPath(path, fill=1, stroke=0)
 
-        # curve line
         pdf.setStrokeColor(COLOR_NAVY)
         pdf.setLineWidth(2.4)
         for idx in range(len(xs) - 1):
@@ -1947,12 +1965,10 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
                 scale_x(xs[idx + 1]), scale_y(values[idx + 1]),
             )
 
-        # points
         pdf.setFillColor(COLOR_NAVY)
         for i, v in zip(xs, values):
             pdf.circle(scale_x(i), scale_y(v), 2.2, fill=1, stroke=0)
 
-        # peak / trough
         peak_idx = max(range(len(values)), key=lambda i: values[i])
         trough_idx = min(range(len(values)), key=lambda i: values[i])
 
@@ -1971,25 +1987,15 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         trough_label_x = trough_x - 54 if trough_x > chart_x + 60 else trough_x + 8
         pdf.drawString(trough_label_x, trough_y + 10, f"Trough {fmt_num(values[trough_idx], 2)}")
 
-        # net change label
         pdf.setFillColor(COLOR_MUTED)
         pdf.setFont("Helvetica", 8.5)
         net_change = values[-1] - values[0]
         pdf.drawRightString(chart_x + chart_w, chart_y + chart_h + 10, f"Net change {net_change:+.4f}")
 
-    buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=letter)
-    pdf.setTitle(filename)
-    pdf.setAuthor("Trading Truth Layer")
-    pdf.setSubject("Verified Trading Claim Report")
-
-    page_number = 1
-    y = pdf_start_page(pdf, page_number, document_title, claim_hash)
-    y -= PAGE_TOP_GAP
-
     # =========================
     # PAGE 1 — EXECUTIVE SUMMARY
     # =========================
+    ensure_space(520)
 
     pdf.setFillColor(COLOR_INK)
     pdf.setFont("Helvetica-Bold", TITLE_XL)
@@ -2004,7 +2010,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.setFillColor(COLOR_MUTED)
     pdf.setFont("Helvetica", TEXT_L)
     pdf.drawString(PDF_MARGIN_LEFT, y, "Trading Truth Layer")
-    y -= 18
+    y -= BLOCK_GAP
 
     pdf.setFillColor(COLOR_MUTED)
     pdf.setFont("Helvetica", TEXT_M)
@@ -2015,7 +2021,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.drawString(PDF_MARGIN_LEFT, y, f"Workspace ID: {schema.workspace_id}")
     y -= 14
     pdf.drawString(PDF_MARGIN_LEFT, y, f"Exported At: {exported_at.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-    y -= 24
+    y -= BLOCK_GAP + 6
 
     pdf.setFillColor(COLOR_TEXT)
     pdf.setFont("Helvetica", TEXT_L)
@@ -2029,22 +2035,11 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         "Helvetica",
         TEXT_L,
     )
-    y -= 24
+    y -= SECTION_GAP
 
-    banner_height = 208
     banner_fill = COLOR_GREEN_BG if integrity_status == "valid" else COLOR_RED_BG
     banner_stroke = COLOR_GREEN_LINE if integrity_status == "valid" else COLOR_RED_LINE
     banner_text = COLOR_GREEN_TEXT if integrity_status == "valid" else COLOR_RED_TEXT
-
-    draw_soft_panel(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, banner_height, radius=18, fill=banner_fill, stroke=banner_stroke)
-
-    # left accent bar
-    pdf.setFillColor(banner_text)
-    pdf.roundRect(PDF_MARGIN_LEFT + 10, y - banner_height + 10, 8, banner_height - 20, 4, fill=1, stroke=0)
-
-    pdf.setFillColor(banner_text)
-    pdf.setFont("Helvetica", TEXT_L)
-    pdf.drawString(PDF_MARGIN_LEFT + 24, y - 22, "Verification Signature")
 
     if schema.status == "locked" and integrity_status == "valid":
         signature_text = "Verified • Locked • Integrity Valid"
@@ -2085,44 +2080,61 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             trust_state_text = f"Trust State: {schema.status.title()}"
             chip_rows = [("status", schema.status), ("integrity", integrity_status), ("trust", "contextual")]
 
+    banner_height = estimate_verification_banner_height(signature_text, trust_state_text, sub_text)
+    ensure_space(banner_height + 170)
+
+    draw_soft_panel(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, banner_height, radius=18, fill=banner_fill, stroke=banner_stroke)
+
+    pdf.setFillColor(banner_text)
+    pdf.roundRect(PDF_MARGIN_LEFT + 10, y - banner_height + 10, 8, banner_height - 20, 4, fill=1, stroke=0)
+
+    pdf.setFillColor(banner_text)
+    pdf.setFont("Helvetica", TEXT_L)
+    pdf.drawString(PDF_MARGIN_LEFT + 24, y - 22, "Verification Signature")
+
+    chip_w = 190
+    chip_h = 108
+    chip_x = PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT - chip_w
+    content_x = PDF_MARGIN_LEFT + 24
+    content_w = chip_x - content_x - 18
+    content_y = y - 48
+
     pdf.setFont("Helvetica-Bold", 24)
     pdf.setFillColor(banner_text)
-    title_lines = split_wrapped_lines(signature_text, PDF_CONTENT_WIDTH - 260, "Helvetica-Bold", 24) or [signature_text]
-    title_y = y - 52
+    title_lines = split_wrapped_lines(signature_text, content_w, "Helvetica-Bold", 24) or [signature_text]
     for line in title_lines[:2]:
-        pdf.drawString(PDF_MARGIN_LEFT + 24, title_y, line)
-        title_y -= 26  # increased spacing
+        pdf.drawString(content_x, content_y, line)
+        content_y -= 26
 
-    trust_y = title_y - 6
     pdf.setFont("Helvetica", TEXT_L)
-    pdf.drawString(PDF_MARGIN_LEFT + 24, trust_y, trust_state_text)
+    pdf.drawString(content_x, content_y, trust_state_text)
+    content_y -= 22
 
-    draw_pdf_wrapped_text(
+    content_y = draw_pdf_wrapped_text(
         pdf,
         sub_text,
-        PDF_MARGIN_LEFT + 24,
-        y - 102,
-        PDF_CONTENT_WIDTH - 250,
+        content_x,
+        content_y,
+        content_w,
         13,
         "Helvetica",
         TEXT_M,
     )
 
-    chip_x = PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT - 190
     draw_info_chip(
         chip_x,
-        y - 18,
-        190,
-        92,
+        y - 22,
+        chip_w,
+        chip_h,
         chip_rows,
         fill=colors.white,
         stroke=COLOR_LINE,
     )
 
-    hash_box_w = (PDF_CONTENT_WIDTH - 24 - CARD_GAP) / 2
-    hash_row_top = y - 160
+    hash_box_w = (PDF_CONTENT_WIDTH - CARD_GAP) / 2
+    hash_row_top = y - banner_height + 64
     draw_label_value_box_v2(
-        PDF_MARGIN_LEFT + 12,
+        PDF_MARGIN_LEFT,
         hash_row_top,
         hash_box_w,
         58,
@@ -2132,7 +2144,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         value_size=8.5,
     )
     draw_label_value_box_v2(
-        PDF_MARGIN_LEFT + 12 + hash_box_w + CARD_GAP,
+        PDF_MARGIN_LEFT + hash_box_w + CARD_GAP,
         hash_row_top,
         hash_box_w,
         58,
@@ -2144,18 +2156,21 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     y -= banner_height + SECTION_GAP
 
+    ensure_space(260)
+
     pdf.setFillColor(COLOR_INK)
     pdf.setFont("Helvetica-Bold", TITLE_L)
     pdf.drawString(PDF_MARGIN_LEFT, y, "Claim Identity")
+    draw_hr(y - 6)
     y -= 34
 
     pdf.setFillColor(COLOR_INK)
     pdf.setFont("Helvetica-Bold", 22)
-    title_lines = split_wrapped_lines(schema.name or "Untitled Claim", PDF_CONTENT_WIDTH, "Helvetica-Bold", 22)
+    title_lines = split_wrapped_lines(schema.name or "Untitled Claim", PDF_CONTENT_WIDTH, "Helvetica-Bold", 22) or ["Untitled Claim"]
     for line in title_lines[:2]:
         pdf.drawString(PDF_MARGIN_LEFT, y, line)
         y -= 24
-    y -= 6
+    y -= MINI_GAP
 
     card_w = (PDF_CONTENT_WIDTH - (CARD_GAP * 3)) / 4
     card_h = 74
@@ -2170,7 +2185,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     draw_metric_card_v2(PDF_MARGIN_LEFT + card_w + CARD_GAP, y, card_w, 72, "Included Trades", str(len(scope["included"])), "Rows used in claim")
     draw_metric_card_v2(PDF_MARGIN_LEFT + (card_w + CARD_GAP) * 2, y, card_w, 72, "Excluded Trades", str(len(scope["excluded"])), "Out-of-scope rows")
     draw_metric_card_v2(PDF_MARGIN_LEFT + (card_w + CARD_GAP) * 3, y, card_w, 72, "Audit Events", str(len(audit_events)), "Lifecycle trail count")
-    y -= 90
+    y -= 72 + BLOCK_GAP
 
     latest_event = audit_events[-1] if audit_events else None
     latest_event_text = f"{latest_event.event_type} @ {fmt_dt(latest_event.created_at)}" if latest_event else "No audit events"
@@ -2183,16 +2198,18 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     # =========================
     # PAGE 2 — PERFORMANCE DIAGNOSTICS
     # =========================
+    ensure_space(520)
 
     y = pdf_section_title(pdf, "Performance Diagnostics", PDF_MARGIN_LEFT, y)
-    y -= 6
+    draw_hr(y - 6)
+    y -= MINI_GAP
 
     diag_w = (PDF_CONTENT_WIDTH - (CARD_GAP * 3)) / 4
     draw_metric_card_v2(PDF_MARGIN_LEFT, y, diag_w, 72, "Best Trade", fmt_num(metrics["best_trade"], 2), "Highest PnL")
     draw_metric_card_v2(PDF_MARGIN_LEFT + diag_w + CARD_GAP, y, diag_w, 72, "Worst Trade", fmt_num(metrics["worst_trade"], 2), "Lowest PnL")
     draw_metric_card_v2(PDF_MARGIN_LEFT + (diag_w + CARD_GAP) * 2, y, diag_w, 72, "Max Drawdown", fmt_num(drawdown_stats["max_drawdown"], 2), "Peak-to-trough")
     draw_metric_card_v2(PDF_MARGIN_LEFT + (diag_w + CARD_GAP) * 3, y, diag_w, 72, "Ending Equity", fmt_num(equity_curve["ending_equity"], 2), "Final cumulative")
-    y -= 92
+    y -= 72 + BLOCK_GAP + 2
 
     curve_points = equity_curve["curve"]
     first_point = curve_points[0] if curve_points else None
@@ -2241,7 +2258,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         value_font="Helvetica",
         value_size=8,
     )
-    y -= 80
+    y -= 60 + BLOCK_GAP + 2
 
     y = draw_highlight_note(
         PDF_MARGIN_LEFT,
@@ -2250,16 +2267,17 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         "This curve mirrors the public proof surface by showing cumulative path structure, consistent peak and trough annotations, and the deepest drawdown interval when one exists. Max drawdown remains the primary risk statistic, while peak and trough identify the full performance range.",
         min_height=50,
     )
-    y -= 14
+    y -= BLOCK_GAP - 4
 
     pdf.setFont("Helvetica", TEXT_S)
     pdf.setFillColor(COLOR_MUTED)
     pdf.drawString(PDF_MARGIN_LEFT, y, "X-axis: Trade sequence (chronological)")
     y -= 12
     pdf.drawString(PDF_MARGIN_LEFT, y, "Y-axis: Cumulative PnL")
-    y -= 18
+    y -= BLOCK_GAP
 
-    draw_equity_curve_preview_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, 232, curve_points)
+    ensure_space(250)
+    draw_equity_curve_preview_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, 244, curve_points)
 
     page_number += 1
     y = pdf_new_page(pdf, page_number, document_title, claim_hash)
@@ -2268,9 +2286,11 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     # =========================
     # PAGE 3 — VERIFICATION CONTEXT
     # =========================
+    ensure_space(620)
 
     y = pdf_section_title(pdf, "Verification Context", PDF_MARGIN_LEFT, y)
-    y -= 6
+    draw_hr(y - 6)
+    y -= BLOCK_GAP
 
     panel_gap = 16
     panel_w = (PDF_CONTENT_WIDTH - panel_gap) / 2
@@ -2319,7 +2339,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         label="Versioning Context",
         min_height=44,
     )
-    y -= 14
+    y -= BLOCK_GAP - 4
 
     y = draw_highlight_note(
         PDF_MARGIN_LEFT,
@@ -2329,7 +2349,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         label="Methodology Notes",
         min_height=56,
     )
-    y -= 14
+    y -= BLOCK_GAP - 4
 
     y = draw_highlight_note(
         PDF_MARGIN_LEFT,
@@ -2339,7 +2359,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         label="Interpretation & Limitations",
         min_height=56,
     )
-    y -= 14
+    y -= BLOCK_GAP - 4
 
     excluded_breakdown = scope["excluded_breakdown"]
     exclusion_summary_text = (
@@ -2364,10 +2384,11 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     # =========================
     # PAGE 4 — EVIDENCE TABLES
     # =========================
+    ensure_space(500)
 
     y = draw_table_title("Leaderboard Snapshot", y)
     leaderboard_x = PDF_MARGIN_LEFT
-    leaderboard_total_w = PDF_CONTENT_WIDTH
+    leaderboard_total_w = TABLE_TOTAL_W
 
     leaderboard_columns = [
         {"label": "Rank", "key": "rank", "x": 0, "w": 64, "align": "left"},
@@ -2397,14 +2418,17 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
                 row_h=24,
                 alt=(idx % 2 == 1),
             )
-        y = row_top - 18
+        y = row_top - BLOCK_GAP
     else:
         pdf.setFillColor(COLOR_MUTED)
         pdf.setFont("Helvetica", TEXT_M)
         pdf.drawString(PDF_MARGIN_LEFT + 4, y - 18, "No leaderboard data available.")
         y -= 38
 
+    ensure_space(320)
     y = draw_table_title("Trade Evidence Snapshot", y)
+
+    evidence_total_w = TABLE_TOTAL_W
     evidence_columns = [
         {"label": "#", "key": "index", "x": 0, "w": 36, "align": "left"},
         {"label": "Trade ID", "key": "trade_id", "x": 36, "w": 74, "align": "left"},
@@ -2415,7 +2439,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         {"label": "PnL", "key": "net_pnl", "x": 482, "w": 52, "align": "right"},
         {"label": "Cumulative", "key": "cumulative_pnl", "x": 534, "w": 54, "align": "right"},
     ]
-    y = draw_table_header_row(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, evidence_columns, row_h=24)
+    y = draw_table_header_row(PDF_MARGIN_LEFT, y, evidence_total_w, evidence_columns, row_h=24)
 
     if evidence_rows:
         row_top = y
@@ -2433,7 +2457,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             row_top = draw_table_row(
                 PDF_MARGIN_LEFT,
                 row_top,
-                PDF_CONTENT_WIDTH,
+                evidence_total_w,
                 evidence_columns,
                 row_values,
                 row_h=22,
@@ -2441,7 +2465,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             )
 
         total_pnl = sum((float(r.get("net_pnl", 0) or 0) for r in evidence_rows))
-        y = row_top - 22
+        y = row_top - BLOCK_GAP
         pdf.setFillColor(COLOR_INK)
         pdf.setFont("Helvetica-Bold", TEXT_M)
         pdf.drawString(PDF_MARGIN_LEFT, y, f"Total Trades: {len(evidence_rows)}")
@@ -2458,19 +2482,21 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     # =========================
     # PAGE 5 — FINGERPRINTS & VALIDATION
     # =========================
+    ensure_space(520)
 
     y = pdf_section_title(pdf, "Canonical Fingerprints & Verification Paths", PDF_MARGIN_LEFT, y)
-    y -= 10
+    draw_hr(y - 6)
+    y -= BLOCK_GAP
 
     pdf.setFillColor(COLOR_MUTED)
     pdf.setFont("Helvetica", TEXT_M)
     pdf.drawString(PDF_MARGIN_LEFT, y, "Canonical Verification Anchors")
-    y -= 12
+    y -= MINI_GAP + 2
 
-    y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Claim Hash", claim_hash, emphasize=False) - 12
-    y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Trade Set Hash", trade_set_hash, emphasize=False) - 12
-    y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Public View Path", public_view_path, emphasize=False) - 12
-    y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Verify Link Path", verify_link_path, emphasize=True) - 18
+    y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Claim Hash", claim_hash, emphasize=False) - MINI_GAP
+    y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Trade Set Hash", trade_set_hash, emphasize=False) - MINI_GAP
+    y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Public View Path", public_view_path, emphasize=False) - MINI_GAP
+    y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Verify Link Path", verify_link_path, emphasize=True) - BLOCK_GAP
 
     note_w = PDF_CONTENT_WIDTH - 120
     y = draw_highlight_note(
@@ -2498,7 +2524,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     except Exception:
         pass
 
-    y -= 22
+    y -= BLOCK_GAP + 4
     draw_soft_panel(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, 56, radius=14, fill=COLOR_FILL_ALT, stroke=COLOR_LINE)
     pdf.setFillColor(COLOR_TEXT)
     pdf.setFont("Helvetica", TEXT_M)
