@@ -2562,14 +2562,14 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     equity_point_columns = [
         {"label": "Seq", "key": "sequence", "x": 0, "w": 28, "align": "left"},
-        {"label": "Trade", "key": "trade_id", "x": 28, "w": 42, "align": "left"},
-        {"label": "Opened", "key": "opened_at", "x": 70, "w": 126, "align": "left"},
-        {"label": "Symbol", "key": "symbol", "x": 196, "w": 54, "align": "left"},
-        {"label": "Member", "key": "member_id", "x": 250, "w": 48, "align": "left"},
-        {"label": "Trade PnL", "key": "trade_pnl", "x": 298, "w": 76, "align": "right", "font_size": 8},
-        {"label": "Cumulative", "key": "cumulative_pnl", "x": 374, "w": 80, "align": "right", "font_size": 8},
-        {"label": "Step", "key": "step_change", "x": 454, "w": 44, "align": "right", "font_size": 8},
-        {"label": "Gap (days)", "key": "gap_from_prior", "x": 498, "w": 42, "align": "center", "font_size": 8},
+        {"label": "Trade", "key": "trade_id", "x": 28, "w": 40, "align": "left"},
+        {"label": "Opened", "key": "opened_at", "x": 68, "w": 118, "align": "left"},
+        {"label": "Symbol", "key": "symbol", "x": 186, "w": 50, "align": "left"},
+        {"label": "Member", "key": "member_id", "x": 236, "w": 44, "align": "left"},
+        {"label": "Trade PnL", "key": "trade_pnl", "x": 280, "w": 78, "align": "right", "font_size": 8},
+        {"label": "Cumulative", "key": "cumulative_pnl", "x": 358, "w": 80, "align": "right", "font_size": 8},
+        {"label": "Step", "key": "step_change", "x": 438, "w": 42, "align": "right", "font_size": 8},
+        {"label": "Gap", "key": "gap_from_prior", "x": 480, "w": 60, "align": "right", "font_size": 8},
     ]
     equity_point_rows = build_equity_point_rows(curve_points)
 
