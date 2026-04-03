@@ -1995,7 +1995,6 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     # =========================
     # PAGE 1 — EXECUTIVE SUMMARY
     # =========================
-    ensure_space(520)
 
     pdf.setFillColor(COLOR_INK)
     pdf.setFont("Helvetica-Bold", TITLE_XL)
@@ -2156,7 +2155,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     y -= banner_height + SECTION_GAP
 
-    ensure_space(260)
+
 
     pdf.setFillColor(COLOR_INK)
     pdf.setFont("Helvetica-Bold", TITLE_L)
@@ -2198,7 +2197,6 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     # =========================
     # PAGE 2 — PERFORMANCE DIAGNOSTICS
     # =========================
-    ensure_space(520)
 
     y = pdf_section_title(pdf, "Performance Diagnostics", PDF_MARGIN_LEFT, y)
     draw_hr(y - 6)
@@ -2276,7 +2274,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.drawString(PDF_MARGIN_LEFT, y, "Y-axis: Cumulative PnL")
     y -= BLOCK_GAP
 
-    ensure_space(250)
+    
     draw_equity_curve_preview_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, 244, curve_points)
 
     page_number += 1
@@ -2286,7 +2284,6 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     # =========================
     # PAGE 3 — VERIFICATION CONTEXT
     # =========================
-    ensure_space(620)
 
     y = pdf_section_title(pdf, "Verification Context", PDF_MARGIN_LEFT, y)
     draw_hr(y - 6)
@@ -2384,7 +2381,6 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     # =========================
     # PAGE 4 — EVIDENCE TABLES
     # =========================
-    ensure_space(500)
 
     y = draw_table_title("Leaderboard Snapshot", y)
     leaderboard_x = PDF_MARGIN_LEFT
@@ -2425,7 +2421,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.drawString(PDF_MARGIN_LEFT + 4, y - 18, "No leaderboard data available.")
         y -= 38
 
-    ensure_space(320)
+
     y = draw_table_title("Trade Evidence Snapshot", y)
 
     evidence_total_w = TABLE_TOTAL_W
@@ -2482,7 +2478,6 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     # =========================
     # PAGE 5 — FINGERPRINTS & VALIDATION
     # =========================
-    ensure_space(520)
 
     y = pdf_section_title(pdf, "Canonical Fingerprints & Verification Paths", PDF_MARGIN_LEFT, y)
     draw_hr(y - 6)
