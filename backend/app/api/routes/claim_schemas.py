@@ -773,7 +773,8 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
     trade_set_hash = schema.locked_trade_set_hash
     if not trade_set_hash:
         trade_set_hash = compute_trade_set_hash(filtered_trades)
-        claim_hash = compute_claim_hash(schema)
+
+    claim_hash = compute_claim_hash(schema)
 
     return {
         "claim_schema_id": schema.id,
