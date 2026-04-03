@@ -1653,7 +1653,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     BLOCK_GAP = 18
     CARD_GAP = 12
     MINI_GAP = 10
-    PAGE_BOTTOM_SAFE = 72
+    PAGE_BOTTOM_SAFE = 76
 
     COLOR_INK = colors.HexColor("#0F172A")
     COLOR_TEXT = colors.HexColor("#334155")
@@ -1696,12 +1696,24 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     y = pdf_start_page(pdf, page_number, document_title, claim_hash)
     y -= PAGE_TOP_GAP
 
-    def ensure_space(required_height: float):
+    def new_page():
         nonlocal y, page_number
+        page_number += 1
+        y = pdf_new_page(pdf, page_number, document_title, claim_hash)
+        y -= PAGE_TOP_GAP
+
+    def ensure_space(required_height: float):
+        nonlocal y
         if y - required_height < PAGE_BOTTOM_SAFE:
-            page_number += 1
-            y = pdf_new_page(pdf, page_number, document_title, claim_hash)
-            y -= PAGE_TOP_GAP
+            new_page()
+
+    def ensure_space_with_title(title: str, required_after_title: float):
+        nonlocal y
+        approx_title_h = 34
+        if y - (approx_title_h + required_after_title) < PAGE_BOTTOM_SAFE:
+            new_page()
+        y_local = draw_table_title(title, y)
+        return y_local
 
     def draw_hr(y_pos, stroke=COLOR_LINE_SOFT):
         pdf.setStrokeColor(stroke)
@@ -1721,17 +1733,30 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.setFont(font, size)
         pdf.drawString(x, y_pos, text)
 
-    def draw_kv_grid_cell(x, y_pos, label, value, max_width=120, value_font="Helvetica-Bold", value_size=10):
+    def wrapped_lines(text, max_width, font_name="Helvetica", font_size=TEXT_M):
+        return split_wrapped_lines(str(text or "—"), max_width, font_name, font_size) or ["—"]
+
+    def estimate_text_block_height(text, width, font_name="Helvetica", font_size=TEXT_M, line_gap=12, max_lines=None):
+        lines = wrapped_lines(text, width, font_name, font_size)
+        if max_lines is not None:
+            lines = lines[:max_lines]
+        return len(lines) * line_gap, lines
+
+    def draw_kv_grid_cell(x, y_pos, label, value, max_width=120, value_font="Helvetica-Bold", value_size=10, max_lines=4):
         pdf.setFillColor(COLOR_MUTED)
         pdf.setFont("Helvetica", TEXT_S)
         pdf.drawString(x, y_pos, label)
-        lines = split_wrapped_lines(str(value or "—"), max_width, value_font, value_size) or ["—"]
+        lines = wrapped_lines(value, max_width, value_font, value_size)[:max_lines]
         pdf.setFillColor(COLOR_INK)
         pdf.setFont(value_font, value_size)
         v_y = y_pos - 14
-        for line in lines[:3]:
+        for line in lines:
             pdf.drawString(x, v_y, line)
             v_y -= 11
+
+    def estimate_kv_grid_cell_height(value, max_width=120, value_font="Helvetica-Bold", value_size=10, max_lines=4):
+        lines = wrapped_lines(value, max_width, value_font, value_size)[:max_lines]
+        return 14 + (len(lines) * 11)
 
     def draw_metric_card_v2(x, top_y, w, h, label, value, sublabel, value_color=COLOR_INK):
         draw_soft_panel(x, top_y, w, h, radius=14, fill=COLOR_FILL_SOFT, stroke=COLOR_BLUE_LINE)
@@ -1739,11 +1764,11 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.setFont("Helvetica", TEXT_M)
         pdf.drawString(x + 14, top_y - 20, label)
 
-        value_lines = split_wrapped_lines(str(value), w - 28, "Helvetica-Bold", 17) or ["—"]
+        value_lines = wrapped_lines(value, w - 28, "Helvetica-Bold", 17)[:2]
         pdf.setFillColor(value_color)
         pdf.setFont("Helvetica-Bold", 18)
         value_y = top_y - 44
-        for line in value_lines[:2]:
+        for line in value_lines:
             pdf.drawString(x + 14, value_y, line)
             value_y -= 16
 
@@ -1758,14 +1783,14 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.drawString(x + 12, top_y - 18, label)
         pdf.setFillColor(COLOR_INK)
         pdf.setFont(value_font, value_size)
-        lines = split_wrapped_lines(str(value or "—"), w - 24, value_font, value_size) or ["—"]
+        lines = wrapped_lines(value, w - 24, value_font, value_size)[:3]
         v_y = top_y - 36
-        for line in lines[:3]:
+        for line in lines:
             pdf.drawString(x + 12, v_y, line)
             v_y -= 10
 
     def draw_highlight_note(x, top_y, w, text, label=None, min_height=44):
-        text_lines = split_wrapped_lines(text or "—", w - 28, "Helvetica", TEXT_M) or ["—"]
+        text_lines = wrapped_lines(text, w - 28, "Helvetica", TEXT_M)
         h = max(min_height, 18 + 14 + (len(text_lines) * 12) + 12)
         if label:
             pdf.setFillColor(COLOR_MUTED)
@@ -1781,6 +1806,13 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             yy -= 12
         return top_y - h
 
+    def estimate_highlight_note_height(text, w, label=None, min_height=44):
+        text_lines = wrapped_lines(text, w - 28, "Helvetica", TEXT_M)
+        h = max(min_height, 18 + 14 + (len(text_lines) * 12) + 12)
+        if label:
+            h += 14
+        return h
+
     def draw_hash_block_v2(x, top_y, w, label, value, emphasize=False):
         label_color = COLOR_BLUE_ACCENT if emphasize else COLOR_MUTED
         stroke = colors.HexColor("#93C5FD") if emphasize else COLOR_LINE
@@ -1790,7 +1822,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.setFont("Helvetica", TEXT_M)
         pdf.drawString(x, top_y - 2, label)
 
-        lines = split_wrapped_lines(str(value or "—"), w - 24, "Courier", 8.5) or ["—"]
+        lines = wrapped_lines(value, w - 24, "Courier", 8.5)
         h = max(44, 20 + (len(lines[:3]) * 10) + 10)
 
         pdf.setLineWidth(1.5 if emphasize else 1)
@@ -1802,6 +1834,13 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             pdf.drawString(x + 12, yy, line)
             yy -= 10
         return top_y - 16 - h
+
+    def estimate_hash_block_height(value, w, label=None):
+        lines = wrapped_lines(value, w - 24, "Courier", 8.5)
+        h = max(44, 20 + (len(lines[:3]) * 10) + 10)
+        if label:
+            h += 16
+        return h
 
     def draw_table_title(title, y_pos):
         pdf.setFillColor(COLOR_INK)
@@ -1860,11 +1899,20 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             yy -= 20
 
     def estimate_verification_banner_height(signature_text, trust_state_text, sub_text):
-        title_lines = split_wrapped_lines(signature_text, PDF_CONTENT_WIDTH - 280, "Helvetica-Bold", 24) or [signature_text]
-        trust_lines = split_wrapped_lines(trust_state_text, PDF_CONTENT_WIDTH - 280, "Helvetica", TEXT_L) or [trust_state_text]
-        desc_lines = split_wrapped_lines(sub_text, PDF_CONTENT_WIDTH - 280, "Helvetica", TEXT_M) or [sub_text]
-        content_height = 22 + (len(title_lines[:2]) * 26) + 6 + (len(trust_lines[:2]) * 14) + 8 + (len(desc_lines) * 13) + 18
-        return max(230, content_height + 72)
+        chip_w = 190
+        content_w = PDF_CONTENT_WIDTH - chip_w - 42
+        title_lines = wrapped_lines(signature_text, content_w, "Helvetica-Bold", 24)[:2]
+        trust_lines = wrapped_lines(trust_state_text, content_w, "Helvetica", TEXT_L)[:2]
+        desc_lines = wrapped_lines(sub_text, content_w, "Helvetica", TEXT_M)
+        content_height = (
+            24
+            + (len(title_lines) * 26)
+            + 6
+            + (len(trust_lines) * 14)
+            + 8
+            + (len(desc_lines) * 13)
+        )
+        return max(220, content_height + 80)
 
     def draw_equity_curve_preview_v2(x, top_y, w, h, curve_points):
         draw_soft_panel(x, top_y, w, h, radius=16, fill=colors.white, stroke=COLOR_BLUE_LINE)
@@ -1879,9 +1927,9 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             return
 
         chart_x = x + 26
-        chart_y = top_y - h + 40
+        chart_y = top_y - h + 48
         chart_w = w - 50
-        chart_h = h - 90
+        chart_h = h - 98
 
         values = [float(p.get("cumulative_pnl", 0) or 0) for p in curve_points]
         xs = list(range(1, len(values) + 1))
@@ -1992,6 +2040,120 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         net_change = values[-1] - values[0]
         pdf.drawRightString(chart_x + chart_w, chart_y + chart_h + 10, f"Net change {net_change:+.4f}")
 
+    def draw_section_title_block(title):
+        nonlocal y
+        ensure_space(46)
+        y = pdf_section_title(pdf, title, PDF_MARGIN_LEFT, y)
+        draw_hr(y - 6)
+        y -= BLOCK_GAP
+
+    def draw_dual_detail_panels(top_y, left_title, left_items, right_title, right_items):
+        panel_gap = 16
+        panel_w = (PDF_CONTENT_WIDTH - panel_gap) / 2
+        left_x = PDF_MARGIN_LEFT
+        right_x = PDF_MARGIN_LEFT + panel_w + panel_gap
+
+        left_label_x = left_x + 18
+        left_value_x = left_x + 184
+        right_label_x = right_x + 18
+        right_value_x = right_x + 184
+
+        row_gap = 18
+        start_offset = 58
+
+        def calc_panel_height(items, left_col_width=130, right_col_width=130):
+            max_bottom = 0
+            for idx, pair in enumerate(items):
+                row_top_offset = start_offset + (idx * 68)
+                left_h = estimate_kv_grid_cell_height(pair[0][1], max_width=left_col_width)
+                right_h = estimate_kv_grid_cell_height(pair[1][1], max_width=right_col_width)
+                row_h = max(left_h, right_h)
+                bottom = row_top_offset + row_h
+                max_bottom = max(max_bottom, bottom)
+            return max(210, max_bottom + 26)
+
+        left_panel_h = calc_panel_height(left_items, 130, 130)
+        right_panel_h = calc_panel_height(right_items, 140, 140)
+        panel_h = max(left_panel_h, right_panel_h)
+
+        ensure_space(panel_h + BLOCK_GAP)
+
+        draw_soft_panel(left_x, top_y, panel_w, panel_h, radius=16, fill=colors.white, stroke=COLOR_LINE)
+        pdf.setFillColor(COLOR_INK)
+        pdf.setFont("Helvetica-Bold", TITLE_M)
+        pdf.drawString(left_x + 18, top_y - 24, left_title)
+
+        for idx, pair in enumerate(left_items):
+            row_y = top_y - start_offset - (idx * 68)
+            draw_kv_grid_cell(left_label_x, row_y, pair[0][0], pair[0][1], max_width=130)
+            draw_kv_grid_cell(left_value_x, row_y, pair[1][0], pair[1][1], max_width=130)
+
+        draw_soft_panel(right_x, top_y, panel_w, panel_h, radius=16, fill=colors.white, stroke=COLOR_LINE)
+        pdf.setFillColor(COLOR_INK)
+        pdf.setFont("Helvetica-Bold", TITLE_M)
+        pdf.drawString(right_x + 18, top_y - 24, right_title)
+
+        for idx, pair in enumerate(right_items):
+            row_y = top_y - start_offset - (idx * 68)
+            draw_kv_grid_cell(right_label_x, row_y, pair[0][0], pair[0][1], max_width=140)
+            draw_kv_grid_cell(right_value_x, row_y, pair[1][0], pair[1][1], max_width=140)
+
+        return top_y - panel_h - BLOCK_GAP
+
+    def draw_paginated_table_section(title, columns, rows, empty_text, row_h=22, header_row_h=24, totals_renderer=None):
+        nonlocal y
+
+        section_started = False
+        row_top = y
+        row_count_on_page = 0
+
+        def start_table_page(table_title, continued=False):
+            nonlocal y, section_started, row_top, row_count_on_page
+            if section_started:
+                new_page()
+            ensure_space(90)
+            rendered_title = table_title if not continued else f"{table_title} (continued)"
+            y_local = draw_table_title(rendered_title, y)
+            y = y_local
+            row_top = draw_table_header_row(PDF_MARGIN_LEFT, y, TABLE_TOTAL_W, columns, row_h=header_row_h)
+            row_count_on_page = 0
+            section_started = True
+
+        if not rows:
+            start_table_page(title)
+            pdf.setFillColor(COLOR_MUTED)
+            pdf.setFont("Helvetica", TEXT_M)
+            pdf.drawString(PDF_MARGIN_LEFT + 4, row_top - 18, empty_text)
+            y = row_top - 38
+            return
+
+        start_table_page(title)
+
+        current_top = row_top
+        for idx, row_values in enumerate(rows):
+            if current_top - row_h < PAGE_BOTTOM_SAFE + 22:
+                start_table_page(title, continued=True)
+                current_top = row_top
+
+            current_top = draw_table_row(
+                PDF_MARGIN_LEFT,
+                current_top,
+                TABLE_TOTAL_W,
+                columns,
+                row_values,
+                row_h=row_h,
+                alt=(idx % 2 == 1),
+            )
+            row_count_on_page += 1
+
+        y = current_top - BLOCK_GAP
+
+        if totals_renderer:
+            totals_h = 18
+            ensure_space(totals_h + 10)
+            totals_renderer(y)
+            y -= 12
+
     # =========================
     # PAGE 1 — EXECUTIVE SUMMARY
     # =========================
@@ -2080,7 +2242,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             chip_rows = [("status", schema.status), ("integrity", integrity_status), ("trust", "contextual")]
 
     banner_height = estimate_verification_banner_height(signature_text, trust_state_text, sub_text)
-    ensure_space(banner_height + 170)
+    ensure_space(banner_height + 210)
 
     draw_soft_panel(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, banner_height, radius=18, fill=banner_fill, stroke=banner_stroke)
 
@@ -2100,8 +2262,8 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     pdf.setFont("Helvetica-Bold", 24)
     pdf.setFillColor(banner_text)
-    title_lines = split_wrapped_lines(signature_text, content_w, "Helvetica-Bold", 24) or [signature_text]
-    for line in title_lines[:2]:
+    title_lines = wrapped_lines(signature_text, content_w, "Helvetica-Bold", 24)[:2]
+    for line in title_lines:
         pdf.drawString(content_x, content_y, line)
         content_y -= 26
 
@@ -2155,7 +2317,23 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     y -= banner_height + SECTION_GAP
 
+    claim_name_lines = wrapped_lines(schema.name or "Untitled Claim", PDF_CONTENT_WIDTH, "Helvetica-Bold", 22)[:2]
+    latest_event = audit_events[-1] if audit_events else None
+    latest_event_text = f"{latest_event.event_type} @ {fmt_dt(latest_event.created_at)}" if latest_event else "No audit events"
+    latest_event_h = estimate_highlight_note_height(latest_event_text, PDF_CONTENT_WIDTH, label="Latest Audit Event", min_height=44)
 
+    identity_needed_h = (
+        34
+        + (len(claim_name_lines) * 24)
+        + MINI_GAP
+        + 74
+        + BLOCK_GAP
+        + 72
+        + BLOCK_GAP
+        + latest_event_h
+        + 8
+    )
+    ensure_space(identity_needed_h)
 
     pdf.setFillColor(COLOR_INK)
     pdf.setFont("Helvetica-Bold", TITLE_L)
@@ -2165,8 +2343,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     pdf.setFillColor(COLOR_INK)
     pdf.setFont("Helvetica-Bold", 22)
-    title_lines = split_wrapped_lines(schema.name or "Untitled Claim", PDF_CONTENT_WIDTH, "Helvetica-Bold", 22) or ["Untitled Claim"]
-    for line in title_lines[:2]:
+    for line in claim_name_lines:
         pdf.drawString(PDF_MARGIN_LEFT, y, line)
         y -= 24
     y -= MINI_GAP
@@ -2186,21 +2363,17 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     draw_metric_card_v2(PDF_MARGIN_LEFT + (card_w + CARD_GAP) * 3, y, card_w, 72, "Audit Events", str(len(audit_events)), "Lifecycle trail count")
     y -= 72 + BLOCK_GAP
 
-    latest_event = audit_events[-1] if audit_events else None
-    latest_event_text = f"{latest_event.event_type} @ {fmt_dt(latest_event.created_at)}" if latest_event else "No audit events"
     y = draw_highlight_note(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, latest_event_text, label="Latest Audit Event", min_height=44)
-
-    page_number += 1
-    y = pdf_new_page(pdf, page_number, document_title, claim_hash)
-    y -= PAGE_TOP_GAP
+    y -= SECTION_GAP
 
     # =========================
     # PAGE 2 — PERFORMANCE DIAGNOSTICS
     # =========================
 
-    y = pdf_section_title(pdf, "Performance Diagnostics", PDF_MARGIN_LEFT, y)
-    draw_hr(y - 6)
-    y -= MINI_GAP
+    draw_section_title_block("Performance Diagnostics")
+
+    diag_needed_h = 72 + BLOCK_GAP + 60 + BLOCK_GAP + 50 + BLOCK_GAP + 24 + BLOCK_GAP + 244
+    ensure_space(diag_needed_h)
 
     diag_w = (PDF_CONTENT_WIDTH - (CARD_GAP * 3)) / 4
     draw_metric_card_v2(PDF_MARGIN_LEFT, y, diag_w, 72, "Best Trade", fmt_num(metrics["best_trade"], 2), "Highest PnL")
@@ -2274,89 +2447,47 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.drawString(PDF_MARGIN_LEFT, y, "Y-axis: Cumulative PnL")
     y -= BLOCK_GAP
 
-    
+    ensure_space(244 + 8)
     draw_equity_curve_preview_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, 244, curve_points)
-
-    page_number += 1
-    y = pdf_new_page(pdf, page_number, document_title, claim_hash)
-    y -= PAGE_TOP_GAP
+    y -= 244 + SECTION_GAP
 
     # =========================
     # PAGE 3 — VERIFICATION CONTEXT
     # =========================
 
-    y = pdf_section_title(pdf, "Verification Context", PDF_MARGIN_LEFT, y)
-    draw_hr(y - 6)
-    y -= BLOCK_GAP
+    draw_section_title_block("Verification Context")
 
-    panel_gap = 16
-    panel_w = (PDF_CONTENT_WIDTH - panel_gap) / 2
-    panel_h = 250
+    left_items = [
+        (("Period Start", schema.period_start or "—"), ("Period End", schema.period_end or "—")),
+        (("Included Members", included_members), ("Included Symbols", included_symbols)),
+        (("Excluded Trade IDs", excluded_trade_ids), ("Visibility", schema.visibility or "—")),
+    ]
 
-    draw_soft_panel(PDF_MARGIN_LEFT, y, panel_w, panel_h, radius=16, fill=colors.white, stroke=COLOR_LINE)
-    pdf.setFillColor(COLOR_INK)
-    pdf.setFont("Helvetica-Bold", TITLE_M)
-    pdf.drawString(PDF_MARGIN_LEFT + 18, y - 24, "Verification Scope")
+    right_items = [
+        (("Status", schema.status or "—"), ("Integrity", integrity_status)),
+        (("Verified At", fmt_dt(schema.verified_at)), ("Published At", fmt_dt(schema.published_at))),
+        (("Locked At", fmt_dt(schema.locked_at)), ("Version Number", str(schema.version_number or "—"))),
+        (("Root Claim ID", str(schema.root_claim_id or "—")), ("Parent Claim ID", str(schema.parent_claim_id or "—"))),
+    ]
 
-    draw_kv_grid_cell(PDF_MARGIN_LEFT + 18, y - 58, "Period Start", schema.period_start or "—", max_width=130)
-    draw_kv_grid_cell(PDF_MARGIN_LEFT + 184, y - 58, "Period End", schema.period_end or "—", max_width=130)
-    draw_kv_grid_cell(PDF_MARGIN_LEFT + 18, y - 126, "Included Members", included_members, max_width=130)
-    draw_kv_grid_cell(PDF_MARGIN_LEFT + 184, y - 126, "Included Symbols", included_symbols, max_width=130)
-    draw_kv_grid_cell(PDF_MARGIN_LEFT + 18, y - 194, "Excluded Trade IDs", excluded_trade_ids, max_width=130)
-    draw_kv_grid_cell(PDF_MARGIN_LEFT + 184, y - 194, "Visibility", schema.visibility or "—", max_width=130)
-
-    panel2_x = PDF_MARGIN_LEFT + panel_w + panel_gap
-    draw_soft_panel(panel2_x, y, panel_w, panel_h, radius=16, fill=colors.white, stroke=COLOR_LINE)
-    pdf.setFillColor(COLOR_INK)
-    pdf.setFont("Helvetica-Bold", TITLE_M)
-    pdf.drawString(panel2_x + 18, y - 24, "Lifecycle & Lineage")
-
-    left_col_x = panel2_x + 18
-    right_col_x = panel2_x + 176
-
-    draw_kv_grid_cell(left_col_x, y - 58, "Status", schema.status or "—", max_width=130)
-    draw_kv_grid_cell(right_col_x, y - 58, "Integrity", integrity_status, max_width=130)
-
-    draw_kv_grid_cell(left_col_x, y - 126, "Verified At", fmt_dt(schema.verified_at), max_width=140)
-    draw_kv_grid_cell(right_col_x, y - 126, "Published At", fmt_dt(schema.published_at), max_width=140)
-
-    draw_kv_grid_cell(left_col_x, y - 194, "Locked At", fmt_dt(schema.locked_at), max_width=140)
-    draw_kv_grid_cell(right_col_x, y - 194, "Version Number", str(schema.version_number or "—"), max_width=140)
-
-    draw_kv_grid_cell(left_col_x, y - 230, "Root Claim ID", str(schema.root_claim_id or "—"), max_width=140)
-    draw_kv_grid_cell(right_col_x, y - 230, "Parent Claim ID", str(schema.parent_claim_id or "—"), max_width=140)
-
-    y -= panel_h + BLOCK_GAP
-
-    y = draw_highlight_note(
-        PDF_MARGIN_LEFT,
+    y = draw_dual_detail_panels(
         y,
-        PDF_CONTENT_WIDTH,
-        "This claim belongs to a versioned lineage. Each version represents a scoped evaluation. Root and parent identifiers ensure full traceability of claim evolution.",
-        label="Versioning Context",
-        min_height=44,
+        "Verification Scope",
+        left_items,
+        "Lifecycle & Lineage",
+        right_items,
     )
-    y -= BLOCK_GAP - 4
 
-    y = draw_highlight_note(
-        PDF_MARGIN_LEFT,
-        y,
-        PDF_CONTENT_WIDTH,
-        schema.methodology_notes or "No methodology notes supplied.",
-        label="Methodology Notes",
-        min_height=56,
+    versioning_text = (
+        "This claim belongs to a versioned lineage. Each version represents a scoped evaluation. "
+        "Root and parent identifiers ensure full traceability of claim evolution."
     )
-    y -= BLOCK_GAP - 4
-
-    y = draw_highlight_note(
-        PDF_MARGIN_LEFT,
-        y,
-        PDF_CONTENT_WIDTH,
-        "This report verifies the scoped trade set represented by this claim schema. It does not independently attest to broker connectivity, external account ownership, or performance outside the included evidence boundary. Public trust should be interpreted together with lifecycle status, claim hash, and locked trade-set integrity where applicable.",
-        label="Interpretation & Limitations",
-        min_height=56,
+    methodology_text = schema.methodology_notes or "No methodology notes supplied."
+    limitations_text = (
+        "This report verifies the scoped trade set represented by this claim schema. It does not independently attest "
+        "to broker connectivity, external account ownership, or performance outside the included evidence boundary. "
+        "Public trust should be interpreted together with lifecycle status, claim hash, and locked trade-set integrity where applicable."
     )
-    y -= BLOCK_GAP - 4
 
     excluded_breakdown = scope["excluded_breakdown"]
     exclusion_summary_text = (
@@ -2365,128 +2496,133 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         f"Symbol filter: {excluded_breakdown.get(EXCLUSION_REASON_SYMBOL_FILTER, 0)}, "
         f"Manual exclusion: {excluded_breakdown.get(EXCLUSION_REASON_MANUAL_EXCLUSION, 0)}."
     )
-    y = draw_highlight_note(
-        PDF_MARGIN_LEFT,
-        y,
-        PDF_CONTENT_WIDTH,
-        exclusion_summary_text,
-        label="Scope Exclusion Summary",
-        min_height=44,
-    )
 
-    page_number += 1
-    y = pdf_new_page(pdf, page_number, document_title, claim_hash)
-    y -= PAGE_TOP_GAP
+    notes = [
+        ("Versioning Context", versioning_text, 44),
+        ("Methodology Notes", methodology_text, 56),
+        ("Interpretation & Limitations", limitations_text, 56),
+        ("Scope Exclusion Summary", exclusion_summary_text, 44),
+    ]
+
+    for label, text, min_h in notes:
+        note_h = estimate_highlight_note_height(text, PDF_CONTENT_WIDTH, label=label, min_height=min_h)
+        ensure_space(note_h + 8)
+        y = draw_highlight_note(
+            PDF_MARGIN_LEFT,
+            y,
+            PDF_CONTENT_WIDTH,
+            text,
+            label=label,
+            min_height=min_h,
+        )
+        y -= BLOCK_GAP - 4
 
     # =========================
-    # PAGE 4 — EVIDENCE TABLES
+    # PAGE 4+ — EVIDENCE TABLES
     # =========================
-
-    y = draw_table_title("Leaderboard Snapshot", y)
-    leaderboard_x = PDF_MARGIN_LEFT
-    leaderboard_total_w = TABLE_TOTAL_W
 
     leaderboard_columns = [
-        {"label": "Rank", "key": "rank", "x": 0, "w": 64, "align": "left"},
-        {"label": "Member", "key": "member", "x": 64, "w": 190, "align": "left"},
-        {"label": "Net PnL", "key": "net_pnl", "x": 254, "w": 110, "align": "right"},
-        {"label": "Win Rate", "key": "win_rate", "x": 364, "w": 110, "align": "right"},
-        {"label": "Profit Factor", "key": "profit_factor", "x": 474, "w": 114, "align": "right"},
+        {"label": "Rank", "key": "rank", "x": 0, "w": 56, "align": "left"},
+        {"label": "Member", "key": "member", "x": 56, "w": 150, "align": "left"},
+        {"label": "Net PnL", "key": "net_pnl", "x": 206, "w": 98, "align": "right"},
+        {"label": "Win Rate", "key": "win_rate", "x": 304, "w": 98, "align": "right"},
+        {"label": "Profit Factor", "key": "profit_factor", "x": 402, "w": 114, "align": "right"},
     ]
-    y = draw_table_header_row(leaderboard_x, y, leaderboard_total_w, leaderboard_columns, row_h=24)
 
-    if leaderboard:
-        row_top = y
-        for idx, row in enumerate(leaderboard[:8]):
-            row_values = {
+    leaderboard_rows = []
+    for row in leaderboard[:8]:
+        leaderboard_rows.append(
+            {
                 "rank": row["rank"],
-                "member": shorten_text(str(row["member"]), 24),
+                "member": shorten_text(str(row["member"]), 22),
                 "net_pnl": fmt_num(row["net_pnl"], 2),
                 "win_rate": fmt_pct_ratio(float(row["win_rate"]), 2),
                 "profit_factor": fmt_num(row["profit_factor"], 4),
             }
-            row_top = draw_table_row(
-                leaderboard_x,
-                row_top,
-                leaderboard_total_w,
-                leaderboard_columns,
-                row_values,
-                row_h=24,
-                alt=(idx % 2 == 1),
-            )
-        y = row_top - BLOCK_GAP
-    else:
-        pdf.setFillColor(COLOR_MUTED)
-        pdf.setFont("Helvetica", TEXT_M)
-        pdf.drawString(PDF_MARGIN_LEFT + 4, y - 18, "No leaderboard data available.")
-        y -= 38
+        )
 
+    draw_paginated_table_section(
+        "Leaderboard Snapshot",
+        leaderboard_columns,
+        leaderboard_rows,
+        "No leaderboard data available.",
+        row_h=24,
+        header_row_h=24,
+    )
 
-    y = draw_table_title("Trade Evidence Snapshot", y)
-
-    evidence_total_w = TABLE_TOTAL_W
     evidence_columns = [
-        {"label": "#", "key": "index", "x": 0, "w": 36, "align": "left"},
-        {"label": "Trade ID", "key": "trade_id", "x": 36, "w": 74, "align": "left"},
-        {"label": "Opened", "key": "opened_at", "x": 110, "w": 154, "align": "left"},
-        {"label": "Symbol", "key": "symbol", "x": 264, "w": 84, "align": "left"},
-        {"label": "Side", "key": "side", "x": 348, "w": 62, "align": "left"},
-        {"label": "Member", "key": "member_id", "x": 410, "w": 72, "align": "left"},
-        {"label": "PnL", "key": "net_pnl", "x": 482, "w": 52, "align": "right"},
-        {"label": "Cumulative", "key": "cumulative_pnl", "x": 534, "w": 54, "align": "right"},
+        {"label": "#", "key": "index", "x": 0, "w": 28, "align": "left"},
+        {"label": "Trade ID", "key": "trade_id", "x": 28, "w": 66, "align": "left"},
+        {"label": "Opened", "key": "opened_at", "x": 94, "w": 140, "align": "left"},
+        {"label": "Symbol", "key": "symbol", "x": 234, "w": 70, "align": "left"},
+        {"label": "Side", "key": "side", "x": 304, "w": 58, "align": "left"},
+        {"label": "Member", "key": "member_id", "x": 362, "w": 68, "align": "left"},
+        {"label": "PnL", "key": "net_pnl", "x": 430, "w": 40, "align": "right"},
+        {"label": "Cumulative", "key": "cumulative_pnl", "x": 470, "w": 46, "align": "right"},
     ]
-    y = draw_table_header_row(PDF_MARGIN_LEFT, y, evidence_total_w, evidence_columns, row_h=24)
 
-    if evidence_rows:
-        row_top = y
-        for idx, row in enumerate(evidence_rows[:10]):
-            row_values = {
+    evidence_table_rows = []
+    for row in evidence_rows:
+        evidence_table_rows.append(
+            {
                 "index": row["index"],
                 "trade_id": row["trade_id"],
-                "opened_at": shorten_text(fmt_dt(row["opened_at"]), 22),
+                "opened_at": shorten_text(fmt_dt(row["opened_at"]), 20),
                 "symbol": shorten_text(str(row["symbol"]), 10),
                 "side": shorten_text(str(row["side"]), 6),
                 "member_id": str(row["member_id"]),
                 "net_pnl": fmt_num(row["net_pnl"], 2),
                 "cumulative_pnl": fmt_num(row["cumulative_pnl"], 2),
             }
-            row_top = draw_table_row(
-                PDF_MARGIN_LEFT,
-                row_top,
-                evidence_total_w,
-                evidence_columns,
-                row_values,
-                row_h=22,
-                alt=(idx % 2 == 1),
-            )
+        )
 
+    def render_evidence_totals(totals_y):
         total_pnl = sum((float(r.get("net_pnl", 0) or 0) for r in evidence_rows))
-        y = row_top - BLOCK_GAP
         pdf.setFillColor(COLOR_INK)
         pdf.setFont("Helvetica-Bold", TEXT_M)
-        pdf.drawString(PDF_MARGIN_LEFT, y, f"Total Trades: {len(evidence_rows)}")
-        pdf.drawRightString(PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT, y, f"Total Net PnL: {fmt_num(total_pnl, 2)}")
-    else:
-        pdf.setFillColor(COLOR_MUTED)
-        pdf.setFont("Helvetica", TEXT_M)
-        pdf.drawString(PDF_MARGIN_LEFT + 4, y - 18, "No trade evidence rows available.")
+        pdf.drawString(PDF_MARGIN_LEFT, totals_y, f"Total Trades: {len(evidence_rows)}")
+        pdf.drawRightString(PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT, totals_y, f"Total Net PnL: {fmt_num(total_pnl, 2)}")
 
-    page_number += 1
-    y = pdf_new_page(pdf, page_number, document_title, claim_hash)
-    y -= PAGE_TOP_GAP
+    draw_paginated_table_section(
+        "Trade Evidence Snapshot",
+        evidence_columns,
+        evidence_table_rows,
+        "No trade evidence rows available.",
+        row_h=22,
+        header_row_h=24,
+        totals_renderer=render_evidence_totals,
+    )
 
     # =========================
-    # PAGE 5 — FINGERPRINTS & VALIDATION
+    # FINAL PAGE — FINGERPRINTS & VALIDATION
     # =========================
 
-    y = pdf_section_title(pdf, "Canonical Fingerprints & Verification Paths", PDF_MARGIN_LEFT, y)
-    draw_hr(y - 6)
-    y -= BLOCK_GAP
+    new_page()
+    draw_section_title_block("Canonical Fingerprints & Verification Paths")
 
     pdf.setFillColor(COLOR_MUTED)
     pdf.setFont("Helvetica", TEXT_M)
     pdf.drawString(PDF_MARGIN_LEFT, y, "Canonical Verification Anchors")
     y -= MINI_GAP + 2
+
+    block_estimate = (
+        estimate_hash_block_height(claim_hash, PDF_CONTENT_WIDTH, label="Claim Hash") + MINI_GAP +
+        estimate_hash_block_height(trade_set_hash, PDF_CONTENT_WIDTH, label="Trade Set Hash") + MINI_GAP +
+        estimate_hash_block_height(public_view_path, PDF_CONTENT_WIDTH, label="Public View Path") + MINI_GAP +
+        estimate_hash_block_height(verify_link_path, PDF_CONTENT_WIDTH, label="Verify Link Path") + BLOCK_GAP +
+        max(
+            estimate_highlight_note_height(
+                "The claim hash and trade-set hash uniquely identify this report and its dataset. Any modification will produce a different hash, ensuring tamper-evident verification.",
+                PDF_CONTENT_WIDTH - 120,
+                label="Data Integrity Statement",
+                min_height=60,
+            ),
+            100,
+        ) +
+        BLOCK_GAP +
+        56
+    )
+    ensure_space(block_estimate)
 
     y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Claim Hash", claim_hash, emphasize=False) - MINI_GAP
     y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Trade Set Hash", trade_set_hash, emphasize=False) - MINI_GAP
@@ -2494,6 +2630,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Verify Link Path", verify_link_path, emphasize=True) - BLOCK_GAP
 
     note_w = PDF_CONTENT_WIDTH - 120
+    note_top_y = y
     y = draw_highlight_note(
         PDF_MARGIN_LEFT,
         y,
@@ -2515,11 +2652,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             transform=[qr_size / qr_width, 0, 0, qr_size / qr_height, 0, 0],
         )
         d.add(qr_code)
-        renderPDF.draw(d, pdf, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT - 92, y + 8)
+        renderPDF.draw(d, pdf, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT - 92, note_top_y - 88)
     except Exception:
         pass
 
     y -= BLOCK_GAP + 4
+    ensure_space(56)
     draw_soft_panel(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, 56, radius=14, fill=COLOR_FILL_ALT, stroke=COLOR_LINE)
     pdf.setFillColor(COLOR_TEXT)
     pdf.setFont("Helvetica", TEXT_M)
@@ -2527,9 +2665,9 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         "Generated from Trading Truth Layer — a verification infrastructure for trading claims. "
         "This record can be independently validated via its verify link, public view path, claim hash, and trade-set hash."
     )
-    footer_lines = split_wrapped_lines(footer_note, PDF_CONTENT_WIDTH - 28, "Helvetica", TEXT_M) or [footer_note]
+    footer_lines = wrapped_lines(footer_note, PDF_CONTENT_WIDTH - 28, "Helvetica", TEXT_M)[:3]
     line_y = y - 18
-    for line in footer_lines[:3]:
+    for line in footer_lines:
         pdf.drawString(PDF_MARGIN_LEFT + 14, line_y, line)
         line_y -= 12
 
