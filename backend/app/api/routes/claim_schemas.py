@@ -16,6 +16,9 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.utils import simpleSplit
 from reportlab.pdfgen import canvas
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics import renderPDF
+from reportlab.graphics.barcode import qr
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
@@ -1611,7 +1614,15 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     verify_link_path = f"/verify/{claim_hash}"
     verify_link_short = f"/verify/{short_hash(claim_hash, 14, 8)}"
 
-    document_title = f"Verified Trading Claim · {schema.name}"
+    if schema.status == "draft":
+        document_title = f"Draft Trading Claim Report · {schema.name}"
+    elif schema.status == "published":
+        document_title = f"Verified Trading Claim Report · {schema.name}"
+    elif schema.status == "locked":
+        document_title = f"Locked Verified Claim Report · {schema.name}"
+    else:
+        document_title = f"Trading Claim Report · {schema.name}"
+
     filename = f"claim_report_{schema.id}_{claim_hash[:12]}.pdf"
 
     def fmt_num(value, digits=2):
@@ -1649,7 +1660,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     pdf.setFillColor(colors.HexColor("#0F172A"))
     pdf.setFont("Helvetica-Bold", 24)
-    pdf.drawString(PDF_MARGIN_LEFT, y, "Verified Trading Claim")
+    title_text = "Verified Trading Claim"
+    if schema.status == "draft":
+        title_text = "Draft Trading Claim"
+    elif schema.status == "locked":
+        title_text = "Locked Verified Trading Claim"
+    pdf.drawString(PDF_MARGIN_LEFT, y, title_text)
     y -= 18
 
     pdf.setFillColor(colors.HexColor("#64748B"))
@@ -1717,7 +1733,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             "Its canonical identity, scope, and lifecycle posture are available "
             "for external review through Trading Truth Layer."
         )
-        trust_state_text = "Trust State: Publicly reviewable record"
+        trust_state_text = "Trust State: Public verification surface"
     elif schema.status == "locked" and integrity_status != "valid":
         signature_text = "Locked • Integrity Compromised"
         sub_text = (
@@ -1731,7 +1747,14 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             "This report summarizes current lifecycle state, scoped claim evidence, "
             "and canonical record identity for review."
         )
-        trust_state_text = f"Trust State: {schema.status.title()} lifecycle record"
+        if schema.status == "draft":
+            trust_state_text = "Trust State: Draft (not yet published or locked)"
+        elif schema.status == "published":
+            trust_state_text = "Trust State: Public verification surface"
+        elif schema.status == "locked":
+            trust_state_text = "Trust State: Locked canonical record"
+        else:
+            trust_state_text = f"Trust State: {schema.status.title()}"
 
     pdf.setFont("Helvetica-Bold", 20)
     pdf.drawString(PDF_MARGIN_LEFT + 16, y - 44, signature_text)
@@ -1873,7 +1896,25 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         str(len(audit_events)),
         "Lifecycle trail count",
     )
-    y -= scope_card_h + 28
+    y -= scope_card_h + 18
+
+    latest_event = audit_events[-1] if audit_events else None
+    latest_event_text = (
+        f"{latest_event.event_type} @ {fmt_dt(latest_event.created_at)}"
+        if latest_event else "No audit events"
+    )
+
+    y, page_number = draw_dynamic_note_box(
+        pdf,
+        PDF_MARGIN_LEFT,
+        y,
+        PDF_CONTENT_WIDTH,
+        latest_event_text,
+        page_number,
+        document_title,
+        claim_hash,
+        label="Latest Audit Event",
+    )
 
     page_number += 1
     y = pdf_new_page(pdf, page_number, document_title, claim_hash)
@@ -1932,7 +1973,14 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         "This curve mirrors the public proof surface by showing cumulative path structure, consistent peak and trough annotations, and the deepest drawdown interval when one exists. Max drawdown remains the primary risk statistic, while peak and trough identify the full performance range.",
         height=50,
     )
-    y -= 74
+    y -= 62
+
+    pdf.setFont("Helvetica", 9)
+    pdf.setFillColor(colors.HexColor("#64748B"))
+    pdf.drawString(PDF_MARGIN_LEFT, y, "X-axis: Trade sequence (chronological)")
+    y -= 12
+    pdf.drawString(PDF_MARGIN_LEFT, y, "Y-axis: Cumulative PnL")
+    y -= 16
 
     curve_box_h = 180
     y, page_number = pdf_require_space(
@@ -2048,6 +2096,18 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         PDF_MARGIN_LEFT,
         y,
         PDF_CONTENT_WIDTH,
+        "This claim belongs to a versioned lineage. Each version represents a scoped evaluation. Root and parent identifiers ensure full traceability of claim evolution.",
+        page_number,
+        document_title,
+        claim_hash,
+        label="Versioning Context",
+    )
+
+    y, page_number = draw_dynamic_note_box(
+        pdf,
+        PDF_MARGIN_LEFT,
+        y,
+        PDF_CONTENT_WIDTH,
         schema.methodology_notes or "No methodology notes supplied.",
         page_number,
         document_title,
@@ -2097,7 +2157,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         document_title,
         claim_hash,
     )
-    y = pdf_section_title(pdf, "Trade Evidence Snapshot", PDF_MARGIN_LEFT, y)
+    y = pdf_section_title(pdf, "Leaderboard Snapshot", PDF_MARGIN_LEFT, y)
 
     leaderboard_x = PDF_MARGIN_LEFT + 18
     leaderboard_width = 440
@@ -2139,7 +2199,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     y, page_number = pdf_require_space(
         pdf,
         y,
-        150,
+        170,
         page_number,
         document_title,
         claim_hash,
@@ -2178,6 +2238,13 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
             pdf.line(PDF_MARGIN_LEFT, y - 8, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT, y - 8)
             y -= 16
+
+        total_pnl = sum((float(r.get("net_pnl", 0) or 0) for r in evidence_rows))
+        y -= 10
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.setFillColor(colors.HexColor("#0F172A"))
+        pdf.drawString(PDF_MARGIN_LEFT, y, f"Total Trades: {len(evidence_rows)}")
+        pdf.drawString(PDF_MARGIN_LEFT + 200, y, f"Total Net PnL: {fmt_num(total_pnl, 2)}")
     else:
         pdf.drawString(PDF_MARGIN_LEFT, y, "No trade evidence rows available.")
         y -= 18
@@ -2198,12 +2265,41 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Public View Path", public_view_path)
     y -= 62
     draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Verify Link Path", verify_link_path)
-    y -= 70
+    y -= 76
+
+    y, page_number = draw_dynamic_note_box(
+        pdf,
+        PDF_MARGIN_LEFT,
+        y,
+        PDF_CONTENT_WIDTH - 110,
+        "The claim hash and trade-set hash uniquely identify this report and its dataset. Any modification will produce a different hash, ensuring tamper-evident verification.",
+        page_number,
+        document_title,
+        claim_hash,
+        label="Data Integrity Statement",
+    )
+
+    try:
+        qr_code = qr.QrCodeWidget(verify_link_path)
+        bounds = qr_code.getBounds()
+        qr_width = bounds[2] - bounds[0]
+        qr_height = bounds[3] - bounds[1]
+        qr_size = 78
+
+        d = Drawing(
+            qr_size,
+            qr_size,
+            transform=[qr_size / qr_width, 0, 0, qr_size / qr_height, 0, 0],
+        )
+        d.add(qr_code)
+        renderPDF.draw(d, pdf, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT - 82, y + 4)
+    except Exception:
+        pass
 
     draw_light_note_box(
         pdf,
         PDF_MARGIN_LEFT,
-        y,
+        y - 10,
         PDF_CONTENT_WIDTH,
         "Generated from Trading Truth Layer — a verification infrastructure for trading claims. This record can be independently validated via its verify link, public view path, claim hash, and trade-set hash.",
         height=44,
@@ -2212,6 +2308,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.save()
     buffer.seek(0)
     return buffer, filename
+
 
 
 def draw_dynamic_note_box(
@@ -2271,7 +2368,6 @@ def draw_dynamic_note_box(
 
     return y_top - box_height - 14, page_number
 
-    
 
 
 def build_next_version_name(db: Session, workspace_id: int, base_name: str) -> str:
