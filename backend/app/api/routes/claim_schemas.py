@@ -773,10 +773,13 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
     trade_set_hash = schema.locked_trade_set_hash
     if not trade_set_hash:
         trade_set_hash = compute_trade_set_hash(filtered_trades)
+        claim_hash = compute_claim_hash(schema)
 
     return {
         "claim_schema_id": schema.id,
-        "claim_hash": compute_claim_hash(schema),
+        "claim_hash": claim_hash,
+        "public_view_path": f"/claim/{schema.id}/public",
+        "verify_path": f"/verify/{claim_hash}",
         "name": schema.name,
         "verification_status": schema.status,
         "trade_count": metrics["trade_count"],
@@ -828,10 +831,13 @@ def build_public_claim_payload(schema: ClaimSchema, db: Session):
     included_rows = build_included_trade_scope_rows(scope["included"])
     excluded_rows = build_excluded_trade_scope_rows(scope["excluded"])
     equity_curve = build_equity_curve(scope["included"])
+    claim_hash = compute_claim_hash(schema)
 
     return {
         "claim_schema_id": schema.id,
-        "claim_hash": compute_claim_hash(schema),
+        "claim_hash": claim_hash,
+        "public_view_path": f"/claim/{schema.id}/public",
+        "verify_path": f"/verify/{claim_hash}",
         "name": schema.name,
         "verification_status": schema.status,
         "integrity_status": integrity_status,
