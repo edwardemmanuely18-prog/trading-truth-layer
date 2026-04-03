@@ -73,6 +73,28 @@ export type Trade = {
   source_system?: string | null;
 };
 
+export type VerifyClaimResult = {
+  claim_id: number;
+  workspace_id: number;
+  name: string;
+  status: string;
+  visibility: string;
+  claim_hash: string;
+  stored_trade_set_hash?: string | null;
+  recomputed_trade_set_hash?: string | null;
+  integrity: "valid" | "compromised" | "unlocked";
+  version_number?: number | null;
+  root_claim_id?: number | null;
+  parent_claim_id?: number | null;
+  published_at?: string | null;
+  verified_at?: string | null;
+  locked_at?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  public_view_path: string;
+  verify_path: string;
+};
+
 export type ImportBatch = {
   id: number;
   workspace_id: number;
@@ -1640,6 +1662,12 @@ export const api = {
           }
         : undefined,
     };
+  },
+
+  getVerifyClaimByHash: async (claimHash: string): Promise<VerifyClaimResult> => {
+    return apiFetch<VerifyClaimResult>(`/verify/${claimHash}`, {
+      cache: "no-store",
+    });
   },
 
   getClaimIntegrity: async (claimSchemaId: number): Promise<ClaimIntegrityResult> => {
