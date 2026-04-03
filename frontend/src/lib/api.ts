@@ -418,6 +418,8 @@ export type ClaimSchema = {
   locked_at?: string | null;
   locked_trade_set_hash?: string | null;
   claim_hash?: string;
+  verify_path?: string | null;
+  public_view_path?: string | null;
 };
 
 export type ClaimSchemaCreatePayload = {

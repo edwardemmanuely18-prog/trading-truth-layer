@@ -891,7 +891,9 @@ export default function WorkspaceClaimDetailPage() {
 
   const internalHref = `/workspace/${workspaceId}/claim/${claimId}`;
   const evidenceHref = `/workspace/${workspaceId}/evidence?claimId=${claimId}`;
-  const verifyRouteHref = claim?.claim_hash ? `/verify/${claim.claim_hash}` : null;
+  const verifyRouteHref =
+  ((claim as ClaimSchema & { verify_path?: string | null })?.verify_path ?? null) ||
+  (claim?.claim_hash ? `/verify/${claim.claim_hash}` : null);
   const publicViewHref =
     claimStatusNormalized === "published" || claimStatusNormalized === "locked"
       ? `/claim/${claimId}/public`
@@ -1129,16 +1131,15 @@ export default function WorkspaceClaimDetailPage() {
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <CopyButton value={claim.claim_hash || preview.claim_hash} label="Copy Claim Hash" />
-                {publicRouteReady || unlistedRouteReady ? (
+                {(publicRouteReady || unlistedRouteReady) && verifyRouteHref ? (
                   <Link
-                    href={`/verify/${claim.claim_hash}`}
+                    href={verifyRouteHref}
                     className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                   >
                     Open Verify Surface
                   </Link>
                 ) : null}
               </div>
-            </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
               <div className="text-sm text-slate-500">Exposure state</div>
