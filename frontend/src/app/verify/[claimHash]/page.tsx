@@ -33,9 +33,15 @@ type VerifyClaimResult = {
 };
 
 async function fetchVerifyClaimByHash(claimHash: string): Promise<VerifyClaimResult> {
-  const response = await fetch(`/api/verify/${encodeURIComponent(claimHash)}`, {
-    cache: "no-store",
-  });
+  const backendBase =
+    process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "") || "http://localhost:8000";
+
+  const response = await fetch(
+    `${backendBase}/verify/${encodeURIComponent(claimHash)}`,
+    {
+      cache: "no-store",
+    }
+  );
 
   if (!response.ok) {
     const raw = await response.text();
