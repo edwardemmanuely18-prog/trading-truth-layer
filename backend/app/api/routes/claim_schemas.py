@@ -2049,6 +2049,24 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.setFont("Helvetica", 8.5)
         net_change = values[-1] - values[0]
         pdf.drawRightString(chart_x + chart_w, chart_y + chart_h + 10, f"Net change {net_change:+.4f}")
+    
+    def normalize_dt(value):
+        if value is None:
+            return None
+        if hasattr(value, "strftime"):
+            return value
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return None
+            try:
+                return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except Exception:
+                try:
+                    return datetime.strptime(raw[:19], "%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    return None
+        return None
 
     def build_equity_point_rows(curve_points):
         rows = []
@@ -2058,7 +2076,10 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         for idx, point in enumerate(curve_points, start=1):
             cumulative_val = float(point.get("cumulative_pnl", 0) or 0)
             trade_pnl_val = float(point.get("net_pnl", 0) or 0)
-            opened_at = point.get("opened_at")
+
+            raw_opened_at = point.get("opened_at")
+            opened_at_dt = normalize_dt(raw_opened_at)
+
             trade_id = point.get("trade_id", "—")
             symbol = point.get("symbol", "—")
             member_id = point.get("member_id", "—")
@@ -2066,11 +2087,11 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             step_change = trade_pnl_val
             if prev_cumulative is not None:
                 step_change = cumulative_val - prev_cumulative
-
+ 
             gap_display = "—"
-            if opened_at and prev_opened_at:
+            if opened_at_dt and prev_opened_at:
                 try:
-                    gap_display = fmt_gap_days((opened_at - prev_opened_at).total_seconds())
+                    gap_display = fmt_gap_days((opened_at_dt - prev_opened_at).total_seconds())
                 except Exception:
                     gap_display = "—"
 
@@ -2078,7 +2099,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
                 {
                     "sequence": idx,
                     "trade_id": trade_id,
-                    "opened_at": shorten_text(fmt_dt(opened_at), 19),
+                    "opened_at": shorten_text(fmt_dt(opened_at_dt or raw_opened_at), 16),
                     "symbol": shorten_text(str(symbol), 10),
                     "member_id": str(member_id),
                     "trade_pnl": fmt_num(trade_pnl_val, 2),
@@ -2089,7 +2110,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             )
 
             prev_cumulative = cumulative_val
-            prev_opened_at = opened_at
+            prev_opened_at = opened_at_dt
 
         return rows
 
@@ -2662,14 +2683,14 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     )
 
     evidence_columns = [
-        {"label": "#", "key": "index", "x": 0, "w": 28, "align": "left"},
-        {"label": "Trade ID", "key": "trade_id", "x": 28, "w": 66, "align": "left"},
-        {"label": "Opened", "key": "opened_at", "x": 94, "w": 140, "align": "left"},
-        {"label": "Symbol", "key": "symbol", "x": 234, "w": 70, "align": "left"},
-        {"label": "Side", "key": "side", "x": 304, "w": 58, "align": "left"},
-        {"label": "Member", "key": "member_id", "x": 362, "w": 68, "align": "left"},
-        {"label": "PnL", "key": "net_pnl", "x": 430, "w": 48, "align": "right"},
-        {"label": "Cumulative", "key": "cumulative_pnl", "x": 478, "w": 62, "align": "right"},
+        {"label": "#", "key": "index", "x": 0, "w": 26, "align": "left"},
+        {"label": "Trade ID", "key": "trade_id", "x": 26, "w": 58, "align": "left"},
+        {"label": "Opened", "key": "opened_at", "x": 84, "w": 134, "align": "left"},
+        {"label": "Symbol", "key": "symbol", "x": 218, "w": 64, "align": "left"},
+        {"label": "Side", "key": "side", "x": 282, "w": 52, "align": "left"},
+        {"label": "Member", "key": "member_id", "x": 334, "w": 62, "align": "left"},
+        {"label": "PnL", "key": "net_pnl", "x": 396, "w": 54, "align": "right"},
+        {"label": "Cumulative", "key": "cumulative_pnl", "x": 450, "w": 66, "align": "right"},
     ]
 
     evidence_table_rows = []
