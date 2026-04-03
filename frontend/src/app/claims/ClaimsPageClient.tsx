@@ -114,11 +114,17 @@ function resolveMethodologyNotes(row: any) {
 }
 
 function buildVerifyHref(row: any) {
+  const verifyPath = String(row?.verify_path ?? "").trim();
+  if (verifyPath) return verifyPath;
+
   const claimHash = String(row?.claim_hash ?? "").trim();
   return claimHash ? `/verify/${claimHash}` : "/claims";
 }
 
 function buildPublicViewHref(row: any) {
+  const publicViewPath = String(row?.public_view_path ?? "").trim();
+  if (publicViewPath) return publicViewPath;
+
   const claimId = row?.claim_schema_id ?? row?.id;
   return claimId ? `/claim/${claimId}/public` : "/claims";
 }
@@ -854,6 +860,8 @@ export default function ClaimsPageClient() {
 
                       <Link
                         href={verifyHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50"
                       >
                         Open Verification Surface
