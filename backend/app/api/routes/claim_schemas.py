@@ -2088,18 +2088,18 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             if prev_cumulative is not None:
                 step_change = cumulative_val - prev_cumulative
  
-            gap_display = "—"
+            gap_display = "start"
             if opened_at_dt and prev_opened_at:
                 try:
                     gap_display = fmt_gap_days((opened_at_dt - prev_opened_at).total_seconds())
                 except Exception:
-                    gap_display = "—"
+                    gap_display = "start"
 
             rows.append(
                 {
                     "sequence": idx,
                     "trade_id": trade_id,
-                    "opened_at": shorten_text(fmt_dt(opened_at_dt or raw_opened_at), 16),
+                    "opened_at": fmt_dt(opened_at_dt or raw_opened_at),
                     "symbol": shorten_text(str(symbol), 10),
                     "member_id": str(member_id),
                     "trade_pnl": fmt_num(trade_pnl_val, 2),
@@ -2556,13 +2556,13 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     equity_point_columns = [
         {"label": "Seq", "key": "sequence", "x": 0, "w": 28, "align": "left"},
         {"label": "Trade", "key": "trade_id", "x": 28, "w": 42, "align": "left"},
-        {"label": "Opened", "key": "opened_at", "x": 70, "w": 112, "align": "left"},
+        {"label": "Opened", "key": "opened_at", "x": 70, "w": 126, "align": "left"},
         {"label": "Symbol", "key": "symbol", "x": 182, "w": 56, "align": "left"},
         {"label": "Member", "key": "member_id", "x": 238, "w": 52, "align": "left"},
         {"label": "Trade PnL", "key": "trade_pnl", "x": 290, "w": 72, "align": "right", "font_size": 8},
         {"label": "Cumulative", "key": "cumulative_pnl", "x": 362, "w": 76, "align": "right", "font_size": 8},
         {"label": "Step", "key": "step_change", "x": 438, "w": 48, "align": "right", "font_size": 8},
-        {"label": "Gap", "key": "gap_from_prior", "x": 486, "w": 42, "align": "center", "font_size": 8},
+        {"label": "Gap", "key": "gap_from_prior", "x": 486, "w": 52, "align": "center", "font_size": 8},
     ]
     equity_point_rows = build_equity_point_rows(curve_points)
 
