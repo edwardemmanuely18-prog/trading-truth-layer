@@ -1707,13 +1707,9 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         if y - required_height < PAGE_BOTTOM_SAFE:
             new_page()
 
-    def ensure_space_with_title(title: str, required_after_title: float):
+    def start_major_section_new_page():
         nonlocal y
-        approx_title_h = 34
-        if y - (approx_title_h + required_after_title) < PAGE_BOTTOM_SAFE:
-            new_page()
-        y_local = draw_table_title(title, y)
-        return y_local
+        new_page()
 
     def draw_hr(y_pos, stroke=COLOR_LINE_SOFT):
         pdf.setStrokeColor(stroke)
@@ -1723,24 +1719,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     def draw_soft_panel(x, top_y, w, h, radius=14, fill=colors.white, stroke=COLOR_LINE_SOFT):
         pdf_round_box(pdf, x, top_y, w, h, fill, stroke, radius=radius)
 
-    def draw_label(x, y_pos, text):
-        pdf.setFillColor(COLOR_MUTED)
-        pdf.setFont("Helvetica", TEXT_S)
-        pdf.drawString(x, y_pos, text)
-
-    def draw_value(x, y_pos, text, font="Helvetica-Bold", size=10, color=COLOR_INK):
-        pdf.setFillColor(color)
-        pdf.setFont(font, size)
-        pdf.drawString(x, y_pos, text)
-
     def wrapped_lines(text, max_width, font_name="Helvetica", font_size=TEXT_M):
         return split_wrapped_lines(str(text or "—"), max_width, font_name, font_size) or ["—"]
 
-    def estimate_text_block_height(text, width, font_name="Helvetica", font_size=TEXT_M, line_gap=12, max_lines=None):
-        lines = wrapped_lines(text, width, font_name, font_size)
-        if max_lines is not None:
-            lines = lines[:max_lines]
-        return len(lines) * line_gap, lines
+    def estimate_kv_grid_cell_height(value, max_width=120, value_font="Helvetica-Bold", value_size=10, max_lines=4):
+        lines = wrapped_lines(value, max_width, value_font, value_size)[:max_lines]
+        return 14 + (len(lines) * 11)
 
     def draw_kv_grid_cell(x, y_pos, label, value, max_width=120, value_font="Helvetica-Bold", value_size=10, max_lines=4):
         pdf.setFillColor(COLOR_MUTED)
@@ -1753,10 +1737,6 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         for line in lines:
             pdf.drawString(x, v_y, line)
             v_y -= 11
-
-    def estimate_kv_grid_cell_height(value, max_width=120, value_font="Helvetica-Bold", value_size=10, max_lines=4):
-        lines = wrapped_lines(value, max_width, value_font, value_size)[:max_lines]
-        return 14 + (len(lines) * 11)
 
     def draw_metric_card_v2(x, top_y, w, h, label, value, sublabel, value_color=COLOR_INK):
         draw_soft_panel(x, top_y, w, h, radius=14, fill=COLOR_FILL_SOFT, stroke=COLOR_BLUE_LINE)
@@ -1842,12 +1822,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             h += 16
         return h
 
-    def draw_table_title(title, y_pos):
+    def draw_standard_section_title(title, y_pos):
         pdf.setFillColor(COLOR_INK)
         pdf.setFont("Helvetica-Bold", TITLE_L)
         pdf.drawString(PDF_MARGIN_LEFT, y_pos, title)
         draw_hr(y_pos - 10)
-        return y_pos - 22
+        return y_pos - 32
 
     def draw_table_header_row(x, top_y, total_w, columns, row_h=24):
         pdf.setFillColor(COLOR_TABLE_HEADER)
@@ -1912,7 +1892,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             + 8
             + (len(desc_lines) * 13)
         )
-        return max(220, content_height + 80)
+        return max(220, content_height + 92)
 
     def draw_equity_curve_preview_v2(x, top_y, w, h, curve_points):
         draw_soft_panel(x, top_y, w, h, radius=16, fill=colors.white, stroke=COLOR_BLUE_LINE)
@@ -2042,81 +2022,89 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     def draw_section_title_block(title):
         nonlocal y
-        ensure_space(46)
-        y = pdf_section_title(pdf, title, PDF_MARGIN_LEFT, y)
-        draw_hr(y - 6)
-        y -= BLOCK_GAP
+        ensure_space(54)
+        y = draw_standard_section_title(title, y)
 
     def draw_dual_detail_panels(top_y, left_title, left_items, right_title, right_items):
         panel_gap = 16
         panel_w = (PDF_CONTENT_WIDTH - panel_gap) / 2
+        panel_padding_x = 22
+        panel_title_gap = 28
+        col_gap = 22
+        col_w = (panel_w - (panel_padding_x * 2) - col_gap) / 2
+
         left_x = PDF_MARGIN_LEFT
         right_x = PDF_MARGIN_LEFT + panel_w + panel_gap
 
-        left_label_x = left_x + 18
-        left_value_x = left_x + 184
-        right_label_x = right_x + 18
-        right_value_x = right_x + 184
-
-        row_gap = 18
-        start_offset = 58
-
-        def calc_panel_height(items, left_col_width=130, right_col_width=130):
-            max_bottom = 0
-            for idx, pair in enumerate(items):
-                row_top_offset = start_offset + (idx * 68)
-                left_h = estimate_kv_grid_cell_height(pair[0][1], max_width=left_col_width)
-                right_h = estimate_kv_grid_cell_height(pair[1][1], max_width=right_col_width)
+        def calc_panel_height(items):
+            row_y_cursor = 0
+            for pair in items:
+                left_h = estimate_kv_grid_cell_height(pair[0][1], max_width=col_w, max_lines=5)
+                right_h = estimate_kv_grid_cell_height(pair[1][1], max_width=col_w, max_lines=5)
                 row_h = max(left_h, right_h)
-                bottom = row_top_offset + row_h
-                max_bottom = max(max_bottom, bottom)
-            return max(210, max_bottom + 26)
+                row_y_cursor += row_h + 22
+            return max(220, 24 + panel_title_gap + row_y_cursor + 10)
 
-        left_panel_h = calc_panel_height(left_items, 130, 130)
-        right_panel_h = calc_panel_height(right_items, 140, 140)
+        left_panel_h = calc_panel_height(left_items)
+        right_panel_h = calc_panel_height(right_items)
         panel_h = max(left_panel_h, right_panel_h)
 
         ensure_space(panel_h + BLOCK_GAP)
 
-        draw_soft_panel(left_x, top_y, panel_w, panel_h, radius=16, fill=colors.white, stroke=COLOR_LINE)
-        pdf.setFillColor(COLOR_INK)
-        pdf.setFont("Helvetica-Bold", TITLE_M)
-        pdf.drawString(left_x + 18, top_y - 24, left_title)
+        def render_panel(panel_x, panel_title, items):
+            draw_soft_panel(panel_x, top_y, panel_w, panel_h, radius=16, fill=colors.white, stroke=COLOR_LINE)
+            pdf.setFillColor(COLOR_INK)
+            pdf.setFont("Helvetica-Bold", TITLE_M)
+            pdf.drawString(panel_x + panel_padding_x, top_y - 26, panel_title)
 
-        for idx, pair in enumerate(left_items):
-            row_y = top_y - start_offset - (idx * 68)
-            draw_kv_grid_cell(left_label_x, row_y, pair[0][0], pair[0][1], max_width=130)
-            draw_kv_grid_cell(left_value_x, row_y, pair[1][0], pair[1][1], max_width=130)
+            left_col_x = panel_x + panel_padding_x
+            right_col_x = left_col_x + col_w + col_gap
+            row_top_y = top_y - 58
 
-        draw_soft_panel(right_x, top_y, panel_w, panel_h, radius=16, fill=colors.white, stroke=COLOR_LINE)
-        pdf.setFillColor(COLOR_INK)
-        pdf.setFont("Helvetica-Bold", TITLE_M)
-        pdf.drawString(right_x + 18, top_y - 24, right_title)
+            for pair in items:
+                left_h = estimate_kv_grid_cell_height(pair[0][1], max_width=col_w, max_lines=5)
+                right_h = estimate_kv_grid_cell_height(pair[1][1], max_width=col_w, max_lines=5)
+                row_h = max(left_h, right_h)
 
-        for idx, pair in enumerate(right_items):
-            row_y = top_y - start_offset - (idx * 68)
-            draw_kv_grid_cell(right_label_x, row_y, pair[0][0], pair[0][1], max_width=140)
-            draw_kv_grid_cell(right_value_x, row_y, pair[1][0], pair[1][1], max_width=140)
+                draw_kv_grid_cell(left_col_x, row_top_y, pair[0][0], pair[0][1], max_width=col_w, max_lines=5)
+                draw_kv_grid_cell(right_col_x, row_top_y, pair[1][0], pair[1][1], max_width=col_w, max_lines=5)
 
+                row_top_y -= row_h + 22
+
+        render_panel(left_x, left_title, left_items)
+        render_panel(right_x, right_title, right_items)
         return top_y - panel_h - BLOCK_GAP
 
-    def draw_paginated_table_section(title, columns, rows, empty_text, row_h=22, header_row_h=24, totals_renderer=None):
+    def draw_paginated_table_section(
+        title,
+        columns,
+        rows,
+        empty_text,
+        row_h=22,
+        header_row_h=24,
+        totals_renderer=None,
+        start_on_new_page=False,
+        top_gap_before_title=0,
+    ):
         nonlocal y
 
         section_started = False
         row_top = y
-        row_count_on_page = 0
+
+        if top_gap_before_title:
+            y -= top_gap_before_title
 
         def start_table_page(table_title, continued=False):
-            nonlocal y, section_started, row_top, row_count_on_page
+            nonlocal y, section_started, row_top
             if section_started:
                 new_page()
-            ensure_space(90)
+            elif start_on_new_page:
+                start_major_section_new_page()
+
+            ensure_space(96)
             rendered_title = table_title if not continued else f"{table_title} (continued)"
-            y_local = draw_table_title(rendered_title, y)
-            y = y_local
+            y = draw_standard_section_title(rendered_title, y)
             row_top = draw_table_header_row(PDF_MARGIN_LEFT, y, TABLE_TOTAL_W, columns, row_h=header_row_h)
-            row_count_on_page = 0
             section_started = True
 
         if not rows:
@@ -2131,7 +2119,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
         current_top = row_top
         for idx, row_values in enumerate(rows):
-            if current_top - row_h < PAGE_BOTTOM_SAFE + 22:
+            if current_top - row_h < PAGE_BOTTOM_SAFE + 24:
                 start_table_page(title, continued=True)
                 current_top = row_top
 
@@ -2144,7 +2132,6 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
                 row_h=row_h,
                 alt=(idx % 2 == 1),
             )
-            row_count_on_page += 1
 
         y = current_top - BLOCK_GAP
 
@@ -2338,7 +2325,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.setFillColor(COLOR_INK)
     pdf.setFont("Helvetica-Bold", TITLE_L)
     pdf.drawString(PDF_MARGIN_LEFT, y, "Claim Identity")
-    draw_hr(y - 6)
+    draw_hr(y - 10)
     y -= 34
 
     pdf.setFillColor(COLOR_INK)
@@ -2370,6 +2357,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     # PAGE 2 — PERFORMANCE DIAGNOSTICS
     # =========================
 
+    start_major_section_new_page()
     draw_section_title_block("Performance Diagnostics")
 
     diag_needed_h = 72 + BLOCK_GAP + 60 + BLOCK_GAP + 50 + BLOCK_GAP + 24 + BLOCK_GAP + 244
@@ -2455,6 +2443,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     # PAGE 3 — VERIFICATION CONTEXT
     # =========================
 
+    start_major_section_new_page()
     draw_section_title_block("Verification Context")
 
     left_items = [
@@ -2506,7 +2495,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     for label, text, min_h in notes:
         note_h = estimate_highlight_note_height(text, PDF_CONTENT_WIDTH, label=label, min_height=min_h)
-        ensure_space(note_h + 8)
+        ensure_space(note_h + 10)
         y = draw_highlight_note(
             PDF_MARGIN_LEFT,
             y,
@@ -2548,6 +2537,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         "No leaderboard data available.",
         row_h=24,
         header_row_h=24,
+        start_on_new_page=True,
     )
 
     evidence_columns = [
@@ -2591,13 +2581,14 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         row_h=22,
         header_row_h=24,
         totals_renderer=render_evidence_totals,
+        top_gap_before_title=SECTION_GAP,
     )
 
     # =========================
     # FINAL PAGE — FINGERPRINTS & VALIDATION
     # =========================
 
-    new_page()
+    start_major_section_new_page()
     draw_section_title_block("Canonical Fingerprints & Verification Paths")
 
     pdf.setFillColor(COLOR_MUTED)
