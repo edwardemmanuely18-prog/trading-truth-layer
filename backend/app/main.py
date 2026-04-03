@@ -1,6 +1,7 @@
 import os
 
 from fastapi import FastAPI
+from app.api.routes import verify
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
 
@@ -60,6 +61,7 @@ def ensure_claim_schema_columns():
 
 
 app = FastAPI(title="Trading Truth Layer API")
+app.include_router(verify.router)
 
 app.add_middleware(
     CORSMiddleware,
