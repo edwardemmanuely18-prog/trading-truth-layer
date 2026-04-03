@@ -1645,6 +1645,337 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         except Exception:
             return format_pdf_datetime(value)
 
+    # =========================
+    # VISUAL SYSTEM
+    # =========================
+    PAGE_TOP_GAP = 12
+    SECTION_GAP = 28
+    BLOCK_GAP = 18
+    CARD_GAP = 12
+    MINI_GAP = 10
+
+    COLOR_INK = colors.HexColor("#0F172A")
+    COLOR_TEXT = colors.HexColor("#334155")
+    COLOR_MUTED = colors.HexColor("#64748B")
+    COLOR_LINE = colors.HexColor("#CBD5E1")
+    COLOR_LINE_SOFT = colors.HexColor("#E2E8F0")
+    COLOR_FILL_SOFT = colors.HexColor("#F8FAFC")
+    COLOR_FILL_ALT = colors.HexColor("#F1F5F9")
+    COLOR_GREEN_BG = colors.HexColor("#ECFDF5")
+    COLOR_GREEN_LINE = colors.HexColor("#86EFAC")
+    COLOR_GREEN_TEXT = colors.HexColor("#166534")
+    COLOR_RED_BG = colors.HexColor("#FEF2F2")
+    COLOR_RED_LINE = colors.HexColor("#FCA5A5")
+    COLOR_RED_TEXT = colors.HexColor("#991B1B")
+    COLOR_NAVY = colors.HexColor("#0B132B")
+    COLOR_BLUE_LINE = colors.HexColor("#CBD5F5")
+    COLOR_BLUE_ACCENT = colors.HexColor("#1D4ED8")
+    COLOR_TABLE_HEADER = colors.HexColor("#F1F5F9")
+    COLOR_TABLE_ALT = colors.HexColor("#F8FAFC")
+    COLOR_TABLE_BORDER = colors.HexColor("#D7E1EC")
+
+    TITLE_XL = 26
+    TITLE_L = 19
+    TITLE_M = 15
+    TITLE_S = 12
+    TEXT_L = 11
+    TEXT_M = 10
+    TEXT_S = 9
+    TEXT_XS = 8
+
+    def draw_hr(y_pos, stroke=COLOR_LINE_SOFT):
+        pdf.setStrokeColor(stroke)
+        pdf.setLineWidth(1)
+        pdf.line(PDF_MARGIN_LEFT, y_pos, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT, y_pos)
+
+    def draw_soft_panel(x, top_y, w, h, radius=14, fill=colors.white, stroke=COLOR_LINE_SOFT):
+        pdf_round_box(pdf, x, top_y, w, h, fill, stroke, radius=radius)
+
+    def draw_label(x, y_pos, text):
+        pdf.setFillColor(COLOR_MUTED)
+        pdf.setFont("Helvetica", TEXT_S)
+        pdf.drawString(x, y_pos, text)
+
+    def draw_value(x, y_pos, text, font="Helvetica-Bold", size=10, color=COLOR_INK):
+        pdf.setFillColor(color)
+        pdf.setFont(font, size)
+        pdf.drawString(x, y_pos, text)
+
+    def draw_kv_grid_cell(x, y_pos, label, value, max_width=120, value_font="Helvetica-Bold", value_size=10):
+        pdf.setFillColor(COLOR_MUTED)
+        pdf.setFont("Helvetica", TEXT_S)
+        pdf.drawString(x, y_pos, label)
+        lines = split_wrapped_lines(str(value or "—"), max_width, value_font, value_size) or ["—"]
+        pdf.setFillColor(COLOR_INK)
+        pdf.setFont(value_font, value_size)
+        v_y = y_pos - 14
+        for line in lines[:3]:
+            pdf.drawString(x, v_y, line)
+            v_y -= 11
+
+    def draw_metric_card_v2(x, top_y, w, h, label, value, sublabel, value_color=COLOR_INK):
+        draw_soft_panel(x, top_y, w, h, radius=14, fill=COLOR_FILL_SOFT, stroke=COLOR_BLUE_LINE)
+        pdf.setFillColor(COLOR_MUTED)
+        pdf.setFont("Helvetica", TEXT_M)
+        pdf.drawString(x + 14, top_y - 20, label)
+
+        value_lines = split_wrapped_lines(str(value), w - 28, "Helvetica-Bold", 17) or ["—"]
+        pdf.setFillColor(value_color)
+        pdf.setFont("Helvetica-Bold", 17)
+        value_y = top_y - 44
+        for line in value_lines[:2]:
+            pdf.drawString(x + 14, value_y, line)
+            value_y -= 16
+
+        pdf.setFillColor(COLOR_MUTED)
+        pdf.setFont("Helvetica", TEXT_S)
+        pdf.drawString(x + 14, top_y - h + 16, sublabel)
+
+    def draw_label_value_box_v2(x, top_y, w, h, label, value, value_font="Helvetica", value_size=8):
+        draw_soft_panel(x, top_y, w, h, radius=14, fill=COLOR_FILL_ALT, stroke=COLOR_LINE)
+        pdf.setFillColor(COLOR_MUTED)
+        pdf.setFont("Helvetica", TEXT_M)
+        pdf.drawString(x + 12, top_y - 18, label)
+        pdf.setFillColor(COLOR_INK)
+        pdf.setFont(value_font, value_size)
+        lines = split_wrapped_lines(str(value or "—"), w - 24, value_font, value_size) or ["—"]
+        v_y = top_y - 36
+        for line in lines[:3]:
+            pdf.drawString(x + 12, v_y, line)
+            v_y -= 10
+
+    def draw_highlight_note(x, top_y, w, text, label=None, min_height=44):
+        text_lines = split_wrapped_lines(text or "—", w - 28, "Helvetica", TEXT_M) or ["—"]
+        h = max(min_height, 18 + 14 + (len(text_lines) * 12) + 12)
+        if label:
+            pdf.setFillColor(COLOR_MUTED)
+            pdf.setFont("Helvetica", TEXT_M)
+            pdf.drawString(x, top_y - 2, label)
+            top_y -= 14
+        draw_soft_panel(x, top_y, w, h, radius=14, fill=COLOR_FILL_ALT, stroke=COLOR_LINE)
+        pdf.setFillColor(COLOR_TEXT)
+        pdf.setFont("Helvetica", TEXT_M)
+        yy = top_y - 18
+        for line in text_lines:
+            pdf.drawString(x + 14, yy, line)
+            yy -= 12
+        return top_y - h
+
+    def draw_hash_block_v2(x, top_y, w, label, value, emphasize=False):
+        label_color = COLOR_BLUE_ACCENT if emphasize else COLOR_MUTED
+        stroke = colors.HexColor("#93C5FD") if emphasize else COLOR_LINE
+        fill = colors.HexColor("#EFF6FF") if emphasize else COLOR_FILL_SOFT
+
+        pdf.setFillColor(label_color)
+        pdf.setFont("Helvetica", TEXT_M)
+        pdf.drawString(x, top_y - 2, label)
+
+        h = 44
+        draw_soft_panel(x, top_y - 16, w, h, radius=13, fill=fill, stroke=stroke)
+        pdf.setFillColor(COLOR_INK)
+        pdf.setFont("Courier", 8.5)
+        lines = split_wrapped_lines(str(value or "—"), w - 24, "Courier", 8.5) or ["—"]
+        yy = top_y - 34
+        for line in lines[:3]:
+            pdf.drawString(x + 12, yy, line)
+            yy -= 10
+        return top_y - 16 - h
+
+    def draw_table_title(title, y_pos):
+        pdf.setFillColor(COLOR_INK)
+        pdf.setFont("Helvetica-Bold", TITLE_L)
+        pdf.drawString(PDF_MARGIN_LEFT, y_pos, title)
+        draw_hr(y_pos - 10)
+        return y_pos - 22
+
+    def draw_table_header_row(x, top_y, total_w, columns, row_h=24):
+        pdf.setFillColor(COLOR_TABLE_HEADER)
+        pdf.setStrokeColor(COLOR_TABLE_BORDER)
+        pdf.roundRect(x, top_y - row_h, total_w, row_h, 6, fill=1, stroke=1)
+        pdf.setFillColor(COLOR_MUTED)
+        pdf.setFont("Helvetica-Bold", TEXT_S)
+        for col in columns:
+            label = col["label"]
+            cx = x + col["x"] + 4
+            pdf.drawString(cx, top_y - 16, label)
+        return top_y - row_h
+
+    def draw_table_row(x, top_y, total_w, columns, row_values, row_h=22, alt=False):
+        fill = COLOR_TABLE_ALT if alt else colors.white
+        pdf.setFillColor(fill)
+        pdf.setStrokeColor(COLOR_TABLE_BORDER)
+        pdf.rect(x, top_y - row_h, total_w, row_h, fill=1, stroke=1)
+
+        for col in columns:
+            key = col["key"]
+            align = col.get("align", "left")
+            col_x = x + col["x"] + 4
+            col_w = col["w"] - 8
+            text = str(row_values.get(key, "—"))
+            font_name = col.get("font", "Helvetica")
+            font_size = col.get("font_size", TEXT_S)
+            pdf.setFont(font_name, font_size)
+            pdf.setFillColor(COLOR_INK)
+
+            if align == "right":
+                pdf.drawRightString(col_x + col_w, top_y - 15, text)
+            elif align == "center":
+                pdf.drawCentredString(col_x + (col_w / 2), top_y - 15, text)
+            else:
+                pdf.drawString(col_x, top_y - 15, text)
+        return top_y - row_h
+
+    def draw_info_chip(x, top_y, w, h, rows, fill=colors.white, stroke=COLOR_LINE):
+        draw_soft_panel(x, top_y, w, h, radius=12, fill=fill, stroke=stroke)
+        yy = top_y - 20
+        for label, value in rows:
+            pdf.setFillColor(COLOR_MUTED)
+            pdf.setFont("Helvetica", TEXT_M)
+            pdf.drawString(x + 12, yy, f"{label}:")
+            pdf.setFillColor(COLOR_INK)
+            pdf.setFont("Helvetica-Bold", TEXT_M)
+            pdf.drawString(x + 64, yy, value)
+            yy -= 16
+
+    def draw_equity_curve_preview_v2(x, top_y, w, h, curve_points):
+        draw_soft_panel(x, top_y, w, h, radius=16, fill=colors.white, stroke=COLOR_BLUE_LINE)
+        pdf.setFillColor(COLOR_INK)
+        pdf.setFont("Helvetica-Bold", TITLE_L)
+        pdf.drawString(x + 18, top_y - 18, "Equity Curve Preview")
+
+        if not curve_points:
+            pdf.setFillColor(COLOR_MUTED)
+            pdf.setFont("Helvetica", TEXT_M)
+            pdf.drawString(x + 18, top_y - 48, "No equity curve data available.")
+            return
+
+        chart_x = x + 26
+        chart_y = top_y - h + 30
+        chart_w = w - 50
+        chart_h = h - 72
+
+        values = [float(p.get("cumulative_pnl", 0) or 0) for p in curve_points]
+        xs = list(range(1, len(values) + 1))
+        min_val = min(values)
+        max_val = max(values)
+
+        if abs(max_val - min_val) < 1e-9:
+            max_val += 1
+            min_val -= 1
+
+        pad = max((max_val - min_val) * 0.08, 1.0)
+        axis_min = min(0.0, min_val - pad)
+        axis_max = max_val + pad
+
+        def scale_y(v):
+            return chart_y + ((v - axis_min) / (axis_max - axis_min)) * chart_h
+
+        def scale_x(i):
+            if len(xs) == 1:
+                return chart_x + (chart_w / 2)
+            return chart_x + ((i - 1) / (len(xs) - 1)) * chart_w
+
+        # background grid
+        pdf.setStrokeColor(COLOR_LINE_SOFT)
+        pdf.setLineWidth(1)
+        grid_steps = 5
+        for step in range(grid_steps + 1):
+            gy = chart_y + (chart_h / grid_steps) * step
+            pdf.line(chart_x, gy, chart_x + chart_w, gy)
+
+            val = axis_min + ((axis_max - axis_min) / grid_steps) * step
+            pdf.setFillColor(COLOR_MUTED)
+            pdf.setFont("Helvetica", 8)
+            pdf.drawRightString(chart_x - 6, gy - 2, fmt_num(val, 1))
+
+        # axes
+        pdf.setStrokeColor(COLOR_LINE)
+        pdf.setLineWidth(1.2)
+        pdf.line(chart_x, chart_y, chart_x, chart_y + chart_h)
+        pdf.line(chart_x, chart_y, chart_x + chart_w, chart_y)
+
+        # x-axis markers
+        marker_count = min(4, len(xs))
+        if marker_count == 1:
+            marker_indexes = [0]
+        else:
+            marker_indexes = sorted(set(round(i * (len(xs) - 1) / (marker_count - 1)) for i in range(marker_count)))
+
+        for idx in marker_indexes:
+            px = scale_x(xs[idx])
+            pdf.setStrokeColor(COLOR_LINE_SOFT)
+            pdf.line(px, chart_y, px, chart_y + chart_h)
+
+            point = curve_points[idx]
+            date_label = ""
+            opened_at = point.get("opened_at")
+            if opened_at:
+                try:
+                    date_label = opened_at.strftime("%Y-%m-%d")
+                except Exception:
+                    date_label = str(opened_at)[:10]
+            pdf.setFillColor(COLOR_MUTED)
+            pdf.setFont("Helvetica", 8)
+            pdf.drawCentredString(px, chart_y - 12, str(xs[idx]))
+            if date_label:
+                pdf.drawCentredString(px, chart_y - 24, date_label)
+
+        # area fill approximation
+        polygon_points = []
+        for i, v in zip(xs, values):
+            polygon_points.extend([scale_x(i), scale_y(v)])
+        polygon_points.extend([scale_x(xs[-1]), chart_y, scale_x(xs[0]), chart_y])
+
+        path = pdf.beginPath()
+        path.moveTo(scale_x(xs[0]), chart_y)
+        for i, v in zip(xs, values):
+            path.lineTo(scale_x(i), scale_y(v))
+        path.lineTo(scale_x(xs[-1]), chart_y)
+        path.close()
+
+        pdf.setFillColor(colors.HexColor("#E2E8F0"))
+        pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
+        pdf.drawPath(path, fill=1, stroke=0)
+
+        # curve line
+        pdf.setStrokeColor(COLOR_NAVY)
+        pdf.setLineWidth(2.4)
+        for idx in range(len(xs) - 1):
+            pdf.line(
+                scale_x(xs[idx]), scale_y(values[idx]),
+                scale_x(xs[idx + 1]), scale_y(values[idx + 1]),
+            )
+
+        # points
+        pdf.setFillColor(COLOR_NAVY)
+        for i, v in zip(xs, values):
+            pdf.circle(scale_x(i), scale_y(v), 2.2, fill=1, stroke=0)
+
+        # peak / trough
+        peak_idx = max(range(len(values)), key=lambda i: values[i])
+        trough_idx = min(range(len(values)), key=lambda i: values[i])
+
+        peak_x = scale_x(xs[peak_idx])
+        peak_y = scale_y(values[peak_idx])
+        trough_x = scale_x(xs[trough_idx])
+        trough_y = scale_y(values[trough_idx])
+
+        pdf.setFillColor(colors.HexColor("#16A34A"))
+        pdf.circle(peak_x, peak_y, 4.5, fill=1, stroke=0)
+        pdf.setFont("Helvetica-Bold", 8.5)
+        pdf.drawString(min(peak_x + 10, chart_x + chart_w - 80), peak_y + 10, f"Peak {fmt_num(values[peak_idx], 2)}")
+
+        pdf.setFillColor(colors.HexColor("#DC2626"))
+        pdf.circle(trough_x, trough_y, 4.5, fill=1, stroke=0)
+        trough_label_x = trough_x - 54 if trough_x > chart_x + 60 else trough_x + 8
+        pdf.drawString(trough_label_x, trough_y + 10, f"Trough {fmt_num(values[trough_idx], 2)}")
+
+        # net change label
+        pdf.setFillColor(COLOR_MUTED)
+        pdf.setFont("Helvetica", 8.5)
+        net_change = values[-1] - values[0]
+        pdf.drawRightString(chart_x + chart_w, chart_y + chart_h + 10, f"Net change {net_change:+.4f}")
+
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=letter)
     pdf.setTitle(filename)
@@ -1653,13 +1984,14 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     page_number = 1
     y = pdf_start_page(pdf, page_number, document_title, claim_hash)
+    y -= PAGE_TOP_GAP
 
     # =========================
     # PAGE 1 — EXECUTIVE SUMMARY
     # =========================
 
-    pdf.setFillColor(colors.HexColor("#0F172A"))
-    pdf.setFont("Helvetica-Bold", 24)
+    pdf.setFillColor(COLOR_INK)
+    pdf.setFont("Helvetica-Bold", TITLE_XL)
     title_text = "Verified Trading Claim"
     if schema.status == "draft":
         title_text = "Draft Trading Claim"
@@ -1668,13 +2000,13 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.drawString(PDF_MARGIN_LEFT, y, title_text)
     y -= 18
 
-    pdf.setFillColor(colors.HexColor("#64748B"))
-    pdf.setFont("Helvetica", 11)
+    pdf.setFillColor(COLOR_MUTED)
+    pdf.setFont("Helvetica", TEXT_L)
     pdf.drawString(PDF_MARGIN_LEFT, y, "Trading Truth Layer")
-    y -= 16
+    y -= 18
 
-    pdf.setFillColor(colors.HexColor("#64748B"))
-    pdf.setFont("Helvetica", 10)
+    pdf.setFillColor(COLOR_MUTED)
+    pdf.setFont("Helvetica", TEXT_M)
     pdf.drawString(PDF_MARGIN_LEFT, y, f"Public View Path: {public_view_path}")
     y -= 14
     pdf.drawString(PDF_MARGIN_LEFT, y, f"Verify Link Path: {verify_link_short}")
@@ -1682,10 +2014,10 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.drawString(PDF_MARGIN_LEFT, y, f"Workspace ID: {schema.workspace_id}")
     y -= 14
     pdf.drawString(PDF_MARGIN_LEFT, y, f"Exported At: {exported_at.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-    y -= 22
+    y -= 24
 
-    pdf.setFillColor(colors.HexColor("#475569"))
-    pdf.setFont("Helvetica", 11)
+    pdf.setFillColor(COLOR_TEXT)
+    pdf.setFont("Helvetica", TEXT_L)
     y = draw_pdf_wrapped_text(
         pdf,
         "Lifecycle-governed trading claim report with public-proof framing, canonical fingerprints, integrity validation context, scope explainability, and evidence-backed performance summary.",
@@ -1694,243 +2026,171 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         PDF_CONTENT_WIDTH,
         14,
         "Helvetica",
-        11,
+        TEXT_L,
     )
-    y -= 18
+    y -= 24
 
-    banner_height = 174
-    banner_fill = colors.HexColor("#ECFDF5") if integrity_status == "valid" else colors.HexColor("#FEF2F2")
-    banner_stroke = colors.HexColor("#A7F3D0") if integrity_status == "valid" else colors.HexColor("#FECACA")
-    banner_text = colors.HexColor("#166534") if integrity_status == "valid" else colors.HexColor("#991B1B")
+    banner_height = 208
+    banner_fill = COLOR_GREEN_BG if integrity_status == "valid" else COLOR_RED_BG
+    banner_stroke = COLOR_GREEN_LINE if integrity_status == "valid" else COLOR_RED_LINE
+    banner_text = COLOR_GREEN_TEXT if integrity_status == "valid" else COLOR_RED_TEXT
 
-    pdf_round_box(
-        pdf,
-        PDF_MARGIN_LEFT,
-        y,
-        PDF_CONTENT_WIDTH,
-        banner_height,
-        banner_fill,
-        banner_stroke,
-        radius=16,
-    )
+    draw_soft_panel(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, banner_height, radius=18, fill=banner_fill, stroke=banner_stroke)
+
+    # left accent bar
+    pdf.setFillColor(banner_text)
+    pdf.roundRect(PDF_MARGIN_LEFT + 10, y - banner_height + 10, 8, banner_height - 20, 4, fill=1, stroke=0)
 
     pdf.setFillColor(banner_text)
-    pdf.setFont("Helvetica", 11)
-    pdf.drawString(PDF_MARGIN_LEFT + 16, y - 22, "Verification Signature")
+    pdf.setFont("Helvetica", TEXT_L)
+    pdf.drawString(PDF_MARGIN_LEFT + 24, y - 22, "Verification Signature")
 
     if schema.status == "locked" and integrity_status == "valid":
         signature_text = "Verified • Locked • Integrity Valid"
         sub_text = (
-            "This claim is lifecycle-governed and publicly verifiable. "
-            "The locked trade-set fingerprint matches the canonical record, "
-            "and integrity can be independently checked through the verify route."
+            "This claim is lifecycle-governed and publicly verifiable. The locked trade-set fingerprint matches "
+            "the canonical record, and integrity can be independently checked through the verify route."
         )
         trust_state_text = "Trust State: High-trust finalized record"
+        chip_rows = [("status", "locked"), ("integrity", "valid"), ("trust", "high")]
     elif schema.status == "published":
         signature_text = "Published Verification Surface"
         sub_text = (
-            "This claim is publicly exposed and verification-ready. "
-            "Its canonical identity, scope, and lifecycle posture are available "
-            "for external review through Trading Truth Layer."
+            "This claim is publicly exposed and verification-ready. Its canonical identity, scope, and lifecycle "
+            "posture are available for external review through Trading Truth Layer."
         )
         trust_state_text = "Trust State: Public verification surface"
+        chip_rows = [("status", "published"), ("integrity", integrity_status), ("trust", "elevated")]
     elif schema.status == "locked" and integrity_status != "valid":
         signature_text = "Locked • Integrity Compromised"
         sub_text = (
-            "This record is locked, but the current in-scope trade-set fingerprint "
-            "no longer matches the stored locked fingerprint."
+            "This record is locked, but the current in-scope trade-set fingerprint no longer matches the stored "
+            "locked fingerprint."
         )
         trust_state_text = "Trust State: Integrity compromised"
+        chip_rows = [("status", "locked"), ("integrity", "compromised"), ("trust", "alert")]
     else:
         signature_text = f"{schema.status.title()} Claim"
         sub_text = (
-            "This report summarizes current lifecycle state, scoped claim evidence, "
-            "and canonical record identity for review."
+            "This report summarizes current lifecycle state, scoped claim evidence, and canonical record identity for review."
         )
         if schema.status == "draft":
             trust_state_text = "Trust State: Draft (not yet published or locked)"
-        elif schema.status == "published":
-            trust_state_text = "Trust State: Public verification surface"
+            chip_rows = [("status", "draft"), ("integrity", integrity_status), ("trust", "pre-public")]
         elif schema.status == "locked":
             trust_state_text = "Trust State: Locked canonical record"
+            chip_rows = [("status", "locked"), ("integrity", integrity_status), ("trust", "controlled")]
         else:
             trust_state_text = f"Trust State: {schema.status.title()}"
+            chip_rows = [("status", schema.status), ("integrity", integrity_status), ("trust", "contextual")]
 
-    pdf.setFont("Helvetica-Bold", 20)
-    pdf.drawString(PDF_MARGIN_LEFT + 16, y - 44, signature_text)
-
-    pdf.setFont("Helvetica", 9)
+    pdf.setFont("Helvetica-Bold", 24)
     pdf.setFillColor(banner_text)
-    pdf.drawString(PDF_MARGIN_LEFT + 16, y - 58, trust_state_text)
+    title_lines = split_wrapped_lines(signature_text, PDF_CONTENT_WIDTH - 260, "Helvetica-Bold", 24) or [signature_text]
+    title_y = y - 50
+    for line in title_lines[:2]:
+        pdf.drawString(PDF_MARGIN_LEFT + 24, title_y, line)
+        title_y -= 22
 
-    pdf.setFont("Helvetica", 10)
+    pdf.setFont("Helvetica", TEXT_L)
+    pdf.drawString(PDF_MARGIN_LEFT + 24, y - 78, trust_state_text)
+
     draw_pdf_wrapped_text(
         pdf,
         sub_text,
-        PDF_MARGIN_LEFT + 16,
-        y - 80,
-        PDF_CONTENT_WIDTH - 220,
-        12,
+        PDF_MARGIN_LEFT + 24,
+        y - 102,
+        PDF_CONTENT_WIDTH - 250,
+        13,
         "Helvetica",
-        10,
+        TEXT_M,
     )
 
-    chip_x = PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT - 160
-    pdf_round_box(
-        pdf,
+    chip_x = PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT - 190
+    draw_info_chip(
         chip_x,
         y - 18,
-        160,
-        70,
-        colors.white,
-        colors.HexColor("#D1D5DB"),
-        radius=10,
-    )
-    pdf.setFillColor(colors.HexColor("#0F172A"))
-    pdf.setFont("Helvetica", 10)
-    pdf.drawString(chip_x + 12, y - 34, f"status: {schema.status}")
-    pdf.drawString(chip_x + 12, y - 48, f"integrity: {integrity_status}")
-    pdf.drawString(
-        chip_x + 12,
-        y - 62,
-        "trust: high" if integrity_status == "valid" else "trust: alert",
+        190,
+        92,
+        chip_rows,
+        fill=colors.white,
+        stroke=COLOR_LINE,
     )
 
-    inner_gap = 14
-    hash_box_w = (PDF_CONTENT_WIDTH - 32 - inner_gap) / 2
-    hash_row_top = y - 116
-
-    draw_label_value_box(
-        pdf,
-        PDF_MARGIN_LEFT + 16,
+    hash_box_w = (PDF_CONTENT_WIDTH - 24 - CARD_GAP) / 2
+    hash_row_top = y - 148
+    draw_label_value_box_v2(
+        PDF_MARGIN_LEFT + 12,
         hash_row_top,
         hash_box_w,
-        52,
+        58,
         "Claim Hash Fingerprint",
         short_hash(claim_hash, 18, 10),
+        value_font="Courier",
+        value_size=8.5,
     )
-    draw_label_value_box(
-        pdf,
-        PDF_MARGIN_LEFT + 16 + hash_box_w + inner_gap,
+    draw_label_value_box_v2(
+        PDF_MARGIN_LEFT + 12 + hash_box_w + CARD_GAP,
         hash_row_top,
         hash_box_w,
-        52,
+        58,
         "Trade Set Hash Fingerprint",
         short_hash(trade_set_hash, 18, 10),
+        value_font="Courier",
+        value_size=8.5,
     )
 
-    y -= banner_height + 44
+    y -= banner_height + SECTION_GAP
 
-    pdf.setFillColor(colors.HexColor("#0F172A"))
-    pdf.setFont("Helvetica-Bold", 18)
+    pdf.setFillColor(COLOR_INK)
+    pdf.setFont("Helvetica-Bold", TITLE_L)
     pdf.drawString(PDF_MARGIN_LEFT, y, "Claim Identity")
     y -= 34
 
-    pdf.setFillColor(colors.HexColor("#0F172A"))
+    pdf.setFillColor(COLOR_INK)
     pdf.setFont("Helvetica-Bold", 22)
     title_lines = split_wrapped_lines(schema.name or "Untitled Claim", PDF_CONTENT_WIDTH, "Helvetica-Bold", 22)
     for line in title_lines[:2]:
         pdf.drawString(PDF_MARGIN_LEFT, y, line)
         y -= 24
+    y -= 6
 
-    card_gap = 12
-    card_w = (PDF_CONTENT_WIDTH - (card_gap * 3)) / 4
-    card_h = 66
+    card_w = (PDF_CONTENT_WIDTH - (CARD_GAP * 3)) / 4
+    card_h = 74
 
-    draw_metric_card(
-        pdf, PDF_MARGIN_LEFT, y, card_w, card_h,
-        "Trade Count", str(metrics["trade_count"]), "In-scope rows"
-    )
-    draw_metric_card(
-        pdf, PDF_MARGIN_LEFT + card_w + card_gap, y, card_w, card_h,
-        "Net PnL", fmt_num(metrics["net_pnl"], 2), "Aggregate result"
-    )
-    draw_metric_card(
-        pdf, PDF_MARGIN_LEFT + (card_w + card_gap) * 2, y, card_w, card_h,
-        "Profit Factor", fmt_num(metrics["profit_factor"], 4), "Gross profit / loss"
-    )
-    draw_metric_card(
-        pdf, PDF_MARGIN_LEFT + (card_w + card_gap) * 3, y, card_w, card_h,
-        "Win Rate", fmt_pct_ratio(metrics["win_rate"], 2), "Winning trades %"
-    )
-    y -= card_h + 20
+    draw_metric_card_v2(PDF_MARGIN_LEFT, y, card_w, card_h, "Trade Count", str(metrics["trade_count"]), "In-scope rows")
+    draw_metric_card_v2(PDF_MARGIN_LEFT + card_w + CARD_GAP, y, card_w, card_h, "Net PnL", fmt_num(metrics["net_pnl"], 2), "Aggregate result")
+    draw_metric_card_v2(PDF_MARGIN_LEFT + (card_w + CARD_GAP) * 2, y, card_w, card_h, "Profit Factor", fmt_num(metrics["profit_factor"], 4), "Gross profit / loss")
+    draw_metric_card_v2(PDF_MARGIN_LEFT + (card_w + CARD_GAP) * 3, y, card_w, card_h, "Win Rate", fmt_pct_ratio(metrics["win_rate"], 2), "Winning trades %")
+    y -= card_h + BLOCK_GAP
 
-    scope_card_h = 64
-    draw_metric_card(
-        pdf,
-        PDF_MARGIN_LEFT,
-        y,
-        card_w,
-        scope_card_h,
-        "Workspace Trades",
-        str(scope["workspace_trade_count"]),
-        "All workspace trade rows",
-    )
-    draw_metric_card(
-        pdf,
-        PDF_MARGIN_LEFT + card_w + card_gap,
-        y,
-        card_w,
-        scope_card_h,
-        "Included Trades",
-        str(len(scope["included"])),
-        "Rows used in claim",
-    )
-    draw_metric_card(
-        pdf,
-        PDF_MARGIN_LEFT + (card_w + card_gap) * 2,
-        y,
-        card_w,
-        scope_card_h,
-        "Excluded Trades",
-        str(len(scope["excluded"])),
-        "Out-of-scope rows",
-    )
-    draw_metric_card(
-        pdf,
-        PDF_MARGIN_LEFT + (card_w + card_gap) * 3,
-        y,
-        card_w,
-        scope_card_h,
-        "Audit Events",
-        str(len(audit_events)),
-        "Lifecycle trail count",
-    )
-    y -= scope_card_h + 18
+    draw_metric_card_v2(PDF_MARGIN_LEFT, y, card_w, 72, "Workspace Trades", str(scope["workspace_trade_count"]), "All workspace trade rows")
+    draw_metric_card_v2(PDF_MARGIN_LEFT + card_w + CARD_GAP, y, card_w, 72, "Included Trades", str(len(scope["included"])), "Rows used in claim")
+    draw_metric_card_v2(PDF_MARGIN_LEFT + (card_w + CARD_GAP) * 2, y, card_w, 72, "Excluded Trades", str(len(scope["excluded"])), "Out-of-scope rows")
+    draw_metric_card_v2(PDF_MARGIN_LEFT + (card_w + CARD_GAP) * 3, y, card_w, 72, "Audit Events", str(len(audit_events)), "Lifecycle trail count")
+    y -= 90
 
     latest_event = audit_events[-1] if audit_events else None
-    latest_event_text = (
-        f"{latest_event.event_type} @ {fmt_dt(latest_event.created_at)}"
-        if latest_event else "No audit events"
-    )
-
-    y, page_number = draw_dynamic_note_box(
-        pdf,
-        PDF_MARGIN_LEFT,
-        y,
-        PDF_CONTENT_WIDTH,
-        latest_event_text,
-        page_number,
-        document_title,
-        claim_hash,
-        label="Latest Audit Event",
-    )
+    latest_event_text = f"{latest_event.event_type} @ {fmt_dt(latest_event.created_at)}" if latest_event else "No audit events"
+    y = draw_highlight_note(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, latest_event_text, label="Latest Audit Event", min_height=44)
 
     page_number += 1
     y = pdf_new_page(pdf, page_number, document_title, claim_hash)
+    y -= PAGE_TOP_GAP
 
     # =========================
     # PAGE 2 — PERFORMANCE DIAGNOSTICS
     # =========================
 
     y = pdf_section_title(pdf, "Performance Diagnostics", PDF_MARGIN_LEFT, y)
+    y -= 6
 
-    diag_w = (PDF_CONTENT_WIDTH - 36) / 4
-    draw_metric_card(pdf, PDF_MARGIN_LEFT, y, diag_w, 66, "Best Trade", fmt_num(metrics["best_trade"], 2), "Highest PnL")
-    draw_metric_card(pdf, PDF_MARGIN_LEFT + diag_w + 12, y, diag_w, 66, "Worst Trade", fmt_num(metrics["worst_trade"], 2), "Lowest PnL")
-    draw_metric_card(pdf, PDF_MARGIN_LEFT + (diag_w + 12) * 2, y, diag_w, 66, "Max Drawdown", fmt_num(drawdown_stats["max_drawdown"], 2), "Peak-to-trough")
-    draw_metric_card(pdf, PDF_MARGIN_LEFT + (diag_w + 12) * 3, y, diag_w, 66, "Ending Equity", fmt_num(equity_curve["ending_equity"], 2), "Final cumulative")
-    y -= 82
+    diag_w = (PDF_CONTENT_WIDTH - (CARD_GAP * 3)) / 4
+    draw_metric_card_v2(PDF_MARGIN_LEFT, y, diag_w, 72, "Best Trade", fmt_num(metrics["best_trade"], 2), "Highest PnL")
+    draw_metric_card_v2(PDF_MARGIN_LEFT + diag_w + CARD_GAP, y, diag_w, 72, "Worst Trade", fmt_num(metrics["worst_trade"], 2), "Lowest PnL")
+    draw_metric_card_v2(PDF_MARGIN_LEFT + (diag_w + CARD_GAP) * 2, y, diag_w, 72, "Max Drawdown", fmt_num(drawdown_stats["max_drawdown"], 2), "Peak-to-trough")
+    draw_metric_card_v2(PDF_MARGIN_LEFT + (diag_w + CARD_GAP) * 3, y, diag_w, 72, "Ending Equity", fmt_num(equity_curve["ending_equity"], 2), "Final cumulative")
+    y -= 92
 
     curve_points = equity_curve["curve"]
     first_point = curve_points[0] if curve_points else None
@@ -1938,196 +2198,146 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     peak_point = drawdown_stats.get("peak_point")
     trough_point = drawdown_stats.get("trough_point")
 
-    mini_gap = 12
-    note_w = (PDF_CONTENT_WIDTH - (mini_gap * 3)) / 4
-    row_h = 52
-    row_left = PDF_MARGIN_LEFT
-
-    draw_label_value_box(
-        pdf, row_left, y, note_w, row_h, "First Point",
+    note_w = (PDF_CONTENT_WIDTH - (CARD_GAP * 3)) / 4
+    draw_label_value_box_v2(
+        PDF_MARGIN_LEFT,
+        y,
+        note_w,
+        60,
+        "First Point",
         f"Trade #{first_point['trade_id']} · {first_point['symbol']} · {fmt_dt(first_point['opened_at'])}" if first_point else "—",
-        value_font_size=8,
+        value_font="Helvetica",
+        value_size=8,
     )
-    draw_label_value_box(
-        pdf, row_left + note_w + mini_gap, y, note_w, row_h, "Last Point",
+    draw_label_value_box_v2(
+        PDF_MARGIN_LEFT + note_w + CARD_GAP,
+        y,
+        note_w,
+        60,
+        "Last Point",
         f"Trade #{last_point['trade_id']} · {last_point['symbol']} · {fmt_dt(last_point['opened_at'])}" if last_point else "—",
-        value_font_size=8,
+        value_font="Helvetica",
+        value_size=8,
     )
-    draw_label_value_box(
-        pdf, row_left + (note_w + mini_gap) * 2, y, note_w, row_h, "Peak Point",
+    draw_label_value_box_v2(
+        PDF_MARGIN_LEFT + (note_w + CARD_GAP) * 2,
+        y,
+        note_w,
+        60,
+        "Peak Point",
         f"Trade #{peak_point['trade_id']} · {peak_point['symbol']} · {fmt_dt(peak_point['opened_at'])}" if peak_point else "—",
-        value_font_size=8,
+        value_font="Helvetica",
+        value_size=8,
     )
-    draw_label_value_box(
-        pdf, row_left + (note_w + mini_gap) * 3, y, note_w, row_h, "Trough Point",
+    draw_label_value_box_v2(
+        PDF_MARGIN_LEFT + (note_w + CARD_GAP) * 3,
+        y,
+        note_w,
+        60,
+        "Trough Point",
         f"Trade #{trough_point['trade_id']} · {trough_point['symbol']} · {fmt_dt(trough_point['opened_at'])}" if trough_point else "—",
-        value_font_size=8,
+        value_font="Helvetica",
+        value_size=8,
     )
-    y -= row_h + 18
+    y -= 80
 
-    draw_light_note_box(
-        pdf,
+    y = draw_highlight_note(
         PDF_MARGIN_LEFT,
         y,
         PDF_CONTENT_WIDTH,
         "This curve mirrors the public proof surface by showing cumulative path structure, consistent peak and trough annotations, and the deepest drawdown interval when one exists. Max drawdown remains the primary risk statistic, while peak and trough identify the full performance range.",
-        height=50,
+        min_height=50,
     )
-    y -= 62
+    y -= 14
 
-    pdf.setFont("Helvetica", 9)
-    pdf.setFillColor(colors.HexColor("#64748B"))
+    pdf.setFont("Helvetica", TEXT_S)
+    pdf.setFillColor(COLOR_MUTED)
     pdf.drawString(PDF_MARGIN_LEFT, y, "X-axis: Trade sequence (chronological)")
     y -= 12
     pdf.drawString(PDF_MARGIN_LEFT, y, "Y-axis: Cumulative PnL")
-    y -= 16
+    y -= 18
 
-    curve_box_h = 180
-    y, page_number = pdf_require_space(
-        pdf,
-        y,
-        curve_box_h + 20,
-        page_number,
-        document_title,
-        claim_hash,
-    )
-
-    draw_equity_curve_preview(
-        pdf,
-        PDF_MARGIN_LEFT,
-        y,
-        PDF_CONTENT_WIDTH,
-        curve_box_h,
-        curve_points,
-    )
-    y -= curve_box_h + 18
+    draw_equity_curve_preview_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, 232, curve_points)
 
     page_number += 1
     y = pdf_new_page(pdf, page_number, document_title, claim_hash)
+    y -= PAGE_TOP_GAP
 
     # =========================
-    # PAGE 3 — CONTEXT / EVIDENCE
+    # PAGE 3 — VERIFICATION CONTEXT
     # =========================
 
     y = pdf_section_title(pdf, "Verification Context", PDF_MARGIN_LEFT, y)
+    y -= 6
 
     panel_gap = 16
     panel_w = (PDF_CONTENT_WIDTH - panel_gap) / 2
-    panel_h = 244
+    panel_h = 250
 
-    pdf_round_box(
-        pdf,
-        PDF_MARGIN_LEFT,
-        y,
-        panel_w,
-        panel_h,
-        colors.white,
-        colors.HexColor("#E2E8F0"),
-        radius=14,
-    )
-    pdf.setFillColor(colors.HexColor("#0F172A"))
-    pdf.setFont("Helvetica-Bold", 15)
-    pdf.drawString(PDF_MARGIN_LEFT + 14, y - 22, "Verification Scope")
+    draw_soft_panel(PDF_MARGIN_LEFT, y, panel_w, panel_h, radius=16, fill=colors.white, stroke=COLOR_LINE)
+    pdf.setFillColor(COLOR_INK)
+    pdf.setFont("Helvetica-Bold", TITLE_M)
+    pdf.drawString(PDF_MARGIN_LEFT + 18, y - 24, "Verification Scope")
 
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 14, y - 48, "Period Start", schema.period_start or "—")
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 174, y - 48, "Period End", schema.period_end or "—")
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 14, y - 110, "Included Members", included_members)
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 174, y - 110, "Included Symbols", included_symbols)
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 14, y - 172, "Excluded Trade IDs", excluded_trade_ids)
-    draw_kv_pair(pdf, PDF_MARGIN_LEFT + 174, y - 172, "Visibility", schema.visibility or "—")
+    draw_kv_grid_cell(PDF_MARGIN_LEFT + 18, y - 58, "Period Start", schema.period_start or "—", max_width=130)
+    draw_kv_grid_cell(PDF_MARGIN_LEFT + 184, y - 58, "Period End", schema.period_end or "—", max_width=130)
+    draw_kv_grid_cell(PDF_MARGIN_LEFT + 18, y - 126, "Included Members", included_members, max_width=130)
+    draw_kv_grid_cell(PDF_MARGIN_LEFT + 184, y - 126, "Included Symbols", included_symbols, max_width=130)
+    draw_kv_grid_cell(PDF_MARGIN_LEFT + 18, y - 194, "Excluded Trade IDs", excluded_trade_ids, max_width=130)
+    draw_kv_grid_cell(PDF_MARGIN_LEFT + 184, y - 194, "Visibility", schema.visibility or "—", max_width=130)
 
     panel2_x = PDF_MARGIN_LEFT + panel_w + panel_gap
-    pdf_round_box(
-        pdf,
-        panel2_x,
-        y,
-        panel_w,
-        panel_h,
-        colors.white,
-        colors.HexColor("#E2E8F0"),
-        radius=14,
-    )
-    pdf.setFillColor(colors.HexColor("#0F172A"))
-    pdf.setFont("Helvetica-Bold", 15)
-    pdf.drawString(panel2_x + 14, y - 22, "Lifecycle & Lineage")
+    draw_soft_panel(panel2_x, y, panel_w, panel_h, radius=16, fill=colors.white, stroke=COLOR_LINE)
+    pdf.setFillColor(COLOR_INK)
+    pdf.setFont("Helvetica-Bold", TITLE_M)
+    pdf.drawString(panel2_x + 18, y - 24, "Lifecycle & Lineage")
 
     left_col_x = panel2_x + 18
-    right_col_x = panel2_x + 150
+    right_col_x = panel2_x + 176
 
-    row_1_y = y - 48
-    row_2_y = y - 96
-    row_3_y = y - 144
-    row_4_y = y - 192
+    draw_kv_grid_cell(left_col_x, y - 58, "Status", schema.status or "—", max_width=130)
+    draw_kv_grid_cell(right_col_x, y - 58, "Integrity", integrity_status, max_width=130)
 
-    def draw_lifecycle_cell(cell_x: float, cell_y: float, label: str, value: str):
-        pdf.setFillColor(colors.HexColor("#64748B"))
-        pdf.setFont("Helvetica", 9)
-        pdf.drawString(cell_x, cell_y, label)
+    draw_kv_grid_cell(left_col_x, y - 126, "Verified At", fmt_dt(schema.verified_at), max_width=140)
+    draw_kv_grid_cell(right_col_x, y - 126, "Published At", fmt_dt(schema.published_at), max_width=140)
 
-        pdf.setFillColor(colors.HexColor("#0F172A"))
-        pdf.setFont("Helvetica-Bold", 10)
-        lines = split_wrapped_lines(value or "—", 112, "Helvetica-Bold", 10)
-        if not lines:
-            lines = ["—"]
+    draw_kv_grid_cell(left_col_x, y - 194, "Locked At", fmt_dt(schema.locked_at), max_width=140)
+    draw_kv_grid_cell(right_col_x, y - 194, "Version Number", str(schema.version_number or "—"), max_width=140)
 
-        value_y = cell_y - 14
-        for line in lines[:2]:
-            pdf.drawString(cell_x, value_y, line)
-            value_y -= 11
+    draw_kv_grid_cell(left_col_x, y - 230, "Root Claim ID", str(schema.root_claim_id or "—"), max_width=140)
+    draw_kv_grid_cell(right_col_x, y - 230, "Parent Claim ID", str(schema.parent_claim_id or "—"), max_width=140)
 
-        pdf.setFillColor(colors.black)
+    y -= panel_h + BLOCK_GAP
 
-    draw_lifecycle_cell(left_col_x, row_1_y, "Status", schema.status or "—")
-    draw_lifecycle_cell(right_col_x, row_1_y, "Integrity", integrity_status)
-
-    draw_lifecycle_cell(left_col_x, row_2_y, "Verified At", fmt_dt(schema.verified_at))
-    draw_lifecycle_cell(right_col_x, row_2_y, "Published At", fmt_dt(schema.published_at))
-
-    draw_lifecycle_cell(left_col_x, row_3_y, "Locked At", fmt_dt(schema.locked_at))
-    draw_lifecycle_cell(right_col_x, row_3_y, "Version Number", str(schema.version_number or "—"))
-
-    draw_lifecycle_cell(left_col_x, row_4_y, "Root Claim ID", str(schema.root_claim_id or "—"))
-    draw_lifecycle_cell(right_col_x, row_4_y, "Parent Claim ID", str(schema.parent_claim_id or "—"))
-
-    y -= panel_h + 14
-
-    y, page_number = draw_dynamic_note_box(
-        pdf,
+    y = draw_highlight_note(
         PDF_MARGIN_LEFT,
         y,
         PDF_CONTENT_WIDTH,
         "This claim belongs to a versioned lineage. Each version represents a scoped evaluation. Root and parent identifiers ensure full traceability of claim evolution.",
-        page_number,
-        document_title,
-        claim_hash,
         label="Versioning Context",
+        min_height=44,
     )
+    y -= 14
 
-    y, page_number = draw_dynamic_note_box(
-        pdf,
+    y = draw_highlight_note(
         PDF_MARGIN_LEFT,
         y,
         PDF_CONTENT_WIDTH,
         schema.methodology_notes or "No methodology notes supplied.",
-        page_number,
-        document_title,
-        claim_hash,
         label="Methodology Notes",
+        min_height=56,
     )
+    y -= 14
 
-    y, page_number = draw_dynamic_note_box(
-        pdf,
+    y = draw_highlight_note(
         PDF_MARGIN_LEFT,
         y,
         PDF_CONTENT_WIDTH,
         "This report verifies the scoped trade set represented by this claim schema. It does not independently attest to broker connectivity, external account ownership, or performance outside the included evidence boundary. Public trust should be interpreted together with lifecycle status, claim hash, and locked trade-set integrity where applicable.",
-        page_number,
-        document_title,
-        claim_hash,
         label="Interpretation & Limitations",
+        min_height=56,
     )
-
-    y -= 12
+    y -= 14
 
     excluded_breakdown = scope["excluded_breakdown"]
     exclusion_summary_text = (
@@ -2136,147 +2346,138 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         f"Symbol filter: {excluded_breakdown.get(EXCLUSION_REASON_SYMBOL_FILTER, 0)}, "
         f"Manual exclusion: {excluded_breakdown.get(EXCLUSION_REASON_MANUAL_EXCLUSION, 0)}."
     )
-
-    y, page_number = draw_dynamic_note_box(
-        pdf,
+    y = draw_highlight_note(
         PDF_MARGIN_LEFT,
         y,
         PDF_CONTENT_WIDTH,
         exclusion_summary_text,
-        page_number,
-        document_title,
-        claim_hash,
         label="Scope Exclusion Summary",
+        min_height=44,
     )
-
-    y, page_number = pdf_require_space(
-        pdf,
-        y,
-        150,
-        page_number,
-        document_title,
-        claim_hash,
-    )
-    y = pdf_section_title(pdf, "Leaderboard Snapshot", PDF_MARGIN_LEFT, y)
-
-    leaderboard_x = PDF_MARGIN_LEFT + 18
-    leaderboard_width = 440
-
-    y = draw_table_header(
-        pdf,
-        leaderboard_x,
-        y,
-        [
-            (0, "Rank"),
-            (72, "Member"),
-            (220, "Net PnL"),
-            (310, "Win Rate"),
-            (390, "Profit Factor"),
-        ],
-        font_size=9,
-        table_width=leaderboard_width,
-    )
-
-    pdf.setFont("Helvetica", 9)
-    pdf.setFillColor(colors.HexColor("#0F172A"))
-    if leaderboard:
-        for row in leaderboard[:8]:
-            y, page_number = pdf_require_space(pdf, y, 24, page_number, document_title, claim_hash)
-            pdf.drawString(leaderboard_x, y, str(row["rank"]))
-            pdf.drawString(leaderboard_x + 72, y, shorten_text(str(row["member"]), 18))
-            pdf.drawString(leaderboard_x + 220, y, fmt_num(row["net_pnl"], 2))
-            pdf.drawString(leaderboard_x + 310, y, fmt_pct_ratio(float(row["win_rate"]), 2))
-            pdf.drawString(leaderboard_x + 390, y, fmt_num(row["profit_factor"], 4))
-            pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
-            pdf.line(leaderboard_x, y - 8, leaderboard_x + leaderboard_width, y - 8)
-            y -= 18
-    else:
-        pdf.drawString(leaderboard_x, y, "No leaderboard data available.")
-        y -= 18
-
-    y -= 12
-
-    y, page_number = pdf_require_space(
-        pdf,
-        y,
-        170,
-        page_number,
-        document_title,
-        claim_hash,
-    )
-    y = pdf_section_title(pdf, "Trade Evidence Snapshot", PDF_MARGIN_LEFT, y)
-    y = draw_table_header(
-        pdf,
-        PDF_MARGIN_LEFT,
-        y,
-        [
-            (0, "#"),
-            (34, "Trade ID"),
-            (100, "Opened"),
-            (230, "Symbol"),
-            (302, "Side"),
-            (360, "Member"),
-            (426, "PnL"),
-            (492, "Cumulative"),
-        ],
-        font_size=8,
-    )
-
-    pdf.setFont("Helvetica", 8)
-    pdf.setFillColor(colors.HexColor("#0F172A"))
-    if evidence_rows:
-        for row in evidence_rows[:10]:
-            y, page_number = pdf_require_space(pdf, y, 22, page_number, document_title, claim_hash)
-            pdf.drawString(PDF_MARGIN_LEFT, y, str(row["index"]))
-            pdf.drawString(PDF_MARGIN_LEFT + 34, y, str(row["trade_id"]))
-            pdf.drawString(PDF_MARGIN_LEFT + 100, y, shorten_text(fmt_dt(row["opened_at"]), 22))
-            pdf.drawString(PDF_MARGIN_LEFT + 230, y, shorten_text(str(row["symbol"]), 10))
-            pdf.drawString(PDF_MARGIN_LEFT + 302, y, shorten_text(str(row["side"]), 6))
-            pdf.drawString(PDF_MARGIN_LEFT + 360, y, str(row["member_id"]))
-            pdf.drawString(PDF_MARGIN_LEFT + 426, y, fmt_num(row["net_pnl"], 2))
-            pdf.drawString(PDF_MARGIN_LEFT + 492, y, fmt_num(row["cumulative_pnl"], 2))
-            pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
-            pdf.line(PDF_MARGIN_LEFT, y - 8, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT, y - 8)
-            y -= 16
-
-        total_pnl = sum((float(r.get("net_pnl", 0) or 0) for r in evidence_rows))
-        y -= 10
-        pdf.setFont("Helvetica-Bold", 9)
-        pdf.setFillColor(colors.HexColor("#0F172A"))
-        pdf.drawString(PDF_MARGIN_LEFT, y, f"Total Trades: {len(evidence_rows)}")
-        pdf.drawString(PDF_MARGIN_LEFT + 200, y, f"Total Net PnL: {fmt_num(total_pnl, 2)}")
-    else:
-        pdf.drawString(PDF_MARGIN_LEFT, y, "No trade evidence rows available.")
-        y -= 18
 
     page_number += 1
     y = pdf_new_page(pdf, page_number, document_title, claim_hash)
+    y -= PAGE_TOP_GAP
 
     # =========================
-    # PAGE 4 — FINGERPRINTS & VALIDATION
+    # PAGE 4 — EVIDENCE TABLES
+    # =========================
+
+    y = draw_table_title("Leaderboard Snapshot", y)
+    leaderboard_x = PDF_MARGIN_LEFT
+    leaderboard_total_w = PDF_CONTENT_WIDTH
+
+    leaderboard_columns = [
+        {"label": "Rank", "key": "rank", "x": 0, "w": 64, "align": "left"},
+        {"label": "Member", "key": "member", "x": 64, "w": 190, "align": "left"},
+        {"label": "Net PnL", "key": "net_pnl", "x": 254, "w": 110, "align": "right"},
+        {"label": "Win Rate", "key": "win_rate", "x": 364, "w": 110, "align": "right"},
+        {"label": "Profit Factor", "key": "profit_factor", "x": 474, "w": 114, "align": "right"},
+    ]
+    y = draw_table_header_row(leaderboard_x, y, leaderboard_total_w, leaderboard_columns, row_h=24)
+
+    if leaderboard:
+        row_top = y
+        for idx, row in enumerate(leaderboard[:8]):
+            row_values = {
+                "rank": row["rank"],
+                "member": shorten_text(str(row["member"]), 24),
+                "net_pnl": fmt_num(row["net_pnl"], 2),
+                "win_rate": fmt_pct_ratio(float(row["win_rate"]), 2),
+                "profit_factor": fmt_num(row["profit_factor"], 4),
+            }
+            row_top = draw_table_row(
+                leaderboard_x,
+                row_top,
+                leaderboard_total_w,
+                leaderboard_columns,
+                row_values,
+                row_h=24,
+                alt=(idx % 2 == 1),
+            )
+        y = row_top - 18
+    else:
+        pdf.setFillColor(COLOR_MUTED)
+        pdf.setFont("Helvetica", TEXT_M)
+        pdf.drawString(PDF_MARGIN_LEFT + 4, y - 18, "No leaderboard data available.")
+        y -= 38
+
+    y = draw_table_title("Trade Evidence Snapshot", y)
+    evidence_columns = [
+        {"label": "#", "key": "index", "x": 0, "w": 36, "align": "left"},
+        {"label": "Trade ID", "key": "trade_id", "x": 36, "w": 74, "align": "left"},
+        {"label": "Opened", "key": "opened_at", "x": 110, "w": 154, "align": "left"},
+        {"label": "Symbol", "key": "symbol", "x": 264, "w": 84, "align": "left"},
+        {"label": "Side", "key": "side", "x": 348, "w": 62, "align": "left"},
+        {"label": "Member", "key": "member_id", "x": 410, "w": 72, "align": "left"},
+        {"label": "PnL", "key": "net_pnl", "x": 482, "w": 52, "align": "right"},
+        {"label": "Cumulative", "key": "cumulative_pnl", "x": 534, "w": 54, "align": "right"},
+    ]
+    y = draw_table_header_row(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, evidence_columns, row_h=24)
+
+    if evidence_rows:
+        row_top = y
+        for idx, row in enumerate(evidence_rows[:10]):
+            row_values = {
+                "index": row["index"],
+                "trade_id": row["trade_id"],
+                "opened_at": shorten_text(fmt_dt(row["opened_at"]), 22),
+                "symbol": shorten_text(str(row["symbol"]), 10),
+                "side": shorten_text(str(row["side"]), 6),
+                "member_id": str(row["member_id"]),
+                "net_pnl": fmt_num(row["net_pnl"], 2),
+                "cumulative_pnl": fmt_num(row["cumulative_pnl"], 2),
+            }
+            row_top = draw_table_row(
+                PDF_MARGIN_LEFT,
+                row_top,
+                PDF_CONTENT_WIDTH,
+                evidence_columns,
+                row_values,
+                row_h=22,
+                alt=(idx % 2 == 1),
+            )
+
+        total_pnl = sum((float(r.get("net_pnl", 0) or 0) for r in evidence_rows))
+        y = row_top - 22
+        pdf.setFillColor(COLOR_INK)
+        pdf.setFont("Helvetica-Bold", TEXT_M)
+        pdf.drawString(PDF_MARGIN_LEFT, y, f"Total Trades: {len(evidence_rows)}")
+        pdf.drawRightString(PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT, y, f"Total Net PnL: {fmt_num(total_pnl, 2)}")
+    else:
+        pdf.setFillColor(COLOR_MUTED)
+        pdf.setFont("Helvetica", TEXT_M)
+        pdf.drawString(PDF_MARGIN_LEFT + 4, y - 18, "No trade evidence rows available.")
+
+    page_number += 1
+    y = pdf_new_page(pdf, page_number, document_title, claim_hash)
+    y -= PAGE_TOP_GAP
+
+    # =========================
+    # PAGE 5 — FINGERPRINTS & VALIDATION
     # =========================
 
     y = pdf_section_title(pdf, "Canonical Fingerprints & Verification Paths", PDF_MARGIN_LEFT, y)
+    y -= 10
 
-    draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Claim Hash", claim_hash)
-    y -= 62
-    draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Trade Set Hash", trade_set_hash)
-    y -= 62
-    draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Public View Path", public_view_path)
-    y -= 62
-    draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Verify Link Path", verify_link_path)
-    y -= 76
+    pdf.setFillColor(COLOR_MUTED)
+    pdf.setFont("Helvetica", TEXT_M)
+    pdf.drawString(PDF_MARGIN_LEFT, y, "Canonical Verification Anchors")
+    y -= 12
 
-    y, page_number = draw_dynamic_note_box(
-        pdf,
+    y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Claim Hash", claim_hash, emphasize=False) - 12
+    y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Trade Set Hash", trade_set_hash, emphasize=False) - 12
+    y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Public View Path", public_view_path, emphasize=False) - 12
+    y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Verify Link Path", verify_link_path, emphasize=True) - 18
+
+    note_w = PDF_CONTENT_WIDTH - 120
+    y = draw_highlight_note(
         PDF_MARGIN_LEFT,
         y,
-        PDF_CONTENT_WIDTH - 110,
+        note_w,
         "The claim hash and trade-set hash uniquely identify this report and its dataset. Any modification will produce a different hash, ensuring tamper-evident verification.",
-        page_number,
-        document_title,
-        claim_hash,
         label="Data Integrity Statement",
+        min_height=60,
     )
 
     try:
@@ -2284,26 +2485,30 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         bounds = qr_code.getBounds()
         qr_width = bounds[2] - bounds[0]
         qr_height = bounds[3] - bounds[1]
-        qr_size = 78
-
+        qr_size = 84
         d = Drawing(
             qr_size,
             qr_size,
             transform=[qr_size / qr_width, 0, 0, qr_size / qr_height, 0, 0],
         )
         d.add(qr_code)
-        renderPDF.draw(d, pdf, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT - 82, y + 4)
+        renderPDF.draw(d, pdf, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT - 92, y + 8)
     except Exception:
         pass
 
-    draw_light_note_box(
-        pdf,
-        PDF_MARGIN_LEFT,
-        y - 10,
-        PDF_CONTENT_WIDTH,
-        "Generated from Trading Truth Layer — a verification infrastructure for trading claims. This record can be independently validated via its verify link, public view path, claim hash, and trade-set hash.",
-        height=44,
+    y -= 22
+    draw_soft_panel(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, 56, radius=14, fill=COLOR_FILL_ALT, stroke=COLOR_LINE)
+    pdf.setFillColor(COLOR_TEXT)
+    pdf.setFont("Helvetica", TEXT_M)
+    footer_note = (
+        "Generated from Trading Truth Layer — a verification infrastructure for trading claims. "
+        "This record can be independently validated via its verify link, public view path, claim hash, and trade-set hash."
     )
+    footer_lines = split_wrapped_lines(footer_note, PDF_CONTENT_WIDTH - 28, "Helvetica", TEXT_M) or [footer_note]
+    line_y = y - 18
+    for line in footer_lines[:3]:
+        pdf.drawString(PDF_MARGIN_LEFT + 14, line_y, line)
+        line_y -= 12
 
     pdf.save()
     buffer.seek(0)
