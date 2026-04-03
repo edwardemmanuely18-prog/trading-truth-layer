@@ -39,6 +39,31 @@ def verify_claim(claim_hash: str, db: Session = Depends(get_db)):
     else:
         integrity = "unlocked"
 
+
+@router.get("/debug/all")
+def debug_all_claim_hashes(db: Session = Depends(get_db)):
+    claims = db.query(ClaimSchema).order_by(ClaimSchema.id.desc()).all()
+
+    items = []
+    for claim in claims:
+        try:
+            computed_hash = compute_claim_hash(claim)
+        except Exception as e:
+            computed_hash = f"ERROR: {str(e)}"
+
+        items.append(
+            {
+                "id": claim.id,
+                "name": claim.name,
+                "status": claim.status,
+                "workspace_id": claim.workspace_id,
+                "computed_hash": computed_hash,
+                "public_view_path": f"/claim/{claim.id}/public",
+            }
+        )
+
+    return {"count": len(items), "claims": items}        
+
     return {
         "claim_id": matched_claim.id,
         "workspace_id": matched_claim.workspace_id,
