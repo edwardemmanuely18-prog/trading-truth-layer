@@ -2516,15 +2516,15 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     y -= BLOCK_GAP
 
     equity_point_columns = [
-        {"label": "Seq", "key": "sequence", "x": 0, "w": 30, "align": "left"},
-        {"label": "Trade", "key": "trade_id", "x": 30, "w": 44, "align": "left"},
-        {"label": "Opened", "key": "opened_at", "x": 74, "w": 116, "align": "left"},
-        {"label": "Symbol", "key": "symbol", "x": 190, "w": 58, "align": "left"},
-        {"label": "Member", "key": "member_id", "x": 248, "w": 54, "align": "left"},
-        {"label": "Trade PnL", "key": "trade_pnl", "x": 302, "w": 66, "align": "right", "font_size": 8},
-        {"label": "Cumulative", "key": "cumulative_pnl", "x": 368, "w": 68, "align": "right", "font_size": 8},
+        {"label": "Seq", "key": "sequence", "x": 0, "w": 28, "align": "left"},
+        {"label": "Trade", "key": "trade_id", "x": 28, "w": 42, "align": "left"},
+        {"label": "Opened", "key": "opened_at", "x": 70, "w": 112, "align": "left"},
+        {"label": "Symbol", "key": "symbol", "x": 182, "w": 56, "align": "left"},
+        {"label": "Member", "key": "member_id", "x": 238, "w": 52, "align": "left"},
+        {"label": "Trade PnL", "key": "trade_pnl", "x": 290, "w": 72, "align": "right", "font_size": 8},
+        {"label": "Cumulative", "key": "cumulative_pnl", "x": 362, "w": 74, "align": "right", "font_size": 8},
         {"label": "Step", "key": "step_change", "x": 436, "w": 48, "align": "right", "font_size": 8},
-        {"label": "Gap", "key": "gap_from_prior", "x": 484, "w": 56, "align": "center", "font_size": 8},
+        {"label": "Gap", "key": "gap_from_prior", "x": 484, "w": 44, "align": "center", "font_size": 8},
     ]
     equity_point_rows = build_equity_point_rows(curve_points)
 
@@ -2535,6 +2535,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         "No equity point analytics available.",
         row_h=22,
         header_row_h=24,
+        top_gap_before_title=10,
         preferred_break_height=220,
     )
 
@@ -2639,6 +2640,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         "No leaderboard data available.",
         row_h=24,
         header_row_h=24,
+        top_gap_before_title=10,
         preferred_break_height=220,
     )
 
