@@ -1645,6 +1645,15 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         except Exception:
             return format_pdf_datetime(value)
 
+    def fmt_gap_days(delta_value):
+        if delta_value is None:
+            return "—"
+        try:
+            days = float(delta_value) / 86400.0
+            return f"{days:.2f} days"
+        except Exception:
+            return "—"
+
     # =========================
     # VISUAL SYSTEM
     # =========================
@@ -1707,9 +1716,13 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         if y - required_height < PAGE_BOTTOM_SAFE:
             new_page()
 
-    def start_major_section_new_page():
+    def should_start_new_page(required_height: float, min_remaining_after_draw: float = 100):
+        return (y - required_height) < (PAGE_BOTTOM_SAFE + min_remaining_after_draw)
+
+    def start_section_if_needed(required_height: float, min_remaining_after_draw: float = 100):
         nonlocal y
-        new_page()
+        if should_start_new_page(required_height, min_remaining_after_draw):
+            new_page()
 
     def draw_hr(y_pos, stroke=COLOR_LINE_SOFT):
         pdf.setStrokeColor(stroke)
@@ -2020,6 +2033,49 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         net_change = values[-1] - values[0]
         pdf.drawRightString(chart_x + chart_w, chart_y + chart_h + 10, f"Net change {net_change:+.4f}")
 
+    def build_equity_point_rows(curve_points):
+        rows = []
+        prev_cumulative = None
+        prev_opened_at = None
+
+        for idx, point in enumerate(curve_points, start=1):
+            cumulative_val = float(point.get("cumulative_pnl", 0) or 0)
+            trade_pnl_val = float(point.get("net_pnl", 0) or 0)
+            opened_at = point.get("opened_at")
+            trade_id = point.get("trade_id", "—")
+            symbol = point.get("symbol", "—")
+            member_id = point.get("member_id", "—")
+
+            step_change = trade_pnl_val
+            if prev_cumulative is not None:
+                step_change = cumulative_val - prev_cumulative
+
+            gap_display = "—"
+            if opened_at and prev_opened_at:
+                try:
+                    gap_display = fmt_gap_days((opened_at - prev_opened_at).total_seconds())
+                except Exception:
+                    gap_display = "—"
+
+            rows.append(
+                {
+                    "sequence": idx,
+                    "trade_id": trade_id,
+                    "opened_at": shorten_text(fmt_dt(opened_at), 19),
+                    "symbol": shorten_text(str(symbol), 10),
+                    "member_id": str(member_id),
+                    "trade_pnl": fmt_num(trade_pnl_val, 2),
+                    "cumulative_pnl": fmt_num(cumulative_val, 2),
+                    "step_change": fmt_num(step_change, 2),
+                    "gap_from_prior": gap_display,
+                }
+            )
+
+            prev_cumulative = cumulative_val
+            prev_opened_at = opened_at
+
+        return rows
+
     def draw_section_title_block(title):
         nonlocal y
         ensure_space(54)
@@ -2085,6 +2141,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         totals_renderer=None,
         start_on_new_page=False,
         top_gap_before_title=0,
+        preferred_break_height=None,
     ):
         nonlocal y
 
@@ -2099,7 +2156,9 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             if section_started:
                 new_page()
             elif start_on_new_page:
-                start_major_section_new_page()
+                new_page()
+            elif preferred_break_height is not None and should_start_new_page(preferred_break_height, 40):
+                new_page()
 
             ensure_space(96)
             rendered_title = table_title if not continued else f"{table_title} (continued)"
@@ -2354,14 +2413,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     y -= SECTION_GAP
 
     # =========================
-    # PAGE 2 — PERFORMANCE DIAGNOSTICS
+    # PERFORMANCE DIAGNOSTICS
     # =========================
 
-    start_major_section_new_page()
-    draw_section_title_block("Performance Diagnostics")
-
     diag_needed_h = 72 + BLOCK_GAP + 60 + BLOCK_GAP + 50 + BLOCK_GAP + 24 + BLOCK_GAP + 244
-    ensure_space(diag_needed_h)
+    start_section_if_needed(diag_needed_h + 54, 90)
+    draw_section_title_block("Performance Diagnostics")
 
     diag_w = (PDF_CONTENT_WIDTH - (CARD_GAP * 3)) / 4
     draw_metric_card_v2(PDF_MARGIN_LEFT, y, diag_w, 72, "Best Trade", fmt_num(metrics["best_trade"], 2), "Highest PnL")
@@ -2435,15 +2492,58 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.drawString(PDF_MARGIN_LEFT, y, "Y-axis: Cumulative PnL")
     y -= BLOCK_GAP
 
-    ensure_space(244 + 8)
+    ensure_space(244 + 12)
     draw_equity_curve_preview_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, 244, curve_points)
-    y -= 244 + SECTION_GAP
+    y -= 244 + BLOCK_GAP
+
+    point_table_intro = (
+        "Equity Point Analytics provides a printable companion to the curve for dense trade paths. "
+        "Each row captures the sequence point, trade reference, timestamp, trade PnL, cumulative PnL, "
+        "step change, and gap from the prior point."
+    )
+    intro_h = estimate_highlight_note_height(point_table_intro, PDF_CONTENT_WIDTH, label="Equity Point Analytics", min_height=48)
+    ensure_space(intro_h + 100)
+    y = draw_highlight_note(
+        PDF_MARGIN_LEFT,
+        y,
+        PDF_CONTENT_WIDTH,
+        point_table_intro,
+        label="Equity Point Analytics",
+        min_height=48,
+    )
+    y -= BLOCK_GAP
+
+    equity_point_columns = [
+        {"label": "Seq", "key": "sequence", "x": 0, "w": 34, "align": "left"},
+        {"label": "Trade", "key": "trade_id", "x": 34, "w": 50, "align": "left"},
+        {"label": "Opened", "key": "opened_at", "x": 84, "w": 116, "align": "left"},
+        {"label": "Symbol", "key": "symbol", "x": 200, "w": 64, "align": "left"},
+        {"label": "Member", "key": "member_id", "x": 264, "w": 58, "align": "left"},
+        {"label": "Trade PnL", "key": "trade_pnl", "x": 322, "w": 58, "align": "right"},
+        {"label": "Cumulative", "key": "cumulative_pnl", "x": 380, "w": 62, "align": "right"},
+        {"label": "Step", "key": "step_change", "x": 442, "w": 44, "align": "right"},
+        {"label": "Gap", "key": "gap_from_prior", "x": 486, "w": 50, "align": "right"},
+    ]
+    equity_point_rows = build_equity_point_rows(curve_points)
+
+    draw_paginated_table_section(
+        "Equity Point Snapshot",
+        equity_point_columns,
+        equity_point_rows,
+        "No equity point analytics available.",
+        row_h=22,
+        header_row_h=24,
+        preferred_break_height=220,
+    )
+
+    y -= SECTION_GAP
 
     # =========================
-    # PAGE 3 — VERIFICATION CONTEXT
+    # VERIFICATION CONTEXT
     # =========================
 
-    start_major_section_new_page()
+    verification_context_min_h = 360
+    start_section_if_needed(verification_context_min_h, 70)
     draw_section_title_block("Verification Context")
 
     left_items = [
@@ -2507,7 +2607,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         y -= BLOCK_GAP - 4
 
     # =========================
-    # PAGE 4+ — EVIDENCE TABLES
+    # EVIDENCE TABLES
     # =========================
 
     leaderboard_columns = [
@@ -2537,7 +2637,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         "No leaderboard data available.",
         row_h=24,
         header_row_h=24,
-        start_on_new_page=True,
+        preferred_break_height=220,
     )
 
     evidence_columns = [
@@ -2582,13 +2682,15 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         header_row_h=24,
         totals_renderer=render_evidence_totals,
         top_gap_before_title=SECTION_GAP,
+        preferred_break_height=260,
     )
 
     # =========================
     # FINAL PAGE — FINGERPRINTS & VALIDATION
     # =========================
 
-    start_major_section_new_page()
+    fingerprints_min_h = 360
+    start_section_if_needed(fingerprints_min_h, 70)
     draw_section_title_block("Canonical Fingerprints & Verification Paths")
 
     pdf.setFillColor(COLOR_MUTED)
