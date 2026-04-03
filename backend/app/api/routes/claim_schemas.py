@@ -1627,7 +1627,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     def fmt_num(value, digits=2):
         try:
-            return f"{float(value):.{digits}f}"
+            return f"{float(value):,.{digits}f}"
         except Exception:
             return "—"
 
@@ -1650,7 +1650,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             return "—"
         try:
             days = float(delta_value) / 86400.0
-            return f"{days:.2f} days"
+            return f"{days:.2f}"
         except Exception:
             return "—"
 
@@ -1663,6 +1663,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     CARD_GAP = 12
     MINI_GAP = 10
     PAGE_BOTTOM_SAFE = 76
+
+    SECTION_TOP_SPACING = 18
+    SECTION_BOTTOM_SPACING = 10
+    FIELD_ROW_SPACING = 16
+    COMPACT_ROW_GAP = 10
+    PANEL_INNER_PADDING = 10
 
     COLOR_INK = colors.HexColor("#0F172A")
     COLOR_TEXT = colors.HexColor("#334155")
@@ -1755,19 +1761,19 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         draw_soft_panel(x, top_y, w, h, radius=14, fill=COLOR_FILL_SOFT, stroke=COLOR_BLUE_LINE)
         pdf.setFillColor(COLOR_MUTED)
         pdf.setFont("Helvetica", TEXT_M)
-        pdf.drawString(x + 14, top_y - 20, label)
+        pdf.drawString(x + PANEL_INNER_PADDING + 4, top_y - 20, label)
 
         value_lines = wrapped_lines(value, w - 28, "Helvetica-Bold", 17)[:2]
         pdf.setFillColor(value_color)
         pdf.setFont("Helvetica-Bold", 18)
         value_y = top_y - 44
         for line in value_lines:
-            pdf.drawString(x + 14, value_y, line)
+            pdf.drawString(x + PANEL_INNER_PADDING + 4, value_y, line)
             value_y -= 16
 
         pdf.setFillColor(COLOR_MUTED)
         pdf.setFont("Helvetica", TEXT_S)
-        pdf.drawString(x + 14, top_y - h + 16, sublabel)
+        pdf.drawString(x + PANEL_INNER_PADDING + 4, top_y - h + 16, sublabel)
 
     def draw_label_value_box_v2(x, top_y, w, h, label, value, value_font="Helvetica", value_size=8):
         draw_soft_panel(x, top_y, w, h, radius=14, fill=COLOR_FILL_ALT, stroke=COLOR_LINE)
@@ -1812,7 +1818,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         fill = colors.HexColor("#EFF6FF") if emphasize else COLOR_FILL_SOFT
 
         pdf.setFillColor(label_color)
-        pdf.setFont("Helvetica", TEXT_M)
+        pdf.setFont("Helvetica-Bold" if label in {"Claim Hash", "Trade Set Hash", "Public View Path", "Verify Link Path"} else "Helvetica", TEXT_M)
         pdf.drawString(x, top_y - 2, label)
 
         lines = wrapped_lines(value, w - 24, "Courier", 8.5)
@@ -1836,11 +1842,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         return h
 
     def draw_standard_section_title(title, y_pos):
+        y_pos -= SECTION_TOP_SPACING
         pdf.setFillColor(COLOR_INK)
         pdf.setFont("Helvetica-Bold", TITLE_L)
         pdf.drawString(PDF_MARGIN_LEFT, y_pos, title)
         draw_hr(y_pos - 10)
-        return y_pos - 32
+        return y_pos - 22 - SECTION_BOTTOM_SPACING
 
     def draw_table_header_row(x, top_y, total_w, columns, row_h=24):
         pdf.setFillColor(COLOR_TABLE_HEADER)
@@ -1922,7 +1929,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             + 8
             + (len(desc_lines) * 13)
         )
-        return max(220, content_height + 92)
+        return max(214, content_height + 84)
 
     def draw_equity_curve_preview_v2(x, top_y, w, h, curve_points):
         draw_soft_panel(x, top_y, w, h, radius=16, fill=colors.white, stroke=COLOR_BLUE_LINE)
@@ -2023,9 +2030,10 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
                 scale_x(xs[idx + 1]), scale_y(values[idx + 1]),
             )
 
-        pdf.setFillColor(COLOR_NAVY)
-        for i, v in zip(xs, values):
-            pdf.circle(scale_x(i), scale_y(v), 2.2, fill=1, stroke=0)
+        if len(xs) <= 25:
+            pdf.setFillColor(COLOR_NAVY)
+            for i, v in zip(xs, values):
+                pdf.circle(scale_x(i), scale_y(v), 2.2, fill=1, stroke=0)
 
         peak_idx = max(range(len(values)), key=lambda i: values[i])
         trough_idx = min(range(len(values)), key=lambda i: values[i])
@@ -2049,7 +2057,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.setFont("Helvetica", 8.5)
         net_change = values[-1] - values[0]
         pdf.drawRightString(chart_x + chart_w, chart_y + chart_h + 10, f"Net change {net_change:+.4f}")
-    
+
     def normalize_dt(value):
         if value is None:
             return None
@@ -2087,7 +2095,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             step_change = trade_pnl_val
             if prev_cumulative is not None:
                 step_change = cumulative_val - prev_cumulative
- 
+
             gap_display = "start"
             if opened_at_dt and prev_opened_at:
                 try:
@@ -2136,7 +2144,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
                 left_h = estimate_kv_grid_cell_height(pair[0][1], max_width=col_w, max_lines=5)
                 right_h = estimate_kv_grid_cell_height(pair[1][1], max_width=col_w, max_lines=5)
                 row_h = max(left_h, right_h)
-                row_y_cursor += row_h + 22
+                row_y_cursor += row_h + FIELD_ROW_SPACING
             return max(220, 24 + panel_title_gap + row_y_cursor + 10)
 
         left_panel_h = calc_panel_height(left_items)
@@ -2163,7 +2171,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
                 draw_kv_grid_cell(left_col_x, row_top_y, pair[0][0], pair[0][1], max_width=col_w, max_lines=5)
                 draw_kv_grid_cell(right_col_x, row_top_y, pair[1][0], pair[1][1], max_width=col_w, max_lines=5)
 
-                row_top_y -= row_h + 22
+                row_top_y -= row_h + FIELD_ROW_SPACING
 
         render_panel(left_x, left_title, left_items)
         render_panel(right_x, right_title, right_items)
@@ -2326,7 +2334,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             chip_rows = [("status", schema.status), ("integrity", integrity_status), ("trust", "contextual")]
 
     banner_height = estimate_verification_banner_height(signature_text, trust_state_text, sub_text)
-    ensure_space(banner_height + 210)
+    ensure_space(banner_height + 180)
 
     draw_soft_panel(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, banner_height, radius=18, fill=banner_fill, stroke=banner_stroke)
 
@@ -2340,7 +2348,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     chip_w = 190
     chip_h = 102
     chip_x = PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT - chip_w
-    chip_top_y = y - 8
+    chip_top_y = y - 6
 
     content_x = PDF_MARGIN_LEFT + 24
     content_w = chip_x - content_x - 26
@@ -2379,12 +2387,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     )
 
     hash_box_w = (PDF_CONTENT_WIDTH - CARD_GAP) / 2
-    hash_row_top = y - banner_height + 64
+    hash_row_top = y - banner_height + 60
     draw_label_value_box_v2(
         PDF_MARGIN_LEFT,
         hash_row_top,
         hash_box_w,
-        58,
+        56,
         "Claim Hash Fingerprint",
         short_hash(claim_hash, 18, 10),
         value_font="Courier",
@@ -2394,14 +2402,14 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         PDF_MARGIN_LEFT + hash_box_w + CARD_GAP,
         hash_row_top,
         hash_box_w,
-        58,
+        56,
         "Trade Set Hash Fingerprint",
         short_hash(trade_set_hash, 18, 10),
         value_font="Courier",
         value_size=8.5,
     )
 
-    y -= banner_height + SECTION_GAP
+    y -= banner_height + 18
 
     claim_name_lines = wrapped_lines(schema.name or "Untitled Claim", PDF_CONTENT_WIDTH, "Helvetica-Bold", 22)[:2]
     latest_event = audit_events[-1] if audit_events else None
@@ -2441,7 +2449,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     draw_metric_card_v2(PDF_MARGIN_LEFT + card_w + CARD_GAP, y, card_w, card_h, "Net PnL", fmt_num(metrics["net_pnl"], 2), "Aggregate result")
     draw_metric_card_v2(PDF_MARGIN_LEFT + (card_w + CARD_GAP) * 2, y, card_w, card_h, "Profit Factor", fmt_num(metrics["profit_factor"], 4), "Gross profit / loss")
     draw_metric_card_v2(PDF_MARGIN_LEFT + (card_w + CARD_GAP) * 3, y, card_w, card_h, "Win Rate", fmt_pct_ratio(metrics["win_rate"], 2), "Winning trades %")
-    y -= card_h + BLOCK_GAP
+    y -= card_h + COMPACT_ROW_GAP
 
     draw_metric_card_v2(PDF_MARGIN_LEFT, y, card_w, 72, "Workspace Trades", str(scope["workspace_trade_count"]), "All workspace trade rows")
     draw_metric_card_v2(PDF_MARGIN_LEFT + card_w + CARD_GAP, y, card_w, 72, "Included Trades", str(len(scope["included"])), "Rows used in claim")
@@ -2456,7 +2464,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     # PERFORMANCE DIAGNOSTICS
     # =========================
 
-    diag_needed_h = 72 + BLOCK_GAP + 60 + BLOCK_GAP + 50 + BLOCK_GAP + 24 + BLOCK_GAP + 244
+    diag_needed_h = 72 + COMPACT_ROW_GAP + 60 + BLOCK_GAP + 50 + BLOCK_GAP + 24 + BLOCK_GAP + 244
     start_section_if_needed(diag_needed_h + 54, 90)
     draw_section_title_block("Performance Diagnostics")
 
@@ -2465,7 +2473,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     draw_metric_card_v2(PDF_MARGIN_LEFT + diag_w + CARD_GAP, y, diag_w, 72, "Worst Trade", fmt_num(metrics["worst_trade"], 2), "Lowest PnL")
     draw_metric_card_v2(PDF_MARGIN_LEFT + (diag_w + CARD_GAP) * 2, y, diag_w, 72, "Max Drawdown", fmt_num(drawdown_stats["max_drawdown"], 2), "Peak-to-trough")
     draw_metric_card_v2(PDF_MARGIN_LEFT + (diag_w + CARD_GAP) * 3, y, diag_w, 72, "Ending Equity", fmt_num(equity_curve["ending_equity"], 2), "Final cumulative")
-    y -= 72 + BLOCK_GAP + 2
+    y -= 72 + COMPACT_ROW_GAP
 
     curve_points = equity_curve["curve"]
     first_point = curve_points[0] if curve_points else None
@@ -2514,14 +2522,14 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         value_font="Helvetica",
         value_size=8,
     )
-    y -= 60 + BLOCK_GAP + 2
+    y -= 60 + BLOCK_GAP
 
     y = draw_highlight_note(
         PDF_MARGIN_LEFT,
         y,
         PDF_CONTENT_WIDTH,
         "This curve mirrors the public proof surface by showing cumulative path structure, consistent peak and trough annotations, and the deepest drawdown interval when one exists. Max drawdown remains the primary risk statistic, while peak and trough identify the full performance range.",
-        min_height=50,
+        min_height=46,
     )
     y -= BLOCK_GAP - 4
 
@@ -2537,9 +2545,8 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     y -= 244 + BLOCK_GAP
 
     point_table_intro = (
-        "Equity Point Analytics provides a printable companion to the curve for dense trade paths. "
-        "Each row captures the sequence point, trade reference, timestamp, trade PnL, cumulative PnL, "
-        "step change, and gap from the prior point."
+        "Equity Point Analytics provides a printable companion to the curve for dense trade paths. Each row captures the "
+        "sequence point, trade reference, timestamp, trade PnL, cumulative PnL, step change, and gap from the prior point."
     )
     intro_h = estimate_highlight_note_height(point_table_intro, PDF_CONTENT_WIDTH, label="Equity Point Analytics", min_height=48)
     ensure_space(intro_h + 100)
@@ -2557,12 +2564,12 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         {"label": "Seq", "key": "sequence", "x": 0, "w": 28, "align": "left"},
         {"label": "Trade", "key": "trade_id", "x": 28, "w": 42, "align": "left"},
         {"label": "Opened", "key": "opened_at", "x": 70, "w": 126, "align": "left"},
-        {"label": "Symbol", "key": "symbol", "x": 182, "w": 56, "align": "left"},
-        {"label": "Member", "key": "member_id", "x": 238, "w": 52, "align": "left"},
-        {"label": "Trade PnL", "key": "trade_pnl", "x": 290, "w": 72, "align": "right", "font_size": 8},
-        {"label": "Cumulative", "key": "cumulative_pnl", "x": 362, "w": 76, "align": "right", "font_size": 8},
-        {"label": "Step", "key": "step_change", "x": 438, "w": 48, "align": "right", "font_size": 8},
-        {"label": "Gap", "key": "gap_from_prior", "x": 486, "w": 52, "align": "center", "font_size": 8},
+        {"label": "Symbol", "key": "symbol", "x": 196, "w": 54, "align": "left"},
+        {"label": "Member", "key": "member_id", "x": 250, "w": 48, "align": "left"},
+        {"label": "Trade PnL", "key": "trade_pnl", "x": 298, "w": 76, "align": "right", "font_size": 8},
+        {"label": "Cumulative", "key": "cumulative_pnl", "x": 374, "w": 80, "align": "right", "font_size": 8},
+        {"label": "Step", "key": "step_change", "x": 454, "w": 44, "align": "right", "font_size": 8},
+        {"label": "Gap (days)", "key": "gap_from_prior", "x": 498, "w": 42, "align": "center", "font_size": 8},
     ]
     equity_point_rows = build_equity_point_rows(curve_points)
 
@@ -2723,7 +2730,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         row_h=22,
         header_row_h=24,
         totals_renderer=render_evidence_totals,
-        top_gap_before_title=SECTION_GAP,
+        top_gap_before_title=20,
         preferred_break_height=260,
     )
 
