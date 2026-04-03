@@ -1570,12 +1570,26 @@ def draw_light_note_box(pdf: canvas.Canvas, x: float, y_top: float, width: float
 
 
 def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[BytesIO, str]:
-    filtered_trades = resolve_schema_trades(schema, db)
+    scope = resolve_schema_trade_scope(schema, db)
+    filtered_trades = scope["included"]
+    excluded_trades = scope["excluded"]
+
     metrics = compute_trade_metrics(filtered_trades)
     leaderboard = build_leaderboard(filtered_trades)
     equity_curve = build_equity_curve(filtered_trades)
     evidence_rows = build_trade_evidence(filtered_trades)
     drawdown_stats = compute_drawdown_stats(equity_curve["curve"])
+
+    audit_events = (
+        db.query(AuditEvent)
+        .filter(
+            AuditEvent.entity_type == "claim_schema",
+            AuditEvent.entity_id == str(schema.id),
+        )
+        .order_by(AuditEvent.id.asc())
+        .all()
+    )
+    exported_at = datetime.utcnow()
 
     trade_set_hash = schema.locked_trade_set_hash
     if not trade_set_hash:
@@ -1648,6 +1662,10 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.drawString(PDF_MARGIN_LEFT, y, f"Public View Path: {public_view_path}")
     y -= 14
     pdf.drawString(PDF_MARGIN_LEFT, y, f"Verify Link Path: {verify_link_short}")
+    y -= 14
+    pdf.drawString(PDF_MARGIN_LEFT, y, f"Workspace ID: {schema.workspace_id}")
+    y -= 14
+    pdf.drawString(PDF_MARGIN_LEFT, y, f"Exported At: {exported_at.strftime('%Y-%m-%d %H:%M:%S UTC')}")
     y -= 22
 
     pdf.setFillColor(colors.HexColor("#475569"))
@@ -1812,7 +1830,50 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf, PDF_MARGIN_LEFT + (card_w + card_gap) * 3, y, card_w, card_h,
         "Win Rate", fmt_pct_ratio(metrics["win_rate"], 2), "Winning trades %"
     )
-    y -= card_h + 28
+    y -= card_h + 20
+
+    scope_card_h = 64
+    draw_metric_card(
+        pdf,
+        PDF_MARGIN_LEFT,
+        y,
+        card_w,
+        scope_card_h,
+        "Workspace Trades",
+        str(scope["workspace_trade_count"]),
+        "All workspace trade rows",
+    )
+    draw_metric_card(
+        pdf,
+        PDF_MARGIN_LEFT + card_w + card_gap,
+        y,
+        card_w,
+        scope_card_h,
+        "Included Trades",
+        str(len(scope["included"])),
+        "Rows used in claim",
+    )
+    draw_metric_card(
+        pdf,
+        PDF_MARGIN_LEFT + (card_w + card_gap) * 2,
+        y,
+        card_w,
+        scope_card_h,
+        "Excluded Trades",
+        str(len(scope["excluded"])),
+        "Out-of-scope rows",
+    )
+    draw_metric_card(
+        pdf,
+        PDF_MARGIN_LEFT + (card_w + card_gap) * 3,
+        y,
+        card_w,
+        scope_card_h,
+        "Audit Events",
+        str(len(audit_events)),
+        "Lifecycle trail count",
+    )
+    y -= scope_card_h + 28
 
     page_number += 1
     y = pdf_new_page(pdf, page_number, document_title, claim_hash)
@@ -1994,18 +2055,49 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         label="Methodology Notes",
     )
 
+    y, page_number = draw_dynamic_note_box(
+        pdf,
+        PDF_MARGIN_LEFT,
+        y,
+        PDF_CONTENT_WIDTH,
+        "This report verifies the scoped trade set represented by this claim schema. It does not independently attest to broker connectivity, external account ownership, or performance outside the included evidence boundary. Public trust should be interpreted together with lifecycle status, claim hash, and locked trade-set integrity where applicable.",
+        page_number,
+        document_title,
+        claim_hash,
+        label="Interpretation & Limitations",
+    )
+
     y -= 12
+
+    excluded_breakdown = scope["excluded_breakdown"]
+    exclusion_summary_text = (
+        f"Excluded breakdown — Outside period: {excluded_breakdown.get(EXCLUSION_REASON_OUTSIDE_PERIOD, 0)}, "
+        f"Member filter: {excluded_breakdown.get(EXCLUSION_REASON_MEMBER_FILTER, 0)}, "
+        f"Symbol filter: {excluded_breakdown.get(EXCLUSION_REASON_SYMBOL_FILTER, 0)}, "
+        f"Manual exclusion: {excluded_breakdown.get(EXCLUSION_REASON_MANUAL_EXCLUSION, 0)}."
+    )
+
+    y, page_number = draw_dynamic_note_box(
+        pdf,
+        PDF_MARGIN_LEFT,
+        y,
+        PDF_CONTENT_WIDTH,
+        exclusion_summary_text,
+        page_number,
+        document_title,
+        claim_hash,
+        label="Scope Exclusion Summary",
+    )
 
     y, page_number = pdf_require_space(
         pdf,
         y,
-        210,
+        150,
         page_number,
         document_title,
         claim_hash,
     )
-
-    y = pdf_section_title(pdf, "Leaderboard Snapshot", PDF_MARGIN_LEFT, y)
+    y = pdf_section_title(pdf, "Trade Evidence Snapshot", PDF_MARGIN_LEFT, y)
 
     leaderboard_x = PDF_MARGIN_LEFT + 18
     leaderboard_width = 440
@@ -2097,7 +2189,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     # PAGE 4 — FINGERPRINTS & VALIDATION
     # =========================
 
-    y = pdf_section_title(pdf, "Canonical Fingerprints", PDF_MARGIN_LEFT, y)
+    y = pdf_section_title(pdf, "Canonical Fingerprints & Verification Paths", PDF_MARGIN_LEFT, y)
 
     draw_hash_block(pdf, PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Claim Hash", claim_hash)
     y -= 62
