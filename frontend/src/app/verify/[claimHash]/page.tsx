@@ -7,10 +7,54 @@ import {
   api,
   type ClaimTradeEvidence,
   type ClaimTradeScopeRow,
-  type PublicVerifyResult,
 } from "../../../lib/api";
 import ClaimVerificationSignature from "../../../components/ClaimVerificationSignature";
-import EquityCurveChart from "../../../components/EquityCurveChart";
+
+type VerifyClaimResult = {
+  claim_id: number;
+  workspace_id: number;
+  name: string;
+  status: string;
+  visibility: string;
+  claim_hash: string;
+  stored_trade_set_hash?: string | null;
+  recomputed_trade_set_hash?: string | null;
+  integrity: "valid" | "compromised" | "unlocked";
+  version_number?: number | null;
+  root_claim_id?: number | null;
+  parent_claim_id?: number | null;
+  published_at?: string | null;
+  verified_at?: string | null;
+  locked_at?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  public_view_path: string;
+  verify_path: string;
+};
+
+async function fetchVerifyClaimByHash(claimHash: string): Promise<VerifyClaimResult> {
+  const response = await fetch(`/api/verify/${encodeURIComponent(claimHash)}`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const raw = await response.text();
+    try {
+      const parsed = JSON.parse(raw);
+      const detail =
+        typeof parsed?.detail === "string"
+          ? parsed.detail
+          : typeof parsed?.message === "string"
+            ? parsed.message
+            : raw;
+      throw new Error(detail || `Verify request failed with status ${response.status}`);
+    } catch {
+      throw new Error(raw || `Verify request failed with status ${response.status}`);
+    }
+  }
+
+  return response.json() as Promise<VerifyClaimResult>;
+}
 
 function formatDateTime(value?: string | null) {
   if (!value) return "—";
@@ -24,11 +68,6 @@ function formatDateTime(value?: string | null) {
 function formatNumber(value?: number | null, digits = 2) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
   return Number(value).toFixed(digits);
-}
-
-function formatPercent(value?: number | null, digits = 2) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
-  return `${(Number(value) * 100).toFixed(digits)}%`;
 }
 
 function normalizeText(value: unknown) {
@@ -68,8 +107,8 @@ function StatusBadge({ status }: { status?: string | null }) {
       ? "border-green-200 bg-green-100 text-green-800"
       : normalized === "published"
         ? "border-blue-200 bg-blue-100 text-blue-800"
-        : normalized === "verified"
-          ? "border-amber-200 bg-amber-100 text-amber-800"
+        : normalized === "draft"
+          ? "border-slate-200 bg-slate-100 text-slate-800"
           : "border-slate-200 bg-slate-100 text-slate-800";
 
   return (
@@ -87,7 +126,7 @@ function IntegrityBadge({ integrityStatus }: { integrityStatus?: string | null }
       ? "border-green-200 bg-green-100 text-green-800"
       : normalized === "compromised"
         ? "border-red-200 bg-red-100 text-red-800"
-        : "border-slate-200 bg-slate-100 text-slate-800";
+        : "border-amber-200 bg-amber-100 text-amber-800";
 
   return (
     <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
@@ -200,36 +239,6 @@ function DetailRow({
     <div>
       <div className="text-sm text-slate-500">{label}</div>
       <div className="mt-1 font-medium">{value}</div>
-    </div>
-  );
-}
-
-function ScopeListCard({
-  title,
-  items,
-  emptyText,
-}: {
-  title: string;
-  items: Array<string | number>;
-  emptyText: string;
-}) {
-  return (
-    <div className="rounded-2xl border bg-white p-6 shadow-sm">
-      <h2 className="text-2xl font-semibold">{title}</h2>
-      {items.length === 0 ? (
-        <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">{emptyText}</div>
-      ) : (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {items.map((item) => (
-            <span
-              key={String(item)}
-              className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700"
-            >
-              {item}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -360,7 +369,7 @@ export default function PublicVerifyClaimPage() {
     return String(raw || "").trim();
   }, [params]);
 
-  const [result, setResult] = useState<PublicVerifyResult | null>(null);
+  const [result, setResult] = useState<VerifyClaimResult | null>(null);
   const [tradeEvidence, setTradeEvidence] = useState<ClaimTradeEvidence | null>(null);
   const [loading, setLoading] = useState(true);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
@@ -381,16 +390,16 @@ export default function PublicVerifyClaimPage() {
         setError(null);
         setEvidenceError(null);
 
-        const res = await api.getPublicClaimByHash(claimHash);
+        const res = await fetchVerifyClaimByHash(claimHash);
         setResult(res);
 
-        if (res.claim_schema_id) {
+        if (res.claim_id) {
           try {
             setEvidenceLoading(true);
-            const evidence = await api.getClaimTrades(res.claim_schema_id);
+            const evidence = await api.getClaimTrades(res.claim_id);
             setTradeEvidence(evidence);
           } catch (err) {
-            setTradeEvidence(emptyTradeEvidence(res.claim_schema_id));
+            setTradeEvidence(emptyTradeEvidence(res.claim_id));
             setEvidenceError(
               err instanceof Error ? err.message : "Failed to load verified trade evidence."
             );
@@ -424,15 +433,6 @@ export default function PublicVerifyClaimPage() {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-900">
         <main className="mx-auto max-w-[1400px] px-6 py-10">
-          <div className="mb-6">
-            <Link
-              href="/claims"
-              className="inline-flex rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
-            >
-              Back to Public Claims
-            </Link>
-          </div>
-
           <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700 shadow-sm">
             {error}
           </div>
@@ -452,34 +452,10 @@ export default function PublicVerifyClaimPage() {
   }
 
   const verifiedResult = result;
-
-  const scope = verifiedResult.scope ?? {
-    period_start: "—",
-    period_end: "—",
-    included_members: [],
-    included_symbols: [],
-    methodology_notes: "",
-    visibility: "—",
-  };
-
-  const lifecycle = verifiedResult.lifecycle ?? {
-    status: verifiedResult.verification_status || "unknown",
-    verified_at: null,
-    published_at: null,
-    locked_at: null,
-  };
-
-  const lineage = verifiedResult.lineage ?? {
-    parent_claim_id: null,
-    root_claim_id: null,
-    version_number: null,
-  };
-
-  const leaderboard = Array.isArray(verifiedResult.leaderboard) ? verifiedResult.leaderboard : [];
-  const integrityOk = normalizeText(verifiedResult.integrity_status) === "valid";
+  const integrityOk = normalizeText(verifiedResult.integrity) === "valid";
   const verificationUrl =
-    typeof window !== "undefined" ? window.location.href : `/verify/${verifiedResult.claim_hash}`;
-  const publicViewUrl = `/claim/${verifiedResult.claim_schema_id}/public`;
+    typeof window !== "undefined" ? window.location.href : verifiedResult.verify_path;
+  const publicViewUrl = verifiedResult.public_view_path;
   const qrImageUrl = buildQrImageUrl(verificationUrl);
 
   const includedRows = Array.isArray(tradeEvidence?.included_trades)
@@ -490,15 +466,13 @@ export default function PublicVerifyClaimPage() {
     : [];
   const evidenceSummary = tradeEvidence?.summary;
 
-  const publicCurvePoints = Array.isArray(verifiedResult.equity_curve?.curve)
-    ? verifiedResult.equity_curve.curve
-    : [];
-
   const trustState = integrityOk
-    ? normalizeText(verifiedResult.verification_status) === "locked"
+    ? normalizeText(verifiedResult.status) === "locked"
       ? "High-trust finalized record"
-      : "Trusted public verification record"
-    : "Integrity review required";
+      : "Trusted verification record"
+    : normalizeText(verifiedResult.integrity) === "compromised"
+      ? "Integrity review required"
+      : "Pre-final verification state";
 
   async function handleShare() {
     try {
@@ -529,19 +503,11 @@ export default function PublicVerifyClaimPage() {
             <h1 className="mt-2 text-4xl font-bold tracking-tight">Verified Claim Record</h1>
             <p className="mt-3 max-w-3xl text-slate-600">
               Canonical verification route for a lifecycle-governed trading claim, including
-              integrity state, fingerprints, scope, lifecycle history, leaderboard snapshot,
-              verified trade evidence, and equity-curve inspection.
+              integrity state, fingerprints, lifecycle history, and optional evidence inspection.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Link
-              href="/claims"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
-            >
-              Public Claims
-            </Link>
-
             <Link
               href={publicViewUrl}
               className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
@@ -567,12 +533,12 @@ export default function PublicVerifyClaimPage() {
 
         <div className="mb-8">
           <ClaimVerificationSignature
-            status={verifiedResult.verification_status}
-            integrityStatus={verifiedResult.integrity_status}
+            status={verifiedResult.status}
+            integrityStatus={verifiedResult.integrity}
             claimHash={verifiedResult.claim_hash}
-            tradeSetHash={verifiedResult.trade_set_hash}
-            verifiedAt={lifecycle.verified_at}
-            lockedAt={lifecycle.locked_at}
+            tradeSetHash={verifiedResult.stored_trade_set_hash || verifiedResult.recomputed_trade_set_hash || ""}
+            verifiedAt={verifiedResult.verified_at}
+            lockedAt={verifiedResult.locked_at}
           />
         </div>
 
@@ -583,9 +549,9 @@ export default function PublicVerifyClaimPage() {
               <h2 className="mt-2 text-3xl font-semibold text-green-950">{verifiedResult.name}</h2>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <StatusBadge status={verifiedResult.verification_status} />
-                <IntegrityBadge integrityStatus={verifiedResult.integrity_status} />
-                <VisibilityBadge visibility={scope.visibility || "—"} />
+                <StatusBadge status={verifiedResult.status} />
+                <IntegrityBadge integrityStatus={verifiedResult.integrity} />
+                <VisibilityBadge visibility={verifiedResult.visibility || "—"} />
                 <span className="inline-flex rounded-full border border-green-200 bg-white px-3 py-1 text-sm font-medium text-green-800">
                   trust state: {trustState}
                 </span>
@@ -594,9 +560,11 @@ export default function PublicVerifyClaimPage() {
               <div className="mt-5 rounded-2xl border border-green-200 bg-white/70 p-5">
                 <div className="text-base font-semibold text-green-900">Verification Reading</div>
                 <div className="mt-2 text-sm leading-7 text-green-800">
-                  This route is the canonical proof surface for this claim. It exposes the identity
-                  fingerprint, the in-scope trade-set fingerprint, lifecycle milestones, and the
-                  integrity posture needed for external trust, disputes, and audit review.
+                  {integrityOk
+                    ? "This route confirms that the current record matches its canonical verification state and may be used as a trusted public reference."
+                    : normalizeText(verifiedResult.integrity) === "compromised"
+                      ? "This route indicates an integrity mismatch between the stored and recomputed trade-set fingerprints. Review is required before reliance."
+                      : "This claim is not locked yet. Verification is available, but should not be interpreted as a final locked record."}
                 </div>
               </div>
 
@@ -680,55 +648,66 @@ export default function PublicVerifyClaimPage() {
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-sm text-slate-500">Trade Set Hash</div>
+                  <div className="text-sm text-slate-500">Stored Trade Set Hash</div>
                   <div className="mt-2 rounded-xl bg-white p-3 font-mono text-xs break-all text-slate-700">
-                    {verifiedResult.trade_set_hash || "—"}
+                    {verifiedResult.stored_trade_set_hash || "—"}
                   </div>
-                  <div className="mt-2 text-sm text-slate-500">{shortHash(verifiedResult.trade_set_hash)}</div>
+                  <div className="mt-2 text-sm text-slate-500">{shortHash(verifiedResult.stored_trade_set_hash)}</div>
                   <div className="mt-3">
-                    <CopyButton value={verifiedResult.trade_set_hash} label="Copy Trade Set Hash" />
+                    <CopyButton value={verifiedResult.stored_trade_set_hash} label="Copy Stored Hash" />
                   </div>
                 </div>
-              </div>
-            </div>
 
-            <div
-              className={`rounded-2xl border px-5 py-4 ${
-                integrityOk ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
-              }`}
-            >
-              <div className="text-sm text-slate-500">Integrity Posture</div>
-              <div className="mt-2 text-lg font-semibold">
-                {integrityOk ? "Integrity Confirmed" : "Integrity Alert"}
-              </div>
-              <div className="mt-2 max-w-xs text-sm text-slate-600">
-                {integrityOk
-                  ? "The public record matches the recomputed integrity fingerprint for the current trade set."
-                  : "The public record does not currently match the recomputed integrity fingerprint."}
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm text-slate-500">Recomputed Trade Set Hash</div>
+                  <div className="mt-2 rounded-xl bg-white p-3 font-mono text-xs break-all text-slate-700">
+                    {verifiedResult.recomputed_trade_set_hash || "—"}
+                  </div>
+                  <div className="mt-2 text-sm text-slate-500">{shortHash(verifiedResult.recomputed_trade_set_hash)}</div>
+                  <div className="mt-3">
+                    <CopyButton value={verifiedResult.recomputed_trade_set_hash} label="Copy Recomputed Hash" />
+                  </div>
+                </div>
+
+                <div
+                  className={`rounded-2xl border px-5 py-4 ${
+                    integrityOk ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+                  }`}
+                >
+                  <div className="text-sm text-slate-500">Integrity Posture</div>
+                  <div className="mt-2 text-lg font-semibold">
+                    {integrityOk ? "Integrity Confirmed" : "Integrity Alert"}
+                  </div>
+                  <div className="mt-2 text-sm text-slate-600">
+                    {integrityOk
+                      ? "Stored and recomputed trade-set fingerprints are aligned."
+                      : "Stored and recomputed trade-set fingerprints are not aligned."}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MetricCard
-              label="Trade Count"
-              value={String(verifiedResult.trade_count)}
-              hint="In-scope trades used for this record"
+              label="Claim ID"
+              value={String(verifiedResult.claim_id)}
+              hint="Canonical claim record id"
             />
             <MetricCard
-              label="Net PnL"
-              value={formatNumber(verifiedResult.net_pnl)}
-              hint="Aggregate net trading result"
+              label="Workspace ID"
+              value={String(verifiedResult.workspace_id)}
+              hint="Owning workspace"
             />
             <MetricCard
-              label="Profit Factor"
-              value={formatNumber(verifiedResult.profit_factor, 4)}
-              hint="Gross profit ÷ gross loss"
+              label="Version Number"
+              value={String(verifiedResult.version_number ?? "—")}
+              hint="Lineage version"
             />
             <MetricCard
-              label="Win Rate"
-              value={formatPercent(verifiedResult.win_rate, 2)}
-              hint="Winning trades as percentage"
+              label="Visibility"
+              value={verifiedResult.visibility || "—"}
+              hint="Public access posture"
             />
           </div>
         </div>
@@ -738,31 +717,14 @@ export default function PublicVerifyClaimPage() {
             <h2 className="text-2xl font-semibold">Verification Scope</h2>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <DetailRow label="Period Start" value={scope.period_start || "—"} />
-              <DetailRow label="Period End" value={scope.period_end || "—"} />
-              <DetailRow
-                label="Included Members"
-                value={
-                  Array.isArray(scope.included_members) && scope.included_members.length > 0
-                    ? scope.included_members.join(", ")
-                    : "All in scope"
-                }
-              />
-              <DetailRow
-                label="Included Symbols"
-                value={
-                  Array.isArray(scope.included_symbols) && scope.included_symbols.length > 0
-                    ? scope.included_symbols.join(", ")
-                    : "All in scope"
-                }
-              />
+              <DetailRow label="Period Start" value={verifiedResult.period_start || "—"} />
+              <DetailRow label="Period End" value={verifiedResult.period_end || "—"} />
+              <DetailRow label="Status" value={verifiedResult.status || "—"} />
+              <DetailRow label="Visibility" value={verifiedResult.visibility || "—"} />
             </div>
 
-            <div className="mt-5">
-              <div className="text-sm text-slate-500">Methodology Notes</div>
-              <div className="mt-1 rounded-xl bg-slate-50 p-4 text-sm whitespace-pre-wrap text-slate-700">
-                {scope.methodology_notes || "—"}
-              </div>
+            <div className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+              Scope detail, methodology notes, and public performance interpretation continue on the public claim page.
             </div>
           </div>
 
@@ -771,14 +733,14 @@ export default function PublicVerifyClaimPage() {
               <h2 className="text-2xl font-semibold">Lifecycle & Lineage</h2>
 
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                <DetailRow label="Status" value={lifecycle.status || "—"} />
-                <DetailRow label="Integrity" value={verifiedResult.integrity_status || "—"} />
-                <DetailRow label="Verified At" value={formatDateTime(lifecycle.verified_at)} />
-                <DetailRow label="Published At" value={formatDateTime(lifecycle.published_at)} />
-                <DetailRow label="Locked At" value={formatDateTime(lifecycle.locked_at)} />
-                <DetailRow label="Version Number" value={lineage.version_number ?? "—"} />
-                <DetailRow label="Root Claim ID" value={lineage.root_claim_id ?? "—"} />
-                <DetailRow label="Parent Claim ID" value={lineage.parent_claim_id ?? "—"} />
+                <DetailRow label="Status" value={verifiedResult.status || "—"} />
+                <DetailRow label="Integrity" value={verifiedResult.integrity || "—"} />
+                <DetailRow label="Verified At" value={formatDateTime(verifiedResult.verified_at)} />
+                <DetailRow label="Published At" value={formatDateTime(verifiedResult.published_at)} />
+                <DetailRow label="Locked At" value={formatDateTime(verifiedResult.locked_at)} />
+                <DetailRow label="Version Number" value={verifiedResult.version_number ?? "—"} />
+                <DetailRow label="Root Claim ID" value={verifiedResult.root_claim_id ?? "—"} />
+                <DetailRow label="Parent Claim ID" value={verifiedResult.parent_claim_id ?? "—"} />
               </div>
             </div>
 
@@ -790,99 +752,41 @@ export default function PublicVerifyClaimPage() {
                   fingerprint for this claim definition.
                 </div>
                 <div className="rounded-xl bg-slate-50 p-4">
-                  <span className="font-medium text-slate-900">Trade-set hash:</span> fingerprint of
-                  the in-scope trade evidence used by the record.
+                  <span className="font-medium text-slate-900">Stored trade-set hash:</span> fingerprint
+                  persisted on the claim record when finalized.
                 </div>
                 <div className="rounded-xl bg-slate-50 p-4">
-                  <span className="font-medium text-slate-900">Integrity valid:</span> recomputed
-                  trade-set fingerprint matches the stored locked fingerprint.
+                  <span className="font-medium text-slate-900">Recomputed trade-set hash:</span> freshly
+                  generated fingerprint from the current in-scope trade set.
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="mb-8 grid gap-6 lg:grid-cols-2">
-          <ScopeListCard
-            title="Included Members"
-            items={Array.isArray(scope.included_members) ? scope.included_members : []}
-            emptyText="All members were considered in scope for this public claim."
-          />
-
-          <ScopeListCard
-            title="Included Symbols"
-            items={Array.isArray(scope.included_symbols) ? scope.included_symbols : []}
-            emptyText="All symbols were considered in scope for this public claim."
-          />
-        </div>
-
         <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="text-2xl font-semibold">Leaderboard Snapshot</h2>
+          <h2 className="text-2xl font-semibold">Verified Trade Evidence</h2>
+          <div className="mt-2 text-sm text-slate-500">
+            Trade-level evidence loaded from the canonical claim record when access is available.
+          </div>
 
-          {leaderboard.length === 0 ? (
-            <div className="mt-4 text-slate-500">No leaderboard rows available.</div>
-          ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-slate-500">
-                    <th className="px-3 py-2">Rank</th>
-                    <th className="px-3 py-2">Member</th>
-                    <th className="px-3 py-2">Net PnL</th>
-                    <th className="px-3 py-2">Win Rate</th>
-                    <th className="px-3 py-2">Profit Factor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaderboard.map((row) => (
-                    <tr
-                      key={`${row.rank}-${row.member}-${row.member_id ?? "na"}`}
-                      className="border-b last:border-0"
-                    >
-                      <td className="px-3 py-2">{row.rank}</td>
-                      <td className="px-3 py-2">{row.member}</td>
-                      <td className="px-3 py-2">{formatNumber(row.net_pnl)}</td>
-                      <td className="px-3 py-2">{formatPercent(row.win_rate, 2)}</td>
-                      <td className="px-3 py-2">{formatNumber(row.profit_factor, 4)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        <div className="mb-8">
-          <EquityCurveChart title="Public Equity Curve" points={publicCurvePoints} />
-        </div>
-
-        <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-semibold">Verified Trade Evidence</h2>
-              <div className="mt-2 text-sm text-slate-500">
-                Public trade-level evidence derived from the verified in-scope claim trade set.
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+              <div className="text-slate-500">Workspace Trades</div>
+              <div className="mt-1 font-semibold">
+                {evidenceSummary?.workspace_trade_count ?? "—"}
               </div>
             </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-                <div className="text-slate-500">Workspace Trades</div>
-                <div className="mt-1 font-semibold">
-                  {evidenceSummary?.workspace_trade_count ?? "—"}
-                </div>
+            <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm">
+              <div className="text-green-700">Included Trades</div>
+              <div className="mt-1 font-semibold text-green-900">
+                {evidenceSummary?.included_trade_count ?? includedRows.length}
               </div>
-              <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm">
-                <div className="text-green-700">Included Trades</div>
-                <div className="mt-1 font-semibold text-green-900">
-                  {evidenceSummary?.included_trade_count ?? includedRows.length}
-                </div>
-              </div>
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm">
-                <div className="text-red-700">Excluded Trades</div>
-                <div className="mt-1 font-semibold text-red-900">
-                  {evidenceSummary?.excluded_trade_count ?? excludedRows.length}
-                </div>
+            </div>
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm">
+              <div className="text-red-700">Excluded Trades</div>
+              <div className="mt-1 font-semibold text-red-900">
+                {evidenceSummary?.excluded_trade_count ?? excludedRows.length}
               </div>
             </div>
           </div>
@@ -900,16 +804,16 @@ export default function PublicVerifyClaimPage() {
           <div className="mt-6 space-y-6">
             <PublicTradeEvidenceTable
               title="Included Trade Rows"
-              subtitle="Trades included in the public claim scope and used to compute the published verification metrics."
+              subtitle="Trades included in the canonical claim scope."
               rows={includedRows}
-              emptyText="No included trade rows are available for this public claim."
+              emptyText="No included trade rows are available for this claim."
             />
 
             <PublicTradeEvidenceTable
               title="Excluded Trade Rows"
-              subtitle="Trades outside the final public claim scope, shown with explicit exclusion reasons when available."
+              subtitle="Trades outside the final canonical claim scope, shown with exclusion reasons where available."
               rows={excludedRows}
-              emptyText="No excluded trade rows are available for this public claim."
+              emptyText="No excluded trade rows are available for this claim."
               showExclusionColumns
             />
           </div>
