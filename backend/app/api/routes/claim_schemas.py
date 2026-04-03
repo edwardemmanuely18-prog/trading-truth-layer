@@ -1404,7 +1404,7 @@ def draw_equity_curve_preview(
         pdf.drawCentredString(tick_x, chart_y_bottom - 12, str(point.get("index", tick_index + 1)))
 
         opened_text = str(point.get("opened_at", ""))[:10]
-        pdf.setFillColor(colors.HexColor("#94A3B8"))
+        pdf.setFillColor(colors.HexColor("#475569"))
         pdf.setFont("Helvetica", 7)
         pdf.drawCentredString(tick_x, chart_y_bottom - 24, opened_text)
 
@@ -1720,8 +1720,8 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.drawString(x + 14, top_y - 20, label)
 
         value_lines = split_wrapped_lines(str(value), w - 28, "Helvetica-Bold", 17) or ["—"]
-        pdf.setFillColor(value_color)
-        pdf.setFont("Helvetica-Bold", 17)
+        pdf.setFillColor(colors.HexColor("#020617"))
+        pdf.setFont("Helvetica-Bold", 18)
         value_y = top_y - 44
         for line in value_lines[:2]:
             pdf.drawString(x + 14, value_y, line)
@@ -1771,6 +1771,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.drawString(x, top_y - 2, label)
 
         h = 44
+        pdf.setLineWidth(1.5 if emphasize else 1)
         draw_soft_panel(x, top_y - 16, w, h, radius=13, fill=fill, stroke=stroke)
         pdf.setFillColor(COLOR_INK)
         pdf.setFont("Courier", 8.5)
@@ -1790,7 +1791,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     def draw_table_header_row(x, top_y, total_w, columns, row_h=24):
         pdf.setFillColor(COLOR_TABLE_HEADER)
-        pdf.setStrokeColor(COLOR_TABLE_BORDER)
+        pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
         pdf.roundRect(x, top_y - row_h, total_w, row_h, 6, fill=1, stroke=1)
         pdf.setFillColor(COLOR_MUTED)
         pdf.setFont("Helvetica-Bold", TEXT_S)
@@ -1876,7 +1877,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
             return chart_x + ((i - 1) / (len(xs) - 1)) * chart_w
 
         # background grid
-        pdf.setStrokeColor(COLOR_LINE_SOFT)
+        pdf.setStrokeColor(colors.HexColor("#E8EEF6"))
         pdf.setLineWidth(1)
         grid_steps = 5
         for step in range(grid_steps + 1):
@@ -1933,7 +1934,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         path.lineTo(scale_x(xs[-1]), chart_y)
         path.close()
 
-        pdf.setFillColor(colors.HexColor("#E2E8F0"))
+        pdf.setFillColor(colors.HexColor("#EEF2F7"))
         pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
         pdf.drawPath(path, fill=1, stroke=0)
 
@@ -2087,13 +2088,14 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.setFont("Helvetica-Bold", 24)
     pdf.setFillColor(banner_text)
     title_lines = split_wrapped_lines(signature_text, PDF_CONTENT_WIDTH - 260, "Helvetica-Bold", 24) or [signature_text]
-    title_y = y - 50
+    title_y = y - 52
     for line in title_lines[:2]:
         pdf.drawString(PDF_MARGIN_LEFT + 24, title_y, line)
-        title_y -= 22
+        title_y -= 26  # increased spacing
 
+    trust_y = title_y - 6
     pdf.setFont("Helvetica", TEXT_L)
-    pdf.drawString(PDF_MARGIN_LEFT + 24, y - 78, trust_state_text)
+    pdf.drawString(PDF_MARGIN_LEFT + 24, trust_y, trust_state_text)
 
     draw_pdf_wrapped_text(
         pdf,
@@ -2118,7 +2120,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     )
 
     hash_box_w = (PDF_CONTENT_WIDTH - 24 - CARD_GAP) / 2
-    hash_row_top = y - 148
+    hash_row_top = y - 160
     draw_label_value_box_v2(
         PDF_MARGIN_LEFT + 12,
         hash_row_top,
