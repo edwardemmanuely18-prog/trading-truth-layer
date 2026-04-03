@@ -2561,17 +2561,31 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     y -= BLOCK_GAP
 
     equity_point_columns = [
-        {"label": "Seq", "key": "sequence", "x": 0, "w": 28, "align": "left"},
-        {"label": "Trade", "key": "trade_id", "x": 28, "w": 40, "align": "left"},
-        {"label": "Opened", "key": "opened_at", "x": 68, "w": 118, "align": "left"},
-        {"label": "Symbol", "key": "symbol", "x": 186, "w": 50, "align": "left"},
-        {"label": "Member", "key": "member_id", "x": 236, "w": 44, "align": "left"},
-        {"label": "Trade PnL", "key": "trade_pnl", "x": 280, "w": 78, "align": "right", "font_size": 8},
-        {"label": "Cumulative", "key": "cumulative_pnl", "x": 358, "w": 80, "align": "right", "font_size": 8},
-        {"label": "Step", "key": "step_change", "x": 438, "w": 42, "align": "right", "font_size": 8},
-        {"label": "Gap", "key": "gap_from_prior", "x": 480, "w": 60, "align": "right", "font_size": 8},
+        {"label": "Seq", "key": "sequence", "x": 0, "w": 26, "align": "left"},
+        {"label": "Trade", "key": "trade_id", "x": 26, "w": 40, "align": "left"},
+        {"label": "Opened", "key": "opened_at", "x": 66, "w": 110, "align": "left"},
+        {"label": "Symbol", "key": "symbol", "x": 176, "w": 48, "align": "left"},
+        {"label": "Member", "key": "member_id", "x": 224, "w": 44, "align": "left"},
+        {"label": "Trade PnL", "key": "trade_pnl", "x": 268, "w": 80, "align": "right", "font_size": 8},
+        {"label": "Cumulative", "key": "cumulative_pnl", "x": 348, "w": 82, "align": "right", "font_size": 8},
+        {"label": "Step", "key": "step_change", "x": 430, "w": 46, "align": "right", "font_size": 8},
+        {"label": "Gap", "key": "gap_from_prior", "x": 476, "w": 40, "align": "right", "font_size": 8},
     ]
     equity_point_rows = build_equity_point_rows(curve_points)
+
+    units_note = "Units — Trade PnL: account currency • Cumulative: account currency • Step: account currency • Gap: days"
+    units_note_h = estimate_highlight_note_height(units_note, PDF_CONTENT_WIDTH, label="Equity Point Units", min_height=40)
+    ensure_space(units_note_h + 80)
+    y = draw_highlight_note(
+        PDF_MARGIN_LEFT,
+        y,
+        PDF_CONTENT_WIDTH,
+        units_note,
+        label="Equity Point Units",
+        min_height=40,
+    )
+    y -= 8
+
 
     draw_paginated_table_section(
         "Equity Point Snapshot",
@@ -2580,7 +2594,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         "No equity point analytics available.",
         row_h=22,
         header_row_h=24,
-        top_gap_before_title=10,
+        top_gap_before_title=12,
         preferred_break_height=220,
     )
 
