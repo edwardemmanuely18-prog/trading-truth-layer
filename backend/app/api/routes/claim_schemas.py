@@ -1846,12 +1846,24 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.setFillColor(COLOR_TABLE_HEADER)
         pdf.setStrokeColor(colors.HexColor("#E2E8F0"))
         pdf.roundRect(x, top_y - row_h, total_w, row_h, 6, fill=1, stroke=1)
+
         pdf.setFillColor(COLOR_MUTED)
         pdf.setFont("Helvetica-Bold", TEXT_S)
+
         for col in columns:
             label = col["label"]
-            cx = x + col["x"] + 4
-            pdf.drawString(cx, top_y - 16, label)
+            align = col.get("align", "left")
+            col_left = x + col["x"]
+            col_w = col["w"]
+            pad = 8
+
+            if align == "right":
+                pdf.drawRightString(col_left + col_w - pad, top_y - 16, label)
+            elif align == "center":
+                pdf.drawCentredString(col_left + (col_w / 2), top_y - 16, label)
+            else:
+                pdf.drawString(col_left + pad, top_y - 16, label)
+
         return top_y - row_h
 
     def draw_table_row(x, top_y, total_w, columns, row_values, row_h=22, alt=False):
@@ -1863,20 +1875,25 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         for col in columns:
             key = col["key"]
             align = col.get("align", "left")
-            col_x = x + col["x"] + 4
-            col_w = col["w"] - 8
             text = str(row_values.get(key, "—"))
             font_name = col.get("font", "Helvetica")
             font_size = col.get("font_size", TEXT_S)
+
+            col_left = x + col["x"]
+            col_w = col["w"]
+            left_pad = 8
+            right_pad = 8
+
             pdf.setFont(font_name, font_size)
             pdf.setFillColor(COLOR_INK)
 
             if align == "right":
-                pdf.drawRightString(col_x + col_w, top_y - 15, text)
+                pdf.drawRightString(col_left + col_w - right_pad, top_y - 15, text)
             elif align == "center":
-                pdf.drawCentredString(col_x + (col_w / 2), top_y - 15, text)
+                pdf.drawCentredString(col_left + (col_w / 2), top_y - 15, text)
             else:
-                pdf.drawString(col_x, top_y - 15, text)
+                pdf.drawString(col_left + left_pad, top_y - 15, text)
+
         return top_y - row_h
 
     def draw_info_chip(x, top_y, w, h, rows, fill=colors.white, stroke=COLOR_LINE):
@@ -2522,9 +2539,9 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         {"label": "Symbol", "key": "symbol", "x": 182, "w": 56, "align": "left"},
         {"label": "Member", "key": "member_id", "x": 238, "w": 52, "align": "left"},
         {"label": "Trade PnL", "key": "trade_pnl", "x": 290, "w": 72, "align": "right", "font_size": 8},
-        {"label": "Cumulative", "key": "cumulative_pnl", "x": 362, "w": 74, "align": "right", "font_size": 8},
-        {"label": "Step", "key": "step_change", "x": 436, "w": 48, "align": "right", "font_size": 8},
-        {"label": "Gap", "key": "gap_from_prior", "x": 484, "w": 44, "align": "center", "font_size": 8},
+        {"label": "Cumulative", "key": "cumulative_pnl", "x": 362, "w": 76, "align": "right", "font_size": 8},
+        {"label": "Step", "key": "step_change", "x": 438, "w": 48, "align": "right", "font_size": 8},
+        {"label": "Gap", "key": "gap_from_prior", "x": 486, "w": 42, "align": "center", "font_size": 8},
     ]
     equity_point_rows = build_equity_point_rows(curve_points)
 
@@ -2615,10 +2632,10 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     leaderboard_columns = [
         {"label": "Rank", "key": "rank", "x": 0, "w": 56, "align": "left"},
-        {"label": "Member", "key": "member", "x": 56, "w": 150, "align": "left"},
-        {"label": "Net PnL", "key": "net_pnl", "x": 206, "w": 98, "align": "right"},
-        {"label": "Win Rate", "key": "win_rate", "x": 304, "w": 98, "align": "right"},
-        {"label": "Profit Factor", "key": "profit_factor", "x": 402, "w": 114, "align": "right"},
+        {"label": "Member", "key": "member", "x": 56, "w": 180, "align": "left"},
+        {"label": "Net PnL", "key": "net_pnl", "x": 236, "w": 96, "align": "right"},
+        {"label": "Win Rate", "key": "win_rate", "x": 332, "w": 96, "align": "right"},
+        {"label": "Profit Factor", "key": "profit_factor", "x": 428, "w": 88, "align": "right"},
     ]
 
     leaderboard_rows = []
@@ -2651,8 +2668,8 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         {"label": "Symbol", "key": "symbol", "x": 234, "w": 70, "align": "left"},
         {"label": "Side", "key": "side", "x": 304, "w": 58, "align": "left"},
         {"label": "Member", "key": "member_id", "x": 362, "w": 68, "align": "left"},
-        {"label": "PnL", "key": "net_pnl", "x": 430, "w": 40, "align": "right"},
-        {"label": "Cumulative", "key": "cumulative_pnl", "x": 470, "w": 46, "align": "right"},
+        {"label": "PnL", "key": "net_pnl", "x": 430, "w": 48, "align": "right"},
+        {"label": "Cumulative", "key": "cumulative_pnl", "x": 478, "w": 62, "align": "right"},
     ]
 
     evidence_table_rows = []
