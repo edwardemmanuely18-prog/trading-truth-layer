@@ -3,33 +3,60 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.models.claim_schema import ClaimSchema
+from app.api.routes.claim_schemas import compute_claim_hash, compute_trade_set_hash, resolve_schema_trade_scope
 
 router = APIRouter(prefix="/verify", tags=["verify"])
 
 
 @router.get("/{claim_hash}")
 def verify_claim(claim_hash: str, db: Session = Depends(get_db)):
-    claim = (
+    claims = (
         db.query(ClaimSchema)
-        .filter(ClaimSchema.claim_hash == claim_hash)
-        .first()
+        .order_by(ClaimSchema.id.desc())
+        .all()
     )
 
-    if not claim:
+    matched_claim = None
+    matched_computed_hash = None
+
+    for claim in claims:
+        computed_hash = compute_claim_hash(claim)
+        if computed_hash == claim_hash:
+            matched_claim = claim
+            matched_computed_hash = computed_hash
+            break
+
+    if not matched_claim:
         raise HTTPException(status_code=404, detail="Claim not found")
 
-    # Integrity check (simple version for now)
-    integrity = "valid" if claim.is_locked else "unverified"
+    scope = resolve_schema_trade_scope(matched_claim, db)
+
+    stored_trade_set_hash = matched_claim.locked_trade_set_hash
+    recomputed_trade_set_hash = compute_trade_set_hash(scope["included"])
+
+    if matched_claim.status == "locked":
+        integrity = "valid" if stored_trade_set_hash and stored_trade_set_hash == recomputed_trade_set_hash else "compromised"
+    else:
+        integrity = "unlocked"
 
     return {
-        "claim_id": claim.id,
-        "status": claim.status,
-        "is_locked": claim.is_locked,
+        "claim_id": matched_claim.id,
+        "workspace_id": matched_claim.workspace_id,
+        "name": matched_claim.name,
+        "status": matched_claim.status,
+        "visibility": matched_claim.visibility,
+        "claim_hash": matched_computed_hash,
+        "stored_trade_set_hash": stored_trade_set_hash,
+        "recomputed_trade_set_hash": recomputed_trade_set_hash,
         "integrity": integrity,
-        "workspace_id": claim.workspace_id,
-        "created_at": claim.created_at,
-        "locked_at": claim.locked_at,
-        "published_at": claim.published_at,
-        "claim_hash": claim.claim_hash,
-        "trade_set_hash": claim.trade_set_hash,
+        "version_number": matched_claim.version_number,
+        "root_claim_id": matched_claim.root_claim_id,
+        "parent_claim_id": matched_claim.parent_claim_id,
+        "published_at": matched_claim.published_at,
+        "verified_at": matched_claim.verified_at,
+        "locked_at": matched_claim.locked_at,
+        "period_start": matched_claim.period_start,
+        "period_end": matched_claim.period_end,
+        "public_view_path": f"/claim/{matched_claim.id}/public",
+        "verify_path": f"/verify/{matched_computed_hash}",
     }
