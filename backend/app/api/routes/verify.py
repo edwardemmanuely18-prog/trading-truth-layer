@@ -85,7 +85,16 @@ def verify_claim_by_id(claim_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{claim_hash}")
 def verify_claim(claim_hash: str, db: Session = Depends(get_db)):
-    claims = db.query(ClaimSchema).order_by(ClaimSchema.id.desc()).all()
+    claim_hash = str(claim_hash or "").strip()
+    if not claim_hash:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    claims = (
+        db.query(ClaimSchema)
+        .filter(ClaimSchema.status.in_(["published", "locked"]))
+        .order_by(ClaimSchema.id.desc())
+        .all()
+    )
 
     for claim in claims:
         payload = build_verify_payload(claim, db)
