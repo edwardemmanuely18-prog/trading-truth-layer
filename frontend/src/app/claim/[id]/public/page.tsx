@@ -167,7 +167,7 @@ function IntegrityBadge({ integrity }: { integrity?: ClaimIntegrityResult | null
           : "border-red-200 bg-red-100 text-red-800"
       }`}
     >
-      {isValid ? "Integrity Verified" : "Integrity Check Failed"}
+      {isValid ? "Verified · Hash Match" : "Integrity Mismatch"}
     </span>
   );
 }
@@ -398,6 +398,11 @@ export default function PublicClaimPage() {
             {claim.name}
           </h1>
 
+          <div className="mt-4 text-sm text-slate-600">
+            This is a publicly verifiable trading claim. It represents a locked and auditable
+            record of trading performance, including methodology, scope, and performance metrics.
+          </div>
+
           <div className="mt-5 flex flex-wrap gap-3">
             <StatusBadge status={claim.status} />
             <IntegrityBadge integrity={integrity} />
@@ -424,6 +429,31 @@ export default function PublicClaimPage() {
               </div>
             </div>
           </div>
+
+          {verifyPath ? (
+            <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="text-sm font-semibold text-blue-900">
+                  Verify this claim independently
+                </div>
+                <div className="mt-1 text-sm text-blue-800">
+                  Use the verification route to confirm integrity, lifecycle state, and canonical claim identity.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    window.open(verifyPath, "_blank", "noopener,noreferrer");
+                  }
+                }}
+                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                Open Verification
+              </button>
+            </div>
+          ) : null}
 
           <div className="mt-5 flex flex-wrap gap-3">
             <button
@@ -534,6 +564,28 @@ export default function PublicClaimPage() {
               value={formatNumber((preview as any).profit_factor, 4)}
               hint="Gross profit ÷ gross loss"
             />
+          </div>
+
+          <div className="mt-8">
+            <div className="text-2xl font-semibold text-slate-950">Equity Curve</div>
+
+            {(preview as any).equity_curve && (preview as any).equity_curve.length > 0 ? (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="text-sm text-slate-500">
+                  Equity progression across the claim period.
+                </div>
+
+                <div className="mt-4">
+                  <pre className="overflow-x-auto text-xs text-slate-600">
+                    {JSON.stringify((preview as any).equity_curve.slice(0, 20), null, 2)}
+                  </pre>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                No equity curve data available.
+              </div>
+            )}
           </div>
 
           <div className="mt-8 grid gap-4 xl:grid-cols-[1.5fr_1fr]">
