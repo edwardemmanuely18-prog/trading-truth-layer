@@ -50,14 +50,41 @@ def ensure_claim_schema_columns():
 
     existing_columns = {col["name"] for col in inspector.get_columns("claim_schemas")}
 
-    if "locked_trade_ids_json" not in existing_columns:
-        with engine.begin() as conn:
+    with engine.begin() as conn:
+        if "locked_trade_ids_json" not in existing_columns:
             conn.execute(
                 text(
                     "ALTER TABLE claim_schemas "
                     "ADD COLUMN locked_trade_ids_json TEXT NOT NULL DEFAULT '[]'"
                 )
             )
+
+        if "claim_hash" not in existing_columns:
+            conn.execute(
+                text(
+                    "ALTER TABLE claim_schemas "
+                    "ADD COLUMN claim_hash VARCHAR"
+                )
+            )
+
+
+def backfill_claim_hashes():
+    from app.api.routes.claim_schemas import compute_claim_hash
+
+    db = SessionLocal()
+    try:
+        claims = db.query(ClaimSchema).all()
+        changed = False
+
+        for claim in claims:
+            if not claim.claim_hash:
+                claim.claim_hash = compute_claim_hash(claim)
+                changed = True
+
+        if changed:
+            db.commit()
+    finally:
+        db.close()
 
 
 app = FastAPI(title="Trading Truth Layer API")
@@ -76,6 +103,7 @@ app.add_middleware(
 def on_startup():
     Base.metadata.create_all(bind=engine)
     ensure_claim_schema_columns()
+    backfill_claim_hashes()
 
     db = SessionLocal()
     try:
