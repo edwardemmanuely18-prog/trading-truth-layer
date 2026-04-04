@@ -569,7 +569,8 @@ export default function PublicClaimPage() {
           <div className="mt-8">
             <div className="text-2xl font-semibold text-slate-950">Equity Curve</div>
 
-            {(preview as any).equity_curve && (preview as any).equity_curve.length > 0 ? (
+            {(preview as any).equity_curve?.curve &&
+            (preview as any).equity_curve.curve.length > 0 ? (
               <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="text-sm text-slate-500">
                   Equity progression across the claim period.
@@ -577,7 +578,7 @@ export default function PublicClaimPage() {
 
                 <div className="mt-4">
                   <pre className="overflow-x-auto text-xs text-slate-600">
-                    {JSON.stringify((preview as any).equity_curve.slice(0, 20), null, 2)}
+                    {JSON.stringify((preview as any).equity_curve.curve.slice(0, 20), null, 2)}
                   </pre>
                 </div>
               </div>
