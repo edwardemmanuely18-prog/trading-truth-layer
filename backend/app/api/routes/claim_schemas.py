@@ -33,6 +33,7 @@ from app.models.claim_schema import ClaimSchema
 from app.models.trade import Trade
 from app.models.user import User
 from app.models.workspace import Workspace
+from app.services.workspace_usage import can_create_public_claim 
 from app.services.audit_service import log_audit_event
 from app.services.claim_service import compute_claim_hash
 from app.services.entitlements import enforce_claim_creation_allowed
@@ -189,7 +190,7 @@ def serialize_schema(schema: ClaimSchema):
         "published_at": schema.published_at.isoformat() if schema.published_at else None,
         "locked_at": schema.locked_at.isoformat() if schema.locked_at else None,
         "locked_trade_set_hash": schema.locked_trade_set_hash,
-        "claim_hash": compute_claim_hash(schema),
+        "claim_hash": schema.claim_hash or compute_claim_hash(schema),
     }
 
 
@@ -202,7 +203,7 @@ def serialize_version_row(schema: ClaimSchema):
         "version_number": schema.version_number,
         "parent_claim_id": schema.parent_claim_id,
         "root_claim_id": schema.root_claim_id,
-        "claim_hash": compute_claim_hash(schema),
+        "claim_hash": schema.claim_hash or compute_claim_hash(schema),
     }
 
 
@@ -893,7 +894,7 @@ def build_evidence_pack_payload(schema: ClaimSchema, db: Session):
 
     return {
         "claim_schema_id": schema.id,
-        "claim_hash": compute_claim_hash(schema),
+        "claim_hash": schema.claim_hash or compute_claim_hash(schema),
         "exported_at": datetime.utcnow().isoformat(),
         "export_version": "evidence_pack_v1",
         "schema_snapshot": {
@@ -943,7 +944,7 @@ def build_audit_events_payload(schema: ClaimSchema, db: Session):
 
     return {
         "claim_schema_id": schema.id,
-        "claim_hash": compute_claim_hash(schema),
+        "claim_hash": schema.claim_hash or compute_claim_hash(schema),
         "exported_at": datetime.utcnow().isoformat(),
         "export_version": "audit_events_v1",
         "event_count": len(events),
@@ -952,7 +953,7 @@ def build_audit_events_payload(schema: ClaimSchema, db: Session):
 
 
 def build_evidence_bundle_manifest(schema: ClaimSchema):
-    claim_hash = compute_claim_hash(schema)
+    claim_hash = schema.claim_hash or compute_claim_hash(schema)
     return {
         "export_version": "evidence_bundle_v1",
         "exported_at": datetime.utcnow().isoformat(),
@@ -973,7 +974,7 @@ def build_evidence_bundle_payload(schema: ClaimSchema, db: Session):
 
     return {
         "claim_schema_id": schema.id,
-        "claim_hash": compute_claim_hash(schema),
+        "claim_hash": schema.claim_hash or compute_claim_hash(schema),
         "exported_at": manifest["exported_at"],
         "export_version": manifest["export_version"],
         "included_files": manifest["included_files"],
@@ -984,7 +985,7 @@ def build_evidence_bundle_payload(schema: ClaimSchema, db: Session):
 
 
 def build_evidence_bundle_zip_bytes(schema: ClaimSchema, db: Session) -> tuple[BytesIO, str]:
-    claim_hash = compute_claim_hash(schema)
+    claim_hash = schema.claim_hash or compute_claim_hash(schema)
     hash_prefix = claim_hash[:12]
 
     evidence_pack = build_evidence_pack_payload(schema, db)
@@ -3242,12 +3243,26 @@ def publish_claim_schema(
     }
 
     original_visibility = schema.visibility
+
     schema.status = "published"
     schema.published_at = datetime.utcnow()
     schema.claim_hash = compute_claim_hash(schema)
 
+    # Normalize visibility
     if schema.visibility == "private":
         schema.visibility = "unlisted"
+
+    # 🔒 PUBLIC EXPOSURE CONTROL (ADD THIS BLOCK HERE)
+    if schema.visibility in ["public", "unlisted"]:
+        workspace = get_workspace_or_404(schema.workspace_id, db)
+        workspace_plan_code = workspace.plan_code or "starter"
+
+        allowed = can_create_public_claim(schema.workspace_id, workspace_plan_code, db)
+        if not allowed:
+            raise HTTPException(
+                status_code=403,
+                detail="Public claim limit reached. Upgrade required."
+            )
 
     db.commit()
     db.refresh(schema)
