@@ -24,6 +24,31 @@ function normalizeText(value?: string | null) {
   return String(value || "").toLowerCase().trim();
 }
 
+function getUsageWarning(claimUsage?: WorkspaceUsageSummary["usage"]["claims"] | null) {
+  if (!claimUsage) return null;
+
+  const ratio = Number(claimUsage.ratio ?? 0);
+  if (ratio >= 1) {
+    return {
+      tone: "critical" as const,
+      title: "Governed claim limit reached",
+      message:
+        "This workspace has reached its governed claim capacity. Additional public lifecycle actions require upgrade review.",
+    };
+  }
+
+  if (ratio >= 0.8) {
+    return {
+      tone: "warning" as const,
+      title: "Approaching governed claim limit",
+      message:
+        "This workspace is approaching its governed claim capacity. The next public workflow action may require upgrade.",
+    };
+  }
+
+  return null;
+}
+
 function formatPercent(value?: number | null) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
   return `${(Number(value) * 100).toFixed(1)}%`;
@@ -389,10 +414,13 @@ export default function ClaimLifecycleActions({
   const recommendedPlanName = governanceBillingActivationRecommended
     ? currentPlanName
     : usage?.upgrade_recommendation?.recommended_plan_name || "Review billing posture";
-
+  
   const claimUsage = usage?.usage?.claims;
+
+  const usageWarning = useMemo(() => getUsageWarning(claimUsage), [claimUsage]);
+
   const usageLabel = claimUsage
-    ? `${claimUsage.used} / ${claimUsage.limit}${
+    ? `${claimUsage.used} of ${claimUsage.limit} governed claims used${
         claimUsage.ratio !== null && claimUsage.ratio !== undefined
           ? ` · ${formatPercent(claimUsage.ratio)}`
           : ""
@@ -410,9 +438,13 @@ export default function ClaimLifecycleActions({
           reason: "claim_limit_reached",
           actionLabel,
           message:
-            err.payload?.message ||
-            err.payload?.upgrade_hint ||
-            "This action is blocked because the workspace has reached its governed claim capacity.",
+            action === "publish"
+              ? err.payload?.message ||
+                err.payload?.upgrade_hint ||
+                "Publishing is blocked because the workspace has reached its governed public-claim capacity."
+              : err.payload?.message ||
+                err.payload?.upgrade_hint ||
+                "This action is blocked because the workspace has reached its governed claim capacity.",
         });
         return true;
       }
@@ -451,6 +483,19 @@ export default function ClaimLifecycleActions({
       setLoadingAction(null);
     }
   }
+  
+  {usageWarning ? (
+    <div
+      className={`rounded-2xl border p-4 text-sm ${
+        usageWarning.tone === "critical"
+          ? "border-amber-300 bg-amber-50 text-amber-900"
+          : "border-blue-200 bg-blue-50 text-blue-900"
+      }`}
+    >
+      <div className="font-semibold">{usageWarning.title}</div>
+      <div className="mt-1">{usageWarning.message}</div>
+    </div>
+  ) : null}
 
   async function handleVerify() {
     if (verifyConfig.disabled) return;
@@ -618,6 +663,60 @@ export default function ClaimLifecycleActions({
           </div>
         </div>
 
+        {usage ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-slate-500">Workspace billing posture</div>
+                <div className="mt-2 text-lg font-semibold text-slate-900">
+                  {effectivePlanName}
+                </div>
+                <div className="mt-1 text-sm text-slate-600">
+                  Current workspace plan and governed claim-capacity posture.
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                <div className="text-xs uppercase tracking-wide text-slate-500">Usage state</div>
+                <div className="mt-1 font-semibold text-slate-900">{usageLabel}</div>
+              </div>
+            </div>
+
+            {claimUsage ? (
+              <div className="mt-4">
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <span>Governed claim usage</span>
+                  <span>
+                    {claimUsage.used} / {claimUsage.limit}
+                  </span>
+                </div>
+                <div className="mt-2 h-2 rounded-full bg-slate-100">
+                  <div
+                    className="h-2 rounded-full bg-slate-900 transition-all"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        Math.max(0, Number(((claimUsage.ratio ?? 0) * 100).toFixed(1)))
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
+           ) : null}
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => router.push(`/workspace/${workspaceId}/settings?tab=billing`)}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Review Billing & Access
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+
         <div className="grid gap-3 md:grid-cols-3">
           <StepCard
             title="Verify"
@@ -635,7 +734,7 @@ export default function ClaimLifecycleActions({
 
           <StepCard
             title="Publish"
-            description="Makes a verified claim publishable for external use."
+            description="Moves a verified claim into governed external exposure and shareable trust-surface eligibility."
             stateLabel={publishConfig.stateLabel}
             isAvailableNow={publishConfig.stateAvailable}
             isCompleted={publishConfig.completed}
@@ -649,7 +748,7 @@ export default function ClaimLifecycleActions({
 
           <StepCard
             title="Lock"
-            description="Finalizes the claim and stores the locked trade-set hash."
+            description="Finalizes the claim, stores the locked evidence fingerprint, and enables audit-grade integrity review."
             stateLabel={lockConfig.stateLabel}
             isAvailableNow={lockConfig.stateAvailable}
             isCompleted={lockConfig.completed}
