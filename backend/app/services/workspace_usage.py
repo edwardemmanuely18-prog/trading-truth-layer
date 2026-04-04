@@ -1,21 +1,34 @@
 from sqlalchemy.orm import Session
+
 from app.models.claim_schema import ClaimSchema
 
 
-FREE_LIMITS = {
-    "max_public_claims": 3,
+PLAN_LIMITS = {
+    "starter": {
+        "max_public_claims": 3,
+    },
+    "pro": {
+        "max_public_claims": 50,
+    },
+    "growth": {
+        "max_public_claims": 150,
+    },
+    "business": {
+        "max_public_claims": 500,
+    },
 }
 
 
-PRO_LIMITS = {
-    "max_public_claims": 50,
-}
+def normalize_plan_code(plan_code: str | None) -> str:
+    value = str(plan_code or "").strip().lower()
+    if value in PLAN_LIMITS:
+        return value
+    return "starter"
 
 
-def get_workspace_limits(plan: str):
-    if plan == "pro":
-        return PRO_LIMITS
-    return FREE_LIMITS
+def get_workspace_limits(plan_code: str):
+    normalized = normalize_plan_code(plan_code)
+    return PLAN_LIMITS[normalized]
 
 
 def get_workspace_usage(workspace_id: int, db: Session):
@@ -23,7 +36,8 @@ def get_workspace_usage(workspace_id: int, db: Session):
         db.query(ClaimSchema)
         .filter(
             ClaimSchema.workspace_id == workspace_id,
-            ClaimSchema.visibility == "public",
+            ClaimSchema.visibility.in_(["public", "unlisted"]),
+            ClaimSchema.status.in_(["published", "locked"]),
         )
         .count()
     )
@@ -43,8 +57,7 @@ def get_workspace_usage(workspace_id: int, db: Session):
     }
 
 
-def can_create_public_claim(workspace_id: int, plan: str, db: Session):
-    limits = get_workspace_limits(plan)
+def can_create_public_claim(workspace_id: int, plan_code: str, db: Session):
+    limits = get_workspace_limits(plan_code)
     usage = get_workspace_usage(workspace_id, db)
-
     return usage["public_claims"] < limits["max_public_claims"]
