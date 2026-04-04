@@ -966,7 +966,6 @@ def create_billing_checkout_session(
             }
 
         workspace.billing_provider = "paddle"
-        workspace.billing_status = "inactive"
         workspace.paddle_transaction_id = data.get("id")
         workspace.paddle_price_id = paddle_price_id
         workspace.updated_at = datetime.utcnow()
