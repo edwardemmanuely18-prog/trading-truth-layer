@@ -583,9 +583,41 @@ export default function PublicClaimPage() {
                 </div>
 
                 <div className="mt-4">
-                  <pre className="overflow-x-auto text-xs text-slate-600">
-                    {JSON.stringify(preview.equity_curve.curve.slice(0, 20), null, 2)}
-                  </pre>
+                  <div className="mt-4">
+                    <div className="h-[220px] w-full">
+                      <svg viewBox="0 0 100 40" className="w-full h-full">
+                        {(() => {
+                          const curve = preview.equity_curve.curve;
+                          const max = Math.max(...curve.map((p: any) => p.cumulative_pnl));
+                          const min = Math.min(...curve.map((p: any) => p.cumulative_pnl));
+
+                          const normalize = (value: number) => {
+                            if (max === min) return 20;
+                            return 35 - ((value - min) / (max - min)) * 30;
+                          };
+
+                          const points = curve.map((p: any, i: number) => {
+                            const x = (i / (curve.length - 1)) * 100;
+                            const y = normalize(p.cumulative_pnl);
+                            return `${x},${y}`;
+                          });
+
+                          return (
+                            <polyline
+                              fill="none"
+                              stroke="#2563eb"
+                              strokeWidth="1.5"
+                              points={points.join(" ")}
+                            />
+                          );
+                        })()}
+                      </svg>
+                    </div>
+
+                    <div className="mt-2 text-xs text-slate-500">
+                      Equity curve (cumulative PnL over time)
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : (
