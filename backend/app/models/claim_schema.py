@@ -24,6 +24,8 @@ class ClaimSchema(Base):
     root_claim_id = Column(Integer, nullable=True)
     version_number = Column(Integer, nullable=False, default=1)
 
+    claim_hash = Column(String, nullable=True, index=True)
+
     verified_at = Column(DateTime, nullable=True)
     published_at = Column(DateTime, nullable=True)
     locked_at = Column(DateTime, nullable=True)

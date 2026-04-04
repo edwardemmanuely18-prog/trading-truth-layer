@@ -774,7 +774,7 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
     if not trade_set_hash:
         trade_set_hash = compute_trade_set_hash(filtered_trades)
 
-    claim_hash = compute_claim_hash(schema)
+    claim_hash = schema.claim_hash or compute_claim_hash(schema)
 
     return {
         "claim_schema_id": schema.id,
@@ -832,7 +832,7 @@ def build_public_claim_payload(schema: ClaimSchema, db: Session):
     included_rows = build_included_trade_scope_rows(scope["included"])
     excluded_rows = build_excluded_trade_scope_rows(scope["excluded"])
     equity_curve = build_equity_curve(scope["included"])
-    claim_hash = compute_claim_hash(schema)
+    claim_hash = schema.claim_hash or compute_claim_hash(schema)
 
     return {
         "claim_schema_id": schema.id,
@@ -3194,6 +3194,7 @@ def verify_claim_schema(
 
     schema.status = "verified"
     schema.verified_at = datetime.utcnow()
+    schema.claim_hash = compute_claim_hash(schema)
     db.commit()
     db.refresh(schema)
 
@@ -3243,6 +3244,7 @@ def publish_claim_schema(
     original_visibility = schema.visibility
     schema.status = "published"
     schema.published_at = datetime.utcnow()
+    schema.claim_hash = compute_claim_hash(schema)
 
     if schema.visibility == "private":
         schema.visibility = "unlisted"
@@ -3310,6 +3312,7 @@ def lock_claim_schema(
     schema.locked_trade_ids_json = json.dumps(locked_trade_ids)  # ✅ NEW
     schema.status = "locked"
     schema.locked_at = datetime.utcnow()
+    schema.claim_hash = compute_claim_hash(schema)
 
     db.commit()
     db.refresh(schema)

@@ -89,16 +89,17 @@ def verify_claim(claim_hash: str, db: Session = Depends(get_db)):
     if not claim_hash:
         raise HTTPException(status_code=404, detail="Claim not found")
 
-    claims = (
+    claim_hash = str(claim_hash or "").strip()
+    if not claim_hash:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    claim = (
         db.query(ClaimSchema)
-        .filter(ClaimSchema.status.in_(["published", "locked"]))
-        .order_by(ClaimSchema.id.desc())
-        .all()
+        .filter(ClaimSchema.claim_hash == claim_hash)
+        .first()
     )
 
-    for claim in claims:
-        payload = build_verify_payload(claim, db)
-        if payload["claim_hash"] == claim_hash:
-            return payload
-
-    raise HTTPException(status_code=404, detail="Claim not found")
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+ 
+    return build_verify_payload(claim, db)
