@@ -232,15 +232,18 @@ function PriceCard({
 function PlanCard({
   plan,
   configuredPlanCode,
+  effectivePlanCode,
   selectedPlanCode,
   onSelect,
 }: {
   plan: PlanCatalogItem;
   configuredPlanCode?: string | null;
+  effectivePlanCode?: string | null;
   selectedPlanCode?: string | null;
   onSelect: (planCode: string) => void;
 }) {
   const isConfigured = normalizeText(plan.code) === normalizeText(configuredPlanCode);
+  const isEffective = normalizeText(plan.code) === normalizeText(effectivePlanCode);
   const isSelected = normalizeText(plan.code) === normalizeText(selectedPlanCode);
 
   const monthlyPrice = plan.billing?.monthly_price_usd;
@@ -260,7 +263,12 @@ function PlanCard({
         <div className="text-lg font-semibold">{plan.name}</div>
         {isConfigured ? (
           <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold">
-            current
+            configured
+          </span>
+        ) : null}
+        {isEffective && !isConfigured ? (
+          <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+            effective
           </span>
         ) : null}
         {isSelected ? (
@@ -446,7 +454,7 @@ function resolvePrimaryBillingAction(params: {
   billingStatus?: string | null;
   canSeeUpgrade: boolean;
   checkoutLoading: boolean;
-  selectedPlanMatchesCurrent: boolean;
+  billingStatusIsPaid?: boolean;
 }) {
   const {
     configuredPlanCode,
@@ -454,7 +462,7 @@ function resolvePrimaryBillingAction(params: {
     billingStatus,
     canSeeUpgrade,
     checkoutLoading,
-    selectedPlanMatchesCurrent,
+    billingStatusIsPaid,
   } = params;
 
   const configured = normalizeText(configuredPlanCode);
@@ -462,7 +470,8 @@ function resolvePrimaryBillingAction(params: {
   const billing = normalizeText(billingStatus);
 
   const paidPlan = configured !== "starter";
-  const billingInactive = !["active", "trialing"].includes(billing);
+  const billingInactive =
+    billingStatusIsPaid === undefined ? !["active", "trialing"].includes(billing) : !billingStatusIsPaid;
 
   let label = "Upgrade Workspace";
   let helper: string | null = null;
@@ -482,7 +491,7 @@ function resolvePrimaryBillingAction(params: {
       helper = "Select a different target tier before starting checkout.";
       disabled = !canSeeUpgrade || checkoutLoading;
     }
-  } else if (selectedPlanMatchesCurrent) {
+  } else if (selected === configured) {
     label = "Current Plan Selected";
     helper = "Choose a different plan to start a new upgrade checkout.";
     disabled = true;
@@ -492,24 +501,30 @@ function resolvePrimaryBillingAction(params: {
 }
 
 function UpgradeSummaryPanel({
+  workspaceId,
   settings,
   usage,
+  billingFoundation,
   planCatalog,
   configuredPlanItem,
   selectedPlanCode,
   selectedBillingCycle,
   canSeeUpgrade,
   onStartCheckout,
+  onReturnToClaims,
   checkoutLoading,
 }: {
+  workspaceId: number;
   settings: WorkspaceSettings | null;
   usage: WorkspaceUsageSummary | null;
+  billingFoundation: WorkspaceBillingFoundation | null;
   planCatalog: PlanCatalogItem[];
   configuredPlanItem: PlanCatalogItem | null;
   selectedPlanCode: string;
   selectedBillingCycle: string;
   canSeeUpgrade: boolean;
   onStartCheckout: () => void;
+  onReturnToClaims: () => void;
   checkoutLoading: boolean;
 }) {
   const claimUsed = usage?.usage?.claims?.used ?? 0;
@@ -530,42 +545,42 @@ function UpgradeSummaryPanel({
     settings?.effective_plan_detail?.name ||
     formatPlanCodeLabel(effectivePlanCode);
 
-  const configuredClaimLimit = configuredPlanItem?.limits.claim_limit ?? usage?.usage?.claims?.limit ?? 0;
-  const configuredTradeLimit = configuredPlanItem?.limits.trade_limit ?? usage?.usage?.trades?.limit ?? 0;
-  const configuredMemberLimit = configuredPlanItem?.limits.member_limit ?? usage?.usage?.members?.limit ?? 0;
+  const configuredClaimLimit =
+    configuredPlanItem?.limits.claim_limit ?? usage?.usage?.claims?.limit ?? 0;
+  const configuredTradeLimit =
+    configuredPlanItem?.limits.trade_limit ?? usage?.usage?.trades?.limit ?? 0;
+  const configuredMemberLimit =
+    configuredPlanItem?.limits.member_limit ?? usage?.usage?.members?.limit ?? 0;
 
   const claimBlocked = isAtOrOverLimit(claimUsed, configuredClaimLimit);
-  const selectedPlanMatchesCurrent =
-    normalizeText(selectedPlanCode) === normalizeText(configuredPlanCode);
-
-  const hasPlanMismatch =
+  const planMismatch =
+    Boolean(billingFoundation?.plan_mismatch) ||
     normalizeText(configuredPlanCode) !== normalizeText(effectivePlanCode);
 
-  const breachedDimensions: string[] = [];
-  const nearLimitDimensions: string[] = [];
+  const upgradeRecommendation = usage?.upgrade_recommendation;
+  const governance = usage?.governance;
+  const recommendedPlanName =
+    upgradeRecommendation?.recommended_plan_name ||
+    formatPlanCodeLabel(upgradeRecommendation?.recommended_plan_code);
 
-  if (isOverLimit(claimUsed, configuredClaimLimit)) breachedDimensions.push("claims");
-  else if (isNearLimit(claimUsed, configuredClaimLimit)) nearLimitDimensions.push("claims");
-
-  if (isOverLimit(tradeUsed, configuredTradeLimit)) breachedDimensions.push("trades");
-  else if (isNearLimit(tradeUsed, configuredTradeLimit)) nearLimitDimensions.push("trades");
-
-  if (isOverLimit(memberUsed, configuredMemberLimit)) breachedDimensions.push("members");
-  else if (isNearLimit(memberUsed, configuredMemberLimit)) nearLimitDimensions.push("members");
-
-  const nextConfiguredPlanCode = getNextPlanCode(configuredPlanCode);
-  const recommendedPlanItem = getPlanFromCatalog(planCatalog, nextConfiguredPlanCode);
-  const recommendedPlanName = recommendedPlanItem?.name || formatPlanCodeLabel(nextConfiguredPlanCode);
-  const showRecommendation =
-    Boolean(nextConfiguredPlanCode) && (breachedDimensions.length > 0 || nearLimitDimensions.length > 0);
+  const checkoutIntent =
+    normalizeText(
+      normalizeText(selectedPlanCode) === normalizeText(configuredPlanCode) &&
+        !billingFoundation?.billing_status_is_paid &&
+        normalizeText(configuredPlanCode) !== "starter"
+        ? "billing_activation"
+        : normalizeText(selectedPlanCode) === normalizeText(configuredPlanCode)
+          ? "no_op"
+          : "plan_change"
+    );
 
   const primaryAction = resolvePrimaryBillingAction({
     configuredPlanCode,
     selectedPlanCode,
     billingStatus: settings?.billing_status,
+    billingStatusIsPaid: billingFoundation?.billing_status_is_paid,
     canSeeUpgrade,
     checkoutLoading,
-    selectedPlanMatchesCurrent,
   });
 
   return (
@@ -580,18 +595,24 @@ function UpgradeSummaryPanel({
 
         <span
           className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-            claimBlocked
-              ? "border-amber-200 bg-amber-50 text-amber-800"
-              : "border-green-200 bg-green-50 text-green-800"
+            governance?.billing_activation_recommended
+              ? "border-blue-200 bg-blue-50 text-blue-800"
+              : claimBlocked
+                ? "border-amber-200 bg-amber-50 text-amber-800"
+                : "border-green-200 bg-green-50 text-green-800"
           }`}
         >
-          {claimBlocked ? "claim capacity blocked" : "capacity available"}
+          {governance?.billing_activation_recommended
+            ? "billing activation needed"
+            : claimBlocked
+              ? "claim capacity blocked"
+              : "capacity available"}
         </span>
       </div>
 
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Current plan</div>
+          <div className="text-xs uppercase tracking-wide text-slate-500">Configured plan</div>
           <div className="mt-1 text-xl font-semibold text-slate-900">{configuredPlanName}</div>
           <div className="mt-2 text-sm text-slate-600">
             Claims: {claimUsed} / {configuredClaimLimit}
@@ -599,7 +620,9 @@ function UpgradeSummaryPanel({
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Selected billing target</div>
+          <div className="text-xs uppercase tracking-wide text-slate-500">
+            Selected billing target
+          </div>
           <div className="mt-1 text-xl font-semibold text-slate-900">
             {formatPlanCodeLabel(selectedPlanCode)}
           </div>
@@ -609,7 +632,7 @@ function UpgradeSummaryPanel({
         </div>
       </div>
 
-      {hasPlanMismatch ? (
+      {planMismatch ? (
         <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <div className="font-medium">Billing not active yet</div>
           <div className="mt-2">
@@ -620,24 +643,33 @@ function UpgradeSummaryPanel({
         </div>
       ) : null}
 
-      {(breachedDimensions.length > 0 || nearLimitDimensions.length > 0) ? (
+      {governance?.billing_activation_recommended ? (
+        <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+          <div className="font-medium">Activate billing first</div>
+          <div className="mt-2">
+            The configured plan already provides the intended commercial posture. The next step is to
+            activate billing so the workspace can enforce{" "}
+            <span className="font-semibold">{configuredPlanName}</span>.
+          </div>
+        </div>
+      ) : null}
+
+      {governance?.upgrade_required_now || governance?.upgrade_recommended_soon ? (
         <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <div className="font-medium">
-            {breachedDimensions.length > 0 ? "Upgrade required now" : "Upgrade recommended soon"}
+            {governance?.upgrade_required_now ? "Upgrade required now" : "Upgrade recommended soon"}
           </div>
           <div className="mt-2">
-            {breachedDimensions.length > 0
+            {governance?.upgrade_required_now
               ? "This workspace has reached or exceeded configured plan capacity in one or more governed dimensions. Some workflows may now be blocked."
               : "This workspace is approaching configured plan capacity limits. Upgrading early protects workflow continuity."}
           </div>
-          {showRecommendation ? (
+          {upgradeRecommendation?.recommended_plan_is_distinct && recommendedPlanName ? (
             <div className="mt-2">
               Recommended next plan: <span className="font-semibold">{recommendedPlanName}</span>
             </div>
-          ) : normalizeText(configuredPlanCode) === "business" ? (
-            <div className="mt-2">
-              This workspace is already on the highest commercial tier.
-            </div>
+          ) : upgradeRecommendation?.already_at_highest_tier ? (
+            <div className="mt-2">This workspace is already on the highest commercial tier.</div>
           ) : null}
         </div>
       ) : null}
@@ -648,7 +680,9 @@ function UpgradeSummaryPanel({
           <div className="mt-1 text-lg font-semibold text-slate-900">
             {claimUsed} / {configuredClaimLimit}
           </div>
-          <div className="mt-1 text-xs text-slate-500">Governed versioning capacity</div>
+          <div className="mt-1 text-xs text-slate-500">
+            Public trust-surface and governed claim-capacity envelope
+          </div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -669,16 +703,20 @@ function UpgradeSummaryPanel({
       </div>
 
       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-        <div className="font-medium text-slate-900">What upgrading unlocks</div>
+        <div className="font-medium text-slate-900">What billing unlocks</div>
         <div className="mt-2">
-          Higher plans increase governed claim capacity, reduce the chance of blocked lineage
-          workflows, and provide more operational room for evidence ingestion and workspace growth.
+          A successfully activated commercial plan increases governed claim capacity, reduces blocked
+          lineage workflows, and gives the workspace more operational room for evidence ingestion and
+          collaborator growth.
         </div>
       </div>
 
       {primaryAction.helper ? (
         <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
           {primaryAction.helper}
+          <span className="block mt-1 text-xs text-blue-700">
+            Checkout intent: {checkoutIntent}
+          </span>
         </div>
       ) : null}
 
@@ -701,6 +739,14 @@ function UpgradeSummaryPanel({
           className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
         >
           Compare Plans
+        </button>
+
+        <button
+          type="button"
+          onClick={onReturnToClaims}
+          className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
+        >
+          Back to Claims
         </button>
       </div>
 
@@ -924,19 +970,26 @@ export default function WorkspaceSettingsPage() {
         : "";
 
       const diagnosticMessage =
-        response.diagnostics && response.mode === "placeholder_until_stripe_checkout"
-          ? ` Stripe ready: package=${formatBooleanLabel(
+        response.diagnostics && response.mode === "placeholder_until_checkout"
+          ? ` Paddle enabled=${formatBooleanLabel(
+              response.diagnostics.paddle_enabled
+            )}, Stripe package=${formatBooleanLabel(
               response.diagnostics.stripe_package_installed
-            )}, billing_enabled=${formatBooleanLabel(
-              response.diagnostics.billing_enabled
-            )}, secret_key=${formatBooleanLabel(
-              response.diagnostics.secret_key_configured
-            )}, lookup_key=${response.diagnostics.price_lookup_key || "—"}.`
+            )}, Stripe billing enabled=${formatBooleanLabel(
+              response.diagnostics.stripe_billing_enabled
+            )}, Manual billing enabled=${formatBooleanLabel(
+              response.diagnostics.manual_billing_enabled
+            )}.`
           : "";
+
+      const intentMessage = response.checkout_intent
+        ? ` Checkout intent: ${response.checkout_intent}.`
+        : "";
 
       setBillingMessage(
         (response.message ||
           `Checkout foundation is ready, but no redirect URL was returned for ${selectedPlanCode} (${selectedBillingCycle}).`) +
+          intentMessage +
           manualMessage +
           diagnosticMessage
       );
@@ -1026,43 +1079,26 @@ export default function WorkspaceSettingsPage() {
   const hasAnyOverLimit =
     membersOverLimit || tradesOverLimit || claimsOverLimit || storageOverLimit;
 
-  const breachedDimensions: string[] = [];
-  const nearLimitDimensions: string[] = [];
-
-  if (claimsOverLimit) breachedDimensions.push("claims");
-  else if (isNearLimit(usage?.usage.claims.used, configuredClaimLimit)) nearLimitDimensions.push("claims");
-
-  if (tradesOverLimit) breachedDimensions.push("trades");
-  else if (isNearLimit(usage?.usage.trades.used, configuredTradeLimit)) nearLimitDimensions.push("trades");
-
-  if (membersOverLimit) breachedDimensions.push("members");
-  else if (isNearLimit(usage?.usage.members.used, configuredMemberLimit)) nearLimitDimensions.push("members");
-
-  if (storageOverLimit) breachedDimensions.push("storage_mb");
-  else if (isNearLimit(usage?.usage.storage_mb.used, configuredStorageLimit)) nearLimitDimensions.push("storage_mb");
-
-  const nextConfiguredPlanCode = getNextPlanCode(configuredPlanCode);
-  const recommendedPlanItem = getPlanFromCatalog(planCatalog, nextConfiguredPlanCode);
-  const recommendedPlanName =
-    recommendedPlanItem?.name || formatPlanCodeLabel(nextConfiguredPlanCode);
-
-  const hasPlanMismatch =
+  const planMismatch =
+    Boolean(billingFoundation?.plan_mismatch) ||
     normalizeText(configuredPlanCode) !== normalizeText(effectivePlanCode);
 
-  const hasDistinctRecommendation =
-    Boolean(nextConfiguredPlanCode) && (breachedDimensions.length > 0 || nearLimitDimensions.length > 0);
+  const upgradeRecommendation = usage?.upgrade_recommendation;
+  const governance = usage?.governance;
+
+  const recommendedPlanName =
+    upgradeRecommendation?.recommended_plan_name ||
+    formatPlanCodeLabel(upgradeRecommendation?.recommended_plan_code);
 
   const currentPlanBilling = configuredPlanItem?.billing || settings?.plan_detail?.billing;
-  const selectedPlanMatchesCurrent =
-    normalizeText(selectedPlanCode) === normalizeText(settings?.plan_code);
 
   const primaryAction = resolvePrimaryBillingAction({
     configuredPlanCode,
     selectedPlanCode,
     billingStatus: settings?.billing_status,
+    billingStatusIsPaid: billingFoundation?.billing_status_is_paid,
     canSeeUpgrade,
     checkoutLoading,
-    selectedPlanMatchesCurrent,
   });
 
   if (!workspaceId) {
@@ -1105,10 +1141,12 @@ export default function WorkspaceSettingsPage() {
             <div className="text-sm text-slate-500">
               Trading Truth Layer · Workspace Settings & Billing
             </div>
-            <h1 className="mt-2 text-4xl font-bold tracking-tight">Workspace Settings</h1>
+            <h1 className="mt-2 text-4xl font-bold tracking-tight">
+              Workspace Billing & Governance
+            </h1>
             <p className="mt-3 max-w-3xl text-slate-600">
-              Administrative control surface for workspace identity, plan governance, usage
-              visibility, billing readiness, and monetization foundations.
+              Billing, plan posture, and governed capacity control surface for workspace growth,
+              blocked workflow recovery, and commercial activation.
             </p>
             {activeTab === "billing" ? (
               <div className="mt-4 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">
@@ -1122,6 +1160,16 @@ export default function WorkspaceSettingsPage() {
             <div className="mt-2 text-xl font-semibold">{workspaceRole || "unknown"}</div>
           </div>
         </div>
+
+        {activeTab === "billing" ? (
+          <div className="mb-6 rounded-3xl border border-blue-200 bg-blue-50 p-6 text-blue-900 shadow-sm">
+            <h2 className="text-xl font-semibold">Billing Review Required</h2>
+            <p className="mt-2 text-sm">
+              You arrived here from a governed workflow action that requires billing review,
+              plan activation, or additional workspace capacity before it can proceed.
+            </p>
+          </div>
+        ) : null}
 
         {refreshingBillingState ? (
           <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
@@ -1168,9 +1216,9 @@ export default function WorkspaceSettingsPage() {
                 hint="Checkout mode / foundation state"
               />
               <SummaryCard
-                label="Workspace ID"
-                value={settings?.workspace_id || workspaceId}
-                hint="Administrative workspace record"
+                label="Claims Used"
+                value={`${usage?.usage.claims.used ?? 0} / ${configuredClaimLimit}`}
+                hint="Governed claim-capacity position"
               />
             </div>
 
@@ -1190,39 +1238,46 @@ export default function WorkspaceSettingsPage() {
               </div>
             )}
 
-            {(hasAnyOverLimit || nearLimitDimensions.length > 0 || hasPlanMismatch) && (
+            {(governance?.upgrade_required_now ||
+              governance?.upgrade_recommended_soon ||
+              governance?.billing_activation_recommended ||
+              planMismatch) && (
               <div className="mb-6 rounded-3xl border border-amber-200 bg-amber-50 p-6 text-amber-900 shadow-sm">
                 <h2 className="text-xl font-semibold">
-                  {hasAnyOverLimit
-                    ? "Upgrade Required"
-                    : nearLimitDimensions.length > 0
-                      ? "Upgrade Recommendation"
-                      : "Billing Not Active Yet"}
+                  {governance?.billing_activation_recommended
+                    ? "Billing Activation Needed"
+                    : governance?.upgrade_required_now
+                      ? "Upgrade Required"
+                      : governance?.upgrade_recommended_soon
+                        ? "Upgrade Recommendation"
+                        : "Billing Not Active Yet"}
                 </h2>
 
                 <p className="mt-2 text-sm">
-                  {hasAnyOverLimit
-                    ? "This workspace is now constrained by configured plan limits. Some workflows may be blocked until the plan is upgraded."
-                    : nearLimitDimensions.length > 0
-                      ? "This workspace is approaching one or more configured plan ceilings. Upgrading now will protect workflow continuity."
-                      : `This workspace is configured as ${configuredPlanName}, but billing is still inactive, so active enforcement may temporarily fall back to ${effectivePlanName}.`}
+                  {governance?.billing_activation_recommended
+                    ? `This workspace is configured as ${configuredPlanName}, but billing is not active yet. Until activation is completed, governed enforcement may still operate under ${effectivePlanName}.`
+                    : governance?.upgrade_required_now
+                      ? "This workspace is now constrained by configured plan limits. Some workflows may be blocked until the plan is upgraded."
+                      : governance?.upgrade_recommended_soon
+                        ? "This workspace is approaching one or more configured plan ceilings. Upgrading now will protect workflow continuity."
+                        : `This workspace is configured as ${configuredPlanName}, but billing is still inactive, so active enforcement may temporarily fall back to ${effectivePlanName}.`}
                 </p>
 
-                {hasDistinctRecommendation && recommendedPlanName ? (
+                {upgradeRecommendation?.recommended_plan_is_distinct && recommendedPlanName ? (
                   <div className="mt-3 text-sm">
                     Recommended next plan: <span className="font-semibold">{recommendedPlanName}</span>
                   </div>
-                ) : normalizeText(configuredPlanCode) === "business" ? (
+                ) : upgradeRecommendation?.already_at_highest_tier ? (
                   <div className="mt-3 text-sm">
                     This workspace is already on the highest commercial tier.
                   </div>
                 ) : null}
 
-                {breachedDimensions.length > 0 ? (
+                {upgradeRecommendation?.breached_dimensions?.length ? (
                   <div className="mt-4">
                     <div className="text-sm font-medium">Exceeded dimensions</div>
                     <div className="mt-2 flex flex-wrap gap-2 text-sm">
-                      {breachedDimensions.map((item) => (
+                      {upgradeRecommendation.breached_dimensions.map((item) => (
                         <span
                           key={`breach-${item}`}
                           className="rounded-full border border-amber-300 bg-white px-3 py-1 font-medium"
@@ -1234,11 +1289,11 @@ export default function WorkspaceSettingsPage() {
                   </div>
                 ) : null}
 
-                {nearLimitDimensions.length > 0 ? (
+                {upgradeRecommendation?.near_limit_dimensions?.length ? (
                   <div className="mt-4">
                     <div className="text-sm font-medium">Near-limit dimensions</div>
                     <div className="mt-2 flex flex-wrap gap-2 text-sm">
-                      {nearLimitDimensions.map((item) => (
+                      {upgradeRecommendation.near_limit_dimensions.map((item) => (
                         <span
                           key={`near-${item}`}
                           className="rounded-full border border-amber-300 bg-white px-3 py-1 font-medium"
@@ -1255,14 +1310,17 @@ export default function WorkspaceSettingsPage() {
             <div className="grid gap-6 lg:grid-cols-[1.2fr_0.95fr]">
               <div className="space-y-6">
                 <UpgradeSummaryPanel
+                  workspaceId={workspaceId}
                   settings={settings}
                   usage={usage}
+                  billingFoundation={billingFoundation}
                   planCatalog={planCatalog}
                   configuredPlanItem={configuredPlanItem}
                   selectedPlanCode={selectedPlanCode}
                   selectedBillingCycle={selectedBillingCycle}
                   canSeeUpgrade={canSeeUpgrade}
                   onStartCheckout={() => void handleStartCheckout()}
+                  onReturnToClaims={() => router.push(`/workspace/${workspaceId}/claims`)}
                   checkoutLoading={checkoutLoading}
                 />
 
@@ -1366,7 +1424,7 @@ export default function WorkspaceSettingsPage() {
                     <div>
                       <h2 className="text-2xl font-semibold">Billing Foundation</h2>
                       <p className="mt-1 text-sm text-slate-500">
-                        Current plan state, Stripe placeholders, pricing signals, and monetization readiness.
+                        Current plan state, checkout readiness, portal access, and monetization foundations.
                       </p>
                     </div>
 
@@ -1400,7 +1458,7 @@ export default function WorkspaceSettingsPage() {
                     </div>
                     <div className="mt-2">
                       <span className="font-medium text-slate-900">Entitlement state:</span>{" "}
-                      {hasPlanMismatch
+                      {planMismatch
                         ? "Billing inactive, enforcement may temporarily fall back to the effective active plan"
                         : "Configured plan and active entitlements aligned"}
                     </div>
@@ -1445,12 +1503,6 @@ export default function WorkspaceSettingsPage() {
                     </div>
                   </div>
 
-                  {selectedPlanMatchesCurrent ? (
-                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                      The selected plan matches the current configured workspace plan.
-                    </div>
-                  ) : null}
-
                   {primaryAction.helper ? (
                     <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
                       {primaryAction.helper}
@@ -1489,13 +1541,25 @@ export default function WorkspaceSettingsPage() {
                     <div className="mt-2">
                       Checkout Mode:{" "}
                       <span className="font-medium">
-                        {billingFoundation?.checkout_state.mode || "placeholder_until_stripe_checkout"}
+                        {billingFoundation?.checkout_state.mode || "placeholder_until_checkout"}
                       </span>
                     </div>
                     <div className="mt-2">
                       Billing Enabled:{" "}
                       <span className="font-medium">
                         {formatBooleanLabel(billingFoundation?.stripe_ready.billing_enabled)}
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      Billing Status Is Paid:{" "}
+                      <span className="font-medium">
+                        {formatBooleanLabel(billingFoundation?.billing_status_is_paid)}
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      Plan Mismatch:{" "}
+                      <span className="font-medium">
+                        {formatBooleanLabel(billingFoundation?.plan_mismatch)}
                       </span>
                     </div>
                     <div className="mt-2">
@@ -1586,7 +1650,7 @@ export default function WorkspaceSettingsPage() {
                         </p>
                       </div>
 
-                      {hasDistinctRecommendation && recommendedPlanName ? (
+                      {upgradeRecommendation?.recommended_plan_is_distinct && recommendedPlanName ? (
                         <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
                           Recommended next plan: <span className="font-semibold">{recommendedPlanName}</span>
                         </div>
@@ -1599,6 +1663,7 @@ export default function WorkspaceSettingsPage() {
                           key={plan.code}
                           plan={plan}
                           configuredPlanCode={settings?.plan_code}
+                          effectivePlanCode={effectivePlanCode}
                           selectedPlanCode={selectedPlanCode}
                           onSelect={(planCode) => {
                             setSelectedPlanCode(planCode);
@@ -1618,7 +1683,7 @@ export default function WorkspaceSettingsPage() {
                     Current usage position against configured workspace plan limits.
                   </p>
 
-                  {hasPlanMismatch ? (
+                  {planMismatch ? (
                     <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                       These cards show the configured commercial plan limits for{" "}
                       <span className="font-semibold">{configuredPlanName}</span>. Billing is still inactive,
@@ -1628,6 +1693,16 @@ export default function WorkspaceSettingsPage() {
                   ) : null}
 
                   <div className="mt-4 space-y-4">
+
+                    <UsageCard
+                      label="Claims"
+                      used={usage?.usage.claims.used}
+                      limit={configuredClaimLimit}
+                      ratio={claimsRatio}
+                      atOrOver={claimsAtOrOverLimit}
+                      hint="Governed public-claim and lifecycle exposure capacity"
+                    />
+
                     <UsageCard
                       label="Members"
                       used={usage?.usage.members.used}
@@ -1645,16 +1720,7 @@ export default function WorkspaceSettingsPage() {
                       atOrOver={tradesAtOrOverLimit}
                       hint="Evidence ingestion and operational throughput"
                     />
-
-                    <UsageCard
-                      label="Claims"
-                      used={usage?.usage.claims.used}
-                      limit={configuredClaimLimit}
-                      ratio={claimsRatio}
-                      atOrOver={claimsAtOrOverLimit}
-                      hint="Governed claim and versioning capacity"
-                    />
-
+          
                     <UsageCard
                       label="Storage (MB)"
                       used={usage?.usage.storage_mb.used}
