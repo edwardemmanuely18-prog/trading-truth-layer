@@ -5,8 +5,8 @@ import { useParams } from "next/navigation";
 import {
   api,
   type ClaimSchema,
-  type ClaimSchemaPreview,
   type ClaimIntegrityResult,
+  type PublicVerifyResult,
 } from "../../../../lib/api";
 
 function formatNumber(value?: number | null, digits = 2) {
@@ -59,7 +59,7 @@ function firstNonEmpty(...values: Array<string | null | undefined>) {
   return "";
 }
 
-function resolveVisibility(claim: ClaimSchema | null, preview: ClaimSchemaPreview | null) {
+function resolveVisibility(claim: ClaimSchema | null, preview: PublicVerifyResult | null) {
   return (
     firstNonEmpty(
       (claim as any)?.visibility,
@@ -70,7 +70,7 @@ function resolveVisibility(claim: ClaimSchema | null, preview: ClaimSchemaPrevie
   );
 }
 
-function resolveMethodologyNotes(claim: ClaimSchema | null, preview: ClaimSchemaPreview | null) {
+function resolveMethodologyNotes(claim: ClaimSchema | null, preview: PublicVerifyResult | null) {
   return (
     firstNonEmpty(
       (claim as any)?.methodology_notes,
@@ -81,7 +81,7 @@ function resolveMethodologyNotes(claim: ClaimSchema | null, preview: ClaimSchema
   );
 }
 
-function resolveVerifiedAt(claim: ClaimSchema | null, preview: ClaimSchemaPreview | null) {
+function resolveVerifiedAt(claim: ClaimSchema | null, preview: PublicVerifyResult | null) {
   return firstNonEmpty(
     (claim as any)?.verified_at,
     (preview as any)?.verified_at,
@@ -89,7 +89,7 @@ function resolveVerifiedAt(claim: ClaimSchema | null, preview: ClaimSchemaPrevie
   );
 }
 
-function resolvePublishedAt(claim: ClaimSchema | null, preview: ClaimSchemaPreview | null) {
+function resolvePublishedAt(claim: ClaimSchema | null, preview: PublicVerifyResult | null) {
   return firstNonEmpty(
     (claim as any)?.published_at,
     (preview as any)?.published_at,
@@ -97,7 +97,7 @@ function resolvePublishedAt(claim: ClaimSchema | null, preview: ClaimSchemaPrevi
   );
 }
 
-function resolveLockedAt(claim: ClaimSchema | null, preview: ClaimSchemaPreview | null) {
+function resolveLockedAt(claim: ClaimSchema | null, preview: PublicVerifyResult | null) {
   return firstNonEmpty(
     (claim as any)?.locked_at,
     (preview as any)?.locked_at,
@@ -105,7 +105,7 @@ function resolveLockedAt(claim: ClaimSchema | null, preview: ClaimSchemaPreview 
   );
 }
 
-function resolvePeriodStart(claim: ClaimSchema | null, preview: ClaimSchemaPreview | null) {
+function resolvePeriodStart(claim: ClaimSchema | null, preview: PublicVerifyResult | null) {
   return (
     firstNonEmpty(
       (claim as any)?.period_start,
@@ -115,7 +115,7 @@ function resolvePeriodStart(claim: ClaimSchema | null, preview: ClaimSchemaPrevi
   );
 }
 
-function resolvePeriodEnd(claim: ClaimSchema | null, preview: ClaimSchemaPreview | null) {
+function resolvePeriodEnd(claim: ClaimSchema | null, preview: PublicVerifyResult | null) {
   return (
     firstNonEmpty(
       (claim as any)?.period_end,
@@ -196,7 +196,7 @@ export default function PublicClaimPage() {
   const claimId = useMemo(() => Number(rawId), [rawId]);
 
   const [claim, setClaim] = useState<ClaimSchema | null>(null);
-  const [preview, setPreview] = useState<ClaimSchemaPreview | null>(null);
+  const [preview, setPreview] = useState<PublicVerifyResult | null>(null);
   const [integrity, setIntegrity] = useState<ClaimIntegrityResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -218,11 +218,7 @@ export default function PublicClaimPage() {
         setLoading(true);
         setError(null);
 
-        const [claimResult, previewResult] = await Promise.all([
-          api.getClaimSchema(claimId),
-          api.getClaimPreview(claimId),
-        ]);
-
+        const claimResult = await api.getClaimSchema(claimId);
         if (!active) return;
 
         if (!canShowPublicSurface(claimResult.status)) {
@@ -230,6 +226,17 @@ export default function PublicClaimPage() {
           setLoading(false);
           return;
         }
+
+        const claimHash = claimResult.claim_hash || "";
+
+        if (!claimHash) {
+          setError("This public claim does not yet have a canonical claim hash.");
+          setLoading(false);
+          return;
+        }
+
+        const previewResult = await api.getPublicClaimByHash(claimHash);
+        if (!active) return;
 
         setClaim(claimResult);
         setPreview(previewResult);
@@ -288,7 +295,7 @@ export default function PublicClaimPage() {
   }
 
   const isLocked = normalizeText(claim.status) === "locked";
-  const claimHash = claim.claim_hash || (preview as any).claim_hash || "";
+  const claimHash = claim.claim_hash || preview.claim_hash || "";
   const publicPath =
     (claim as ClaimSchema & { public_view_path?: string | null }).public_view_path ||
     `/claim/${claimId}/public`;
@@ -296,8 +303,8 @@ export default function PublicClaimPage() {
     (claim as ClaimSchema & { verify_path?: string | null }).verify_path ||
     (claimHash ? `/verify/${claimHash}` : null);
   const topEntry =
-    Array.isArray((preview as any).leaderboard) && (preview as any).leaderboard.length > 0
-      ? (preview as any).leaderboard[0]
+    Array.isArray(preview.leaderboard) && preview.leaderboard.length > 0
+      ? preview.leaderboard[0]
       : null;
 
   const resolvedVisibility = resolveVisibility(claim, preview);
@@ -431,7 +438,7 @@ export default function PublicClaimPage() {
           </div>
 
           {verifyPath ? (
-            <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 flex flex-wrap items-center justify-between gap-4">
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-blue-200 bg-blue-50 p-5">
               <div>
                 <div className="text-sm font-semibold text-blue-900">
                   Verify this claim independently
@@ -546,22 +553,22 @@ export default function PublicClaimPage() {
           <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MetricCard
               label="Trades"
-              value={(preview as any).trade_count ?? 0}
+              value={preview.trade_count ?? 0}
               hint="In-scope evidence rows"
             />
             <MetricCard
               label="Net PnL"
-              value={formatNumber((preview as any).net_pnl, 2)}
+              value={formatNumber(preview.net_pnl, 2)}
               hint="Aggregate net performance"
             />
             <MetricCard
               label="Win Rate"
-              value={formatRatioPercent((preview as any).win_rate, 2)}
+              value={formatRatioPercent(preview.win_rate, 2)}
               hint="Winning trades as percentage"
             />
             <MetricCard
               label="Profit Factor"
-              value={formatNumber((preview as any).profit_factor, 4)}
+              value={formatNumber(preview.profit_factor, 4)}
               hint="Gross profit ÷ gross loss"
             />
           </div>
@@ -569,8 +576,7 @@ export default function PublicClaimPage() {
           <div className="mt-8">
             <div className="text-2xl font-semibold text-slate-950">Equity Curve</div>
 
-            {(preview as any).equity_curve?.curve &&
-            (preview as any).equity_curve.curve.length > 0 ? (
+            {preview.equity_curve?.curve && preview.equity_curve.curve.length > 0 ? (
               <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="text-sm text-slate-500">
                   Equity progression across the claim period.
@@ -578,7 +584,7 @@ export default function PublicClaimPage() {
 
                 <div className="mt-4">
                   <pre className="overflow-x-auto text-xs text-slate-600">
-                    {JSON.stringify((preview as any).equity_curve.curve.slice(0, 20), null, 2)}
+                    {JSON.stringify(preview.equity_curve.curve.slice(0, 20), null, 2)}
                   </pre>
                 </div>
               </div>
@@ -673,7 +679,7 @@ export default function PublicClaimPage() {
           <div className="mt-8">
             <div className="text-2xl font-semibold text-slate-950">Leaderboard</div>
 
-            {Array.isArray((preview as any).leaderboard) && (preview as any).leaderboard.length > 0 ? (
+            {Array.isArray(preview.leaderboard) && preview.leaderboard.length > 0 ? (
               <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
                 <table className="min-w-full">
                   <thead className="bg-slate-50 text-left text-sm text-slate-500">
@@ -686,7 +692,7 @@ export default function PublicClaimPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white text-sm text-slate-900">
-                    {(preview as any).leaderboard.map((row: any, index: number) => (
+                    {preview.leaderboard.map((row, index) => (
                       <tr key={`${row.member}-${index}`}>
                         <td className="px-4 py-4">{row.rank}</td>
                         <td className="px-4 py-4">{row.member}</td>
