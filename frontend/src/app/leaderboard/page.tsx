@@ -76,23 +76,24 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
   });
 }
 
-function sortClaimRows(
-  rows: ReturnType<typeof buildClaimRankRows>,
-  sort: string
-) {
+function sortClaimRows(rows: ReturnType<typeof buildClaimRankRows>, sort: string) {
   const items = [...rows];
 
   switch (sort) {
     case "net_pnl_desc":
-      return items.sort((a, b) => b.net_pnl - a.net_pnl);
+      return items.sort((a, b) => b.net_pnl - a.net_pnl || b.claim_schema_id - a.claim_schema_id);
     case "profit_factor_desc":
-      return items.sort((a, b) => b.profit_factor - a.profit_factor);
+      return items.sort(
+        (a, b) => b.profit_factor - a.profit_factor || b.claim_schema_id - a.claim_schema_id
+      );
     case "win_rate_desc":
-      return items.sort((a, b) => b.win_rate - a.win_rate);
+      return items.sort((a, b) => b.win_rate - a.win_rate || b.claim_schema_id - a.claim_schema_id);
     case "trade_count_desc":
-      return items.sort((a, b) => b.trade_count - a.trade_count);
+      return items.sort(
+        (a, b) => b.trade_count - a.trade_count || b.claim_schema_id - a.claim_schema_id
+      );
     case "name_asc":
-      return items.sort((a, b) => a.name.localeCompare(b.name));
+      return items.sort((a, b) => a.name.localeCompare(b.name) || b.claim_schema_id - a.claim_schema_id);
     case "newest":
     default:
       return items.sort((a, b) => b.claim_schema_id - a.claim_schema_id);
@@ -181,21 +182,20 @@ function buildMemberRows(claims: PublicClaimDirectoryItem[]) {
   }));
 }
 
-function sortMemberRows(
-  rows: ReturnType<typeof buildMemberRows>,
-  sort: string
-) {
+function sortMemberRows(rows: ReturnType<typeof buildMemberRows>, sort: string) {
   const items = [...rows];
 
   switch (sort) {
     case "win_rate_desc":
-      return items.sort((a, b) => b.avg_win_rate - a.avg_win_rate);
+      return items.sort((a, b) => b.avg_win_rate - a.avg_win_rate || b.total_net_pnl - a.total_net_pnl);
     case "profit_factor_desc":
-      return items.sort((a, b) => b.avg_profit_factor - a.avg_profit_factor);
+      return items.sort(
+        (a, b) => b.avg_profit_factor - a.avg_profit_factor || b.total_net_pnl - a.total_net_pnl
+      );
     case "trade_count_desc":
-      return items.sort((a, b) => b.trade_count - a.trade_count);
+      return items.sort((a, b) => b.trade_count - a.trade_count || b.total_net_pnl - a.total_net_pnl);
     case "name_asc":
-      return items.sort((a, b) => a.member.localeCompare(b.member));
+      return items.sort((a, b) => a.member.localeCompare(b.member) || b.total_net_pnl - a.total_net_pnl);
     case "newest":
     case "net_pnl_desc":
     default:
@@ -231,17 +231,48 @@ function StatusBadge({ status }: { status?: string | null }) {
 
   const className =
     normalized === "locked"
-      ? "bg-green-100 text-green-800 border-green-200"
+      ? "border-green-200 bg-green-100 text-green-800"
       : normalized === "published"
-        ? "bg-blue-100 text-blue-800 border-blue-200"
+        ? "border-blue-200 bg-blue-100 text-blue-800"
         : normalized === "verified"
-          ? "bg-amber-100 text-amber-800 border-amber-200"
-          : "bg-slate-100 text-slate-800 border-slate-200";
+          ? "border-amber-200 bg-amber-100 text-amber-800"
+          : "border-slate-200 bg-slate-100 text-slate-800";
 
   return (
     <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${className}`}>
       {status || "unknown"}
     </span>
+  );
+}
+
+function TrustBadge({ status }: { status?: string | null }) {
+  const trusted = normalizeText(status) === "locked";
+
+  return trusted ? (
+    <span className="inline-flex rounded-full border border-green-200 bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+      verified
+    </span>
+  ) : (
+    <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+      unverified
+    </span>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border bg-white p-5 shadow-sm">
+      <div className="text-sm text-slate-500">{label}</div>
+      <div className="mt-2 text-4xl font-semibold leading-none tracking-tight tabular-nums text-slate-950">
+        {value}
+      </div>
+    </div>
   );
 }
 
@@ -252,7 +283,17 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
   const visibility = resolvedSearch.visibility || "all";
   const minTrades = parsePositiveInt(resolvedSearch.minTrades);
 
-  const claims = await api.getPublicClaims();
+  const allClaims = await api.getPublicClaims();
+
+  const claims = allClaims.filter((c) => {
+    const lifecycle = safeLifecycle(c);
+    const scope = safeScope(c);
+
+    return (
+      normalizeText(lifecycle.status) === "locked" &&
+      normalizeText(scope.visibility) === "public"
+    );
+  });
 
   const claimRows = sortClaimRows(
     filterClaimRows(buildClaimRankRows(claims), q, visibility, minTrades),
@@ -260,6 +301,11 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
   );
 
   const memberRows = sortMemberRows(buildMemberRows(claims), sort);
+
+  const rankingLabel = sort
+    .replace("_desc", "")
+    .replace("_asc", "")
+    .replace(/_/g, " ");
 
   const qs = (next: {
     q?: string;
@@ -285,8 +331,8 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
           <div className="text-sm text-slate-500">Trading Truth Layer · Public Leaderboard</div>
           <h1 className="mt-2 text-4xl font-bold">Leaderboard</h1>
           <p className="mt-3 max-w-3xl text-slate-600">
-            Public ranking surface for published and locked verified claims, with sortable metrics
-            and claim-level performance comparison across the registry.
+            Public ranking surface for locked public claims, with sortable metrics and
+            claim-level performance comparison across the trust registry.
           </p>
         </div>
 
@@ -396,28 +442,21 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
         </div>
 
         <div className="mb-8 grid gap-4 md:grid-cols-4">
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Public Claims</div>
-            <div className="mt-2 text-2xl font-semibold">{claims.length}</div>
-          </div>
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Ranked Claims</div>
-            <div className="mt-2 text-2xl font-semibold">{claimRows.length}</div>
-          </div>
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Distinct Members</div>
-            <div className="mt-2 text-2xl font-semibold">{memberRows.length}</div>
-          </div>
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Top Net PnL</div>
-            <div className="mt-2 text-2xl font-semibold">
-              {claimRows.length ? formatNumber(claimRows[0].net_pnl) : "—"}
-            </div>
-          </div>
+          <SummaryCard label="Public Claims" value={claims.length} />
+          <SummaryCard label="Ranked Claims" value={claimRows.length} />
+          <SummaryCard label="Distinct Members" value={memberRows.length} />
+          <SummaryCard
+            label="Top Net PnL"
+            value={claimRows.length ? formatNumber(claimRows[0].net_pnl) : "—"}
+          />
         </div>
 
         <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-semibold">Claim Rankings</h2>
+          <div className="mt-2 text-sm text-slate-500">
+            Ranked by {rankingLabel}. Only locked and public claims are included.
+          </div>
+
           {claimRows.length === 0 ? (
             <div className="mt-4 text-slate-600">No claims match the selected leaderboard filters.</div>
           ) : (
@@ -433,13 +472,14 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                     <th className="px-3 py-3">Net PnL</th>
                     <th className="px-3 py-3">Profit Factor</th>
                     <th className="px-3 py-3">Win Rate</th>
+                    <th className="px-3 py-3">Trust</th>
                     <th className="px-3 py-3">Verification</th>
                   </tr>
                 </thead>
                 <tbody>
                   {claimRows.map((row, index) => (
                     <tr key={`${row.claim_schema_id}-${row.claim_hash}`} className="border-b last:border-0">
-                      <td className="px-3 py-3 font-semibold">{index + 1}</td>
+                      <td className="px-3 py-3 font-semibold tabular-nums">{index + 1}</td>
                       <td className="px-3 py-3">
                         <div className="font-medium">{row.name}</div>
                         <div className="mt-1 text-xs text-slate-500">claim #{row.claim_schema_id}</div>
@@ -448,17 +488,35 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                         <StatusBadge status={row.verification_status} />
                       </td>
                       <td className="px-3 py-3">{row.visibility}</td>
-                      <td className="px-3 py-3">{row.trade_count}</td>
-                      <td className="px-3 py-3 font-semibold">{formatNumber(row.net_pnl)}</td>
-                      <td className="px-3 py-3">{formatNumber(row.profit_factor, 4)}</td>
-                      <td className="px-3 py-3">{formatNumber(row.win_rate, 4)}</td>
+                      <td className="px-3 py-3 tabular-nums">{row.trade_count}</td>
+                      <td className="px-3 py-3 font-semibold tabular-nums">
+                        {formatNumber(row.net_pnl)}
+                      </td>
+                      <td className="px-3 py-3 tabular-nums">
+                        {formatNumber(row.profit_factor, 4)}
+                      </td>
+                      <td className="px-3 py-3 tabular-nums">
+                        {formatNumber(row.win_rate, 4)}
+                      </td>
                       <td className="px-3 py-3">
-                        <Link
-                          href={`/verify/${row.claim_hash}`}
-                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                        >
-                          Open
-                        </Link>
+                        <TrustBadge status={row.verification_status} />
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <Link
+                            href={`/verify/${row.claim_hash}`}
+                            className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                          >
+                            Verify
+                          </Link>
+
+                          <Link
+                            href={`/claim/${row.claim_schema_id}/public`}
+                            className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                          >
+                            View
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -492,12 +550,14 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                 <tbody>
                   {memberRows.map((row, index) => (
                     <tr key={`${row.member}-${index}`} className="border-b last:border-0">
-                      <td className="px-3 py-3 font-semibold">{index + 1}</td>
+                      <td className="px-3 py-3 font-semibold tabular-nums">{index + 1}</td>
                       <td className="px-3 py-3 font-medium">{row.member}</td>
-                      <td className="px-3 py-3">{row.claim_count}</td>
-                      <td className="px-3 py-3">{formatNumber(row.total_net_pnl)}</td>
-                      <td className="px-3 py-3">{formatNumber(row.avg_win_rate, 4)}</td>
-                      <td className="px-3 py-3">{formatNumber(row.avg_profit_factor, 4)}</td>
+                      <td className="px-3 py-3 tabular-nums">{row.claim_count}</td>
+                      <td className="px-3 py-3 tabular-nums">{formatNumber(row.total_net_pnl)}</td>
+                      <td className="px-3 py-3 tabular-nums">{formatNumber(row.avg_win_rate, 4)}</td>
+                      <td className="px-3 py-3 tabular-nums">
+                        {formatNumber(row.avg_profit_factor, 4)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
