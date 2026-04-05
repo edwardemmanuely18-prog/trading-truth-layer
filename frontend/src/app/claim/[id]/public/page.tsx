@@ -192,6 +192,27 @@ function MetricCard({
   );
 }
 
+function resolveTrustBand(score: number) {
+  if (score >= 85) {
+    return {
+      label: "High Trust",
+      className: "border-green-200 bg-green-100 text-green-800",
+    };
+  }
+
+  if (score >= 60) {
+    return {
+      label: "Moderate Trust",
+      className: "border-amber-200 bg-amber-100 text-amber-800",
+    };
+  }
+
+  return {
+    label: "Low Trust",
+    className: "border-red-200 bg-red-100 text-red-800",
+  };
+}
+
 export default function PublicClaimPage() {
   const params = useParams();
   const rawId = Array.isArray(params?.id) ? params.id[0] : params?.id;
@@ -331,6 +352,8 @@ export default function PublicClaimPage() {
     },
   });
 
+  const trustBand = resolveTrustBand(trustScore);
+
   async function handleCopyLink() {
     try {
       setCopying(true);
@@ -431,12 +454,20 @@ export default function PublicClaimPage() {
             <IntegrityBadge integrity={integrity} />
           </div>
 
-          <div className="mt-4 flex items-center gap-4">
-            <div className="text-sm text-slate-500">Trust Score</div>
-            <div className="text-2xl font-semibold text-slate-900">
-              {trustScore}
-              <span className="text-sm text-slate-500"> / 100</span>
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            <div>
+              <div className="text-sm text-slate-500">Trust Score</div>
+              <div className="text-2xl font-semibold text-slate-900">
+                {trustScore}
+                <span className="text-sm text-slate-500"> / 100</span>
+              </div>
             </div>
+
+            <span
+              className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${trustBand.className}`}
+            >
+              {trustBand.label}
+            </span>
           </div>
 
           <div className="mt-5 rounded-3xl border border-green-200 bg-green-50 p-6">
