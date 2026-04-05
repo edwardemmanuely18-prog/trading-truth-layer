@@ -767,6 +767,27 @@ def compute_trade_set_hash(trades: list[Trade]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def resolve_claim_integrity_status(schema: ClaimSchema, trades: list[Trade]) -> str:
+    """
+    Canonical integrity resolver used across public surfaces and verify routes.
+
+    locked:
+      - valid        => stored locked hash matches recomputed hash
+      - compromised  => stored locked hash missing or mismatched
+
+    non-locked:
+      - unlocked     => claim has not reached locked finality yet
+    """
+    if schema.status != "locked":
+        return "unlocked"
+
+    if not schema.locked_trade_set_hash:
+        return "compromised"
+
+    recomputed_trade_set_hash = compute_trade_set_hash(trades)
+    return "valid" if recomputed_trade_set_hash == schema.locked_trade_set_hash else "compromised"
+
+
 def build_claim_list_row(schema: ClaimSchema, db: Session):
     filtered_trades = resolve_schema_trades(schema, db)
     metrics = compute_trade_metrics(filtered_trades)
@@ -780,6 +801,7 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
     return {
         "claim_schema_id": schema.id,
         "claim_hash": claim_hash,
+        "integrity_status": resolve_claim_integrity_status(schema, filtered_trades),
         "public_view_path": f"/claim/{schema.id}/public",
         "verify_path": f"/verify/{claim_hash}",
         "name": schema.name,
@@ -823,11 +845,7 @@ def build_public_claim_payload(schema: ClaimSchema, db: Session):
     if not trade_set_hash:
         trade_set_hash = compute_trade_set_hash(filtered_trades)
 
-    integrity_status = "valid"
-    if schema.status == "locked" and schema.locked_trade_set_hash:
-        recomputed_trade_set_hash = compute_trade_set_hash(filtered_trades)
-        if recomputed_trade_set_hash != schema.locked_trade_set_hash:
-            integrity_status = "compromised"
+    integrity_status = resolve_claim_integrity_status(schema, filtered_trades)
 
     scope = resolve_schema_trade_scope(schema, db)
     included_rows = build_included_trade_scope_rows(scope["included"])

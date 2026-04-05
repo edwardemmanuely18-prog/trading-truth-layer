@@ -7,6 +7,7 @@ from app.api.routes.claim_schemas import (
     compute_claim_hash,
     compute_trade_set_hash,
     resolve_schema_trade_scope,
+    resolve_claim_integrity_status,
 )
 
 router = APIRouter(prefix="/verify", tags=["verify"])
@@ -19,14 +20,7 @@ def build_verify_payload(claim: ClaimSchema, db: Session):
     stored_trade_set_hash = claim.locked_trade_set_hash
     recomputed_trade_set_hash = compute_trade_set_hash(scope["included"])
 
-    if claim.status == "locked":
-        integrity = (
-            "valid"
-            if stored_trade_set_hash and stored_trade_set_hash == recomputed_trade_set_hash
-            else "compromised"
-        )
-    else:
-        integrity = "unlocked"
+    integrity = resolve_claim_integrity_status(claim, scope["included"])
 
     return {
         "claim_id": claim.id,
