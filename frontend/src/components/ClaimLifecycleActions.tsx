@@ -414,9 +414,8 @@ export default function ClaimLifecycleActions({
   const recommendedPlanName = governanceBillingActivationRecommended
     ? currentPlanName
     : usage?.upgrade_recommendation?.recommended_plan_name || "Review billing posture";
-  
-  const claimUsage = usage?.usage?.claims;
 
+  const claimUsage = usage?.usage?.claims;
   const usageWarning = useMemo(() => getUsageWarning(claimUsage), [claimUsage]);
 
   const usageLabel = claimUsage
@@ -426,6 +425,8 @@ export default function ClaimLifecycleActions({
           : ""
       }`
     : `Effective plan: ${effectivePlanName}`;
+
+  const billingActive = normalizeText(usage?.billing_status) === "active";
 
   async function handleBackendDenied(err: unknown, action: LifecycleActionKey) {
     const actionLabel = getLifecycleActionLabel(action);
@@ -483,19 +484,6 @@ export default function ClaimLifecycleActions({
       setLoadingAction(null);
     }
   }
-  
-  {usageWarning ? (
-    <div
-      className={`rounded-2xl border p-4 text-sm ${
-        usageWarning.tone === "critical"
-          ? "border-amber-300 bg-amber-50 text-amber-900"
-          : "border-blue-200 bg-blue-50 text-blue-900"
-      }`}
-    >
-      <div className="font-semibold">{usageWarning.title}</div>
-      <div className="mt-1">{usageWarning.message}</div>
-    </div>
-  ) : null}
 
   async function handleVerify() {
     if (verifyConfig.disabled) return;
@@ -574,6 +562,19 @@ export default function ClaimLifecycleActions({
   return (
     <>
       <div className="space-y-4">
+        {usageWarning ? (
+          <div
+            className={`rounded-2xl border p-4 text-sm ${
+              usageWarning.tone === "critical"
+                ? "border-amber-300 bg-amber-50 text-amber-900"
+                : "border-blue-200 bg-blue-50 text-blue-900"
+            }`}
+          >
+            <div className="font-semibold">{usageWarning.title}</div>
+            <div className="mt-1">{usageWarning.message}</div>
+          </div>
+        ) : null}
+
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -668,8 +669,17 @@ export default function ClaimLifecycleActions({
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="text-xs uppercase tracking-wide text-slate-500">Workspace billing posture</div>
-                <div className="mt-2 text-lg font-semibold text-slate-900">
+                <div className="mt-2 flex items-center gap-2 text-lg font-semibold text-slate-900">
                   {effectivePlanName}
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      billingActive
+                        ? "bg-green-100 text-green-700"
+                        : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {billingActive ? "billing active" : "billing inactive"}
+                  </span>
                 </div>
                 <div className="mt-1 text-sm text-slate-600">
                   Current workspace plan and governed claim-capacity posture.
@@ -702,7 +712,13 @@ export default function ClaimLifecycleActions({
                   />
                 </div>
               </div>
-           ) : null}
+            ) : null}
+
+            {!billingActive ? (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                Billing is not active. Lifecycle actions and claim creation are governed and may be blocked until billing is activated.
+              </div>
+            ) : null}
 
             <div className="mt-4 flex flex-wrap gap-3">
               <button
@@ -716,7 +732,6 @@ export default function ClaimLifecycleActions({
           </div>
         ) : null}
 
-
         <div className="grid gap-3 md:grid-cols-3">
           <StepCard
             title="Verify"
@@ -727,7 +742,10 @@ export default function ClaimLifecycleActions({
             disabled={verifyConfig.disabled}
             loading={loadingAction === "verify"}
             actionLabel="Verify"
-            disabledReason={verifyConfig.disabledReason}
+            disabledReason={
+              verifyConfig.disabledReason ||
+              (!billingActive ? "Billing is not active. Activate billing to proceed." : null)
+            }
             accent="amber"
             onClick={handleVerify}
           />
@@ -741,7 +759,10 @@ export default function ClaimLifecycleActions({
             disabled={publishConfig.disabled}
             loading={loadingAction === "publish"}
             actionLabel="Publish"
-            disabledReason={publishConfig.disabledReason}
+            disabledReason={
+              publishConfig.disabledReason ||
+              (!billingActive ? "Billing is not active. Activate billing to proceed." : null)
+            }
             accent="blue"
             onClick={handlePublish}
           />
@@ -755,7 +776,10 @@ export default function ClaimLifecycleActions({
             disabled={lockConfig.disabled}
             loading={loadingAction === "lock"}
             actionLabel="Lock"
-            disabledReason={lockConfig.disabledReason}
+            disabledReason={
+              lockConfig.disabledReason ||
+              (!billingActive ? "Billing is not active. Activate billing to proceed." : null)
+            }
             accent="green"
             onClick={handleLock}
           />
