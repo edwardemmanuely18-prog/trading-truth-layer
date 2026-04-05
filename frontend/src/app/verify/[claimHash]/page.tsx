@@ -81,17 +81,17 @@ function StatusBadge({ status }: { status?: string | null }) {
 
 function IntegrityBadge({ integrityStatus }: { integrityStatus?: string | null }) {
   const normalized = normalizeText(integrityStatus);
-
-  const className =
-    normalized === "valid"
-      ? "border-green-200 bg-green-100 text-green-800"
-      : normalized === "compromised"
-        ? "border-red-200 bg-red-100 text-red-800"
-        : "border-slate-200 bg-slate-100 text-slate-800";
+  const isValid = normalized === "valid";
 
   return (
-    <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
-      integrity: {integrityStatus || "unknown"}
+    <span
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-semibold ${
+        isValid
+          ? "border-green-200 bg-green-100 text-green-800"
+          : "border-red-200 bg-red-100 text-red-800"
+      }`}
+    >
+      {isValid ? "✓ HASH MATCH · VERIFIED" : "⚠ HASH MISMATCH · REVIEW REQUIRED"}
     </span>
   );
 }
@@ -494,11 +494,11 @@ export default function PublicVerifyClaimPage() {
     ? verifiedResult.equity_curve.curve
     : [];
 
-  const trustState = integrityOk
-    ? normalizeText(verifiedResult.verification_status) === "locked"
-      ? "High-trust finalized record"
-      : "Trusted public verification record"
-    : "Integrity review required";
+ const trustState = integrityOk
+  ? normalizeText(verifiedResult.verification_status) === "locked"
+    ? "Finalized · Cryptographically Locked"
+    : "Verified · Public Record"
+  : "Integrity Mismatch · Not Trusted";
 
   async function handleShare() {
     try {
@@ -576,6 +576,23 @@ export default function PublicVerifyClaimPage() {
           />
         </div>
 
+        <div
+          className={`mb-8 rounded-2xl border px-5 py-4 ${
+            integrityOk ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+          }`}
+        >
+          <div className="text-sm text-slate-500">Verification Result</div>
+
+          <div className="mt-2 text-xl font-semibold">
+            {integrityOk ? "Verified Record — Integrity Confirmed" : "Verification Failed — Integrity Mismatch"}
+          </div>
+
+          <div className="mt-2 text-sm text-slate-600 max-w-2xl">
+            {integrityOk
+              ? "The recomputed trade-set hash matches the stored canonical fingerprint. This record is cryptographically consistent and safe to trust."
+              : "The recomputed trade-set hash does NOT match the stored fingerprint. This record may have been altered or is inconsistent with its original state."}
+          </div>
+        </div>
         <div className="mb-8 rounded-3xl border border-green-200 bg-green-50 p-6 shadow-sm">
           <div className="grid gap-6 xl:grid-cols-[1.4fr_0.6fr]">
             <div>
@@ -853,7 +870,13 @@ export default function PublicVerifyClaimPage() {
         </div>
 
         <div className="mb-8">
-          <EquityCurveChart title="Public Equity Curve" points={publicCurvePoints} />
+          {publicCurvePoints.length > 0 ? (
+            <EquityCurveChart title="Public Equity Curve" points={publicCurvePoints} />
+          ) : (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+              No equity curve data available for this verified record.
+            </div>
+          )}
         </div>
 
         <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
