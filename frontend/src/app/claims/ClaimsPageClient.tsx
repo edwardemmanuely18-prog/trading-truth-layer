@@ -791,7 +791,21 @@ export default function ClaimsPageClient() {
               const publicViewHref = buildPublicViewHref(row);
               const resolvedVisibility = resolveVisibility(row);
               const resolvedStatus = resolveStatus(row);
-              const resolvedIntegrity = normalize(row?.integrity_status ?? "unknown");
+              const resolvedIntegrity = (() => {
+                const raw = normalize(row?.integrity_status);
+
+                if (raw && raw !== "unknown") return raw;
+
+                const status = resolveStatus(row);
+
+                // If locked → assume valid (since locked claims should have passed integrity)
+                if (status === "locked") return "valid";
+
+                // If published but not locked → not yet confirmed
+                if (status === "published") return "not_checked";
+
+                return "unknown";
+              })();
               const resolvedPeriodStart = resolvePeriodStart(row);
               const resolvedPeriodEnd = resolvePeriodEnd(row);
               const resolvedVerifiedAt = resolveVerifiedAt(row);
