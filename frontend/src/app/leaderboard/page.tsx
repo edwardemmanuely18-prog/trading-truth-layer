@@ -85,6 +85,8 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
       },
     });
 
+    const trust_weighted_pnl = (Number(claim.net_pnl ?? 0) * trust_score) / 100;
+
     return {
       claim_schema_id: claim.claim_schema_id,
       claim_hash: claim.claim_hash,
@@ -95,7 +97,8 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
       net_pnl: claim.net_pnl ?? 0,
       profit_factor: claim.profit_factor ?? 0,
       win_rate: claim.win_rate ?? 0,
-      trust_score, // ✅ NEW
+      trust_score,
+      trust_weighted_pnl,
       period_start: scope.period_start || "—",
       period_end: scope.period_end || "—",
       methodology_notes: scope.methodology_notes || "",
@@ -126,6 +129,15 @@ function sortClaimRows(rows: ReturnType<typeof buildClaimRankRows>, sort: string
     case "trade_count_desc":
       return items.sort(
         (a, b) => b.trade_count - a.trade_count || b.claim_schema_id - a.claim_schema_id
+      );
+    case "best_trust_score":
+      return items.sort(
+        (a, b) => b.trust_score - a.trust_score || b.net_pnl - a.net_pnl
+      );
+    case "best_trust_weighted_pnl":
+      return items.sort(
+        (a, b) =>
+          b.trust_weighted_pnl - a.trust_weighted_pnl || b.trust_score - a.trust_score
       );
     case "name_asc":
       return items.sort(
