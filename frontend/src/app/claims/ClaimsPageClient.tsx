@@ -199,15 +199,70 @@ function sortRows(rows: any[], sortBy: string) {
     if (sortBy === "best_net_pnl") {
       return Number(b?.net_pnl ?? 0) - Number(a?.net_pnl ?? 0);
     }
+
     if (sortBy === "best_profit_factor") {
       return Number(b?.profit_factor ?? 0) - Number(a?.profit_factor ?? 0);
     }
+
     if (sortBy === "best_win_rate") {
       return Number(b?.win_rate ?? 0) - Number(a?.win_rate ?? 0);
     }
+
+    if (sortBy === "best_trust_score") {
+      const trustA = computeTrustScore({
+        ...a,
+        verification_status: resolveStatus(a),
+        verified_at: resolveVerifiedAt(a),
+        scope: {
+          ...(a?.scope || {}),
+          visibility: resolveVisibility(a),
+        },
+      });
+
+      const trustB = computeTrustScore({
+        ...b,
+        verification_status: resolveStatus(b),
+        verified_at: resolveVerifiedAt(b),
+        scope: {
+          ...(b?.scope || {}),
+          visibility: resolveVisibility(b),
+        },
+      });
+
+      return trustB - trustA || Number(b?.net_pnl ?? 0) - Number(a?.net_pnl ?? 0);
+    }
+
+    if (sortBy === "best_trust_weighted_pnl") {
+      const trustA = computeTrustScore({
+        ...a,
+        verification_status: resolveStatus(a),
+        verified_at: resolveVerifiedAt(a),
+        scope: {
+          ...(a?.scope || {}),
+          visibility: resolveVisibility(a),
+        },
+      });
+
+      const trustB = computeTrustScore({
+        ...b,
+        verification_status: resolveStatus(b),
+        verified_at: resolveVerifiedAt(b),
+        scope: {
+          ...(b?.scope || {}),
+          visibility: resolveVisibility(b),
+        },
+      });
+
+      const weightedA = (Number(a?.net_pnl ?? 0) * trustA) / 100;
+      const weightedB = (Number(b?.net_pnl ?? 0) * trustB) / 100;
+
+      return weightedB - weightedA || trustB - trustA;
+    }
+
     if (sortBy === "oldest") {
       return Number(a?.claim_schema_id ?? a?.id ?? 0) - Number(b?.claim_schema_id ?? b?.id ?? 0);
     }
+
     return Number(b?.claim_schema_id ?? b?.id ?? 0) - Number(a?.claim_schema_id ?? a?.id ?? 0);
   });
 
@@ -377,7 +432,11 @@ export default function ClaimsPageClient() {
           ? "best_profit_factor"
           : quickFilter === "best win rate"
             ? "best_win_rate"
-            : sortApplied;
+            : quickFilter === "best trust score"
+              ? "best_trust_score"
+              : quickFilter === "trust weighted pnl"
+                ? "best_trust_weighted_pnl"
+                : sortApplied;
 
     return sortRows(next, effectiveSort);
   }, [rows, searchApplied, statusApplied, visibilityApplied, sortApplied, quickFilter]);
@@ -535,6 +594,8 @@ export default function ClaimsPageClient() {
                 <option value="best_net_pnl">Best Net PnL</option>
                 <option value="best_profit_factor">Best Profit Factor</option>
                 <option value="best_win_rate">Best Win Rate</option>
+                <option value="best_trust_score">Best Trust Score</option>
+                <option value="best_trust_weighted_pnl">Trust-Weighted PnL</option>
               </select>
             </div>
 
@@ -596,6 +657,8 @@ export default function ClaimsPageClient() {
               { key: "best net pnl", label: "Best Net PnL" },
               { key: "best profit factor", label: "Best Profit Factor" },
               { key: "best win rate", label: "Best Win Rate" },
+              { key: "best trust score", label: "Best Trust Score" },
+              { key: "trust weighted pnl", label: "Trust-Weighted PnL" },
               { key: "locked only", label: "Locked Only" },
               { key: "public only", label: "Public Only" },
             ].map((item) => {
