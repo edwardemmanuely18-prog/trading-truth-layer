@@ -97,7 +97,7 @@ export default function Navbar({ workspaceId = 1 }: Props) {
 
   function navClass(active: boolean) {
     return active
-      ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+      ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm"
       : "rounded-xl px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100";
   }
 
@@ -112,7 +112,14 @@ export default function Navbar({ workspaceId = 1 }: Props) {
           <WorkspaceSwitcher />
         </div>
 
-        <nav className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            <span>Public Trust Surfaces</span>
+            <div className="h-px w-6 bg-slate-200" />
+            <span>Workspace Operations</span>
+          </div>
+
+          <nav className="flex flex-wrap items-center gap-2">
           <Link href="/claims" className={navClass(publicClaimsActive)}>
             Public Claims
           </Link>
@@ -122,7 +129,7 @@ export default function Navbar({ workspaceId = 1 }: Props) {
           </Link>
 
           <Link href="/schema" className={navClass(schemaBuilderActive)}>
-            Create Claim
+            Claim Builder
           </Link>
 
           <div className="mx-1 hidden h-6 w-px bg-slate-200 md:block" />
@@ -165,14 +172,20 @@ export default function Navbar({ workspaceId = 1 }: Props) {
             Settings & Billing
           </Link>
         </nav>
+      </div>
 
         <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
           <div className="text-sm">
-            <div className="font-medium text-slate-900">{user?.name || "User"}</div>
-            <div className="text-xs text-slate-500">
-              {user?.email || "—"}
-              {!loading && workspaceRole ? ` · ${workspaceRole}` : ""}
+            <div className="flex items-center gap-2">
+              <div className="font-medium text-slate-900">{user?.name || "User"}</div>
+              {!loading && workspaceRole ? (
+                <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                  {workspaceRole}
+                </span>
+              ) : null}
             </div>
+
+            <div className="text-xs text-slate-500">{user?.email || "—"}</div>
           </div>
 
           <button
