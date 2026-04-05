@@ -917,26 +917,7 @@ export default function ClaimsPageClient() {
               </div>
             </div>
           ) : null}
-
-        <div className="grid gap-4 xl:grid-cols-2">
-          {[compareLeft, compareRight].filter(Boolean).map((row) => (
-            <div
-              key={`methodology-${String(row?.claim_hash ?? "")}`}
-              className="rounded-2xl border border-slate-200 bg-white p-4"
-            >
-              <div className="text-sm text-slate-500">Methodology Review</div>
-              <div className="mt-2 text-base font-semibold text-slate-950">
-                {safeString(row?.name, "Unnamed Claim")}
-              </div>
-              <div className="mt-3 whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm leading-7 text-slate-700">
-                {safeString(
-                  resolveMethodologyNotes(row),
-                  "No methodology notes were supplied for this public claim."
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+          
         {loading ? (
           <section className="mt-8 rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
             <div className="text-base text-slate-500">Loading public claims…</div>
