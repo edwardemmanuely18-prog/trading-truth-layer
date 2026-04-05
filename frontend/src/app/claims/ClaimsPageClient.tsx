@@ -657,6 +657,7 @@ export default function ClaimsPageClient() {
               One claim selected. Choose one more to activate the comparison surface.
             </div>
           ) : null}
+          </section>
 
           {compareReady && compareLeft && compareRight ? (
             <div className="mt-6 space-y-5">
@@ -671,7 +672,7 @@ export default function ClaimsPageClient() {
               </div>
 
               <div className="grid gap-4 xl:grid-cols-2">
-                {[compareLeft, compareRight].map((row) => {
+                {[compareLeft, compareRight].filter(Boolean).map((row) => {
                   const compareStatus = resolveStatus(row);
                   const compareIntegrity =
                     normalize(row?.integrity_status) ||
@@ -686,7 +687,7 @@ export default function ClaimsPageClient() {
                       <div className="mt-2 text-2xl font-semibold text-slate-950">
                         {safeString(row?.name, "Unnamed Claim")}
                       </div>
-                      <div className="mt-2 font-mono text-xs text-slate-500 break-all">
+                      <div className="mt-2 font-mono text-xs break-all text-slate-500">
                         {safeString(row?.claim_hash, "—")}
                       </div>
 
@@ -702,19 +703,49 @@ export default function ClaimsPageClient() {
 
                       <div className="mt-5 grid gap-3 sm:grid-cols-2">
                         <div className="rounded-xl bg-slate-50 p-3">
-                          <div className="text-xs uppercase tracking-wide text-slate-500">Verification Period</div>
+                          <div className="text-xs uppercase tracking-wide text-slate-500">
+                            Verification Period
+                          </div>
                           <div className="mt-1 text-sm font-medium text-slate-900">
                             {safeString(resolvePeriodStart(row))} → {safeString(resolvePeriodEnd(row))}
                           </div>
                         </div>
 
                         <div className="rounded-xl bg-slate-50 p-3">
-                          <div className="text-xs uppercase tracking-wide text-slate-500">Trade Count</div>
+                          <div className="text-xs uppercase tracking-wide text-slate-500">
+                            Trade Count
+                          </div>
                           <div className="mt-1 text-sm font-medium text-slate-900">
                             {safeString(row?.trade_count, "0")}
                           </div>
                         </div>
                       </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                {[compareLeft, compareRight].filter(Boolean).map((row) => {
+                  const compareStatus = resolveStatus(row);
+                  const compareIntegrity =
+                    normalize(row?.integrity_status) ||
+                    (compareStatus === "locked" ? "valid" : "unknown");
+
+                  return (
+                    <div
+                      key={`signature-${String(row?.claim_hash ?? "")}`}
+                      className="rounded-2xl border border-slate-200 bg-white p-4"
+                    >
+                      <ClaimVerificationSignature
+                        compact
+                        status={compareStatus}
+                        integrityStatus={compareIntegrity}
+                        claimHash={String(row?.claim_hash ?? "")}
+                        tradeSetHash={String(row?.trade_set_hash ?? row?.locked_trade_set_hash ?? "")}
+                        verifiedAt={String(resolveVerifiedAt(row) ?? "")}
+                        lockedAt={String(resolveLockedAt(row) ?? "")}
+                      />
                     </div>
                   );
                 })}
@@ -864,12 +895,31 @@ export default function ClaimsPageClient() {
                   </tbody>
                 </table>
               </div>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                {[compareLeft, compareRight].filter(Boolean).map((row) => (
+                  <div
+                    key={`methodology-${String(row?.claim_hash ?? "")}`}
+                    className="rounded-2xl border border-slate-200 bg-white p-4"
+                  >
+                    <div className="text-sm text-slate-500">Methodology Review</div>
+                    <div className="mt-2 text-base font-semibold text-slate-950">
+                      {safeString(row?.name, "Unnamed Claim")}
+                    </div>
+                    <div className="mt-3 whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm leading-7 text-slate-700">
+                      {safeString(
+                        resolveMethodologyNotes(row),
+                        "No methodology notes were supplied for this public claim."
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : null}
-        </section>
 
         <div className="grid gap-4 xl:grid-cols-2">
-          {[compareLeft, compareRight].map((row) => (
+          {[compareLeft, compareRight].filter(Boolean).map((row) => (
             <div
               key={`methodology-${String(row?.claim_hash ?? "")}`}
               className="rounded-2xl border border-slate-200 bg-white p-4"
