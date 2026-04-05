@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import Navbar from "../../components/Navbar";
 import { api, type PublicClaimDirectoryItem } from "../../lib/api";
 
@@ -264,7 +265,7 @@ function SummaryCard({
   value,
 }: {
   label: string;
-  value: React.ReactNode;
+  value: ReactNode;
 }) {
   return (
     <div className="rounded-2xl border bg-white p-5 shadow-sm">
@@ -283,7 +284,17 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
   const visibility = resolvedSearch.visibility || "all";
   const minTrades = parsePositiveInt(resolvedSearch.minTrades);
 
-  const allClaims = await api.getPublicClaims();
+  let allClaims: PublicClaimDirectoryItem[] = [];
+  let loadError: string | null = null;
+
+  try {
+    allClaims = await api.getPublicClaims();
+  } catch (error) {
+    loadError =
+      error instanceof Error
+        ? error.message
+        : "Failed to load public claims for leaderboard.";
+  }
 
   const claims = allClaims.filter((c) => {
     const lifecycle = safeLifecycle(c);
@@ -335,6 +346,12 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
             claim-level performance comparison across the trust registry.
           </p>
         </div>
+
+        {loadError ? (
+          <div className="mb-8 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {loadError}
+          </div>
+        ) : null} 
 
         <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
           <form action="/leaderboard" method="get" className="space-y-4">
