@@ -8,6 +8,7 @@ import {
   type ClaimIntegrityResult,
   type PublicVerifyResult,
 } from "../../../../lib/api";
+import EquityCurveChart from "../../../../components/EquityCurveChart";
 
 function formatNumber(value?: number | null, digits = 2) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
@@ -577,48 +578,11 @@ export default function PublicClaimPage() {
             <div className="text-2xl font-semibold text-slate-950">Equity Curve</div>
 
             {preview.equity_curve?.curve && preview.equity_curve.curve.length > 0 ? (
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="text-sm text-slate-500">
-                  Equity progression across the claim period.
-                </div>
-
-                <div className="mt-4">
-                  <div className="mt-4">
-                    <div className="h-[220px] w-full">
-                      <svg viewBox="0 0 100 40" className="w-full h-full">
-                        {(() => {
-                          const curve = preview.equity_curve.curve;
-                          const max = Math.max(...curve.map((p: any) => p.cumulative_pnl));
-                          const min = Math.min(...curve.map((p: any) => p.cumulative_pnl));
-
-                          const normalize = (value: number) => {
-                            if (max === min) return 20;
-                            return 35 - ((value - min) / (max - min)) * 30;
-                          };
-
-                          const points = curve.map((p: any, i: number) => {
-                            const x = (i / (curve.length - 1)) * 100;
-                            const y = normalize(p.cumulative_pnl);
-                            return `${x},${y}`;
-                          });
-
-                          return (
-                            <polyline
-                              fill="none"
-                              stroke="#2563eb"
-                              strokeWidth="1.5"
-                              points={points.join(" ")}
-                            />
-                          );
-                        })()}
-                      </svg>
-                    </div>
-
-                    <div className="mt-2 text-xs text-slate-500">
-                      Equity curve (cumulative PnL over time)
-                    </div>
-                  </div>
-                </div>
+              <div className="mt-4">
+                <EquityCurveChart
+                  title="Public Claim Equity Curve"
+                  points={preview.equity_curve.curve}
+                />
               </div>
             ) : (
               <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">

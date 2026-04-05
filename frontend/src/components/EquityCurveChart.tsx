@@ -151,7 +151,29 @@ function getSeriesStats(points: EquityCurvePoint[]) {
 }
 
 function buildTimeTickIndexes(points: EnrichedEquityCurvePoint[]) {
-  return points.map((_, i) => i);
+  const total = points.length;
+
+  if (total <= 0) return [];
+  if (total <= 6) return points.map((_, i) => i);
+
+  const targetTickCount: number =
+    total <= 12 ? 6 :
+    total <= 24 ? 8 :
+    total <= 60 ? 10 :
+    12;
+
+  const indexes = new Set<number>();
+  const lastIndex = total - 1;
+
+  indexes.add(0);
+  indexes.add(lastIndex);
+
+  for (let i = 0; i < targetTickCount; i += 1) {
+    const ratio = targetTickCount <= 1 ? 0 : i / (targetTickCount - 1);
+    indexes.add(Math.round(ratio * lastIndex));
+  }
+
+  return Array.from(indexes).sort((a, b) => a - b);
 }
 
 function ZoomButton({
