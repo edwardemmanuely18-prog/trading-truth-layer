@@ -453,6 +453,8 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                   <option value="net_pnl_desc">Best Net PnL</option>
                   <option value="profit_factor_desc">Best Profit Factor</option>
                   <option value="win_rate_desc">Best Win Rate</option>
+                  <option value="best_trust_score">Best Trust Score</option>
+                  <option value="best_trust_weighted_pnl">Trust-Weighted PnL</option>
                   <option value="trade_count_desc">Most Trades</option>
                   <option value="newest">Newest Claims</option>
                   <option value="name_asc">Name A → Z</option>
@@ -521,6 +523,17 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
               active={sort === "win_rate_desc"}
             />
             <FilterChip
+              href={qs({ sort: "best_trust_score" })}
+              label="Best Trust Score"
+              active={sort === "best_trust_score"}
+            />
+
+            <FilterChip
+              href={qs({ sort: "best_trust_weighted_pnl" })}
+              label="Trust-Weighted PnL"
+              active={sort === "best_trust_weighted_pnl"}
+            />
+            <FilterChip
               href={qs({ sort: "trade_count_desc" })}
               label="Most Trades"
               active={sort === "trade_count_desc"}
@@ -575,6 +588,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                     <th className="px-3 py-3">Status</th>
                     <th className="px-3 py-3">Trades</th>
                     <th className="px-3 py-3">Net PnL</th>
+                    <th className="px-3 py-3">Trust-Weighted PnL</th>
                     <th className="px-3 py-3">Profit Factor</th>
                     <th className="px-3 py-3">Win Rate</th>
                     <th className="px-3 py-3">Trust</th>
@@ -616,6 +630,10 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
 
                       <td className="px-3 py-3 font-semibold tabular-nums">
                         {formatNumber(row.net_pnl)}
+                      </td>
+
+                      <td className="px-3 py-3 font-semibold tabular-nums">
+                        {formatNumber(row.trust_weighted_pnl)}
                       </td>
 
                       <td className="px-3 py-3 tabular-nums">
