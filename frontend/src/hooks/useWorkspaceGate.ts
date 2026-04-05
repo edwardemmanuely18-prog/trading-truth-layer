@@ -14,7 +14,9 @@ type GateAction =
   | "verify_claim"
   | "publish_claim"
   | "lock_claim"
-  | "edit_draft";
+  | "edit_draft"
+  | "view_leaderboard"
+  | "compare_claims";
 
 type GateContext = {
   action: GateAction;
@@ -45,6 +47,10 @@ function isOwner(role?: string | null) {
   return normalizeText(role) === "owner";
 }
 
+function isBillingActive(usage?: WorkspaceUsageSummary | null) {
+  return normalizeText(usage?.billing_status) === "active";
+}
+
 function getActionLabel(action: GateAction) {
   switch (action) {
     case "create_claim_version":
@@ -57,6 +63,10 @@ function getActionLabel(action: GateAction) {
       return "Lock claim";
     case "edit_draft":
       return "Edit draft";
+    case "view_leaderboard":
+      return "View leaderboard";
+    case "compare_claims":
+      return "Compare claims";
     default:
       return "Governed action";
   }
@@ -155,6 +165,14 @@ function buildLifecycleBlockedMessage(
     return "Claim locking is currently blocked for this workspace.";
   }
 
+  if (action === "compare_claims") {
+    return "Claim comparison is currently unavailable under the workspace’s current billing posture.";
+  }
+
+  if (action === "view_leaderboard") {
+    return "Leaderboard access is currently unavailable under the workspace’s current billing posture.";
+  }
+
   return "This governed workflow action is currently blocked.";
 }
 
@@ -203,18 +221,34 @@ export function useWorkspaceGate() {
           actionLabel,
         };
       }
-    } else if (!isOperator(workspaceRole)) {
-      return {
-        allowed: false,
-        reason: "feature_locked",
-        message: buildLifecycleBlockedMessage(action, ctx.claimStatus, workspaceRole),
-        actionLabel,
-      };
+    } else if (
+      action === "verify_claim" ||
+      action === "edit_draft" ||
+      action === "create_claim_version"
+    ) {
+      if (!isOperator(workspaceRole)) {
+        return {
+          allowed: false,
+          reason: "feature_locked",
+          message: buildLifecycleBlockedMessage(action, ctx.claimStatus, workspaceRole),
+          actionLabel,
+        };
+      }
     }
 
     if (action === "create_claim_version") {
       if (!usage) {
         return { allowed: true };
+      }
+
+      if (!isBillingActive(usage)) {
+        return {
+          allowed: false,
+          reason: "claim_limit_reached",
+          message:
+            "Billing is not active. Activate billing to enable governed claim creation under the configured plan.",
+          actionLabel,
+        };
       }
 
       const claimUsage = usage.usage?.claims;
@@ -279,6 +313,32 @@ export function useWorkspaceGate() {
           allowed: false,
           reason: "lifecycle_action_locked",
           message: buildLifecycleBlockedMessage(action, ctx.claimStatus, workspaceRole),
+          actionLabel,
+        };
+      }
+
+      return { allowed: true };
+    }
+
+    if (action === "compare_claims") {
+      if (!isBillingActive(usage)) {
+        return {
+          allowed: false,
+          reason: "feature_locked",
+          message: "Claim comparison is available under an active billing plan.",
+          actionLabel,
+        };
+      }
+
+      return { allowed: true };
+    }
+
+    if (action === "view_leaderboard") {
+      if (!isBillingActive(usage)) {
+        return {
+          allowed: false,
+          reason: "feature_locked",
+          message: "Leaderboard access requires an active billing posture.",
           actionLabel,
         };
       }
