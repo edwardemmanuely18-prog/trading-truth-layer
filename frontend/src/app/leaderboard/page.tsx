@@ -318,7 +318,7 @@ function SummaryCard({
   return (
     <div className="rounded-2xl border bg-white p-5 shadow-sm">
       <div className="text-sm text-slate-500">{label}</div>
-      <div className="mt-2 text-4xl font-semibold leading-none tracking-tight tabular-nums text-slate-950">
+      <div className="mt-2 text-[24px] font-bold leading-none tabular-nums text-slate-950">
         {value}
       </div>
       <div className="mt-3 text-sm leading-6 text-slate-500">{hint}</div>

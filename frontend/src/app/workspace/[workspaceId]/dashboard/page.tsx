@@ -69,7 +69,7 @@ function SummaryCard({
   return (
     <div className="rounded-2xl border bg-white p-6 shadow-sm">
       <div className="text-sm text-slate-500">{label}</div>
-      <div className="mt-2 text-3xl font-bold">{value}</div>
+      <div className="mt-2 text-[24px] font-bold leading-none text-slate-950">{value}</div>
       {hint ? <div className="mt-2 text-xs text-slate-500">{hint}</div> : null}
     </div>
   );
@@ -91,7 +91,9 @@ function CapacityCard({
   return (
     <div className="rounded-2xl border bg-white p-6 shadow-sm">
       <div className="text-sm text-slate-500">{label}</div>
-      <div className="mt-2 text-2xl font-bold">{formatPercent(ratio)}</div>
+      <div className="mt-2 text-[24px] font-bold leading-none text-slate-950">
+        {formatPercent(ratio)}
+      </div>
       <div className="mt-2 text-xs text-slate-500">
         {formatNumber(used)} used of {formatNumber(limit)}
         {suffix}
@@ -554,7 +556,7 @@ export default function WorkspaceDashboardPage() {
                       <div>
                         <div className="font-medium">{claim?.name || "Unnamed claim"}</div>
                         <div className="mt-1 text-sm text-slate-500">
-                          claim #{claim?.claim_schema_id} · {claim?.verification_status} ·{" "}
+                          claim #{claim?.claim_schema_id} · status: {claim?.verification_status || "unknown"} · visibility:{" "}
                           {claim?.scope?.visibility || "private"}
                         </div>
                       </div>
