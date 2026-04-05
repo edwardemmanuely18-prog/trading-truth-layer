@@ -146,7 +146,7 @@ export default function ClaimVerificationSignature({
   const signature = useMemo(() => {
     if (isLocked && isValid) {
       return {
-        title: "Verified • Locked • Integrity Valid",
+        title: "Verified • Locked • Hash Match Confirmed",
         tone: "border-green-200 bg-green-50 text-green-800",
         summary:
           "This claim is finalized and the current in-scope trade set matches the stored locked fingerprint.",
@@ -170,13 +170,13 @@ export default function ClaimVerificationSignature({
 
     if (isLocked) {
       return {
-        title: "Locked • Integrity Check Needed",
+        title: "Locked • Integrity Pending Confirmation",
         tone: "border-amber-200 bg-amber-50 text-amber-800",
         summary:
           "This claim is locked, but the integrity state has not yet been confirmed on this surface.",
-        trustState: "Finalized but awaiting check",
+        trustState: "Finalized record awaiting confirmation",
         verificationMeaning:
-          "The record is finalized, but this viewer has not yet confirmed whether the fingerprint still matches.",
+          "The record is finalized, but this surface has not yet confirmed whether the stored and recomputed fingerprints match.",
       };
     }
 
@@ -221,7 +221,6 @@ export default function ClaimVerificationSignature({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="max-w-3xl">
             <div className="text-sm font-semibold">{signature.title}</div>
-            <div className="mt-1 text-xs leading-5 opacity-80">{signature.summary}</div>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -246,7 +245,7 @@ export default function ClaimVerificationSignature({
         </div>
 
         <div className="mt-4 rounded-xl bg-white/70 p-3 text-xs leading-5 opacity-85">
-          <span className="font-semibold">Trust meaning:</span> {signature.verificationMeaning}
+          <span className="font-semibold">Trust state:</span> {signature.trustState}
         </div>
       </div>
     );
@@ -324,7 +323,7 @@ export default function ClaimVerificationSignature({
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
         <ReadingCard
           title="What this proves"
           body={signature.verificationMeaning}
@@ -336,14 +335,6 @@ export default function ClaimVerificationSignature({
         <ReadingCard
           title="Trade-set hash meaning"
           body="The trade-set hash identifies the exact in-scope trade evidence used for verification and later integrity review."
-        />
-        <ReadingCard
-          title="What integrity valid means"
-          body="A valid integrity state means the recomputed trade-set fingerprint matches the stored locked fingerprint."
-        />
-        <ReadingCard
-          title="What this does not prove"
-          body="This surface does not, by itself, prove broker authenticity, execution quality, or absence of off-platform risk unless those are separately evidenced."
         />
         <ReadingCard
           title="How to read this record"
