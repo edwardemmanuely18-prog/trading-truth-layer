@@ -1,7 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import Navbar from "../../components/Navbar";
-import { api, type PublicClaimDirectoryItem } from "../../lib/api";
+import {
+  api,
+  computeTrustScore,
+  type PublicClaimDirectoryItem,
+} from "../../lib/api";
 
 type PageProps = {
   searchParams?: Promise<{
@@ -71,6 +75,16 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
     const scope = safeScope(claim);
     const lifecycle = safeLifecycle(claim);
 
+    const trust_score = computeTrustScore({
+      ...claim,
+      verification_status: lifecycle.status,
+      verified_at: lifecycle.verified_at,
+      scope: {
+        ...scope,
+        visibility: scope.visibility,
+      },
+    });
+
     return {
       claim_schema_id: claim.claim_schema_id,
       claim_hash: claim.claim_hash,
@@ -81,6 +95,7 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
       net_pnl: claim.net_pnl ?? 0,
       profit_factor: claim.profit_factor ?? 0,
       win_rate: claim.win_rate ?? 0,
+      trust_score, // ✅ NEW
       period_start: scope.period_start || "—",
       period_end: scope.period_end || "—",
       methodology_notes: scope.methodology_notes || "",
@@ -551,6 +566,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                     <th className="px-3 py-3">Profit Factor</th>
                     <th className="px-3 py-3">Win Rate</th>
                     <th className="px-3 py-3">Trust</th>
+                    <th className="px-3 py-3">Score</th>
                     <th className="px-3 py-3">Locked At</th>
                     <th className="px-3 py-3">Verification</th>
                   </tr>
@@ -604,6 +620,10 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                           verifiedAt={row.verified_at}
                           lockedAt={row.locked_at}
                         />
+                      </td>
+
+                      <td className="px-3 py-3 font-semibold tabular-nums">
+                        {row.trust_score}
                       </td>
 
                       <td className="px-3 py-3 text-sm text-slate-700">
