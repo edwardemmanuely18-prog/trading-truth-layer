@@ -22,6 +22,15 @@ function formatPercent(value?: number | null, digits = 2) {
   return `${(Number(value) * 100).toFixed(digits)}%`;
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
+
 function normalizeText(value: unknown) {
   return String(value ?? "").toLowerCase().trim();
 }
@@ -78,6 +87,9 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
       locked_at: lifecycle.locked_at || null,
       published_at: lifecycle.published_at || null,
       verified_at: lifecycle.verified_at || null,
+      short_hash: claim.claim_hash
+        ? `${claim.claim_hash.slice(0, 16)}...${claim.claim_hash.slice(-10)}`
+        : "—",
     };
   });
 }
@@ -93,13 +105,17 @@ function sortClaimRows(rows: ReturnType<typeof buildClaimRankRows>, sort: string
         (a, b) => b.profit_factor - a.profit_factor || b.claim_schema_id - a.claim_schema_id
       );
     case "win_rate_desc":
-      return items.sort((a, b) => b.win_rate - a.win_rate || b.claim_schema_id - a.claim_schema_id);
+      return items.sort(
+        (a, b) => b.win_rate - a.win_rate || b.claim_schema_id - a.claim_schema_id
+      );
     case "trade_count_desc":
       return items.sort(
         (a, b) => b.trade_count - a.trade_count || b.claim_schema_id - a.claim_schema_id
       );
     case "name_asc":
-      return items.sort((a, b) => a.name.localeCompare(b.name) || b.claim_schema_id - a.claim_schema_id);
+      return items.sort(
+        (a, b) => a.name.localeCompare(b.name) || b.claim_schema_id - a.claim_schema_id
+      );
     case "newest":
     default:
       return items.sort((a, b) => b.claim_schema_id - a.claim_schema_id);
@@ -193,10 +209,13 @@ function sortMemberRows(rows: ReturnType<typeof buildMemberRows>, sort: string) 
 
   switch (sort) {
     case "win_rate_desc":
-      return items.sort((a, b) => b.avg_win_rate - a.avg_win_rate || b.total_net_pnl - a.total_net_pnl);
+      return items.sort(
+        (a, b) => b.avg_win_rate - a.avg_win_rate || b.total_net_pnl - a.total_net_pnl
+      );
     case "profit_factor_desc":
       return items.sort(
-        (a, b) => b.avg_profit_factor - a.avg_profit_factor || b.total_net_pnl - a.total_net_pnl
+        (a, b) =>
+          b.avg_profit_factor - a.avg_profit_factor || b.total_net_pnl - a.total_net_pnl
       );
     case "trade_count_desc":
       return items.sort((a, b) => b.trade_count - a.trade_count || b.total_net_pnl - a.total_net_pnl);
@@ -251,16 +270,38 @@ function StatusBadge({ status }: { status?: string | null }) {
   );
 }
 
-function TrustBadge({ status }: { status?: string | null }) {
-  const trusted = normalizeText(status) === "locked";
+function TrustBadge({
+  status,
+  verifiedAt,
+  lockedAt,
+}: {
+  status?: string | null;
+  verifiedAt?: string | null;
+  lockedAt?: string | null;
+}) {
+  const normalized = normalizeText(status);
+  const isLocked = normalized === "locked";
+  const isVerified = normalized === "verified" || normalized === "published";
 
-  return trusted ? (
-    <span className="inline-flex rounded-full border border-green-200 bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
-      verified
-    </span>
-  ) : (
+  if (isLocked) {
+    return (
+      <span className="inline-flex rounded-full border border-green-200 bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+        finalized trust
+      </span>
+    );
+  }
+
+  if (isVerified || verifiedAt || lockedAt) {
+    return (
+      <span className="inline-flex rounded-full border border-amber-200 bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+        reviewable
+      </span>
+    );
+  }
+
+  return (
     <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-      unverified
+      limited trust
     </span>
   );
 }
@@ -398,9 +439,8 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                   defaultValue={visibility}
                   className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
                 >
-                  <option value="all">All visibility</option>
+                  <option value="all">Public ranking set</option>
                   <option value="public">Public</option>
-                  <option value="unlisted">Unlisted</option>
                 </select>
               </div>
 
@@ -504,41 +544,72 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                   <tr className="border-b text-left text-slate-500">
                     <th className="px-3 py-3">Rank</th>
                     <th className="px-3 py-3">Claim</th>
+                    <th className="px-3 py-3">Period</th>
                     <th className="px-3 py-3">Status</th>
-                    <th className="px-3 py-3">Visibility</th>
                     <th className="px-3 py-3">Trades</th>
                     <th className="px-3 py-3">Net PnL</th>
                     <th className="px-3 py-3">Profit Factor</th>
                     <th className="px-3 py-3">Win Rate</th>
                     <th className="px-3 py-3">Trust</th>
+                    <th className="px-3 py-3">Locked At</th>
                     <th className="px-3 py-3">Verification</th>
                   </tr>
                 </thead>
                 <tbody>
                   {claimRows.map((row, index) => (
-                    <tr key={`${row.claim_schema_id}-${row.claim_hash}`} className="border-b last:border-0">
+                    <tr
+                      key={`${row.claim_schema_id}-${row.claim_hash}`}
+                      className="border-b last:border-0 align-top"
+                    >
                       <td className="px-3 py-3 font-semibold tabular-nums">{index + 1}</td>
+
                       <td className="px-3 py-3">
-                        <div className="font-medium">{row.name}</div>
+                        <div className="font-medium text-slate-950">{row.name}</div>
                         <div className="mt-1 text-xs text-slate-500">claim #{row.claim_schema_id}</div>
+                        <div className="mt-1 font-mono text-xs text-slate-500">{row.short_hash}</div>
                       </td>
+
                       <td className="px-3 py-3">
-                        <StatusBadge status={row.verification_status} />
+                        <div className="text-sm text-slate-900">
+                          {row.period_start} → {row.period_end}
+                        </div>
                       </td>
-                      <td className="px-3 py-3">{row.visibility}</td>
+
+                      <td className="px-3 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <StatusBadge status={row.verification_status} />
+                          <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                            {row.visibility}
+                          </span>
+                        </div>
+                      </td>
+
                       <td className="px-3 py-3 tabular-nums">{row.trade_count}</td>
+
                       <td className="px-3 py-3 font-semibold tabular-nums">
                         {formatNumber(row.net_pnl)}
                       </td>
+
                       <td className="px-3 py-3 tabular-nums">
                         {formatNumber(row.profit_factor, 4)}
                       </td>
+
                       <td className="px-3 py-3 tabular-nums">
                         {formatPercent(row.win_rate, 2)}
                       </td>
+
                       <td className="px-3 py-3">
-                        <TrustBadge status={row.verification_status} />
+                        <TrustBadge
+                          status={row.verification_status}
+                          verifiedAt={row.verified_at}
+                          lockedAt={row.locked_at}
+                        />
                       </td>
+
+                      <td className="px-3 py-3 text-sm text-slate-700">
+                        {formatDateTime(row.locked_at)}
+                      </td>
+
                       <td className="px-3 py-3">
                         <div className="flex flex-wrap gap-2">
                           <Link
