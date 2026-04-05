@@ -117,7 +117,7 @@ export default function Navbar({ workspaceId = 1 }: Props) {
           </Link>
 
           <Link href="/schema" className={navClass(schemaBuilderActive)}>
-            Schema Builder
+            Create Claim
           </Link>
 
           <div className="mx-1 hidden h-6 w-px bg-slate-200 md:block" />
@@ -138,7 +138,7 @@ export default function Navbar({ workspaceId = 1 }: Props) {
 
           {canSeeSchema ? (
             <Link href={workspaceSchemaHref} className={navClass(workspaceSchemaActive)}>
-              Workspace Schema
+              Schema Registry
             </Link>
           ) : null}
 
