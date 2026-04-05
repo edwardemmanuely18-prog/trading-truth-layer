@@ -1725,3 +1725,25 @@ export const api = {
     );
   },
 };
+
+export function computeTrustScore(claim: any): number {
+  if (!claim) return 0;
+
+  let score = 0;
+
+  if (claim.integrity_status === "valid") score += 40;
+
+  if (claim.verification_status === "locked") score += 20;
+
+  const trades = Number(claim.trade_count || 0);
+  if (trades >= 50) score += 20;
+  else if (trades >= 20) score += 15;
+  else if (trades >= 10) score += 10;
+  else if (trades > 0) score += 5;
+
+  if (claim.verified_at || claim.lifecycle?.verified_at) score += 10;
+
+  if (claim.scope?.visibility === "public") score += 10;
+
+  return Math.min(score, 100);
+}
