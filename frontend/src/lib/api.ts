@@ -832,6 +832,18 @@ function parseApiErrorPayload(rawText: string): ApiErrorPayload | null {
   return null;
 }
 
+function getApiBaseUrl() {
+  // Client → use relative
+  if (typeof window !== "undefined") return "";
+
+  // Server → MUST use absolute URL
+  return (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.FRONTEND_BASE_URL ||
+    "http://localhost:3000"
+  );
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = getAuthHeaders(options?.headers);
 
@@ -839,7 +851,9 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     headers.set("Content-Type", "application/json");
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const baseUrl = getApiBaseUrl();
+
+  const res = await fetch(`${baseUrl}${API_BASE}${path}`, {
     ...options,
     headers,
   });
