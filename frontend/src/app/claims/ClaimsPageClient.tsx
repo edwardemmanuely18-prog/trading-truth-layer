@@ -222,6 +222,33 @@ function compareMetricTone(left: number, right: number, isLeft: boolean) {
   return wins ? "text-green-700" : "text-slate-900";
 }
 
+function resolveTrustState(row: any) {
+  const status = resolveStatus(row);
+  const integrity = normalize(row?.integrity_status);
+
+  if (integrity === "valid" && status === "locked") {
+    return "Finalized · Cryptographically Locked";
+  }
+
+  if (integrity === "valid") {
+    return "Verified · Hash Match";
+  }
+
+  if (integrity === "compromised") {
+    return "Integrity Mismatch";
+  }
+
+  if (status === "locked") {
+    return "Locked · Integrity assumed from canonical lifecycle";
+  }
+
+  if (status === "published") {
+    return "Published · Reviewable";
+  }
+
+  return "Limited Trust";
+}
+
 export default function ClaimsPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -641,6 +668,32 @@ export default function ClaimsPageClient() {
                   </div>
                 </div>
 
+                <div className="grid gap-4 xl:grid-cols-2">
+                  {[compareLeft, compareRight].map((row) => {
+                    const compareStatus = resolveStatus(row);
+                    const compareIntegrity =
+                      normalize(row?.integrity_status) ||
+                      (compareStatus === "locked" ? "valid" : "unknown");
+
+                    return (
+                      <div
+                        key={`signature-${String(row?.claim_hash ?? "")}`}
+                        className="rounded-2xl border border-slate-200 bg-white p-4"
+                      >
+                        <ClaimVerificationSignature
+                          compact
+                          status={compareStatus}
+                          integrityStatus={compareIntegrity}
+                          claimHash={String(row?.claim_hash ?? "")}
+                          tradeSetHash={String(row?.trade_set_hash ?? row?.locked_trade_set_hash ?? "")}
+                          verifiedAt={String(resolveVerifiedAt(row) ?? "")}
+                          lockedAt={String(resolveLockedAt(row) ?? "")}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+
                 {[compareLeft, compareRight].map((row) => (
                   <div
                     key={String(row?.claim_hash ?? "")}
@@ -657,6 +710,9 @@ export default function ClaimsPageClient() {
                       <Pill className={statusTone(resolveStatus(row))}>{resolveStatus(row)}</Pill>
                       <Pill className={visibilityTone(resolveVisibility(row))}>
                         visibility: {resolveVisibility(row)}
+                      </Pill>
+                      <Pill className={integrityTone(normalize(row?.integrity_status || (resolveStatus(row) === "locked" ? "valid" : "unknown")))}>
+                        integrity: {normalize(row?.integrity_status || (resolveStatus(row) === "locked" ? "valid" : "unknown"))}
                       </Pill>
                     </div>
                   </div>
@@ -741,12 +797,14 @@ export default function ClaimsPageClient() {
 
                     <tr>
                       <td className="px-4 py-4 font-medium">Trade Count</td>
-                      <td className="px-4 py-4 font-semibold">
-                        {safeString(compareLeft?.trade_count, "0")}
-                      </td>
-                      <td className="px-4 py-4 font-semibold">
-                        {safeString(compareRight?.trade_count, "0")}
-                      </td>
+                      <td className="px-4 py-4 font-semibold">{safeString(compareLeft?.trade_count, "0")}</td>
+                      <td className="px-4 py-4 font-semibold">{safeString(compareRight?.trade_count, "0")}</td>
+                    </tr>
+
+                    <tr>
+                      <td className="px-4 py-4 font-medium">Trust State</td>
+                      <td className="px-4 py-4">{resolveTrustState(compareLeft)}</td>
+                      <td className="px-4 py-4">{resolveTrustState(compareRight)}</td>
                     </tr>
 
                     <tr>
@@ -760,6 +818,48 @@ export default function ClaimsPageClient() {
                       <td className="px-4 py-4">{resolveVisibility(compareLeft)}</td>
                       <td className="px-4 py-4">{resolveVisibility(compareRight)}</td>
                     </tr>
+
+                    <tr>
+                      <td className="px-4 py-4 font-medium">Verification Period</td>
+                      <td className="px-4 py-4">
+                        {safeString(resolvePeriodStart(compareLeft))} → {safeString(resolvePeriodEnd(compareLeft))}
+                      </td>
+                      <td className="px-4 py-4">
+                        {safeString(resolvePeriodStart(compareRight))} → {safeString(resolvePeriodEnd(compareRight))}
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="px-4 py-4 font-medium">Verified At</td>
+                      <td className="px-4 py-4">{formatDateTime(resolveVerifiedAt(compareLeft))}</td>
+                      <td className="px-4 py-4">{formatDateTime(resolveVerifiedAt(compareRight))}</td>
+                    </tr>
+
+                    <tr>
+                      <td className="px-4 py-4 font-medium">Locked At</td>
+                      <td className="px-4 py-4">{formatDateTime(resolveLockedAt(compareLeft))}</td>
+                      <td className="px-4 py-4">{formatDateTime(resolveLockedAt(compareRight))}</td>
+                    </tr>
+
+                    <tr>
+                      <td className="px-4 py-4 font-medium">Claim Hash</td>
+                      <td className="px-4 py-4 font-mono text-xs break-all">
+                        {safeString(compareLeft?.claim_hash)}
+                      </td>
+                      <td className="px-4 py-4 font-mono text-xs break-all">
+                        {safeString(compareRight?.claim_hash)}
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td className="px-4 py-4 font-medium">Trade Set Hash</td>
+                      <td className="px-4 py-4 font-mono text-xs break-all">
+                        {safeString(compareLeft?.trade_set_hash ?? compareLeft?.locked_trade_set_hash)}
+                      </td>
+                      <td className="px-4 py-4 font-mono text-xs break-all">
+                        {safeString(compareRight?.trade_set_hash ?? compareRight?.locked_trade_set_hash)}
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -767,6 +867,25 @@ export default function ClaimsPageClient() {
           ) : null}
         </section>
 
+        <div className="grid gap-4 xl:grid-cols-2">
+          {[compareLeft, compareRight].map((row) => (
+            <div
+              key={`methodology-${String(row?.claim_hash ?? "")}`}
+              className="rounded-2xl border border-slate-200 bg-white p-4"
+            >
+              <div className="text-sm text-slate-500">Methodology Review</div>
+              <div className="mt-2 text-base font-semibold text-slate-950">
+                {safeString(row?.name, "Unnamed Claim")}
+              </div>
+              <div className="mt-3 whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-sm leading-7 text-slate-700">
+                {safeString(
+                  resolveMethodologyNotes(row),
+                  "No methodology notes were supplied for this public claim."
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
         {loading ? (
           <section className="mt-8 rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
             <div className="text-base text-slate-500">Loading public claims…</div>
