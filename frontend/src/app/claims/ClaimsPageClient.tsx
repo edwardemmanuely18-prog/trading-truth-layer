@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "../../components/Navbar";
 import ClaimVerificationSignature from "../../components/ClaimVerificationSignature";
-import { api } from "../../lib/api";
+import { api, computeTrustScore } from "../../lib/api";
 
 function formatDateTime(value?: string | null) {
   if (!value) return "—";
@@ -631,6 +631,10 @@ export default function ClaimsPageClient() {
               </div>
             </div>
 
+            <div className="mt-2 text-xs text-slate-500">
+              Higher trust score indicates stronger verification confidence and integrity.
+            </div>
+
             <div className="flex flex-wrap gap-2">
               <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-700">
                 Selected: {selectedCompareHashes.length}/2
@@ -840,6 +844,16 @@ export default function ClaimsPageClient() {
                     </tr>
 
                     <tr>
+                      <td className="px-4 py-4 font-medium">Trust Score</td>
+                      <td className="px-4 py-4 font-semibold">
+                        {computeTrustScore(compareLeft)}
+                      </td>
+                      <td className="px-4 py-4 font-semibold">
+                        {computeTrustScore(compareRight)}
+                      </td>
+                    </tr>
+
+                    <tr>
                       <td className="px-4 py-4 font-medium">Status</td>
                       <td className="px-4 py-4">{resolveStatus(compareLeft)}</td>
                       <td className="px-4 py-4">{resolveStatus(compareRight)}</td>
@@ -917,7 +931,7 @@ export default function ClaimsPageClient() {
               </div>
             </div>
           ) : null}
-          
+
         {loading ? (
           <section className="mt-8 rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
             <div className="text-base text-slate-500">Loading public claims…</div>
@@ -935,6 +949,15 @@ export default function ClaimsPageClient() {
         ) : (
           <div className="mt-8 space-y-6">
             {filteredRows.map((row) => {
+              const trustScore = computeTrustScore({
+                ...row,
+                verification_status: resolveStatus(row),
+                verified_at: resolveVerifiedAt(row),
+                scope: {
+                  ...(row?.scope || {}),
+                  visibility: resolveVisibility(row),
+                },
+              });
               const leaderboard = toArray(row?.leaderboard);
               const topEntry = extractTopLeaderboardEntry(row);
               const routeState = getVerificationRouteState(row);
@@ -1079,6 +1102,16 @@ export default function ClaimsPageClient() {
                       <div className="mt-2 text-sm text-slate-500">
                         Winning trades as percentage
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl bg-slate-50 p-4">
+                    <div className="text-sm text-slate-500">Trust Score</div>
+                    <div className="mt-2 text-[24px] font-bold leading-none text-slate-950">
+                      {trustScore}
+                    </div>
+                    <div className="mt-2 text-sm text-slate-500">
+                      Verification confidence score
                     </div>
                   </div>
 
