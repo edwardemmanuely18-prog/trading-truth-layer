@@ -80,6 +80,7 @@ export default function Navbar({ workspaceId = 1 }: Props) {
   const settingsHref = `${base}/settings`;
 
   const publicClaimsActive = currentPath === "/claims";
+  const leaderboardActive = currentPath === "/leaderboard";
   const schemaBuilderActive = currentPath === "/schema";
   const dashboardActive = startsWithPath(currentPath, dashboardHref);
   const importActive = startsWithPath(currentPath, importHref);
@@ -114,6 +115,10 @@ export default function Navbar({ workspaceId = 1 }: Props) {
         <nav className="flex flex-wrap items-center gap-2">
           <Link href="/claims" className={navClass(publicClaimsActive)}>
             Public Claims
+          </Link>
+
+          <Link href="/leaderboard" className={navClass(leaderboardActive)}>
+            Leaderboard
           </Link>
 
           <Link href="/schema" className={navClass(schemaBuilderActive)}>

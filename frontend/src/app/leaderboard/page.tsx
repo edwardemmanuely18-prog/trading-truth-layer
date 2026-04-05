@@ -17,6 +17,11 @@ function formatNumber(value?: number | null, digits = 2) {
   return Number(value).toFixed(digits);
 }
 
+function formatPercent(value?: number | null, digits = 2) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return `${(Number(value) * 100).toFixed(digits)}%`;
+}
+
 function normalizeText(value: unknown) {
   return String(value ?? "").toLowerCase().trim();
 }
@@ -263,9 +268,11 @@ function TrustBadge({ status }: { status?: string | null }) {
 function SummaryCard({
   label,
   value,
+  hint,
 }: {
   label: string;
   value: ReactNode;
+  hint: string;
 }) {
   return (
     <div className="rounded-2xl border bg-white p-5 shadow-sm">
@@ -273,6 +280,7 @@ function SummaryCard({
       <div className="mt-2 text-4xl font-semibold leading-none tracking-tight tabular-nums text-slate-950">
         {value}
       </div>
+      <div className="mt-3 text-sm leading-6 text-slate-500">{hint}</div>
     </div>
   );
 }
@@ -342,8 +350,8 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
           <div className="text-sm text-slate-500">Trading Truth Layer · Public Leaderboard</div>
           <h1 className="mt-2 text-4xl font-bold">Leaderboard</h1>
           <p className="mt-3 max-w-3xl text-slate-600">
-            Public ranking surface for locked public claims, with sortable metrics and
-            claim-level performance comparison across the trust registry.
+            Public ranking surface for locked public claims, with sortable metrics and claim-level
+            performance comparison across the trust registry.
           </p>
         </div>
 
@@ -351,7 +359,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
           <div className="mb-8 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {loadError}
           </div>
-        ) : null} 
+        ) : null}
 
         <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
           <form action="/leaderboard" method="get" className="space-y-4">
@@ -458,13 +466,26 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        <div className="mb-8 grid gap-4 md:grid-cols-4">
-          <SummaryCard label="Public Claims" value={claims.length} />
-          <SummaryCard label="Ranked Claims" value={claimRows.length} />
-          <SummaryCard label="Distinct Members" value={memberRows.length} />
+        <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <SummaryCard
+            label="Public Claims"
+            value={claims.length}
+            hint="Locked public claims eligible for trust ranking"
+          />
+          <SummaryCard
+            label="Ranked Claims"
+            value={claimRows.length}
+            hint="Claims that match the current filter set"
+          />
+          <SummaryCard
+            label="Distinct Members"
+            value={memberRows.length}
+            hint="Unique leaderboard members across public claims"
+          />
           <SummaryCard
             label="Top Net PnL"
             value={claimRows.length ? formatNumber(claimRows[0].net_pnl) : "—"}
+            hint="Highest claim-level net performance in the current ranking view"
           />
         </div>
 
@@ -513,7 +534,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                         {formatNumber(row.profit_factor, 4)}
                       </td>
                       <td className="px-3 py-3 tabular-nums">
-                        {formatNumber(row.win_rate, 4)}
+                        {formatPercent(row.win_rate, 2)}
                       </td>
                       <td className="px-3 py-3">
                         <TrustBadge status={row.verification_status} />
@@ -546,7 +567,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-semibold">Member Appearances</h2>
           <div className="mt-2 text-sm text-slate-500">
-            Aggregated from leaderboard rows present inside public claims.
+            Aggregated from leaderboard rows present inside locked public claims.
           </div>
 
           {memberRows.length === 0 ? (
@@ -571,7 +592,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                       <td className="px-3 py-3 font-medium">{row.member}</td>
                       <td className="px-3 py-3 tabular-nums">{row.claim_count}</td>
                       <td className="px-3 py-3 tabular-nums">{formatNumber(row.total_net_pnl)}</td>
-                      <td className="px-3 py-3 tabular-nums">{formatNumber(row.avg_win_rate, 4)}</td>
+                      <td className="px-3 py-3 tabular-nums">{formatPercent(row.avg_win_rate, 2)}</td>
                       <td className="px-3 py-3 tabular-nums">
                         {formatNumber(row.avg_profit_factor, 4)}
                       </td>
