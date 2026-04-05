@@ -703,12 +703,14 @@ function UpgradeSummaryPanel({
       </div>
 
       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-        <div className="font-medium text-slate-900">What billing unlocks</div>
-        <div className="mt-2">
-          A successfully activated commercial plan increases governed claim capacity, reduces blocked
-          lineage workflows, and gives the workspace more operational room for evidence ingestion and
-          collaborator growth.
-        </div>
+        <div className="font-medium text-slate-900">What happens after activation</div>
+
+        <ul className="mt-2 space-y-1">
+          <li>• Claim creation and versioning restrictions are lifted</li>
+          <li>• Lifecycle actions (verify, publish, lock) become fully available</li>
+          <li>• Workspace capacity expands based on selected plan</li>
+          <li>• Public trust surfaces operate without interruption</li>
+        </ul>
       </div>
 
       {primaryAction.helper ? (
@@ -1163,11 +1165,40 @@ export default function WorkspaceSettingsPage() {
 
         {activeTab === "billing" ? (
           <div className="mb-6 rounded-3xl border border-blue-200 bg-blue-50 p-6 text-blue-900 shadow-sm">
-            <h2 className="text-xl font-semibold">Billing Review Required</h2>
+            <h2 className="text-xl font-semibold">Action Required</h2>
+
             <p className="mt-2 text-sm">
-              You arrived here from a governed workflow action that requires billing review,
-              plan activation, or additional workspace capacity before it can proceed.
+              This workspace has encountered a governed workflow restriction that requires billing
+              activation or plan upgrade before proceeding.
             </p>
+
+            <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
+              {governance?.billing_activation_recommended ? (
+                <span className="rounded-full border border-blue-300 bg-white px-3 py-1 text-blue-800">
+                  billing activation required
+                </span>
+              ) : null}
+
+              {governance?.upgrade_required_now ? (
+                <span className="rounded-full border border-amber-300 bg-white px-3 py-1 text-amber-800">
+                  upgrade required
+                </span>
+              ) : null}
+
+              {governance?.upgrade_recommended_soon ? (
+                <span className="rounded-full border border-amber-200 bg-white px-3 py-1 text-amber-700">
+                  upgrade recommended
+                </span>
+              ) : null}
+
+              {!governance?.billing_activation_recommended &&
+              !governance?.upgrade_required_now &&
+              !governance?.upgrade_recommended_soon ? (
+                <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-slate-700">
+                  billing review
+                </span>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
@@ -1195,7 +1226,11 @@ export default function WorkspaceSettingsPage() {
               />
               <SummaryCard
                 label="Billing Status"
-                value={settings?.billing_status || "inactive"}
+                value={
+                  normalizeText(settings?.billing_status) === "active"
+                    ? "active"
+                    : "inactive (action required)"
+                }
                 hint="Subscription state"
               />
               <SummaryCard
@@ -1599,7 +1634,7 @@ export default function WorkspaceSettingsPage() {
                       type="button"
                       onClick={() => void handleStartCheckout()}
                       disabled={primaryAction.disabled}
-                      className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                      className="rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-md hover:bg-slate-800"
                     >
                       {checkoutLoading ? "Preparing Billing..." : primaryAction.label}
                     </button>
