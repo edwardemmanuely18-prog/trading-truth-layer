@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   api,
+  computeTrustScore,
   type ClaimSchema,
   type ClaimIntegrityResult,
   type PublicVerifyResult,
@@ -316,6 +317,20 @@ export default function PublicClaimPage() {
   const resolvedPeriodStart = resolvePeriodStart(claim, preview);
   const resolvedPeriodEnd = resolvePeriodEnd(claim, preview);
 
+  const trustScore = computeTrustScore({
+    ...preview,
+    verification_status: claim.status,
+    integrity_status:
+      integrity && integrity.hash_match && normalizeText(integrity.integrity_status) === "valid"
+        ? "valid"
+        : (preview as any)?.integrity_status,
+    verified_at: resolvedVerifiedAt,
+    scope: {
+      ...(preview as any)?.scope,
+      visibility: resolvedVisibility,
+    },
+  });
+
   async function handleCopyLink() {
     try {
       setCopying(true);
@@ -414,6 +429,14 @@ export default function PublicClaimPage() {
           <div className="mt-5 flex flex-wrap gap-3">
             <StatusBadge status={claim.status} />
             <IntegrityBadge integrity={integrity} />
+          </div>
+
+          <div className="mt-4 flex items-center gap-4">
+            <div className="text-sm text-slate-500">Trust Score</div>
+            <div className="text-2xl font-semibold text-slate-900">
+              {trustScore}
+              <span className="text-sm text-slate-500"> / 100</span>
+            </div>
           </div>
 
           <div className="mt-5 rounded-3xl border border-green-200 bg-green-50 p-6">
