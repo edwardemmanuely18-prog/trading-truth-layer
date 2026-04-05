@@ -660,63 +660,64 @@ export default function ClaimsPageClient() {
 
           {compareReady && compareLeft && compareRight ? (
             <div className="mt-6 space-y-5">
-              <div className="grid gap-4 xl:grid-cols-[180px_1fr_1fr]">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-sm font-medium text-slate-500">Comparison Mode</div>
-                  <div className="mt-2 text-base font-semibold text-slate-950">
-                    Side-by-side trust view
-                  </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="text-sm font-medium text-slate-500">Comparison Mode</div>
+                <div className="mt-2 text-base font-semibold text-slate-950">
+                  Side-by-side trust view
                 </div>
+                <div className="mt-2 text-sm text-slate-600">
+                  Compare claim identity, lifecycle, proof fingerprints, performance metrics, and methodology in a single structured surface.
+                </div>
+              </div>
 
-                <div className="grid gap-4 xl:grid-cols-2">
-                  {[compareLeft, compareRight].map((row) => {
-                    const compareStatus = resolveStatus(row);
-                    const compareIntegrity =
-                      normalize(row?.integrity_status) ||
-                      (compareStatus === "locked" ? "valid" : "unknown");
+              <div className="grid gap-4 xl:grid-cols-2">
+                {[compareLeft, compareRight].map((row) => {
+                  const compareStatus = resolveStatus(row);
+                  const compareIntegrity =
+                    normalize(row?.integrity_status) ||
+                    (compareStatus === "locked" ? "valid" : "unknown");
 
-                    return (
-                      <div
-                        key={`signature-${String(row?.claim_hash ?? "")}`}
-                        className="rounded-2xl border border-slate-200 bg-white p-4"
-                      >
-                        <ClaimVerificationSignature
-                          compact
-                          status={compareStatus}
-                          integrityStatus={compareIntegrity}
-                          claimHash={String(row?.claim_hash ?? "")}
-                          tradeSetHash={String(row?.trade_set_hash ?? row?.locked_trade_set_hash ?? "")}
-                          verifiedAt={String(resolveVerifiedAt(row) ?? "")}
-                          lockedAt={String(resolveLockedAt(row) ?? "")}
-                        />
+                  return (
+                    <div
+                      key={`selected-${String(row?.claim_hash ?? "")}`}
+                      className="rounded-2xl border border-slate-200 bg-white p-5"
+                    >
+                      <div className="text-sm text-slate-500">Selected Claim</div>
+                      <div className="mt-2 text-2xl font-semibold text-slate-950">
+                        {safeString(row?.name, "Unnamed Claim")}
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className="mt-2 font-mono text-xs text-slate-500 break-all">
+                        {safeString(row?.claim_hash, "—")}
+                      </div>
 
-                {[compareLeft, compareRight].map((row) => (
-                  <div
-                    key={String(row?.claim_hash ?? "")}
-                    className="rounded-2xl border border-slate-200 bg-white p-4"
-                  >
-                    <div className="text-sm text-slate-500">Selected Claim</div>
-                    <div className="mt-2 text-xl font-semibold text-slate-950">
-                      {safeString(row?.name, "Unnamed Claim")}
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Pill className={statusTone(compareStatus)}>{compareStatus}</Pill>
+                        <Pill className={visibilityTone(resolveVisibility(row))}>
+                          visibility: {resolveVisibility(row)}
+                        </Pill>
+                        <Pill className={integrityTone(compareIntegrity)}>
+                          integrity: {compareIntegrity}
+                        </Pill>
+                      </div>
+
+                      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-xl bg-slate-50 p-3">
+                          <div className="text-xs uppercase tracking-wide text-slate-500">Verification Period</div>
+                          <div className="mt-1 text-sm font-medium text-slate-900">
+                            {safeString(resolvePeriodStart(row))} → {safeString(resolvePeriodEnd(row))}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-50 p-3">
+                          <div className="text-xs uppercase tracking-wide text-slate-500">Trade Count</div>
+                          <div className="mt-1 text-sm font-medium text-slate-900">
+                            {safeString(row?.trade_count, "0")}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="mt-2 text-sm text-slate-500">
-                      {shortHash(String(row?.claim_hash ?? ""), 16, 10)}
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Pill className={statusTone(resolveStatus(row))}>{resolveStatus(row)}</Pill>
-                      <Pill className={visibilityTone(resolveVisibility(row))}>
-                        visibility: {resolveVisibility(row)}
-                      </Pill>
-                      <Pill className={integrityTone(normalize(row?.integrity_status || (resolveStatus(row) === "locked" ? "valid" : "unknown")))}>
-                        integrity: {normalize(row?.integrity_status || (resolveStatus(row) === "locked" ? "valid" : "unknown"))}
-                      </Pill>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="overflow-x-auto rounded-2xl border border-slate-200">
