@@ -44,7 +44,7 @@ function resolveDefaultContent(reason: PaywallReason) {
         title: "Public claim capacity has been reached",
         body:
           "This workspace has reached its currently enforced governed claim capacity. Additional public workflow actions require plan review or billing activation before they can continue.",
-        primaryLabel: "Review Billing & Access",
+        primaryLabel: "Open Billing & Upgrade",
       };
     case "lifecycle_action_locked":
       return {
@@ -53,7 +53,7 @@ function resolveDefaultContent(reason: PaywallReason) {
         title: "This governed workflow action is currently blocked",
         body:
           "This action changes governed workflow state and is not currently available under the workspace’s active access, billing, or enforcement posture.",
-        primaryLabel: "Review Billing & Access",
+        primaryLabel: "Review Billing & Workflow Access",
       };
     case "edit_locked":
       return {
@@ -62,7 +62,7 @@ function resolveDefaultContent(reason: PaywallReason) {
         title: "Draft editing is currently blocked",
         body:
           "Draft editing is not currently available under the workspace’s active workflow and entitlement posture.",
-        primaryLabel: "Review Billing & Access",
+        primaryLabel: "Review Editing Access",
       };
     case "feature_locked":
     default:
@@ -72,7 +72,7 @@ function resolveDefaultContent(reason: PaywallReason) {
         title: "This workflow is currently unavailable",
         body:
           "This action is currently restricted by workspace role, billing posture, or governed plan access.",
-        primaryLabel: "Review Access & Billing",
+        primaryLabel: "Review Access & Upgrade",
       };
   }
 }
@@ -281,7 +281,7 @@ export default function PaywallModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 px-4 py-6">
-      <div className="w-full max-w-3xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
+      <div className="w-full max-w-3xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-200/60">
         <div className="border-b border-slate-200 px-6 py-5 sm:px-7">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -299,6 +299,17 @@ export default function PaywallModal({
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
             {resolvedBody}
           </p>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+            current: {displayPlan}
+          </span>
+          <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">
+            recommended: {displayRecommendation}
+          </span>
+          <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+            blocked action: {displayAction}
+          </span>
+        </div>
         </div>
 
         <div className="px-6 py-5 sm:px-7">
@@ -315,7 +326,7 @@ export default function PaywallModal({
           </div>
 
           <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
-            <div className="text-sm font-semibold text-blue-900">What billing recovery changes</div>
+            <div className="text-sm font-semibold text-blue-900">What unlocks after billing recovery</div>
             <div className="mt-2 text-sm leading-6 text-blue-800">{upgradeBenefit}</div>
           </div>
 
