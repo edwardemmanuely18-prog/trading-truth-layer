@@ -375,6 +375,42 @@ function resolveTrustBand(score: number) {
   };
 }
 
+function resolveLineage(row: any) {
+  return {
+    rootClaimId: row?.root_claim_id ?? null,
+    parentClaimId: row?.parent_claim_id ?? null,
+    versionNumber: row?.version_number ?? null,
+  };
+}
+
+function resolveNetworkContext(row: any) {
+  const hasParent = Boolean(row?.parent_claim_id);
+  const hasRoot = Boolean(row?.root_claim_id);
+  const version = Number(row?.version_number ?? 1);
+
+  if (hasRoot && hasParent) {
+    return "Derived · Versioned Claim";
+  }
+
+  if (hasRoot && !hasParent && version > 1) {
+    return "Root · Multi-Version Claim";
+  }
+
+  if (version === 1 && !hasParent) {
+    return "Independent Claim";
+  }
+
+  return "Unknown Lineage";
+}
+
+function resolveIssuer(row: any) {
+  return (
+    row?.issuer_name ||
+    row?.workspace_name ||
+    "Unknown Issuer"
+  );
+}
+
 export default function ClaimsPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -857,6 +893,10 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                         {safeString(row?.claim_hash, "—")}
                       </div>
 
+                      <div className="mt-2 text-xs text-slate-500">
+                        {resolveNetworkContext(row)} · Issuer: {resolveIssuer(row)}
+                      </div>
+
                       <div className="mt-4 flex flex-wrap gap-2">
                         <Pill className={statusTone(compareStatus)}>{compareStatus}</Pill>
                         <Pill className={visibilityTone(resolveVisibility(row))}>
@@ -1225,6 +1265,36 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                       </p>
                     </div>
 
+                    {/* Phase 8 — Trust Network Context */}
+                    <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="text-xs uppercase tracking-wide text-slate-500">
+                        Trust Network Context
+                      </div>
+
+                      <div className="mt-3 grid gap-3 md:grid-cols-3 text-sm text-slate-700">
+                        <div>
+                          <div className="text-slate-500">Issuer</div>
+                          <div className="font-medium text-slate-900">
+                            {resolveIssuer(row)}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-slate-500">Network State</div>
+                          <div className="font-medium text-slate-900">
+                            {resolveNetworkContext(row)}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-slate-500">Version</div>
+                          <div className="font-medium text-slate-900">
+                            {safeString(row?.version_number, "1")}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -1323,7 +1393,8 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                       </span>
                     </div>
                     <div className="mt-2 text-sm text-slate-500">
-                      Verification confidence score
+                      Composite trust score derived from lifecycle state, integrity, visibility,
+                      and verification posture within the trust network.
                     </div>
                   </div>
 
@@ -1445,6 +1516,22 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                           )}
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <div className="text-sm text-slate-500">Lineage</div>
+
+                    <div className="mt-2 text-sm text-slate-800">
+                      Root: {safeString(row?.root_claim_id, "—")}
+                    </div>
+
+                    <div className="mt-1 text-sm text-slate-800">
+                      Parent: {safeString(row?.parent_claim_id, "—")}
+                    </div>
+
+                    <div className="mt-1 text-sm text-slate-800">
+                      Version: {safeString(row?.version_number, "1")}
                     </div>
                   </div>
 
