@@ -741,6 +741,96 @@ export type PublicVerifyResult = {
   };
 };
 
+export type IntegrationProviderType =
+  | "manual"
+  | "csv"
+  | "mt4"
+  | "mt5"
+  | "broker_api"
+  | "platform_api"
+  | "webhook"
+  | "unknown";
+
+export type VerificationExposureLevel =
+  | "internal_only"
+  | "unlisted"
+  | "public"
+  | "external_distribution";
+
+export type ExternalVerificationIdentity = {
+  claim_hash: string;
+  verify_path: string;
+  public_view_path?: string | null;
+  trade_set_hash?: string | null;
+  verification_status: string;
+  integrity_status?: string | null;
+  exposure_level: VerificationExposureLevel;
+};
+
+export type ExternalVerificationRecord = {
+  claim_schema_id: number;
+  workspace_id?: number | null;
+  name: string;
+  identity: ExternalVerificationIdentity;
+  scope: {
+    period_start: string;
+    period_end: string;
+    included_members: number[];
+    included_symbols: string[];
+    methodology_notes: string;
+    visibility?: string;
+  };
+  lifecycle: {
+    status: string;
+    verified_at?: string | null;
+    published_at?: string | null;
+    locked_at?: string | null;
+  };
+  metrics: {
+    trade_count: number;
+    net_pnl: number;
+    profit_factor: number;
+    win_rate: number;
+  };
+  lineage?: {
+    parent_claim_id?: number | null;
+    root_claim_id?: number | null;
+    version_number?: number | null;
+  };
+};
+
+export type IntegrationSourceMetadata = {
+  provider: IntegrationProviderType;
+  provider_label?: string | null;
+  source_system?: string | null;
+  source_account_id?: string | null;
+  source_workspace_ref?: string | null;
+  sync_mode?: "manual" | "scheduled" | "webhook" | "api" | "unknown";
+  last_synced_at?: string | null;
+};
+
+export type PlatformCapabilityFlags = {
+  public_verification_enabled: boolean;
+  public_distribution_enabled: boolean;
+  external_verification_enabled: boolean;
+  api_access_enabled: boolean;
+  broker_import_enabled: boolean;
+  webhook_ingestion_enabled: boolean;
+};
+
+export type PlatformReadiness = {
+  workspace_id?: number | null;
+  capabilities: PlatformCapabilityFlags;
+  integration_sources: IntegrationSourceMetadata[];
+  verification_exposure_level: VerificationExposureLevel;
+  recommended_next_step?: string | null;
+};
+
+export type ExternalVerificationLookupResult = {
+  record: ExternalVerificationRecord;
+  platform_readiness?: PlatformReadiness;
+};
+
 export type ClaimIntegrityResult = {
   claim_schema_id: number;
   claim_hash?: string;
@@ -1240,6 +1330,148 @@ function ensureClaimTradeEvidence(row: ClaimTradeEvidence): ClaimTradeEvidence {
   };
 }
 
+function ensureIntegrationSourceMetadata(
+  row?: Partial<IntegrationSourceMetadata> | null
+): IntegrationSourceMetadata {
+  return {
+    provider: (row?.provider ?? "unknown") as IntegrationProviderType,
+    provider_label: row?.provider_label ?? null,
+    source_system: row?.source_system ?? null,
+    source_account_id: row?.source_account_id ?? null,
+    source_workspace_ref: row?.source_workspace_ref ?? null,
+    sync_mode: (row?.sync_mode ?? "unknown") as
+      | "manual"
+      | "scheduled"
+      | "webhook"
+      | "api"
+      | "unknown",
+    last_synced_at: row?.last_synced_at ?? null,
+  };
+}
+
+function ensurePlatformReadiness(row?: Partial<PlatformReadiness> | null): PlatformReadiness | undefined {
+  if (!row) return undefined;
+
+  return {
+    workspace_id:
+      typeof row.workspace_id === "number" ? row.workspace_id : row.workspace_id ?? null,
+    capabilities: {
+      public_verification_enabled: Boolean(row.capabilities?.public_verification_enabled),
+      public_distribution_enabled: Boolean(row.capabilities?.public_distribution_enabled),
+      external_verification_enabled: Boolean(row.capabilities?.external_verification_enabled),
+      api_access_enabled: Boolean(row.capabilities?.api_access_enabled),
+      broker_import_enabled: Boolean(row.capabilities?.broker_import_enabled),
+      webhook_ingestion_enabled: Boolean(row.capabilities?.webhook_ingestion_enabled),
+    },
+    integration_sources: Array.isArray(row.integration_sources)
+      ? row.integration_sources.map((item) => ensureIntegrationSourceMetadata(item))
+      : [],
+    verification_exposure_level:
+      (row.verification_exposure_level ?? "internal_only") as VerificationExposureLevel,
+    recommended_next_step: row.recommended_next_step ?? null,
+  };
+}
+
+function ensureExternalVerificationRecord(
+  row: ExternalVerificationRecord | PublicVerifyResult
+): ExternalVerificationRecord {
+  const scope = "scope" in row && row.scope
+    ? row.scope
+    : {
+        period_start: "—",
+        period_end: "—",
+        included_members: [],
+        included_symbols: [],
+        methodology_notes: "",
+        visibility: "—",
+      };
+
+  const lifecycle = "lifecycle" in row && row.lifecycle
+    ? row.lifecycle
+    : {
+        status: (row as any)?.verification_status ?? "unknown",
+        verified_at: null,
+        published_at: null,
+        locked_at: null,
+      };
+
+  return {
+    claim_schema_id: Number((row as any)?.claim_schema_id ?? 0),
+    workspace_id:
+      typeof (row as any)?.workspace_id === "number"
+        ? (row as any).workspace_id
+        : (row as any)?.workspace_id ?? null,
+    name: String((row as any)?.name ?? ""),
+    identity: {
+      claim_hash: String((row as any)?.claim_hash ?? ""),
+      verify_path: String(
+        (row as any)?.verify_path ??
+          ((row as any)?.claim_hash ? `/verify/${(row as any).claim_hash}` : "")
+      ),
+      public_view_path:
+        (row as any)?.public_view_path ??
+        ((row as any)?.claim_schema_id
+          ? `/claim/${(row as any).claim_schema_id}/public`
+          : null),
+      trade_set_hash: (row as any)?.trade_set_hash ?? null,
+      verification_status: String((row as any)?.verification_status ?? "unknown"),
+      integrity_status: (row as any)?.integrity_status ?? null,
+      exposure_level:
+        ((scope as any)?.visibility === "public"
+          ? "public"
+          : (scope as any)?.visibility === "unlisted"
+            ? "unlisted"
+            : "internal_only") as VerificationExposureLevel,
+    },
+    scope: {
+      period_start: String(scope.period_start ?? "—"),
+      period_end: String(scope.period_end ?? "—"),
+      included_members: Array.isArray(scope.included_members) ? scope.included_members : [],
+      included_symbols: Array.isArray(scope.included_symbols) ? scope.included_symbols : [],
+      methodology_notes: String(scope.methodology_notes ?? ""),
+      visibility: scope.visibility ?? "—",
+    },
+    lifecycle: {
+      status: String(lifecycle.status ?? "unknown"),
+      verified_at: lifecycle.verified_at ?? null,
+      published_at: lifecycle.published_at ?? null,
+      locked_at: lifecycle.locked_at ?? null,
+    },
+    metrics: {
+      trade_count: Number((row as any)?.trade_count ?? 0),
+      net_pnl: Number((row as any)?.net_pnl ?? 0),
+      profit_factor: Number((row as any)?.profit_factor ?? 0),
+      win_rate: Number((row as any)?.win_rate ?? 0),
+    },
+    lineage:
+      "lineage" in row && row.lineage
+        ? {
+            parent_claim_id: row.lineage.parent_claim_id ?? null,
+            root_claim_id: row.lineage.root_claim_id ?? null,
+            version_number: row.lineage.version_number ?? null,
+          }
+        : undefined,
+  };
+}
+
+function ensureExternalVerificationLookupResult(
+  row: ExternalVerificationLookupResult | PublicVerifyResult
+): ExternalVerificationLookupResult {
+  if ("record" in row && row.record) {
+    return {
+      record: ensureExternalVerificationRecord(row.record),
+      platform_readiness: ensurePlatformReadiness(row.platform_readiness),
+    };
+  }
+
+  const publicRow = row as PublicVerifyResult;
+
+  return {
+    record: ensureExternalVerificationRecord(publicRow),
+    platform_readiness: undefined,
+  };
+}
+
 export const api = {
   register: async (payload: RegisterPayload): Promise<AuthResponse> => {
     const result = await apiFetch<AuthResponse>(`/auth/register`, {
@@ -1680,6 +1912,47 @@ export const api = {
     };
   },
 
+    getExternalVerificationRecord: async (
+    claimHash: string
+  ): Promise<ExternalVerificationLookupResult> => {
+    const row = await apiFetch<ExternalVerificationLookupResult | PublicVerifyResult>(
+      `/public/verify/${claimHash}`,
+      {
+        cache: "no-store",
+      }
+    );
+
+    return ensureExternalVerificationLookupResult(row);
+  },
+
+  getWorkspacePlatformReadiness: async (
+    workspaceId: number
+  ): Promise<PlatformReadiness> => {
+    const row = await apiFetch<PlatformReadiness>(
+      withDevUser(`/workspaces/${workspaceId}/platform-readiness`),
+      {
+        cache: "no-store",
+      }
+    );
+
+    return (
+      ensurePlatformReadiness(row) ?? {
+        workspace_id: workspaceId,
+        capabilities: {
+          public_verification_enabled: false,
+          public_distribution_enabled: false,
+          external_verification_enabled: false,
+          api_access_enabled: false,
+          broker_import_enabled: false,
+          webhook_ingestion_enabled: false,
+        },
+        integration_sources: [],
+        verification_exposure_level: "internal_only",
+        recommended_next_step: null,
+      }
+    );
+  },
+
   getVerifyClaimByHash: async (claimHash: string): Promise<VerifyClaimResult> => {
     return apiFetch<VerifyClaimResult>(`/verify/${claimHash}`, {
       cache: "no-store",
@@ -1746,4 +2019,32 @@ export function computeTrustScore(claim: any): number {
   if (claim.scope?.visibility === "public") score += 10;
 
   return Math.min(score, 100);
+}
+
+export function computeTrustWeightedPnl(claim: any): number {
+  const trustScore = computeTrustScore(claim);
+  const netPnl = Number(claim?.net_pnl ?? 0);
+
+  if (!Number.isFinite(netPnl)) return 0;
+  return (netPnl * trustScore) / 100;
+}
+
+export function resolveVerificationExposureLevel(claim: any): VerificationExposureLevel {
+  const visibility = String(claim?.scope?.visibility ?? claim?.visibility ?? "")
+    .toLowerCase()
+    .trim();
+
+  if (visibility === "public") return "public";
+  if (visibility === "unlisted") return "unlisted";
+
+  const hasClaimHash = Boolean(String(claim?.claim_hash ?? "").trim());
+  const status = String(claim?.verification_status ?? claim?.status ?? "")
+    .toLowerCase()
+    .trim();
+
+  if ((status === "locked" || status === "published") && hasClaimHash) {
+    return "external_distribution";
+  }
+
+  return "internal_only";
 }
