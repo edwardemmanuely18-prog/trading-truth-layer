@@ -788,6 +788,17 @@ def resolve_claim_integrity_status(schema: ClaimSchema, trades: list[Trade]) -> 
     return "valid" if recomputed_trade_set_hash == schema.locked_trade_set_hash else "compromised"
 
 
+def build_issuer_payload(schema: ClaimSchema, db: Session):
+    workspace = get_workspace_or_404(schema.workspace_id, db)
+
+    return {
+        "id": workspace.id,
+        "name": workspace.name,
+        "type": "workspace",
+        "network": "internal",
+    }
+
+
 def build_claim_list_row(schema: ClaimSchema, db: Session):
     filtered_trades = resolve_schema_trades(schema, db)
     metrics = compute_trade_metrics(filtered_trades)
@@ -801,6 +812,7 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
     return {
         "claim_schema_id": schema.id,
         "claim_hash": claim_hash,
+        "issuer": build_issuer_payload(schema, db),
         "integrity_status": resolve_claim_integrity_status(schema, filtered_trades),
         "public_view_path": f"/claim/{schema.id}/public",
         "verify_path": f"/verify/{claim_hash}",
@@ -852,6 +864,7 @@ def build_public_claim_payload(schema: ClaimSchema, db: Session):
     excluded_rows = build_excluded_trade_scope_rows(scope["excluded"])
     equity_curve = build_equity_curve(scope["included"])
     claim_hash = schema.claim_hash or compute_claim_hash(schema)
+    issuer = build_issuer_payload(schema, db)
 
     return {
         "claim_schema_id": schema.id,
@@ -866,6 +879,7 @@ def build_public_claim_payload(schema: ClaimSchema, db: Session):
         "profit_factor": metrics["profit_factor"],
         "win_rate": metrics["win_rate"],
         "leaderboard": leaderboard,
+        "issuer": issuer,
         "scope": {
             "period_start": schema.period_start,
             "period_end": schema.period_end,
@@ -3393,6 +3407,7 @@ def get_claim_schema_preview(
     return {
         "claim_schema_id": schema.id,
         "claim_hash": compute_claim_hash(schema),
+        "issuer": build_issuer_payload(schema, db),
         "name": schema.name,
         "verification_status": schema.status,
         "trade_count": metrics["trade_count"],
