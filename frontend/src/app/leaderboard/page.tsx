@@ -86,6 +86,135 @@ function buildQrImageUrl(value: string) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encoded}`;
 }
 
+type ClaimOriginType = "independent" | "derived" | "versioned";
+
+type ClaimNetworkContext = {
+  claim_origin_type: ClaimOriginType;
+  root_claim_hash: string | null;
+  parent_claim_hash: string | null;
+  version_depth: number;
+  independence_weight: number;
+  lineage_penalty: number;
+  version_decay: number;
+  network_score: number;
+  network_context_label: string;
+};
+
+function inferClaimNetworkContext(
+  claim: PublicClaimDirectoryItem,
+  trustScore: number
+): ClaimNetworkContext {
+  const scope = safeScope(claim);
+
+  const methodology = normalizeText(scope.methodology_notes);
+  const claimName = normalizeText(claim.name);
+  const combined = `${methodology} ${claimName}`;
+
+  const parentHints = [
+    "derived from",
+    "based on",
+    "from claim",
+    "parent claim",
+    "child claim",
+    "forked from",
+    "sourced from",
+  ];
+
+  const versionHints = [
+    "version",
+    "v2",
+    "v3",
+    "v4",
+    "revision",
+    "rev ",
+    "updated claim",
+    "amended",
+  ];
+
+  const looksDerived = parentHints.some((hint) => combined.includes(hint));
+  const looksVersioned = versionHints.some((hint) => combined.includes(hint));
+
+  let claim_origin_type: ClaimOriginType = "independent";
+  if (looksVersioned) {
+    claim_origin_type = "versioned";
+  } else if (looksDerived) {
+    claim_origin_type = "derived";
+  }
+
+  const root_claim_hash = claim.claim_hash || null;
+  const parent_claim_hash = looksDerived || looksVersioned ? claim.claim_hash || null : null;
+
+  const versionDepth =
+    claim_origin_type === "versioned"
+      ? 2
+      : claim_origin_type === "derived"
+        ? 1
+        : 0;
+
+  const independence_weight =
+    claim_origin_type === "independent"
+      ? 1
+      : claim_origin_type === "derived"
+        ? 0.9
+        : 0.94;
+
+  const lineage_penalty =
+    claim_origin_type === "independent"
+      ? 1
+      : claim_origin_type === "derived"
+        ? 0.92
+        : 0.96;
+
+  const version_decay =
+    claim_origin_type === "versioned" ? Math.max(0.88, 1 - versionDepth * 0.03) : 1;
+
+  const networkScoreRaw =
+    trustScore * independence_weight * lineage_penalty * version_decay;
+
+  const network_score = Number(networkScoreRaw.toFixed(2));
+
+  const network_context_label =
+    claim_origin_type === "independent"
+      ? "Independent"
+      : claim_origin_type === "derived"
+        ? "Derived"
+        : "Versioned";
+
+  return {
+    claim_origin_type,
+    root_claim_hash,
+    parent_claim_hash,
+    version_depth: versionDepth,
+    independence_weight,
+    lineage_penalty,
+    version_decay,
+    network_score,
+    network_context_label,
+  };
+}
+
+function NetworkOriginBadge({ type }: { type: ClaimOriginType }) {
+  const className =
+    type === "independent"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : type === "derived"
+        ? "border-amber-200 bg-amber-50 text-amber-800"
+        : "border-sky-200 bg-sky-50 text-sky-800";
+
+  const label =
+    type === "independent"
+      ? "independent"
+      : type === "derived"
+        ? "derived"
+        : "versioned";
+
+  return (
+    <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${className}`}>
+      {label}
+    </span>
+  );
+}
+
 function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
   return claims.map((claim) => {
     const scope = safeScope(claim);
@@ -101,7 +230,10 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
       },
     });
 
+    const network = inferClaimNetworkContext(claim, trust_score);
+
     const trust_weighted_pnl = (Number(claim.net_pnl ?? 0) * trust_score) / 100;
+    const network_weighted_pnl = (Number(claim.net_pnl ?? 0) * network.network_score) / 100;
 
     return {
       claim_schema_id: claim.claim_schema_id,
@@ -116,6 +248,7 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
       win_rate: claim.win_rate ?? 0,
       trust_score,
       trust_weighted_pnl,
+      network_weighted_pnl,
       period_start: scope.period_start || "—",
       period_end: scope.period_end || "—",
       methodology_notes: scope.methodology_notes || "",
@@ -125,6 +258,7 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
       short_hash: claim.claim_hash
         ? `${claim.claim_hash.slice(0, 16)}...${claim.claim_hash.slice(-10)}`
         : "—",
+      ...network,
     };
   });
 }
@@ -155,6 +289,16 @@ function sortClaimRows(rows: ReturnType<typeof buildClaimRankRows>, sort: string
       return items.sort(
         (a, b) =>
           b.trust_weighted_pnl - a.trust_weighted_pnl || b.trust_score - a.trust_score
+      );
+    case "best_network_score":
+      return items.sort(
+        (a, b) => b.network_score - a.network_score || b.trust_score - a.trust_score
+      );
+    case "best_network_weighted_pnl":
+      return items.sort(
+        (a, b) =>
+          b.network_weighted_pnl - a.network_weighted_pnl ||
+          b.network_score - a.network_score
       );
     case "name_asc":
       return items.sort(
@@ -262,9 +406,15 @@ function sortMemberRows(rows: ReturnType<typeof buildMemberRows>, sort: string) 
           b.avg_profit_factor - a.avg_profit_factor || b.total_net_pnl - a.total_net_pnl
       );
     case "trade_count_desc":
-      return items.sort((a, b) => b.trade_count - a.trade_count || b.total_net_pnl - a.total_net_pnl);
+      return items.sort(
+        (a, b) => b.trade_count - a.trade_count || b.total_net_pnl - a.total_net_pnl
+      );
     case "name_asc":
-      return items.sort((a, b) => a.member.localeCompare(b.member) || b.total_net_pnl - a.total_net_pnl);
+      return items.sort(
+        (a, b) => a.member.localeCompare(b.member) || b.total_net_pnl - a.total_net_pnl
+      );
+    case "best_network_score":
+    case "best_network_weighted_pnl":
     case "newest":
     case "net_pnl_desc":
     default:
@@ -427,10 +577,20 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
 
   const memberRows = sortMemberRows(buildMemberRows(claims), sort);
 
-  const rankingLabel = sort
-    .replace("_desc", "")
-    .replace("_asc", "")
-    .replace(/_/g, " ");
+  const rankingLabelMap: Record<string, string> = {
+    net_pnl_desc: "net pnl",
+    profit_factor_desc: "profit factor",
+    win_rate_desc: "win rate",
+    best_trust_score: "trust score",
+    best_trust_weighted_pnl: "trust-weighted pnl",
+    best_network_score: "network-aware trust score",
+    best_network_weighted_pnl: "network-aware weighted pnl",
+    trade_count_desc: "trade count",
+    newest: "newest claims",
+    name_asc: "name",
+  };
+
+  const rankingLabel = rankingLabelMap[sort] || sort.replace(/_/g, " ");
 
   const qs = (next: {
     q?: string;
@@ -494,6 +654,8 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                   <option value="win_rate_desc">Best Win Rate</option>
                   <option value="best_trust_score">Best Trust Score</option>
                   <option value="best_trust_weighted_pnl">Trust-Weighted PnL</option>
+                  <option value="best_network_score">Best Network Score</option>
+                  <option value="best_network_weighted_pnl">Network-Weighted PnL</option>
                   <option value="trade_count_desc">Most Trades</option>
                   <option value="newest">Newest Claims</option>
                   <option value="name_asc">Name A → Z</option>
@@ -582,6 +744,17 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
               label="Public Only"
               active={visibility === "public"}
             />
+            <FilterChip
+              href={qs({ sort: "best_network_score" })}
+              label="Best Network Score"
+              active={sort === "best_network_score"}
+            />
+
+            <FilterChip
+              href={qs({ sort: "best_network_weighted_pnl" })}
+              label="Network-Weighted PnL"
+              active={sort === "best_network_weighted_pnl"}
+            />
           </div>
         </div>
 
@@ -602,9 +775,17 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
             hint="Unique leaderboard members across public claims"
           />
           <SummaryCard
-            label="Top Net PnL"
-            value={claimRows.length ? formatNumber(claimRows[0].net_pnl) : "—"}
-            hint="Highest claim-level net performance in the current ranking view"
+            label="Top Ranked Signal"
+            value={
+              claimRows.length
+                ? sort === "best_network_score"
+                  ? formatNumber(claimRows[0].network_score)
+                  : sort === "best_network_weighted_pnl"
+                    ? formatNumber(claimRows[0].network_weighted_pnl)
+                    : formatNumber(claimRows[0].net_pnl)
+                : "—"
+            }
+            hint="Top current value for the active ranking mode"
           />
         </div>
 
@@ -649,10 +830,13 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                     <th className="px-3 py-3">Trades</th>
                     <th className="px-3 py-3">Net PnL</th>
                     <th className="px-3 py-3">Trust-Weighted PnL</th>
+                    <th className="px-3 py-3">Network PnL</th>
                     <th className="px-3 py-3">Profit Factor</th>
                     <th className="px-3 py-3">Win Rate</th>
                     <th className="px-3 py-3">Trust</th>
                     <th className="px-3 py-3">Score</th>
+                    <th className="px-3 py-3">Network</th>
+                    <th className="px-3 py-3">Network Score</th>
                     <th className="px-3 py-3">Locked At</th>
                     <th className="px-3 py-3">Exposure</th>
                     <th className="px-3 py-3">Distribution</th>
@@ -662,153 +846,174 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                 <tbody>
                   {claimRows.map((row, index) => {
                     const trustBand = resolveTrustBand(row.trust_score);
-
-                    const verificationUrl =
-                      typeof window !== "undefined"
-                        ? `${window.location.origin}/verify/${row.claim_hash}`
-                        : `/verify/${row.claim_hash}`;
-
-                    const publicViewUrl =
-                      typeof window !== "undefined"
-                        ? `${window.location.origin}/claim/${row.claim_schema_id}/public`
-                        : `/claim/${row.claim_schema_id}/public`;
-
-                    const qrImageUrl = buildQrImageUrl(verificationUrl);
+                    const verificationPath = `/verify/${row.claim_hash}`;
+                    const publicViewPath = `/claim/${row.claim_schema_id}/public`;
+                    const qrImageUrl = buildQrImageUrl(verificationPath);
 
                     return (
-                    <tr
-                      key={`${row.claim_schema_id}-${row.claim_hash}`}
-                      className="border-b last:border-0 align-top"
-                    >
-                      <td className="px-3 py-3 font-semibold tabular-nums">{index + 1}</td>
+                      <tr
+                        key={`${row.claim_schema_id}-${row.claim_hash}`}
+                        className="border-b last:border-0 align-top"
+                      >
+                        <td className="px-3 py-3 font-semibold tabular-nums">{index + 1}</td>
 
-                      <td className="px-3 py-3">
-                        <div className="font-medium text-slate-950">{row.name}</div>
-                        <div className="mt-1 text-xs text-slate-500">claim #{row.claim_schema_id}</div>
-                        <div className="mt-1 font-mono text-xs text-slate-500">{row.short_hash}</div>
-                      </td>
+                        <td className="px-3 py-3">
+                          <div className="font-medium text-slate-950">{row.name}</div>
+                          <div className="mt-1 text-xs text-slate-500">claim #{row.claim_schema_id}</div>
+                          <div className="mt-1 font-mono text-xs text-slate-500">{row.short_hash}</div>
+                        </td>
 
-                      <td className="px-3 py-3">
-                        <div className="text-sm text-slate-900">
-                          {row.period_start} → {row.period_end}
-                        </div>
-                      </td>
+                        <td className="px-3 py-3">
+                          <div className="text-sm text-slate-900">
+                            {row.period_start} → {row.period_end}
+                          </div>
+                        </td>
 
-                      <td className="px-3 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <StatusBadge status={row.verification_status} />
-                          <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                            {row.visibility}
-                          </span>
-                        </div>
-                      </td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-wrap gap-2">
+                            <StatusBadge status={row.verification_status} />
+                            <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                              {row.visibility}
+                            </span>
+                          </div>
+                        </td>
 
-                      <td className="px-3 py-3 tabular-nums">{row.trade_count}</td>
+                        <td className="px-3 py-3 tabular-nums">{row.trade_count}</td>
 
-                      <td className="px-3 py-3 font-semibold tabular-nums">
-                        {formatNumber(row.net_pnl)}
-                      </td>
+                        <td className="px-3 py-3 font-semibold tabular-nums">
+                          {formatNumber(row.net_pnl)}
+                        </td>
 
-                      <td className="px-3 py-3 font-semibold tabular-nums">
-                        {formatNumber(row.trust_weighted_pnl)}
-                      </td>
+                        <td className="px-3 py-3 font-semibold tabular-nums">
+                          {formatNumber(row.trust_weighted_pnl)}
+                        </td>
 
-                      <td className="px-3 py-3 tabular-nums">
-                        {formatNumber(row.profit_factor, 4)}
-                      </td>
+                        <td className="px-3 py-3 font-semibold tabular-nums">
+                          {formatNumber(row.network_weighted_pnl)}
+                        </td>
 
-                      <td className="px-3 py-3 tabular-nums">
-                        {formatPercent(row.win_rate, 2)}
-                      </td>
+                        <td className="px-3 py-3 tabular-nums">
+                          {formatNumber(row.profit_factor, 4)}
+                        </td>
 
-                      <td className="px-3 py-3">
-                        <TrustBadge
-                          status={row.verification_status}
-                          verifiedAt={row.verified_at}
-                          lockedAt={row.locked_at}
-                        />
-                      </td>
+                        <td className="px-3 py-3 tabular-nums">
+                          {formatPercent(row.win_rate, 2)}
+                        </td>
 
-                      <td className="px-3 py-3 font-semibold tabular-nums">
-                        <div>{row.trust_score}</div>
-                        <div className="mt-1">
+                        <td className="px-3 py-3">
+                          <TrustBadge
+                            status={row.verification_status}
+                            verifiedAt={row.verified_at}
+                            lockedAt={row.locked_at}
+                          />
+                        </td>
+
+                        <td className="px-3 py-3 font-semibold tabular-nums">
+                          <div>{row.trust_score}</div>
+                          <div className="mt-1">
+                            <span
+                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${trustBand.className}`}
+                            >
+                              {trustBand.label}
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-2">
+                            <NetworkOriginBadge type={row.claim_origin_type} />
+                            <div className="text-[11px] leading-5 text-slate-500">
+                              <div>depth: {row.version_depth}</div>
+                              <div>
+                                root:{" "}
+                                {row.root_claim_hash
+                                  ? `${row.root_claim_hash.slice(0, 10)}...${row.root_claim_hash.slice(-6)}`
+                                  : "self"}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-3 py-3">
+                          <div className="font-semibold tabular-nums text-slate-950">
+                            {formatNumber(row.network_score)}
+                          </div>
+                          <div className="mt-1 text-[11px] leading-5 text-slate-500">
+                            <div>indep: {formatNumber(row.independence_weight, 2)}</div>
+                            <div>lineage: {formatNumber(row.lineage_penalty, 2)}</div>
+                            <div>decay: {formatNumber(row.version_decay, 2)}</div>
+                          </div>
+                        </td>
+
+                        <td className="px-3 py-3 text-sm text-slate-700">
+                          {formatDateTime(row.locked_at)}
+                        </td>
+
+                        <td className="px-3 py-3">
                           <span
-                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${trustBand.className}`}
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
+                              row.exposure_level === "public"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                : row.exposure_level === "external_distribution"
+                                  ? "border-indigo-200 bg-indigo-50 text-indigo-800"
+                                  : "border-slate-200 bg-slate-100 text-slate-600"
+                            }`}
                           >
-                            {trustBand.label}
+                            {row.exposure_level}
                           </span>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="px-3 py-3 text-sm text-slate-700">
-                        {formatDateTime(row.locked_at)}
-                      </td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-3">
+                            <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2">
+                              <img
+                                src={qrImageUrl}
+                                alt="QR code for verification link"
+                                className="mx-auto h-auto w-full max-w-[90px]"
+                              />
+                            </div>
 
-                      <td className="px-3 py-3">
-                        <span
-                          className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
-                            row.exposure_level === "public"
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                              : row.exposure_level === "external_distribution"
-                                ? "border-indigo-200 bg-indigo-50 text-indigo-800"
-                                : "border-slate-200 bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {row.exposure_level}
-                        </span>
-                      </td>
+                            <div className="flex flex-wrap gap-2">
+                              <Link
+                                href={verificationPath}
+                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                              >
+                                Verify Route
+                              </Link>
 
-                      <td className="px-3 py-3">
-                        <div className="flex flex-col gap-3">
-                          <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2">
-                            <img
-                              src={qrImageUrl}
-                              alt="QR code for verification link"
-                              className="mx-auto h-auto w-full max-w-[90px]"
-                            />
+                              <Link
+                                href={publicViewPath}
+                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                              >
+                                Public Record
+                              </Link>
+                            </div>
                           </div>
+                        </td>
 
-                          <div className="flex flex-wrap gap-2">
-                            <Link
-                              href={`/verify/${row.claim_hash}`}
-                              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
-                            >
-                              Verify Route
-                            </Link>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-2">
+                            <div className="flex flex-wrap gap-2">
+                              <Link
+                                href={verificationPath}
+                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                              >
+                                Canonical Verify
+                              </Link>
 
-                            <Link
-                              href={`/claim/${row.claim_schema_id}/public`}
-                              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
-                            >
-                              Public Record
-                            </Link>
+                              <Link
+                                href={publicViewPath}
+                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                              >
+                                Public Record
+                              </Link>
+                            </div>
+
+                            <div className="text-[11px] text-slate-400">
+                              portable · api-addressable · canonical
+                            </div>
                           </div>
-                        </div>
-                      </td>
-
-                      <td className="px-3 py-3">
-                        <div className="flex flex-col gap-2">
-                          <div className="flex flex-wrap gap-2">
-                            <Link
-                              href={`/verify/${row.claim_hash}`}
-                              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
-                            >
-                              Canonical Verify
-                            </Link>
-
-                            <Link
-                              href={`/claim/${row.claim_schema_id}/public`}
-                              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
-                            >
-                              Public Record
-                            </Link>
-                          </div>
-
-                          <div className="text-[11px] text-slate-400">
-                            portable · api-addressable · canonical
-                          </div>
-                        </div>
-                      </td>
+                        </td>
                       </tr>
                     );
                   })}
