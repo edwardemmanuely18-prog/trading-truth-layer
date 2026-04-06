@@ -333,6 +333,27 @@ function TrustBadge({
   );
 }
 
+function resolveTrustBand(score: number) {
+  if (score >= 85) {
+    return {
+      label: "High Trust",
+      className: "border-green-200 bg-green-100 text-green-800",
+    };
+  }
+
+  if (score >= 60) {
+    return {
+      label: "Moderate Trust",
+      className: "border-amber-200 bg-amber-100 text-amber-800",
+    };
+  }
+
+  return {
+    label: "Low Trust",
+    className: "border-red-200 bg-red-100 text-red-800",
+  };
+}
+
 function SummaryCard({
   label,
   value,
@@ -598,7 +619,10 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {claimRows.map((row, index) => (
+                  {claimRows.map((row, index) => {
+                    const trustBand = resolveTrustBand(row.trust_score);
+
+                    return (
                     <tr
                       key={`${row.claim_schema_id}-${row.claim_hash}`}
                       className="border-b last:border-0 align-top"
@@ -653,7 +677,14 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                       </td>
 
                       <td className="px-3 py-3 font-semibold tabular-nums">
-                        {row.trust_score}
+                        <div>{row.trust_score}</div>
+                        <div className="mt-1">
+                          <span
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${trustBand.className}`}
+                          >
+                            {trustBand.label}
+                          </span>
+                        </div>
                       </td>
 
                       <td className="px-3 py-3 text-sm text-slate-700">
@@ -678,7 +709,8 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
