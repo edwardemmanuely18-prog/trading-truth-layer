@@ -438,7 +438,7 @@ export default function PublicClaimPage() {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <main className="mx-auto max-w-[1200px] px-6 py-10">
         <section className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
-          <div className="text-sm text-slate-500">Trading Truth Layer · Public Claim Verification</div>
+          <div className="text-sm text-slate-500">Trading Truth Layer · Canonical Public Claim Record</div>
 
           <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 md:text-4xl">
             {claim.name}
@@ -471,12 +471,15 @@ export default function PublicClaimPage() {
           </div>
 
           <div className="mt-5 rounded-3xl border border-green-200 bg-green-50 p-6">
-            <div className="text-base font-semibold text-green-900">Trust Summary</div>
+            <div className="text-base font-semibold text-green-900">
+              Trust Summary · Public Verification Layer
+            </div>
 
             <div className="mt-3 text-sm leading-7 text-green-800">
-              This claim is publicly exposed through Trading Truth Layer. The public page presents
-              performance, scope, methodology, and leaderboard context, while the verification route
-              provides canonical proof, lifecycle state, integrity validation, and claim fingerprints.
+              This claim is exposed through the Trading Truth Layer as a verifiable record.
+              The public surface presents performance and methodology, while the verification route
+              acts as the canonical trust layer for independent validation, dispute resolution,
+              and audit-grade verification.
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -492,11 +495,24 @@ export default function PublicClaimPage() {
             </div>
           </div>
 
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="text-sm font-semibold text-slate-900">
+              Intended Trust Consumers
+            </div>
+
+            <div className="mt-3 grid gap-2 text-sm text-slate-600">
+              <div>• Trading communities and evaluation programs</div>
+              <div>• Investors and capital allocators</div>
+              <div>• Prop firms and verification platforms</div>
+              <div>• Dispute resolution and audit workflows</div>
+            </div>
+          </div>
+
           {verifyPath ? (
             <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-blue-200 bg-blue-50 p-5">
               <div>
                 <div className="text-sm font-semibold text-blue-900">
-                  Verify this claim independently
+                  Independent Verification Route
                 </div>
                 <div className="mt-1 text-sm text-blue-800">
                   Use the verification route to confirm integrity, lifecycle state, and canonical claim identity.
@@ -512,8 +528,32 @@ export default function PublicClaimPage() {
                 }}
                 className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700"
               >
-                Open Verification
+                Open Canonical Verification
               </button>
+            </div>
+          ) : null}
+
+          {verifyPath ? (
+            <div className="mt-6 grid gap-4 md:grid-cols-[1fr_220px]">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="text-sm font-semibold text-slate-900">
+                  External Verification Access
+                </div>
+                <div className="mt-2 text-sm text-slate-600">
+                  Scan this QR code to open the canonical verification route. This ensures
+                  independent validation of claim integrity, lifecycle state, and fingerprint consistency.
+                </div>
+              </div>
+
+              <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-4">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
+                    verifyPath
+                  )}`}
+                  alt="Verification QR"
+                  className="h-[160px] w-[160px]"
+                />
+              </div>
             </div>
           ) : null}
 
@@ -762,7 +802,7 @@ export default function PublicClaimPage() {
           </div>
 
           <div className="mt-10 text-center text-xs text-slate-400">
-            Verified by Trading Truth Layer — Trust Infrastructure for Trading Claims
+            Trading Truth Layer — Canonical verification infrastructure for trading claims
           </div>
         </section>
       </main>
