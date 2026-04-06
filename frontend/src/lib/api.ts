@@ -1067,6 +1067,29 @@ function ensurePlanBilling(row?: Partial<PlanBilling> | null): PlanBilling {
   };
 }
 
+function ensureClaimLineage(row?: {
+  parent_claim_id?: number | null;
+  root_claim_id?: number | null;
+  version_number?: number | null;
+} | null):
+  | {
+      parent_claim_id?: number;
+      root_claim_id?: number;
+      version_number?: number;
+    }
+  | undefined {
+  if (!row) return undefined;
+
+  return {
+    parent_claim_id:
+      typeof row.parent_claim_id === "number" ? row.parent_claim_id : undefined,
+    root_claim_id:
+      typeof row.root_claim_id === "number" ? row.root_claim_id : undefined,
+    version_number:
+      typeof row.version_number === "number" ? row.version_number : undefined,
+  };
+}
+
 function ensureWorkspacePlanDetail(
   row?: Partial<WorkspacePlanDetail> | null
 ): WorkspacePlanDetail | undefined {
@@ -1160,6 +1183,7 @@ function ensurePublicClaim(row: PublicClaimDirectoryItem): PublicClaimDirectoryI
       locked_at: null,
       locked_trade_set_hash: null,
     },
+    lineage: ensureClaimLineage(row.lineage),
     trade_set_hash: row.trade_set_hash ?? "—",
   };
 }
@@ -1902,7 +1926,7 @@ export const api = {
     });
   },
 
-  getClaimPreview: async (claimSchemaId: number): Promise<ClaimSchemaPreview> => {
+    getClaimPreview: async (claimSchemaId: number): Promise<ClaimSchemaPreview> => {
     const row = await apiFetch<ClaimSchemaPreview>(
       withDevUser(`/claim-schemas/${claimSchemaId}/preview`),
       {
@@ -1910,7 +1934,10 @@ export const api = {
       }
     );
 
-    return ensureLeaderboard(row);
+    return {
+      ...ensureLeaderboard(row),
+      lineage: ensureClaimLineage(row.lineage),
+    };
   },
 
   getClaimEquityCurve: async (claimSchemaId: number): Promise<ClaimEquityCurve> => {
@@ -1985,6 +2012,7 @@ export const api = {
         published_at: null,
         locked_at: null,
       },
+      lineage: ensureClaimLineage(row.lineage),
       trade_set_hash: row.trade_set_hash ?? "—",
       trades: Array.isArray(row.trades)
         ? row.trades.map((item) => ensureClaimTradeScopeRow(item, "included"))
