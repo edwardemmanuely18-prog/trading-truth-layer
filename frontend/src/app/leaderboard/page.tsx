@@ -39,6 +39,17 @@ function normalizeText(value: unknown) {
   return String(value ?? "").toLowerCase().trim();
 }
 
+function resolveExposureLevelFromClaim(claim: PublicClaimDirectoryItem): string {
+  const visibility = normalizeText(claim?.scope?.visibility);
+  const status = normalizeText(claim?.verification_status);
+
+  if (visibility === "public") return "public";
+  if (visibility === "unlisted") return "unlisted";
+  if (status === "locked") return "external_distribution";
+
+  return "internal";
+}
+
 function safeScope(claim: PublicClaimDirectoryItem) {
   return claim?.scope ?? {
     period_start: "",
@@ -95,6 +106,7 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
     return {
       claim_schema_id: claim.claim_schema_id,
       claim_hash: claim.claim_hash,
+      exposure_level: resolveExposureLevelFromClaim(claim),
       name: claim.name,
       verification_status: claim.verification_status,
       visibility: scope.visibility || "—",
@@ -642,6 +654,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                     <th className="px-3 py-3">Trust</th>
                     <th className="px-3 py-3">Score</th>
                     <th className="px-3 py-3">Locked At</th>
+                    <th className="px-3 py-3">Exposure</th>
                     <th className="px-3 py-3">Distribution</th>
                     <th className="px-3 py-3">Verification</th>
                   </tr>
@@ -732,6 +745,20 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                       </td>
 
                       <td className="px-3 py-3">
+                        <span
+                          className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
+                            row.exposure_level === "public"
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                              : row.exposure_level === "external_distribution"
+                                ? "border-indigo-200 bg-indigo-50 text-indigo-800"
+                                : "border-slate-200 bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {row.exposure_level}
+                        </span>
+                      </td>
+
+                      <td className="px-3 py-3">
                         <div className="flex flex-col gap-3">
                           <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2">
                             <img
@@ -760,23 +787,29 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                       </td>
 
                       <td className="px-3 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <Link
-                            href={`/verify/${row.claim_hash}`}
-                            className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
-                          >
-                            Open Canonical Verification
-                          </Link>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex flex-wrap gap-2">
+                            <Link
+                              href={`/verify/${row.claim_hash}`}
+                              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                            >
+                              Canonical Verify
+                            </Link>
 
-                          <Link
-                            href={`/claim/${row.claim_schema_id}/public`}
-                            className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
-                          >
-                            Open Public Record
-                          </Link>
+                            <Link
+                              href={`/claim/${row.claim_schema_id}/public`}
+                              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                            >
+                              Public Record
+                            </Link>
+                          </div>
+
+                          <div className="text-[11px] text-slate-400">
+                            portable · api-addressable · canonical
+                          </div>
                         </div>
                       </td>
-                    </tr>
+                      </tr>
                     );
                   })}
                 </tbody>
