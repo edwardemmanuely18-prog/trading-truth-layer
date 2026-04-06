@@ -129,6 +129,24 @@ function buildPublicViewHref(row: any) {
   return claimId ? `/claim/${claimId}/public` : "/claims";
 }
 
+async function copyToClipboard(value: string) {
+  if (typeof window === "undefined") {
+    throw new Error("Clipboard is not available in this environment.");
+  }
+
+  const nav = window.navigator;
+  if (!nav?.clipboard?.writeText) {
+    throw new Error("Clipboard is not available in this browser.");
+  }
+
+  await nav.clipboard.writeText(value);
+}
+
+function buildQrImageUrl(value: string) {
+  const encoded = encodeURIComponent(value);
+  return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encoded}`;
+}
+
 function statusTone(status: string) {
   const value = normalize(status);
   if (value === "locked") return "border-green-200 bg-green-50 text-green-800";
@@ -175,6 +193,38 @@ function Pill({
     <div className={`rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
       {children}
     </div>
+  );
+}
+
+function CopyButton({
+  value,
+  label,
+}: {
+  value?: string | null;
+  label: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    if (!value) return;
+    try {
+      await copyToClipboard(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void handleCopy()}
+      disabled={!value}
+      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {copied ? "Copied" : label}
+    </button>
   );
 }
 
@@ -571,8 +621,8 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
           </h1>
           <p className="mt-4 max-w-5xl text-base leading-8 text-slate-700">
             Public registry of lifecycle-governed, hash-verifiable trading claims that are
-            published or locked and eligible for external credibility, verification, and evidence
-            review.
+            published or locked and ready for external verification, trust review, evidence
+            inspection, and distribution across trading communities and institutional workflows.
           </p>
 
           <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -737,8 +787,9 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                 Select two public claims for side-by-side comparison
               </div>
               <div className="mt-2 text-sm text-slate-600">
-                Comparison uses the canonical public claim records already exposed in the trust
-                layer.
+                Comparison uses canonical public claim records already exposed in the trust layer,
+                allowing side-by-side review of verification posture, methodology, fingerprints,
+                and performance credibility.
               </div>
             </div>
 
@@ -1057,6 +1108,20 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
             </div>
           ) : null}
 
+          <section className="mt-8 rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="text-sm text-slate-500">Trust Distribution Context</div>
+            <div className="mt-2 text-xl font-semibold text-slate-950">
+              Intended Trust Consumers
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4 text-sm text-slate-600">
+              <div className="rounded-2xl bg-slate-50 p-4">Trading communities and educator networks</div>
+              <div className="rounded-2xl bg-slate-50 p-4">Investors and capital allocators</div>
+              <div className="rounded-2xl bg-slate-50 p-4">Prop firms and verification platforms</div>
+              <div className="rounded-2xl bg-slate-50 p-4">Audit, challenge, and dispute workflows</div>
+            </div>
+          </section>
+
         {loading ? (
           <section className="mt-8 rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
             <div className="text-base text-slate-500">Loading public claims…</div>
@@ -1089,6 +1154,17 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
               const routeState = getVerificationRouteState(row);
               const verifyHref = buildVerifyHref(row);
               const publicViewHref = buildPublicViewHref(row);
+              const verificationUrl =
+                typeof window !== "undefined"
+                  ? `${window.location.origin}${verifyHref}`
+                  : verifyHref;
+
+              const publicViewUrl =
+                typeof window !== "undefined"
+                  ? `${window.location.origin}${publicViewHref}`
+                  : publicViewHref;
+
+              const qrImageUrl = buildQrImageUrl(verificationUrl);
               const resolvedVisibility = resolveVisibility(row);
               const resolvedStatus = resolveStatus(row);
               const resolvedIntegrity = (() => {
@@ -1169,7 +1245,7 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                         rel="noopener noreferrer"
                         className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50"
                       >
-                        View Public
+                        Open Public Record
                       </Link>
 
                       <Link
@@ -1178,8 +1254,11 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                         rel="noopener noreferrer"
                         className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50"
                       >
-                        Open Verification Surface
+                        Open Canonical Verification
                       </Link>
+
+                      <CopyButton value={verificationUrl} label="Copy Verify Link" />
+                      <CopyButton value={publicViewUrl} label="Copy Public Link" />
                     </div>
                   </div>
 
@@ -1245,6 +1324,52 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                     </div>
                     <div className="mt-2 text-sm text-slate-500">
                       Verification confidence score
+                    </div>
+                  </div>
+
+                  <div className="mt-6 grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                      <div className="text-sm font-semibold text-slate-900">
+                        Verification Distribution Surface
+                      </div>
+
+                      <div className="mt-3 text-sm leading-7 text-slate-600">
+                        Use the canonical verification route for independent validation and the public record
+                        route for presentation, sharing, and distribution across communities, investor review,
+                        and audit-oriented workflows.
+                      </div>
+
+                      <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <div className="rounded-xl border border-slate-200 bg-white p-4">
+                          <div className="text-xs uppercase tracking-wide text-slate-500">Verification route</div>
+                          <div className="mt-2 break-all font-mono text-xs text-slate-700">{verificationUrl}</div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <CopyButton value={verificationUrl} label="Copy Verify Link" />
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 bg-white p-4">
+                          <div className="text-xs uppercase tracking-wide text-slate-500">Public record route</div>
+                          <div className="mt-2 break-all font-mono text-xs text-slate-700">{publicViewUrl}</div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <CopyButton value={publicViewUrl} label="Copy Public Link" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                      <div className="text-sm font-semibold text-slate-900">Scan to verify</div>
+                      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                        <img
+                          src={qrImageUrl}
+                          alt="QR code for verification link"
+                          className="mx-auto h-auto w-full max-w-[180px]"
+                        />
+                      </div>
+                      <div className="mt-4 text-sm leading-6 text-slate-600">
+                        Scan this code to open the canonical verification route for this claim.
+                      </div>
                     </div>
                   </div>
 
