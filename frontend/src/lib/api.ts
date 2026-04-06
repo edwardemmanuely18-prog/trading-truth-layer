@@ -95,6 +95,76 @@ export type VerifyClaimResult = {
   verify_path: string;
 };
 
+export type VerifyPayloadV7 = {
+  payload_version: string;
+
+  issuer: {
+    name: string;
+    network: string;
+    endpoint_kind: string;
+  };
+
+  network_identity: {
+    claim_hash: string;
+    claim_id: number;
+    workspace_id: number;
+    verify_path: string;
+    public_view_path: string;
+    exposure_level: VerificationExposureLevel;
+  };
+
+  verification_record: {
+    name: string;
+    status: string;
+    visibility: string;
+    version_number?: number | null;
+    root_claim_id?: number | null;
+    parent_claim_id?: number | null;
+  };
+
+  scope: {
+    period_start?: string | null;
+    period_end?: string | null;
+    included_trade_count: number;
+    excluded_trade_count: number;
+    included_member_ids: number[];
+    included_symbols: string[];
+  };
+
+  integrity_record: {
+    status: string;
+    is_valid: boolean;
+    stored_trade_set_hash?: string | null;
+    recomputed_trade_set_hash?: string | null;
+  };
+
+  lifecycle: {
+    verified_at?: string | null;
+    published_at?: string | null;
+    locked_at?: string | null;
+  };
+
+  proof_summary: {
+    claim_hash: string;
+    trade_set_hash?: string | null;
+    integrity_status: string;
+    integrity_valid: boolean;
+    canonical: boolean;
+    portable: boolean;
+    api_addressable: boolean;
+  };
+
+  // keep legacy fields (important!)
+  claim_id: number;
+  workspace_id: number;
+  name: string;
+  status: string;
+  visibility: string;
+  claim_hash: string;
+  public_view_path: string;
+  verify_path: string;
+};
+
 export type ImportBatch = {
   id: number;
   workspace_id: number;
@@ -1472,6 +1542,40 @@ function ensureExternalVerificationLookupResult(
   };
 }
 
+function normalizeVerifyPayload(
+  row: VerifyPayloadV7 | VerifyClaimResult
+): VerifyClaimResult {
+  // Phase 7 payload detected
+  if ((row as VerifyPayloadV7)?.payload_version) {
+    const v7 = row as VerifyPayloadV7;
+
+    return {
+      claim_id: v7.claim_id,
+      workspace_id: v7.workspace_id,
+      name: v7.verification_record?.name || v7.name,
+      status: v7.verification_record?.status || v7.status,
+      visibility: v7.verification_record?.visibility || v7.visibility,
+      claim_hash: v7.network_identity?.claim_hash || v7.claim_hash,
+      stored_trade_set_hash: v7.integrity_record?.stored_trade_set_hash,
+      recomputed_trade_set_hash: v7.integrity_record?.recomputed_trade_set_hash,
+      integrity: v7.integrity_record?.status as any,
+      version_number: v7.verification_record?.version_number,
+      root_claim_id: v7.verification_record?.root_claim_id,
+      parent_claim_id: v7.verification_record?.parent_claim_id,
+      published_at: v7.lifecycle?.published_at,
+      verified_at: v7.lifecycle?.verified_at,
+      locked_at: v7.lifecycle?.locked_at,
+      period_start: v7.scope?.period_start,
+      period_end: v7.scope?.period_end,
+      public_view_path: v7.network_identity?.public_view_path || v7.public_view_path,
+      verify_path: v7.network_identity?.verify_path || v7.verify_path,
+    };
+  }
+
+  // fallback (Phase 5)
+  return row as VerifyClaimResult;
+}
+
 export const api = {
   register: async (payload: RegisterPayload): Promise<AuthResponse> => {
     const result = await apiFetch<AuthResponse>(`/auth/register`, {
@@ -1954,9 +2058,14 @@ export const api = {
   },
 
   getVerifyClaimByHash: async (claimHash: string): Promise<VerifyClaimResult> => {
-    return apiFetch<VerifyClaimResult>(`/verify/${claimHash}`, {
-      cache: "no-store",
-    });
+    const row = await apiFetch<VerifyPayloadV7 | VerifyClaimResult>(
+      `/verify/${claimHash}`,
+      {
+        cache: "no-store",
+      }
+    );
+
+    return normalizeVerifyPayload(row);
   },
 
   getClaimIntegrity: async (claimSchemaId: number): Promise<ClaimIntegrityResult> => {
