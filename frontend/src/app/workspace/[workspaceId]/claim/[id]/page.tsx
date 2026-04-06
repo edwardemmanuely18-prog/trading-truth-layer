@@ -53,6 +53,87 @@ function normalizeText(value?: string | null) {
   return String(value || "").toLowerCase().trim();
 }
 
+function resolveCanonicalLineage(row: {
+  root_claim_id?: number | null;
+  parent_claim_id?: number | null;
+  version_number?: number | null;
+}) {
+  const rootClaimId =
+    typeof row?.root_claim_id === "number" ? row.root_claim_id : null;
+
+  const parentClaimId =
+    typeof row?.parent_claim_id === "number" ? row.parent_claim_id : null;
+
+  const versionNumber =
+    typeof row?.version_number === "number" ? row.version_number : 1;
+
+  return {
+    rootClaimId,
+    parentClaimId,
+    versionNumber,
+  };
+}
+
+function resolveClaimOriginType(row: {
+  root_claim_id?: number | null;
+  parent_claim_id?: number | null;
+  version_number?: number | null;
+}) {
+  const lineage = resolveCanonicalLineage(row);
+
+  if (lineage.versionNumber > 1) return "versioned";
+  if (lineage.parentClaimId || lineage.rootClaimId) return "derived";
+  return "independent";
+}
+
+function resolveNetworkLabel(row: {
+  root_claim_id?: number | null;
+  parent_claim_id?: number | null;
+  version_number?: number | null;
+}) {
+  const type = resolveClaimOriginType(row);
+
+  if (type === "versioned") return "Versioned Claim";
+  if (type === "derived") return "Derived Claim";
+  return "Independent Claim";
+}
+
+function networkTone(row: {
+  root_claim_id?: number | null;
+  parent_claim_id?: number | null;
+  version_number?: number | null;
+}) {
+  const type = resolveClaimOriginType(row);
+
+  if (type === "independent") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  }
+
+  if (type === "derived") {
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  }
+
+  return "border-sky-200 bg-sky-50 text-sky-800";
+}
+
+function buildLineageSummary(row: {
+  root_claim_id?: number | null;
+  parent_claim_id?: number | null;
+  version_number?: number | null;
+}) {
+  const lineage = resolveCanonicalLineage(row);
+
+  return {
+    root: lineage.rootClaimId ? `claim#${lineage.rootClaimId}` : "self",
+    parent: lineage.parentClaimId ? `claim#${lineage.parentClaimId}` : "none",
+    version: String(lineage.versionNumber),
+  };
+}
+
+function resolveIssuerName(claim: ClaimSchema, workspaceId: number) {
+  return `workspace#${workspaceId}`;
+}
+
 function emptyTradeEvidence(claimId: number): ClaimTradeEvidence {
   return {
     claim_schema_id: claimId,
@@ -312,8 +393,9 @@ function VersionCard({
         <div>
           <div className="font-medium">{version.name}</div>
           <div className="mt-1 text-xs text-slate-500">
-            version {version.version_number} · root {version.root_claim_id ?? "—"} · parent{" "}
-            {version.parent_claim_id ?? "—"}
+            version {version.version_number} · root{" "}
+            {version.root_claim_id ? `claim#${version.root_claim_id}` : "self"} · parent{" "}
+            {version.parent_claim_id ? `claim#${version.parent_claim_id}` : "none"}
           </div>
         </div>
 
@@ -384,6 +466,9 @@ function GovernanceOverview({
 }) {
   const latestEvent = auditEvents[0] ?? null;
   const lineageDepth = versions.length;
+  const lineageSummary = buildLineageSummary(claim);
+  const networkLabel = resolveNetworkLabel(claim);
+  const networkClassName = networkTone(claim);
   const integrityState = integrity
     ? integrity.integrity_status === "valid" && integrity.hash_match
       ? "Confirmed"
@@ -407,6 +492,10 @@ function GovernanceOverview({
         </span>
       </div>
 
+      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${networkClassName}`}>
+        network: {normalizeText(resolveClaimOriginType(claim))}
+      </span>
+
       <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="text-xs uppercase tracking-wide text-slate-500">Lifecycle state</div>
@@ -417,14 +506,31 @@ function GovernanceOverview({
           <div className="mt-1 text-lg font-semibold text-slate-900">{integrityState}</div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Lineage depth</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">{lineageDepth}</div>
+          <div className="text-xs uppercase tracking-wide text-slate-500">Network State</div>
+          <div className="mt-1 text-lg font-semibold text-slate-900">{networkLabel}</div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="text-xs uppercase tracking-wide text-slate-500">Latest audit event</div>
           <div className="mt-1 text-lg font-semibold text-slate-900">
             {latestEvent?.event_type || "—"}
           </div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Root</div>
+          <div className="mt-1 text-base font-semibold text-slate-900">{lineageSummary.root}</div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Parent</div>
+          <div className="mt-1 text-base font-semibold text-slate-900">{lineageSummary.parent}</div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Version</div>
+          <div className="mt-1 text-base font-semibold text-slate-900">{lineageSummary.version}</div>
         </div>
       </div>
 
@@ -1036,6 +1142,14 @@ export default function WorkspaceClaimDetailPage() {
     );
   }
 
+  const lineageSummary = claim ? buildLineageSummary(claim) : null;
+  const networkType = claim ? resolveClaimOriginType(claim) : null;
+  const networkLabel = claim ? resolveNetworkLabel(claim) : null;
+  const networkClassName = claim
+    ? networkTone(claim)
+    : "border-slate-200 bg-slate-50 text-slate-700";
+  const issuerName = claim ? resolveIssuerName(claim, workspaceId) : "workspace";
+
   if (!claim || !preview) {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -1127,9 +1241,51 @@ export default function WorkspaceClaimDetailPage() {
             </div>
           ) : null}
 
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="text-xs uppercase tracking-wide text-slate-500">
+              Trust Network Context · Phase 8
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${networkClassName}`}>
+                network: {networkType}
+              </span>
+              <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                issuer: {issuerName}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-5 text-sm text-slate-700">
+              <div>
+                <div className="text-slate-500">Network State</div>
+                <div className="font-medium text-slate-900">{networkLabel}</div>
+              </div>
+
+              <div>
+                <div className="text-slate-500">Issuer</div>
+                <div className="font-medium text-slate-900">{issuerName}</div>
+              </div>
+
+              <div>
+                <div className="text-slate-500">Root</div>
+                <div className="font-medium text-slate-900">{lineageSummary?.root ?? "—"}</div>
+              </div>
+
+              <div>
+                <div className="text-slate-500">Parent</div>
+                <div className="font-medium text-slate-900">{lineageSummary?.parent ?? "—"}</div>
+              </div>
+
+              <div>
+                <div className="text-slate-500">Version</div>
+                <div className="font-medium text-slate-900">{lineageSummary?.version ?? "—"}</div>
+              </div>
+            </div>
+          </div>
+
           <div className="mt-6 grid gap-4 lg:grid-cols-[1.5fr_1fr_1fr]">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <div className="text-sm text-slate-500">Claim fingerprint</div>
+              <div className="text-sm text-slate-500">Claim fingerprint · canonical identity</div>
               <div className="mt-2 font-mono text-sm text-slate-800">
                 {truncateMiddle(claim.claim_hash || preview.claim_hash || "—")}
               </div>
@@ -1147,7 +1303,7 @@ export default function WorkspaceClaimDetailPage() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <div className="text-sm text-slate-500">Exposure state</div>
+              <div className="text-sm text-slate-500">Exposure state · distribution posture</div>
               <div className="mt-2 text-lg font-semibold text-slate-900">
                 {claim.visibility === "private"
                   ? "Internal only"
@@ -1165,7 +1321,7 @@ export default function WorkspaceClaimDetailPage() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <div className="text-sm text-slate-500">Trust state</div>
+              <div className="text-sm text-slate-500">Trust state · internal confidence</div>
               <div className="mt-2 text-lg font-semibold text-slate-900">
                 {integrity?.integrity_status === "valid"
                   ? "Integrity confirmed"
@@ -1418,11 +1574,13 @@ export default function WorkspaceClaimDetailPage() {
 
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <DetailRow label="Status" value={claim.status} />
-                <DetailRow label="Version Number" value={claim.version_number ?? "—"} />
+                <DetailRow label="Network State" value={networkLabel ?? "—"} />
                 <DetailRow label="Verified At" value={formatDateTime(claim.verified_at)} />
                 <DetailRow label="Published At" value={formatDateTime(claim.published_at)} />
                 <DetailRow label="Locked At" value={formatDateTime(claim.locked_at)} />
-                <DetailRow label="Parent Claim" value={claim.parent_claim_id ?? "—"} />
+                <DetailRow label="Root Claim" value={lineageSummary?.root ?? "—"} />
+                <DetailRow label="Parent Claim" value={lineageSummary?.parent ?? "—"} />
+                <DetailRow label="Version Number" value={lineageSummary?.version ?? "—"} />
               </div>
 
               {integrity ? (
@@ -1504,17 +1662,28 @@ export default function WorkspaceClaimDetailPage() {
 
           <div className="space-y-6">
             <div className="rounded-2xl border bg-white p-5 shadow-sm">
-              <h2 className="text-xl font-semibold">Lineage</h2>
+              <h2 className="text-xl font-semibold">Lineage & Claim Graph</h2>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${networkClassName}`}>
+                  {networkLabel}
+                </span>
+                <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+                  issuer: {issuerName}
+                </span>
+              </div>
+
               <div className="mt-4 space-y-3 text-sm">
                 <DetailRow label="Claim ID" value={claim.id} />
-                <DetailRow label="Root Claim ID" value={claim.root_claim_id ?? "—"} />
-                <DetailRow label="Parent Claim ID" value={claim.parent_claim_id ?? "—"} />
-                <DetailRow label="Version Number" value={claim.version_number ?? "—"} />
+                <DetailRow label="Root Claim" value={lineageSummary?.root ?? "—"} />
+                <DetailRow label="Parent Claim" value={lineageSummary?.parent ?? "—"} />
+                <DetailRow label="Version Number" value={lineageSummary?.version ?? "—"} />
               </div>
 
               <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                This claim participates in a governed lineage. New versions preserve history instead
-                of silently overwriting the prior record.
+                This claim participates in a governed claim graph. New versions preserve historical
+                states, support defensible public verification, and prevent silent mutation of prior
+                evidence-bearing records.
               </div>
 
               <div className="mt-4 grid gap-3">
@@ -1585,26 +1754,26 @@ export default function WorkspaceClaimDetailPage() {
               <h2 className="text-xl font-semibold">Governance Guidance</h2>
               <div className="mt-4 space-y-4 text-sm text-slate-700">
                 <div className="rounded-xl bg-slate-50 p-4">
-                  <div className="font-medium">Version before changing meaning</div>
+                  <div className="font-medium">Version before changing claim meaning</div>
                   <div className="mt-1 text-slate-600">
-                    Create a new governed version when scope, methodology, or exclusion logic
-                    changes.
+                    Create a new governed version whenever scope, methodology, exclusions, or trust
+                    posture changes. Preserve the prior claim node instead of mutating history.
                   </div>
                 </div>
 
                 <div className="rounded-xl bg-slate-50 p-4">
                   <div className="font-medium">Audit before exposure</div>
                   <div className="mt-1 text-slate-600">
-                    Review the audit timeline before public distribution to confirm the record tells
-                    a defensible story.
+                    Review audit events, lineage position, and integrity posture before routing a
+                    claim into public or unlisted verification surfaces.
                   </div>
                 </div>
 
                 <div className="rounded-xl bg-slate-50 p-4">
-                  <div className="font-medium">Lock only after final review</div>
+                  <div className="font-medium">Lock only after final trust review</div>
                   <div className="mt-1 text-slate-600">
-                    Locking should be treated as finalization of the trust surface and associated
-                    evidence fingerprint.
+                    Locking finalizes the claim as a trust-bearing node in the network. Treat it as
+                    the point where external verification and dispute readiness become durable.
                   </div>
                 </div>
               </div>
@@ -1631,8 +1800,8 @@ export default function WorkspaceClaimDetailPage() {
             </div>
 
             <GovernanceCard
-              title="Governance principle"
-              body="A trustworthy claim is not just a metric summary. It is a lifecycle-governed record with preserved versions, visible audit events, explainable scope, and verifiable integrity."
+              title="Trust network principle"
+              body="A trustworthy claim is not only a metric summary. It is a governed network node with preserved lineage, visible audit events, explainable scope, controlled exposure, and verifiable integrity."
             />
           </div>
         </div>
