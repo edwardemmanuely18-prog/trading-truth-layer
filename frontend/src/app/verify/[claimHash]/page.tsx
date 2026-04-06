@@ -581,10 +581,10 @@ export default function PublicVerifyClaimPage() {
             integrityOk ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
           }`}
         >
-          <div className="text-sm text-slate-500">Verification Result</div>
+          <div className="text-sm text-slate-500">Verification Result · Cryptographic Integrity Check</div>
 
           <div className="mt-2 text-xl font-semibold">
-            {integrityOk ? "Verified Record — Integrity Confirmed" : "Verification Failed — Integrity Mismatch"}
+            {integrityOk ? "Verified Record — Cryptographic Integrity Confirmed" : "Verification Failed — Cryptographic Mismatch Detected"}
           </div>
 
           <div className="mt-2 text-sm text-slate-600 max-w-2xl">
@@ -596,7 +596,9 @@ export default function PublicVerifyClaimPage() {
         <div className="mb-8 rounded-3xl border border-green-200 bg-green-50 p-6 shadow-sm">
           <div className="grid gap-6 xl:grid-cols-[1.4fr_0.6fr]">
             <div>
-              <div className="text-sm font-medium text-green-700">Trust Summary</div>
+              <div className="text-sm font-medium text-green-700">
+                Trust Summary · Canonical Verification Layer
+              </div>
               <h2 className="mt-2 text-3xl font-semibold text-green-950">{verifiedResult.name}</h2>
 
               <div className="mt-4 flex flex-wrap gap-2">
@@ -604,7 +606,7 @@ export default function PublicVerifyClaimPage() {
                 <IntegrityBadge integrityStatus={verifiedResult.integrity_status} />
                 <VisibilityBadge visibility={scope.visibility || "—"} />
                 <span className="inline-flex rounded-full border border-green-200 bg-white px-3 py-1 text-sm font-medium text-green-800">
-                  trust state: {trustState}
+                  trust state: {trustState} · Verification-grade record
                 </span>
               </div>
 
@@ -635,6 +637,8 @@ export default function PublicVerifyClaimPage() {
                   </div>
                 </div>
 
+
+
                 <div className="rounded-2xl border border-green-200 bg-white p-4">
                   <div className="text-xs uppercase tracking-wide text-slate-500">Public view path</div>
                   <div className="mt-2 rounded-xl bg-slate-50 p-3 font-mono text-xs break-all text-slate-700">
@@ -664,7 +668,9 @@ export default function PublicVerifyClaimPage() {
                 />
               </div>
               <div className="mt-4 text-sm leading-6 text-slate-600">
-                Scan this code to open the canonical verification route for this claim.
+                Scan this code to open the canonical verification route.
+                This enables independent validation of identity, lifecycle state,
+                and trade-set fingerprint integrity.
               </div>
 
               <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm">
@@ -675,6 +681,19 @@ export default function PublicVerifyClaimPage() {
                 <div className="mt-2 text-slate-500">{shortHash(verifiedResult.claim_hash)}</div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="text-sm font-semibold text-slate-900">
+            Intended Trust Consumers
+          </div>
+
+          <div className="mt-3 grid gap-2 text-sm text-slate-600">
+            <div>• Trading communities and evaluation programs</div>
+            <div>• Investors and capital allocators</div>
+            <div>• Prop firms and verification platforms</div>
+            <div>• Dispute resolution and audit workflows</div>
           </div>
         </div>
 
@@ -939,7 +958,7 @@ export default function PublicVerifyClaimPage() {
         </div>
 
         <div className="text-center text-xs text-slate-400">
-          Verified by Trading Truth Layer — Trust Infrastructure for Trading Claims
+          Trading Truth Layer — Canonical verification infrastructure for trading claims
         </div>
       </main>
     </div>
