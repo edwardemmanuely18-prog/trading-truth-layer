@@ -9,6 +9,15 @@ type Props = {
   tradeSetHash?: string | null;
   verifiedAt?: string | null;
   lockedAt?: string | null;
+
+  // Phase 7 additions
+  issuerName?: string | null;
+  issuerNetwork?: string | null;
+  exposureLevel?: string | null;
+  portable?: boolean;
+  canonical?: boolean;
+  apiAddressable?: boolean;
+
   compact?: boolean;
 };
 
@@ -129,6 +138,12 @@ export default function ClaimVerificationSignature({
   tradeSetHash,
   verifiedAt,
   lockedAt,
+  issuerName,
+  issuerNetwork,
+  exposureLevel,
+  portable = false,
+  canonical = false,
+  apiAddressable = false,
   compact = false,
 }: Props) {
   const normalizedStatus = normalize(status);
@@ -244,6 +259,12 @@ export default function ClaimVerificationSignature({
           </div>
         </div>
 
+        {exposureLevel ? (
+          <div className="mt-3 text-xs">
+            exposure: <span className="font-semibold">{exposureLevel}</span>
+          </div>
+        ) : null}
+
         <div className="mt-4 rounded-xl bg-white/70 p-3 text-xs leading-5 opacity-85">
           <span className="font-semibold">Trust state:</span> {signature.trustState}
         </div>
@@ -293,6 +314,18 @@ export default function ClaimVerificationSignature({
           label="locked at"
           value={lockedAt ? "available" : "missing"}
         />
+
+        {issuerName ? (
+          <SignatureMetaPill label="issuer" value={issuerName} />
+        ) : null}
+
+        {issuerNetwork ? (
+          <SignatureMetaPill label="network" value={issuerNetwork} />
+        ) : null}
+
+        {exposureLevel ? (
+          <SignatureMetaPill label="exposure" value={exposureLevel} />
+        ) : null}
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -311,6 +344,39 @@ export default function ClaimVerificationSignature({
           copyLabel="Copy Trade Set Hash"
           helper="Fingerprint of the in-scope trade evidence used by this record. Integrity checks compare the current trade set against this stored value."
         />
+
+        <div className="mt-6 rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+          <div className="text-sm font-medium text-indigo-700">
+            Portable Verification Capabilities
+          </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-3 text-xs">
+            <div>
+              canonical:{" "}
+              <span className="font-semibold">
+                {canonical ? "true" : "false"}
+              </span>
+            </div>
+
+            <div>
+              portable:{" "}
+              <span className="font-semibold">
+                {portable ? "true" : "false"}
+              </span>
+            </div>
+
+            <div>
+              api-addressable:{" "}
+              <span className="font-semibold">
+                {apiAddressable ? "true" : "false"}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-2 text-xs text-indigo-700/80">
+            This record can be distributed, verified externally, and consumed by automated systems.
+          </div>
+        </div>
 
         <div className="rounded-2xl bg-white/70 p-4">
           <div className="text-sm opacity-70">Verified At</div>
