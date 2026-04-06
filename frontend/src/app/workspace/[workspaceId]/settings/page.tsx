@@ -1788,6 +1788,64 @@ export default function WorkspaceSettingsPage() {
                     Recommended next step: {platformReadiness.recommended_next_step}
                   </div>
                 ) : null}
+                {/* PHASE 6.4 — Integration Action Surface */}
+                <div className="mt-6 space-y-4">
+
+                  {/* Broker Integration CTA */}
+                  {!platformReadiness?.capabilities.broker_import_enabled && (
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="text-sm font-semibold text-slate-900">
+                        Connect Broker
+                      </div>
+                      <div className="mt-1 text-sm text-slate-600">
+                        Enable direct trade ingestion from broker accounts to power external verification pipelines.
+                      </div>
+                      <button
+                        type="button"
+                        className="mt-3 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+                      >
+                        Connect Broker (coming soon)
+                      </button>
+                    </div>
+                  )}
+
+                  {/* API Access CTA */}
+                  {!platformReadiness?.capabilities.api_access_enabled && (
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="text-sm font-semibold text-slate-900">
+                        Enable API Access
+                      </div>
+                      <div className="mt-1 text-sm text-slate-600">
+                        Activate API endpoints for external systems, institutional pipelines, and automated verification flows.
+                      </div>
+                      <button
+                        type="button"
+                        className="mt-3 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+                      >
+                        Enable API (coming soon)
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Webhook CTA */}
+                  {!platformReadiness?.capabilities.webhook_ingestion_enabled && (
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="text-sm font-semibold text-slate-900">
+                        Enable Webhook Ingestion
+                      </div>
+                      <div className="mt-1 text-sm text-slate-600">
+                        Allow external systems to push trade or verification data into this workspace.
+                      </div>
+                      <button
+                        type="button"
+                        className="mt-3 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+                      >
+                        Configure Webhooks (coming soon)
+                      </button>
+                    </div>
+                  )}
+
+                </div>
               </div>
 
               <div className="space-y-6">
