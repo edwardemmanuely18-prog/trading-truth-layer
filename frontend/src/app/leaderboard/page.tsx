@@ -104,49 +104,25 @@ function inferClaimNetworkContext(
   claim: PublicClaimDirectoryItem,
   trustScore: number
 ): ClaimNetworkContext {
-  const scope = safeScope(claim);
-
-  const methodology = normalizeText(scope.methodology_notes);
-  const claimName = normalizeText(claim.name);
-  const combined = `${methodology} ${claimName}`;
-
-  const parentHints = [
-    "derived from",
-    "based on",
-    "from claim",
-    "parent claim",
-    "child claim",
-    "forked from",
-    "sourced from",
-  ];
-
-  const versionHints = [
-    "version",
-    "v2",
-    "v3",
-    "v4",
-    "revision",
-    "rev ",
-    "updated claim",
-    "amended",
-  ];
-
-  const looksDerived = parentHints.some((hint) => combined.includes(hint));
-  const looksVersioned = versionHints.some((hint) => combined.includes(hint));
+  const lineage = claim.lineage;
+  const versionNumber = Number(lineage?.version_number ?? 1);
+  const hasParent = typeof lineage?.parent_claim_id === "number" && lineage.parent_claim_id > 0;
+  const hasRoot = typeof lineage?.root_claim_id === "number" && lineage.root_claim_id > 0;
 
   let claim_origin_type: ClaimOriginType = "independent";
-  if (looksVersioned) {
+
+  if (versionNumber > 1) {
     claim_origin_type = "versioned";
-  } else if (looksDerived) {
+  } else if (hasParent || hasRoot) {
     claim_origin_type = "derived";
   }
 
-  const root_claim_hash = claim.claim_hash || null;
-  const parent_claim_hash = looksDerived || looksVersioned ? claim.claim_hash || null : null;
+  const root_claim_hash = hasRoot ? `claim#${lineage?.root_claim_id}` : null;
+  const parent_claim_hash = hasParent ? `claim#${lineage?.parent_claim_id}` : null;
 
   const versionDepth =
     claim_origin_type === "versioned"
-      ? 2
+      ? Math.max(versionNumber - 1, 1)
       : claim_origin_type === "derived"
         ? 1
         : 0;
@@ -166,7 +142,9 @@ function inferClaimNetworkContext(
         : 0.96;
 
   const version_decay =
-    claim_origin_type === "versioned" ? Math.max(0.88, 1 - versionDepth * 0.03) : 1;
+    claim_origin_type === "versioned"
+      ? Math.max(0.82, 1 - versionDepth * 0.03)
+      : 1;
 
   const networkScoreRaw =
     trustScore * independence_weight * lineage_penalty * version_decay;
@@ -924,12 +902,8 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                             <NetworkOriginBadge type={row.claim_origin_type} />
                             <div className="text-[11px] leading-5 text-slate-500">
                               <div>depth: {row.version_depth}</div>
-                              <div>
-                                root:{" "}
-                                {row.root_claim_hash
-                                  ? `${row.root_claim_hash.slice(0, 10)}...${row.root_claim_hash.slice(-6)}`
-                                  : "self"}
-                              </div>
+                              <div>root: {row.root_claim_hash ?? "self"}</div>
+                              <div>parent: {row.parent_claim_hash ?? "none"}</div>
                             </div>
                           </div>
                         </td>
