@@ -304,6 +304,27 @@ function resolveTrustState(row: any) {
   return "Limited Trust";
 }
 
+function resolveTrustBand(score: number) {
+  if (score >= 85) {
+    return {
+      label: "High Trust",
+      className: "border-green-200 bg-green-100 text-green-800",
+    };
+  }
+
+  if (score >= 60) {
+    return {
+      label: "Moderate Trust",
+      className: "border-amber-200 bg-amber-100 text-amber-800",
+    };
+  }
+
+  return {
+    label: "Low Trust",
+    className: "border-red-200 bg-red-100 text-red-800",
+  };
+}
+
 export default function ClaimsPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -452,6 +473,33 @@ export default function ClaimsPageClient() {
 
   const compareLeft = compareReady ? compareCandidates[0] : null;
   const compareRight = compareReady ? compareCandidates[1] : null;
+
+  const compareLeftTrustScore = compareLeft
+    ? computeTrustScore({
+        ...compareLeft,
+        verification_status: resolveStatus(compareLeft),
+        verified_at: resolveVerifiedAt(compareLeft),
+        scope: {
+          ...(compareLeft?.scope || {}),
+          visibility: resolveVisibility(compareLeft),
+        },
+      })
+    : 0;
+
+  const compareRightTrustScore = compareRight
+    ? computeTrustScore({
+        ...compareRight,
+        verification_status: resolveStatus(compareRight),
+        verified_at: resolveVerifiedAt(compareRight),
+        scope: {
+          ...(compareRight?.scope || {}),
+          visibility: resolveVisibility(compareRight),
+        },
+      })
+    : 0;
+
+const compareLeftTrustBand = resolveTrustBand(compareLeftTrustScore);
+const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
 
   function applyFilters() {
     setSearchApplied(searchInput);
@@ -909,10 +957,24 @@ export default function ClaimsPageClient() {
                     <tr>
                       <td className="px-4 py-4 font-medium">Trust Score</td>
                       <td className="px-4 py-4 font-semibold">
-                        {computeTrustScore(compareLeft)}
+                        <div>{compareLeftTrustScore}</div>
+                        <div className="mt-2">
+                          <span
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${compareLeftTrustBand.className}`}
+                          >
+                            {compareLeftTrustBand.label}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-4 py-4 font-semibold">
-                        {computeTrustScore(compareRight)}
+                        <div>{compareRightTrustScore}</div>
+                        <div className="mt-2">
+                          <span
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${compareRightTrustBand.className}`}
+                          >
+                            {compareRightTrustBand.label}
+                          </span>
+                        </div>
                       </td>
                     </tr>
 
@@ -1021,6 +1083,7 @@ export default function ClaimsPageClient() {
                   visibility: resolveVisibility(row),
                 },
               });
+              const trustBand = resolveTrustBand(trustScore);
               const leaderboard = toArray(row?.leaderboard);
               const topEntry = extractTopLeaderboardEntry(row);
               const routeState = getVerificationRouteState(row);
@@ -1170,8 +1233,15 @@ export default function ClaimsPageClient() {
 
                   <div className="rounded-3xl bg-slate-50 p-4">
                     <div className="text-sm text-slate-500">Trust Score</div>
-                    <div className="mt-2 text-[24px] font-bold leading-none text-slate-950">
-                      {trustScore}
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <div className="text-[24px] font-bold leading-none text-slate-950">
+                        {trustScore}
+                      </div>
+                      <span
+                        className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${trustBand.className}`}
+                      >
+                        {trustBand.label}
+                      </span>
                     </div>
                     <div className="mt-2 text-sm text-slate-500">
                       Verification confidence score
