@@ -21,6 +21,16 @@ function startsWithPath(currentPath: string, basePath: string) {
   return current === base || current.startsWith(`${base}/`);
 }
 
+function isPublicTrustPath(currentPath: string) {
+  return (
+    currentPath === "/claims" ||
+    currentPath === "/leaderboard" ||
+    currentPath === "/schema" ||
+    startsWithPath(currentPath, "/claim") ||
+    startsWithPath(currentPath, "/verify")
+  );
+}
+
 export default function Navbar({ workspaceId = 1 }: Props) {
   const pathname = usePathname();
   const [latestClaimId, setLatestClaimId] = useState<number | null>(null);
@@ -68,6 +78,10 @@ export default function Navbar({ workspaceId = 1 }: Props) {
   const currentPath = normalizePath(pathname);
   const base = `/workspace/${workspaceId}`;
 
+  const publicClaimsHref = "/claims";
+  const leaderboardHref = "/leaderboard";
+  const claimBuilderHref = "/schema";
+
   const dashboardHref = `${base}/dashboard`;
   const importHref = `${base}/import`;
   const ledgerHref = `${base}/ledger`;
@@ -79,9 +93,11 @@ export default function Navbar({ workspaceId = 1 }: Props) {
   const membersHref = `${base}/members`;
   const settingsHref = `${base}/settings`;
 
-  const publicClaimsActive = currentPath === "/claims";
+  const publicClaimsActive =
+    currentPath === "/claims" || startsWithPath(currentPath, "/claim");
   const leaderboardActive = currentPath === "/leaderboard";
   const schemaBuilderActive = currentPath === "/schema";
+  const publicTrustActive = isPublicTrustPath(currentPath);
   const dashboardActive = startsWithPath(currentPath, dashboardHref);
   const importActive = startsWithPath(currentPath, importHref);
   const ledgerActive = startsWithPath(currentPath, ledgerHref);
@@ -114,21 +130,21 @@ export default function Navbar({ workspaceId = 1 }: Props) {
 
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-            <span>Public Trust Surfaces</span>
+            <span>Public Trust Layer</span>
             <div className="h-px w-6 bg-slate-200" />
             <span>Workspace Operations</span>
           </div>
 
           <nav className="flex flex-wrap items-center gap-2">
-          <Link href="/claims" className={navClass(publicClaimsActive)}>
-            Public Claims
+          <Link href={publicClaimsHref} className={navClass(publicClaimsActive)}>
+            Public Records
           </Link>
 
-          <Link href="/leaderboard" className={navClass(leaderboardActive)}>
-            Leaderboard
+          <Link href={leaderboardHref} className={navClass(leaderboardActive)}>
+            Trust Leaderboard
           </Link>
 
-          <Link href="/schema" className={navClass(schemaBuilderActive)}>
+          <Link href={claimBuilderHref} className={navClass(schemaBuilderActive)}>
             Claim Builder
           </Link>
 
@@ -155,11 +171,11 @@ export default function Navbar({ workspaceId = 1 }: Props) {
           ) : null}
 
           <Link href={claimsHref} className={navClass(claimsActive)}>
-            Claims
+            Internal Claims
           </Link>
 
           <Link href={evidenceHref} className={navClass(evidenceActive)}>
-            Evidence
+            Evidence Review
           </Link>
 
           {canSeeMembers ? (
@@ -173,6 +189,12 @@ export default function Navbar({ workspaceId = 1 }: Props) {
           </Link>
         </nav>
       </div>
+
+      {publicTrustActive ? (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+          You are viewing a public trust-layer surface designed for verification, distribution, and external review.
+        </div>
+      ) : null}
 
         <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
           <div className="text-sm">
