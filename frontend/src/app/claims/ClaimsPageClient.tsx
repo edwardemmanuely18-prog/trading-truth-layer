@@ -309,6 +309,25 @@ function sortRows(rows: any[], sortBy: string) {
       return weightedB - weightedA || trustB - trustA;
     }
 
+        if (sortBy === "best_network_state") {
+      const networkRank = (row: any) => {
+        const origin = resolveClaimOriginType(row);
+        if (origin === "independent") return 3;
+        if (origin === "versioned") return 2;
+        if (origin === "derived") return 1;
+        return 0;
+      };
+
+      return (
+        networkRank(b) - networkRank(a) ||
+        Number(b?.net_pnl ?? 0) - Number(a?.net_pnl ?? 0)
+      );
+    }
+
+    if (sortBy === "issuer_asc") {
+      return resolveIssuer(a).localeCompare(resolveIssuer(b));
+    }
+
     if (sortBy === "oldest") {
       return Number(a?.claim_schema_id ?? a?.id ?? 0) - Number(b?.claim_schema_id ?? b?.id ?? 0);
     }
@@ -376,39 +395,102 @@ function resolveTrustBand(score: number) {
 }
 
 function resolveLineage(row: any) {
+  const lineage = row?.lineage ?? {};
+
+  const rootClaimId =
+    typeof lineage?.root_claim_id === "number"
+      ? lineage.root_claim_id
+      : typeof row?.root_claim_id === "number"
+        ? row.root_claim_id
+        : null;
+
+  const parentClaimId =
+    typeof lineage?.parent_claim_id === "number"
+      ? lineage.parent_claim_id
+      : typeof row?.parent_claim_id === "number"
+        ? row.parent_claim_id
+        : null;
+
+  const versionNumber =
+    typeof lineage?.version_number === "number"
+      ? lineage.version_number
+      : typeof row?.version_number === "number"
+        ? row.version_number
+        : 1;
+
   return {
-    rootClaimId: row?.root_claim_id ?? null,
-    parentClaimId: row?.parent_claim_id ?? null,
-    versionNumber: row?.version_number ?? null,
+    rootClaimId,
+    parentClaimId,
+    versionNumber,
   };
 }
 
 function resolveNetworkContext(row: any) {
-  const hasParent = Boolean(row?.parent_claim_id);
-  const hasRoot = Boolean(row?.root_claim_id);
-  const version = Number(row?.version_number ?? 1);
+  const lineage = resolveLineage(row);
+  const hasParent = typeof lineage.parentClaimId === "number" && lineage.parentClaimId > 0;
+  const hasRoot = typeof lineage.rootClaimId === "number" && lineage.rootClaimId > 0;
+  const version = Number(lineage.versionNumber ?? 1);
 
-  if (hasRoot && hasParent) {
-    return "Derived · Versioned Claim";
+  if (version > 1 && hasParent) {
+    return "Versioned Derived Claim";
   }
 
-  if (hasRoot && !hasParent && version > 1) {
-    return "Root · Multi-Version Claim";
+  if (version > 1) {
+    return "Versioned Claim";
   }
 
-  if (version === 1 && !hasParent) {
-    return "Independent Claim";
+  if (hasParent || hasRoot) {
+    return "Derived Claim";
   }
 
-  return "Unknown Lineage";
+  return "Independent Claim";
+}
+
+function resolveClaimOriginType(row: any) {
+  const lineage = resolveLineage(row);
+  const hasParent = typeof lineage.parentClaimId === "number" && lineage.parentClaimId > 0;
+  const hasRoot = typeof lineage.rootClaimId === "number" && lineage.rootClaimId > 0;
+  const version = Number(lineage.versionNumber ?? 1);
+
+  if (version > 1) return "versioned";
+  if (hasParent || hasRoot) return "derived";
+  return "independent";
+}
+
+function networkTone(row: any) {
+  const origin = resolveClaimOriginType(row);
+
+  if (origin === "independent") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  }
+
+  if (origin === "derived") {
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  }
+
+  return "border-sky-200 bg-sky-50 text-sky-800";
 }
 
 function resolveIssuer(row: any) {
   return (
+    row?.issuer?.name ||
     row?.issuer_name ||
     row?.workspace_name ||
+    row?.workspace?.name ||
     "Unknown Issuer"
   );
+}
+
+function buildLineageSummary(row: any) {
+  const lineage = resolveLineage(row);
+
+  return {
+    rootLabel:
+      typeof lineage.rootClaimId === "number" ? `claim#${lineage.rootClaimId}` : "self",
+    parentLabel:
+      typeof lineage.parentClaimId === "number" ? `claim#${lineage.parentClaimId}` : "none",
+    versionLabel: String(lineage.versionNumber ?? 1),
+  };
 }
 
 export default function ClaimsPageClient() {
@@ -532,6 +614,14 @@ export default function ClaimsPageClient() {
       next = next.filter((row) => resolveVisibility(row) === "public");
     }
 
+    if (quickFilter === "independent only") {
+      next = next.filter((row) => resolveClaimOriginType(row) === "independent");
+    } else if (quickFilter === "versioned only") {
+      next = next.filter((row) => resolveClaimOriginType(row) === "versioned");
+    } else if (quickFilter === "derived only") {
+      next = next.filter((row) => resolveClaimOriginType(row) === "derived");
+    }
+
     const effectiveSort =
       quickFilter === "best net pnl"
         ? "best_net_pnl"
@@ -543,7 +633,11 @@ export default function ClaimsPageClient() {
               ? "best_trust_score"
               : quickFilter === "trust weighted pnl"
                 ? "best_trust_weighted_pnl"
-                : sortApplied;
+                : quickFilter === "best network state"
+                  ? "best_network_state"
+                  : quickFilter === "issuer a-z"
+                    ? "issuer_asc"
+                    : sortApplied;
 
     return sortRows(next, effectiveSort);
   }, [rows, searchApplied, statusApplied, visibilityApplied, sortApplied, quickFilter]);
@@ -730,6 +824,8 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                 <option value="best_win_rate">Best Win Rate</option>
                 <option value="best_trust_score">Best Trust Score</option>
                 <option value="best_trust_weighted_pnl">Trust-Weighted PnL</option>
+                <option value="best_network_state">Best Network State</option>
+                <option value="issuer_asc">Issuer A → Z</option>
               </select>
             </div>
 
@@ -793,6 +889,11 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
               { key: "best win rate", label: "Best Win Rate" },
               { key: "best trust score", label: "Best Trust Score" },
               { key: "trust weighted pnl", label: "Trust-Weighted PnL" },
+              { key: "best network state", label: "Best Network State" },
+              { key: "issuer a-z", label: "Issuer A → Z" },
+              { key: "independent only", label: "Independent Only" },
+              { key: "derived only", label: "Derived Only" },
+              { key: "versioned only", label: "Versioned Only" },
               { key: "locked only", label: "Locked Only" },
               { key: "public only", label: "Public Only" },
             ].map((item) => {
@@ -859,7 +960,6 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
               One claim selected. Choose one more to activate the comparison surface.
             </div>
           ) : null}
-          </section>
 
           {compareReady && compareLeft && compareRight ? (
             <div className="mt-6 space-y-5">
@@ -879,6 +979,7 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                   const compareIntegrity =
                     normalize(row?.integrity_status) ||
                     (compareStatus === "locked" ? "valid" : "unknown");
+                  const lineageSummary = buildLineageSummary(row);
 
                   return (
                     <div
@@ -894,7 +995,9 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                       </div>
 
                       <div className="mt-2 text-xs text-slate-500">
-                        {resolveNetworkContext(row)} · Issuer: {resolveIssuer(row)}
+                        {resolveNetworkContext(row)} · Issuer: {resolveIssuer(row)} · Root:{" "}
+                        {lineageSummary.rootLabel} · Parent: {lineageSummary.parentLabel} · Version:{" "}
+                        {lineageSummary.versionLabel}
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-2">
@@ -1147,6 +1250,7 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
               </div>
             </div>
           ) : null}
+          </section>
 
           <section className="mt-8 rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm">
             <div className="text-sm text-slate-500">Trust Distribution Context</div>
@@ -1229,6 +1333,8 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
               const resolvedMethodologyNotes = resolveMethodologyNotes(row);
               const compareHash = String(row?.claim_hash ?? "").trim();
               const compareSelected = selectedCompareHashes.includes(compareHash);
+              const lineageSummary = buildLineageSummary(row);
+              const networkOrigin = resolveClaimOriginType(row);
 
               return (
                 <section
@@ -1265,13 +1371,21 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                       </p>
                     </div>
 
-                    {/* Phase 8 — Trust Network Context */}
                     <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                       <div className="text-xs uppercase tracking-wide text-slate-500">
                         Trust Network Context
                       </div>
 
-                      <div className="mt-3 grid gap-3 md:grid-cols-3 text-sm text-slate-700">
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Pill className={networkTone(row)}>
+                          network: {networkOrigin}
+                        </Pill>
+                        <Pill className="border-slate-200 bg-white text-slate-700">
+                          issuer: {resolveIssuer(row)}
+                        </Pill>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5 text-sm text-slate-700">
                         <div>
                           <div className="text-slate-500">Issuer</div>
                           <div className="font-medium text-slate-900">
@@ -1287,9 +1401,23 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                         </div>
 
                         <div>
+                          <div className="text-slate-500">Root</div>
+                          <div className="font-medium text-slate-900">
+                            {lineageSummary.rootLabel}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-slate-500">Parent</div>
+                          <div className="font-medium text-slate-900">
+                            {lineageSummary.parentLabel}
+                          </div>
+                        </div>
+
+                        <div>
                           <div className="text-slate-500">Version</div>
                           <div className="font-medium text-slate-900">
-                            {safeString(row?.version_number, "1")}
+                            {lineageSummary.versionLabel}
                           </div>
                         </div>
                       </div>
@@ -1523,15 +1651,19 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                     <div className="text-sm text-slate-500">Lineage</div>
 
                     <div className="mt-2 text-sm text-slate-800">
-                      Root: {safeString(row?.root_claim_id, "—")}
+                      Root: {lineageSummary.rootLabel}
                     </div>
 
                     <div className="mt-1 text-sm text-slate-800">
-                      Parent: {safeString(row?.parent_claim_id, "—")}
+                      Parent: {lineageSummary.parentLabel}
                     </div>
 
                     <div className="mt-1 text-sm text-slate-800">
-                      Version: {safeString(row?.version_number, "1")}
+                      Version: {lineageSummary.versionLabel}
+                    </div>
+
+                    <div className="mt-3 text-sm text-slate-500">
+                      Canonical lineage derived from public claim lineage metadata.
                     </div>
                   </div>
 
