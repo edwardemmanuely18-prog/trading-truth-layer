@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Navbar from "../../components/Navbar";
 import {
   api,
@@ -68,6 +68,24 @@ function parsePositiveInt(value?: string) {
   const num = Number(value);
   if (!Number.isFinite(num) || num < 0) return 0;
   return Math.floor(num);
+}
+
+async function copyToClipboard(value: string) {
+  if (typeof window === "undefined") {
+    throw new Error("Clipboard is not available in this environment.");
+  }
+
+  const nav = window.navigator;
+  if (!nav?.clipboard?.writeText) {
+    throw new Error("Clipboard is not available in this browser.");
+  }
+
+  await nav.clipboard.writeText(value);
+}
+
+function buildQrImageUrl(value: string) {
+  const encoded = encodeURIComponent(value);
+  return `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encoded}`;
 }
 
 function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
@@ -333,6 +351,38 @@ function TrustBadge({
   );
 }
 
+function CopyButton({
+  value,
+  label,
+}: {
+  value?: string | null;
+  label: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    if (!value) return;
+    try {
+      await copyToClipboard(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setCopied(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void handleCopy()}
+      disabled={!value}
+      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {copied ? "Copied" : label}
+    </button>
+  );
+}
+
 function resolveTrustBand(score: number) {
   if (score >= 85) {
     return {
@@ -438,9 +488,10 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
         <div className="mb-8">
           <div className="text-sm text-slate-500">Trading Truth Layer · Public Leaderboard</div>
           <h1 className="mt-2 text-4xl font-bold">Leaderboard</h1>
-          <p className="mt-3 max-w-3xl text-slate-600">
-            Public ranking surface for locked public claims, with sortable metrics and claim-level
-            performance comparison across the trust registry.
+          <p className="mt-3 max-w-4xl text-slate-600">
+            Public ranking surface for locked public claims, combining performance metrics,
+            trust posture, and verification-ready record access for distribution across
+            trading communities, investor review, and audit-oriented workflows.
           </p>
         </div>
 
@@ -591,9 +642,30 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
         </div>
 
         <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
+          <div className="text-sm text-slate-500">Trust Distribution Context</div>
+          <h2 className="mt-2 text-2xl font-semibold text-slate-950">Intended Trust Consumers</h2>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4 text-sm text-slate-600">
+            <div className="rounded-2xl bg-slate-50 p-4">
+              Trading communities and educator-led evaluation programs
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-4">
+              Investors and capital allocators reviewing verifiable records
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-4">
+              Prop firms and verification platforms requiring canonical proof
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-4">
+              Audit, dispute, and challenge-review workflows
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-semibold">Claim Rankings</h2>
-          <div className="mt-2 text-sm text-slate-500">
-            Ranked by {rankingLabel}. Only locked and public claims are included.
+          <div className="mt-2 max-w-3xl text-sm text-slate-500">
+            Ranked by {rankingLabel}. Only locked and public claims are included so that
+            leaderboard positions remain tied to canonical public records with verification-grade distribution paths.
           </div>
 
           {claimRows.length === 0 ? (
@@ -615,12 +687,25 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                     <th className="px-3 py-3">Trust</th>
                     <th className="px-3 py-3">Score</th>
                     <th className="px-3 py-3">Locked At</th>
+                    <th className="px-3 py-3">Distribution</th>
                     <th className="px-3 py-3">Verification</th>
                   </tr>
                 </thead>
                 <tbody>
                   {claimRows.map((row, index) => {
                     const trustBand = resolveTrustBand(row.trust_score);
+
+                    const verificationUrl =
+                      typeof window !== "undefined"
+                        ? `${window.location.origin}/verify/${row.claim_hash}`
+                        : `/verify/${row.claim_hash}`;
+
+                    const publicViewUrl =
+                      typeof window !== "undefined"
+                        ? `${window.location.origin}/claim/${row.claim_schema_id}/public`
+                        : `/claim/${row.claim_schema_id}/public`;
+
+                    const qrImageUrl = buildQrImageUrl(verificationUrl);
 
                     return (
                     <tr
@@ -692,19 +777,36 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                       </td>
 
                       <td className="px-3 py-3">
+                        <div className="flex flex-col gap-3">
+                          <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2">
+                            <img
+                              src={qrImageUrl}
+                              alt="QR code for verification link"
+                              className="mx-auto h-auto w-full max-w-[90px]"
+                            />
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <CopyButton value={verificationUrl} label="Copy Verify Link" />
+                            <CopyButton value={publicViewUrl} label="Copy Public Link" />
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-3 py-3">
                         <div className="flex flex-wrap gap-2">
                           <Link
                             href={`/verify/${row.claim_hash}`}
                             className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
                           >
-                            Verify
+                            Open Canonical Verification
                           </Link>
 
                           <Link
                             href={`/claim/${row.claim_schema_id}/public`}
                             className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
                           >
-                            View
+                            Open Public Record
                           </Link>
                         </div>
                       </td>
