@@ -99,9 +99,11 @@ export type VerifyPayloadV7 = {
   payload_version: string;
 
   issuer: {
+    id?: number;
     name: string;
+    type?: string;
     network: string;
-    endpoint_kind: string;
+    endpoint_kind?: string;
   };
 
   network_identity: {
@@ -543,6 +545,7 @@ export type ClaimSchemaPreview = {
     win_rate: number;
     profit_factor: number;
   }[];
+  issuer?: ClaimIssuer;
   scope: {
     period_start: string;
     period_end: string;
@@ -733,6 +736,7 @@ export type PublicClaim = {
     win_rate: number;
     profit_factor: number;
   }[];
+  issuer?: ClaimIssuer;
   scope: {
     period_start: string;
     period_end: string;
@@ -777,6 +781,7 @@ export type PublicVerifyResult = {
     win_rate: number;
     profit_factor: number;
   }[];
+  issuer?: ClaimIssuer;
   scope: {
     period_start: string;
     period_end: string;
@@ -826,6 +831,13 @@ export type VerificationExposureLevel =
   | "unlisted"
   | "public"
   | "external_distribution";
+
+export type ClaimIssuer = {
+  id: number;
+  name: string;
+  type: string;
+  network: string;
+};
 
 export type ExternalVerificationIdentity = {
   claim_hash: string;
@@ -1090,6 +1102,19 @@ function ensureClaimLineage(row?: {
   };
 }
 
+function ensureClaimIssuer(
+  row?: Partial<ClaimIssuer> | null
+): ClaimIssuer | undefined {
+  if (!row) return undefined;
+
+  return {
+    id: Number(row.id ?? 0),
+    name: String(row.name ?? ""),
+    type: String(row.type ?? "workspace"),
+    network: String(row.network ?? "internal"),
+  };
+}
+
 function ensureWorkspacePlanDetail(
   row?: Partial<WorkspacePlanDetail> | null
 ): WorkspacePlanDetail | undefined {
@@ -1183,6 +1208,7 @@ function ensurePublicClaim(row: PublicClaimDirectoryItem): PublicClaimDirectoryI
       locked_at: null,
       locked_trade_set_hash: null,
     },
+    issuer: ensureClaimIssuer(row.issuer),
     lineage: ensureClaimLineage(row.lineage),
     trade_set_hash: row.trade_set_hash ?? "—",
   };
@@ -1488,6 +1514,7 @@ function ensureExternalVerificationRecord(
         published_at: null,
         locked_at: null,
       };
+  const issuer = "issuer" in row ? ensureClaimIssuer((row as any).issuer) : undefined;
 
   return {
     claim_schema_id: Number((row as any)?.claim_schema_id ?? 0),
@@ -1495,7 +1522,7 @@ function ensureExternalVerificationRecord(
       typeof (row as any)?.workspace_id === "number"
         ? (row as any).workspace_id
         : (row as any)?.workspace_id ?? null,
-    name: String((row as any)?.name ?? ""),
+    name: String((row as any)?.name ?? issuer?.name ?? ""),
     identity: {
       claim_hash: String((row as any)?.claim_hash ?? ""),
       verify_path: String(
@@ -1936,6 +1963,7 @@ export const api = {
 
     return {
       ...ensureLeaderboard(row),
+      issuer: ensureClaimIssuer(row.issuer),
       lineage: ensureClaimLineage(row.lineage),
     };
   },
@@ -2012,6 +2040,7 @@ export const api = {
         published_at: null,
         locked_at: null,
       },
+      issuer: ensureClaimIssuer(row.issuer),
       lineage: ensureClaimLineage(row.lineage),
       trade_set_hash: row.trade_set_hash ?? "—",
       trades: Array.isArray(row.trades)
