@@ -8,6 +8,7 @@ import {
   type ClaimTradeEvidence,
   type ClaimTradeScopeRow,
   type PublicVerifyResult,
+  type VerifyPayloadV7,
   resolveVerificationExposureLevel,
 } from "../../../lib/api";
 import ClaimVerificationSignature from "../../../components/ClaimVerificationSignature";
@@ -362,6 +363,7 @@ export default function PublicVerifyClaimPage() {
   }, [params]);
 
   const [result, setResult] = useState<PublicVerifyResult | null>(null);
+  const [v7Payload, setV7Payload] = useState<VerifyPayloadV7 | null>(null);
   const [tradeEvidence, setTradeEvidence] = useState<ClaimTradeEvidence | null>(null);
   const [loading, setLoading] = useState(true);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
@@ -382,8 +384,21 @@ export default function PublicVerifyClaimPage() {
         setError(null);
         setEvidenceError(null);
 
+        // Phase 6 public endpoint
         const res = await api.getPublicClaimByHash(claimHash);
         setResult(res);
+
+        // Phase 7 canonical endpoint
+        try {
+          const verify = await api.getVerifyClaimByHash(claimHash);
+          
+          // detect V7 payload (raw)
+          if ((verify as any)?.payload_version) {
+            setV7Payload(verify as unknown as VerifyPayloadV7);
+          }
+        } catch {
+          // ignore — Phase 7 optional
+        }
 
         if (res.claim_schema_id) {
           try {
@@ -616,6 +631,68 @@ export default function PublicVerifyClaimPage() {
             lockedAt={lifecycle.locked_at}
           />
         </div>
+
+        {v7Payload ? (
+          <div className="mb-8 rounded-2xl border border-indigo-200 bg-indigo-50 p-6 shadow-sm">
+            <div className="text-sm text-indigo-700">
+              External Verification Payload · Phase 7
+            </div>
+
+            <div className="mt-2 text-lg font-semibold text-indigo-900">
+              Portable Verification Record (API-Ready)
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              
+              {/* Issuer */}
+              <div className="rounded-xl border bg-white p-4 text-sm">
+                <div className="text-slate-500">Issuer</div>
+                <div className="mt-1 font-semibold">
+                  {v7Payload.issuer?.name}
+                </div>
+                <div className="text-xs text-slate-500">
+                  network: {v7Payload.issuer?.network}
+                </div>
+              </div>
+
+              {/* Exposure */}
+              <div className="rounded-xl border bg-white p-4 text-sm">
+                <div className="text-slate-500">Exposure Level</div>
+                <div className="mt-1 font-semibold">
+                  {v7Payload.network_identity?.exposure_level}
+                </div>
+              </div>
+
+              {/* Canonical Identity */}
+              <div className="rounded-xl border bg-white p-4 text-sm">
+                <div className="text-slate-500">Canonical Claim Hash</div>
+                <div className="mt-1 font-mono text-xs break-all">
+                  {v7Payload.network_identity?.claim_hash}
+                </div>
+              </div>
+
+              {/* Integrity */}
+              <div className="rounded-xl border bg-white p-4 text-sm">
+                <div className="text-slate-500">Integrity Status</div>
+                <div className="mt-1 font-semibold">
+                  {v7Payload.integrity_record?.status}
+                </div>
+              </div>
+            </div>
+
+            {/* Proof summary */}
+            <div className="mt-5 rounded-xl border bg-white p-4 text-sm">
+              <div className="text-slate-500">Proof Summary</div>
+
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <div>canonical: {String(v7Payload.proof_summary?.canonical)}</div>
+                <div>portable: {String(v7Payload.proof_summary?.portable)}</div>
+                <div>api_addressable: {String(v7Payload.proof_summary?.api_addressable)}</div>
+                <div>integrity_valid: {String(v7Payload.proof_summary?.integrity_valid)}</div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div
           className={`mb-8 rounded-2xl border px-5 py-4 ${
