@@ -44,6 +44,73 @@ function shortHash(value?: string | null, head = 16, tail = 10) {
   return `${text.slice(0, head)}...${text.slice(-tail)}`;
 }
 
+function resolveLineageCanonical(lineage: any) {
+  const rootClaimId =
+    typeof lineage?.root_claim_id === "number" ? lineage.root_claim_id : null;
+
+  const parentClaimId =
+    typeof lineage?.parent_claim_id === "number" ? lineage.parent_claim_id : null;
+
+  const versionNumber =
+    typeof lineage?.version_number === "number" ? lineage.version_number : 1;
+
+  return {
+    rootClaimId,
+    parentClaimId,
+    versionNumber,
+  };
+}
+
+function resolveClaimOriginType(lineage: any) {
+  const l = resolveLineageCanonical(lineage);
+
+  if (l.versionNumber > 1) return "versioned";
+  if (l.parentClaimId || l.rootClaimId) return "derived";
+  return "independent";
+}
+
+function resolveNetworkLabel(lineage: any) {
+  const type = resolveClaimOriginType(lineage);
+
+  if (type === "versioned") return "Versioned Claim";
+  if (type === "derived") return "Derived Claim";
+  return "Independent Claim";
+}
+
+function networkTone(lineage: any) {
+  const type = resolveClaimOriginType(lineage);
+
+  if (type === "independent") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  }
+
+  if (type === "derived") {
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  }
+
+  return "border-sky-200 bg-sky-50 text-sky-800";
+}
+
+function resolveIssuerSafe(result: any, v7Payload: any) {
+  return (
+    v7Payload?.issuer?.name ||
+    result?.issuer?.name ||
+    result?.issuer_name ||
+    result?.workspace_name ||
+    "Unknown Issuer"
+  );
+}
+
+function buildLineageSummary(lineage: any) {
+  const l = resolveLineageCanonical(lineage);
+
+  return {
+    root: l.rootClaimId ? `claim#${l.rootClaimId}` : "self",
+    parent: l.parentClaimId ? `claim#${l.parentClaimId}` : "none",
+    version: String(l.versionNumber),
+  };
+}
+
 async function copyToClipboard(value: string) {
   if (typeof window === "undefined") {
     throw new Error("Clipboard is not available in this environment.");
@@ -490,6 +557,10 @@ export default function PublicVerifyClaimPage() {
     root_claim_id: null,
     version_number: null,
   };
+  const lineageSummary = buildLineageSummary(lineage);
+  const networkType = resolveClaimOriginType(lineage);
+  const networkLabel = resolveNetworkLabel(lineage);
+  const issuerName = resolveIssuerSafe(verifiedResult, v7Payload);
 
   const leaderboard = Array.isArray(verifiedResult.leaderboard) ? verifiedResult.leaderboard : [];
   const integrityOk = normalizeText(verifiedResult.integrity_status) === "valid";
@@ -653,6 +724,11 @@ export default function PublicVerifyClaimPage() {
                 <div className="text-xs text-slate-500">
                   network: {v7Payload.issuer?.network}
                 </div>
+              </div>
+
+              <div className="rounded-xl border bg-white p-4 text-sm">
+                <div className="text-slate-500">Network State</div>
+                <div className="mt-1 font-semibold">{networkLabel}</div>
               </div>
 
               {/* Exposure */}
@@ -914,6 +990,49 @@ export default function PublicVerifyClaimPage() {
           </div>
         </div>
 
+        <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="text-xs uppercase tracking-wide text-slate-500">
+            Trust Network Context · Phase 8
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${networkTone(lineage)}`}>
+              network: {networkType}
+            </span>
+
+            <span className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+              issuer: {issuerName}
+            </span>
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5 text-sm text-slate-700">
+            <div>
+              <div className="text-slate-500">Network State</div>
+              <div className="font-medium text-slate-900">{networkLabel}</div>
+            </div>
+
+            <div>
+              <div className="text-slate-500">Issuer</div>
+              <div className="font-medium text-slate-900">{issuerName}</div>
+            </div>
+
+            <div>
+              <div className="text-slate-500">Root</div>
+              <div className="font-medium text-slate-900">{lineageSummary.root}</div>
+            </div>
+
+            <div>
+              <div className="text-slate-500">Parent</div>
+              <div className="font-medium text-slate-900">{lineageSummary.parent}</div>
+            </div>
+
+            <div>
+              <div className="text-slate-500">Version</div>
+              <div className="font-medium text-slate-900">{lineageSummary.version}</div>
+            </div>
+          </div>
+        </div>
+
         <div className="mb-8 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
             <h2 className="text-2xl font-semibold">Verification Scope</h2>
@@ -957,9 +1076,9 @@ export default function PublicVerifyClaimPage() {
                 <DetailRow label="Verified At" value={formatDateTime(lifecycle.verified_at)} />
                 <DetailRow label="Published At" value={formatDateTime(lifecycle.published_at)} />
                 <DetailRow label="Locked At" value={formatDateTime(lifecycle.locked_at)} />
-                <DetailRow label="Version Number" value={lineage.version_number ?? "—"} />
-                <DetailRow label="Root Claim ID" value={lineage.root_claim_id ?? "—"} />
-                <DetailRow label="Parent Claim ID" value={lineage.parent_claim_id ?? "—"} />
+                <DetailRow label="Version Number" value={lineageSummary.version} />
+                <DetailRow label="Root Claim" value={lineageSummary.root} />
+                <DetailRow label="Parent Claim" value={lineageSummary.parent} />
               </div>
             </div>
 
