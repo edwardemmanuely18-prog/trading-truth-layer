@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import Navbar from "../../components/Navbar";
 import {
   api,
@@ -68,19 +68,6 @@ function parsePositiveInt(value?: string) {
   const num = Number(value);
   if (!Number.isFinite(num) || num < 0) return 0;
   return Math.floor(num);
-}
-
-async function copyToClipboard(value: string) {
-  if (typeof window === "undefined") {
-    throw new Error("Clipboard is not available in this environment.");
-  }
-
-  const nav = window.navigator;
-  if (!nav?.clipboard?.writeText) {
-    throw new Error("Clipboard is not available in this browser.");
-  }
-
-  await nav.clipboard.writeText(value);
 }
 
 function buildQrImageUrl(value: string) {
@@ -348,38 +335,6 @@ function TrustBadge({
     <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
       limited trust
     </span>
-  );
-}
-
-function CopyButton({
-  value,
-  label,
-}: {
-  value?: string | null;
-  label: string;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  async function handleCopy() {
-    if (!value) return;
-    try {
-      await copyToClipboard(value);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1200);
-    } catch {
-      setCopied(false);
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => void handleCopy()}
-      disabled={!value}
-      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      {copied ? "Copied" : label}
-    </button>
   );
 }
 
@@ -787,8 +742,19 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                           </div>
 
                           <div className="flex flex-wrap gap-2">
-                            <CopyButton value={verificationUrl} label="Copy Verify Link" />
-                            <CopyButton value={publicViewUrl} label="Copy Public Link" />
+                            <Link
+                              href={`/verify/${row.claim_hash}`}
+                              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                            >
+                              Verify Route
+                            </Link>
+
+                            <Link
+                              href={`/claim/${row.claim_schema_id}/public`}
+                              className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                            >
+                              Public Record
+                            </Link>
                           </div>
                         </div>
                       </td>
