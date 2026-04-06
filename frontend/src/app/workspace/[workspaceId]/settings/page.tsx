@@ -13,6 +13,7 @@ import {
   type WorkspaceBillingFoundation,
   type WorkspaceSettings,
   type WorkspaceUsageSummary,
+  type PlatformReadiness,
 } from "../../../../lib/api";
 
 const PLAN_ORDER = ["starter", "pro", "growth", "business"] as const;
@@ -790,6 +791,7 @@ export default function WorkspaceSettingsPage() {
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
   const [billingFoundation, setBillingFoundation] = useState<WorkspaceBillingFoundation | null>(null);
+  const [platformReadiness, setPlatformReadiness] = useState<PlatformReadiness | null>(null);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -815,15 +817,17 @@ export default function WorkspaceSettingsPage() {
       setLoading(true);
       setError(null);
 
-      const [settingsRes, usageRes, billingFoundationRes] = await Promise.all([
+      const [settingsRes, usageRes, billingFoundationRes, platformReadinessRes] = await Promise.all([
         api.getWorkspaceSettings(targetWorkspaceId),
         api.getWorkspaceUsage(targetWorkspaceId),
         api.getWorkspaceBillingFoundation(targetWorkspaceId),
+        api.getWorkspacePlatformReadiness(targetWorkspaceId),
       ]);
 
       setSettings(settingsRes);
       setUsage(usageRes);
       setBillingFoundation(billingFoundationRes);
+      setPlatformReadiness(platformReadinessRes);
 
       setName(settingsRes.name || "");
       setDescription(settingsRes.description || "");
@@ -841,15 +845,17 @@ export default function WorkspaceSettingsPage() {
     try {
       setRefreshingBillingState(true);
 
-      const [settingsRes, usageRes, billingFoundationRes] = await Promise.all([
+      const [settingsRes, usageRes, billingFoundationRes, platformReadinessRes] = await Promise.all([
         api.getWorkspaceSettings(targetWorkspaceId),
         api.getWorkspaceUsage(targetWorkspaceId),
         api.getWorkspaceBillingFoundation(targetWorkspaceId),
+        api.getWorkspacePlatformReadiness(targetWorkspaceId),
       ]);
 
       setSettings(settingsRes);
       setUsage(usageRes);
       setBillingFoundation(billingFoundationRes);
+      setPlatformReadiness(platformReadinessRes);
 
       setName(settingsRes.name || "");
       setDescription(settingsRes.description || "");
@@ -1707,6 +1713,79 @@ export default function WorkspaceSettingsPage() {
                         />
                       ))}
                     </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold">Platform Readiness</h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      External verification, API access, and integration readiness layer.
+                    </p>
+                  </div>
+
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold">
+                    {platformReadiness?.verification_exposure_level || "internal_only"}
+                  </span>
+                </div>
+
+                <div className="mt-5 grid gap-4 md:grid-cols-2">
+
+                  <div className="rounded-xl border bg-slate-50 p-4">
+                    <div className="text-sm text-slate-500">External Verification</div>
+                    <div className="mt-1 font-semibold">
+                      {platformReadiness?.capabilities.external_verification_enabled ? "enabled" : "disabled"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border bg-slate-50 p-4">
+                    <div className="text-sm text-slate-500">API Access</div>
+                    <div className="mt-1 font-semibold">
+                      {platformReadiness?.capabilities.api_access_enabled ? "enabled" : "disabled"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border bg-slate-50 p-4">
+                    <div className="text-sm text-slate-500">Broker Integration</div>
+                    <div className="mt-1 font-semibold">
+                      {platformReadiness?.capabilities.broker_import_enabled ? "enabled" : "not connected"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border bg-slate-50 p-4">
+                    <div className="text-sm text-slate-500">Webhook Ingestion</div>
+                    <div className="mt-1 font-semibold">
+                      {platformReadiness?.capabilities.webhook_ingestion_enabled ? "enabled" : "disabled"}
+                    </div>
+                  </div>
+                </div>
+
+                {platformReadiness?.integration_sources?.length ? (
+                  <div className="mt-5">
+                    <div className="text-sm font-medium text-slate-900">Connected Sources</div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {platformReadiness.integration_sources.map((src, idx) => (
+                        <span
+                          key={`src-${idx}`}
+                          className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs"
+                        >
+                          {src.provider}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    No external integrations connected yet. This workspace is operating in internal verification mode.
+                  </div>
+                )}
+
+                {platformReadiness?.recommended_next_step ? (
+                  <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                    Recommended next step: {platformReadiness.recommended_next_step}
                   </div>
                 ) : null}
               </div>
