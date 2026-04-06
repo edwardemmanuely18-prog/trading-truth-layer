@@ -25,6 +25,7 @@ from app.api.routes.imports import router as imports_router
 from app.api.routes.audit import router as audit_router
 from app.api.routes.invites import router as invites_router
 from app.api.routes.billing import router as billing_router
+from app.api.routes.platform import router as platform_router
 from app.core.security import hash_password
 
 
@@ -223,3 +224,4 @@ app.include_router(imports_router)
 app.include_router(audit_router)
 app.include_router(invites_router)
 app.include_router(billing_router)
+app.include_router(platform_router)
