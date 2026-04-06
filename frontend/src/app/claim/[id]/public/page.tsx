@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import {
   api,
   computeTrustScore,
+  resolveVerificationExposureLevel,
   type ClaimSchema,
   type ClaimIntegrityResult,
   type PublicVerifyResult,
@@ -353,6 +354,7 @@ export default function PublicClaimPage() {
   });
 
   const trustBand = resolveTrustBand(trustScore);
+  const exposureLevel = resolveVerificationExposureLevel(preview);
 
   async function handleCopyLink() {
     try {
@@ -440,6 +442,45 @@ export default function PublicClaimPage() {
         <section className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
           <div className="text-sm text-slate-500">Trading Truth Layer · Canonical Public Claim Record</div>
 
+          <div className="mt-4 rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="text-sm text-indigo-700">
+                  Public Record Surface · Phase 6
+                </div>
+                <div className="mt-1 text-lg font-semibold text-indigo-900">
+                  Exportable Verification Record
+                </div>
+                <div className="mt-2 max-w-2xl text-sm text-indigo-800">
+                  This page represents a portable public claim record. It is designed for
+                  sharing, embedding, and institutional consumption. The verification route
+                  acts as the canonical proof layer, while this surface provides a structured,
+                  presentation-ready record of performance, scope, and methodology.
+                </div>
+              </div>
+
+              <span className="rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs font-semibold text-indigo-800">
+                exposure: {exposureLevel}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border bg-white p-3 text-sm">
+                <div className="text-slate-500">Public Record Path</div>
+                <div className="mt-1 font-mono text-xs break-all text-slate-800">
+                  {publicPath}
+                </div>
+              </div>
+
+              <div className="rounded-xl border bg-white p-3 text-sm">
+                <div className="text-slate-500">Verification Route</div>
+                <div className="mt-1 font-mono text-xs break-all text-slate-800">
+                  {verifyPath || "—"}
+                </div>
+              </div>
+            </div>
+          </div>
+
           <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-950 md:text-4xl">
             {claim.name}
           </h1>
@@ -471,8 +512,37 @@ export default function PublicClaimPage() {
           </div>
 
           <div className="mt-5 rounded-3xl border border-green-200 bg-green-50 p-6">
+            <div className="mb-5 rounded-xl border border-green-200 bg-white p-4">
+              <div className="text-xs uppercase tracking-wide text-slate-500">
+                Machine-Readable Record Identity
+              </div>
+
+              <div className="mt-3 grid gap-3 md:grid-cols-2 text-xs font-mono text-slate-700">
+                <div>
+                  <div className="text-slate-500">claim_hash</div>
+                  <div className="break-all">{claimHash}</div>
+                </div>
+
+                <div>
+                  <div className="text-slate-500">verification_status</div>
+                  <div>{claim.status}</div>
+                </div>
+
+                <div>
+                  <div className="text-slate-500">integrity_status</div>
+                  <div>
+                    {integrity?.integrity_status || (preview as any)?.integrity_status || "—"}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-slate-500">visibility</div>
+                  <div>{resolvedVisibility}</div>
+                </div>
+              </div>
+            </div>
             <div className="text-base font-semibold text-green-900">
-              Trust Summary · Public Verification Layer
+              Trust Summary · Public Record Layer
             </div>
 
             <div className="mt-3 text-sm leading-7 text-green-800">
