@@ -37,6 +37,89 @@ function tryParseJson(value?: string | null) {
   }
 }
 
+type ClaimOriginType = "independent" | "derived" | "versioned";
+
+function resolveClaimOriginType(claim: ClaimSchema): ClaimOriginType {
+  const versionNumber = Number(claim.version_number ?? 1);
+  const hasParent =
+    typeof claim.parent_claim_id === "number" && claim.parent_claim_id > 0;
+  const hasRoot =
+    typeof claim.root_claim_id === "number" && claim.root_claim_id > 0;
+
+  if (versionNumber > 1) return "versioned";
+  if (hasParent || hasRoot) return "derived";
+  return "independent";
+}
+
+function computeClaimGraphContext(claim: ClaimSchema) {
+  const originType = resolveClaimOriginType(claim);
+  const versionNumber = Number(claim.version_number ?? 1);
+
+  const versionDepth =
+    originType === "versioned"
+      ? Math.max(versionNumber - 1, 1)
+      : originType === "derived"
+        ? 1
+        : 0;
+
+  const independenceWeight =
+    originType === "independent"
+      ? 1
+      : originType === "derived"
+        ? 0.9
+        : 0.94;
+
+  const lineagePenalty =
+    originType === "independent"
+      ? 1
+      : originType === "derived"
+        ? 0.92
+        : 0.96;
+
+  const versionDecay =
+    originType === "versioned"
+      ? Math.max(0.82, 1 - versionDepth * 0.03)
+      : 1;
+
+  const label =
+    originType === "independent"
+      ? "Independent"
+      : originType === "derived"
+        ? "Derived"
+        : "Versioned";
+
+  return {
+    originType,
+    label,
+    versionDepth,
+    independenceWeight,
+    lineagePenalty,
+    versionDecay,
+  };
+}
+
+function OriginBadge({ type }: { type: ClaimOriginType }) {
+  const className =
+    type === "independent"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : type === "derived"
+        ? "border-amber-200 bg-amber-50 text-amber-800"
+        : "border-sky-200 bg-sky-50 text-sky-800";
+
+  const label =
+    type === "independent"
+      ? "independent"
+      : type === "derived"
+        ? "derived"
+        : "versioned";
+
+  return (
+    <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${className}`}>
+      {label}
+    </span>
+  );
+}
+
 function StatusBadge({ status }: { status?: string | null }) {
   const normalized = (status || "").toLowerCase();
 
@@ -94,6 +177,10 @@ export default function ClaimDetailPage() {
   const [checkingIntegrity, setCheckingIntegrity] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const graphContext = useMemo(() => {
+    if (!claim) return null;
+    return computeClaimGraphContext(claim);
+  }, [claim]);
   const loadClaimPage = async () => {
     if (!claimId || Number.isNaN(claimId)) return;
 
@@ -511,6 +598,58 @@ export default function ClaimDetailPage() {
                 </div>
               </div>
 
+              <div className="rounded-2xl border bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-xl font-semibold">Trust Graph Context</h2>
+                  {graphContext ? <OriginBadge type={graphContext.originType} /> : null}
+                </div>
+
+                {graphContext ? (
+                  <>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <div className="text-sm text-slate-500">Origin Type</div>
+                        <div className="mt-1 font-medium">{graphContext.label}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-slate-500">Version Depth</div>
+                        <div className="mt-1 font-medium">{graphContext.versionDepth}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-slate-500">Independence Weight</div>
+                        <div className="mt-1 font-medium">{formatNumber(graphContext.independenceWeight, 2)}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-slate-500">Lineage Penalty</div>
+                        <div className="mt-1 font-medium">{formatNumber(graphContext.lineagePenalty, 2)}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-slate-500">Version Decay</div>
+                        <div className="mt-1 font-medium">{formatNumber(graphContext.versionDecay, 2)}</div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-slate-500">Graph Posture</div>
+                        <div className="mt-1 font-medium">
+                          {graphContext.originType === "independent"
+                            ? "Highest independence"
+                            : graphContext.originType === "derived"
+                              ? "Parent-linked claim"
+                              : "Version-chain claim"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
+                      Graph-aware trust treats independent claims as the strongest trust origin.
+                      Derived and versioned claims remain credible, but their trust posture is interpreted
+                      in the context of lineage dependency, version depth, and inherited claim ancestry.
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-4 text-sm text-slate-500">No graph context available.</div>
+                )}
+              </div>
+
               <div>
                 <div className="text-slate-500">Version Depth</div>
                 <div className="font-medium">
@@ -522,6 +661,9 @@ export default function ClaimDetailPage() {
 
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
             <h2 className="text-xl font-semibold">Versions</h2>
+            <div className="mt-2 text-sm text-slate-500">
+              Navigate across the claim evolution chain and inspect how versions relate to the same root record.
+            </div>
             {versions.length === 0 ? (
               <div className="mt-4 text-sm text-slate-500">No versions found.</div>
             ) : (
@@ -554,6 +696,23 @@ export default function ClaimDetailPage() {
               <Link href={`/claim/${claim.id}`} className="block rounded-lg border px-3 py-2 hover:bg-slate-50">
                 Refresh current claim page
               </Link>
+              {claim.root_claim_id ? (
+                <Link
+                  href={`/claim/${claim.root_claim_id}`}
+                  className="block rounded-lg border px-3 py-2 hover:bg-slate-50"
+                >
+                  Go to root claim
+                </Link>
+              ) : null}
+
+              {claim.parent_claim_id ? (
+                <Link
+                  href={`/claim/${claim.parent_claim_id}`}
+                  className="block rounded-lg border px-3 py-2 hover:bg-slate-50"
+                >
+                  Go to parent claim
+                </Link>
+              ) : null}
               <Link href="/claims" className="block rounded-lg border px-3 py-2 hover:bg-slate-50">
                 Go to claims list
               </Link>
