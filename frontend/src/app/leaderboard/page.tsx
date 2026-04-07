@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import Navbar from "../../components/Navbar";
 import {
   api,
-  computeTrustScore,
   type PublicClaimDirectoryItem,
 } from "../../lib/api";
 
@@ -199,32 +198,32 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
     const lifecycle = safeLifecycle(claim);
 
     // ===============================
-    // Phase 10 — Dispute Awareness
+    // Phase 10.3 — Backend Authority
     // ===============================
 
-    // Future-ready: backend will send disputes_count
-    const disputes_count = Number((claim as any)?.disputes_count ?? 0);
-    const has_active_dispute = disputes_count > 0;
+    const has_active_dispute = Boolean((claim as any)?.has_active_dispute ?? false);
+    const dispute_penalty_factor = Number((claim as any)?.dispute_penalty_factor ?? 1);
 
-    // penalty model (can be tuned later)
-    const dispute_penalty_factor = has_active_dispute ? 0.75 : 1;
+    // Use backend trust if available (fallback safe)
+    const trust_score = Number(
+      (claim as any)?.trust_score ??
+        0
+    );
 
-    const base_trust_score = computeTrustScore({
-      ...claim,
-      verification_status: lifecycle.status,
-      verified_at: lifecycle.verified_at,
-      scope: {
-        ...scope,
-        visibility: scope.visibility,
-      },
-    });
+    // Use backend network context if available, fallback to inference
+    const network =
+      (claim as any)?.network ??
+      inferClaimNetworkContext(claim, trust_score);
 
-    const trust_score = Number((base_trust_score * dispute_penalty_factor).toFixed(2));
+    const trust_weighted_pnl = Number(
+      (claim as any)?.trust_weighted_pnl ??
+        (Number(claim.net_pnl ?? 0) * trust_score) / 100
+    );
 
-    const network = inferClaimNetworkContext(claim, trust_score);
-
-    const trust_weighted_pnl = (Number(claim.net_pnl ?? 0) * trust_score) / 100;
-    const network_weighted_pnl = (Number(claim.net_pnl ?? 0) * network.network_score) / 100;
+    const network_weighted_pnl = Number(
+      (claim as any)?.network_weighted_pnl ??
+        (Number(claim.net_pnl ?? 0) * network.network_score) / 100
+    );
 
     return {
       claim_schema_id: claim.claim_schema_id,
@@ -242,6 +241,7 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
       trust_score,
       trust_weighted_pnl,
       network_weighted_pnl,
+      network_score: network.network_score,
       period_start: scope.period_start || "—",
       period_end: scope.period_end || "—",
       methodology_notes: scope.methodology_notes || "",
