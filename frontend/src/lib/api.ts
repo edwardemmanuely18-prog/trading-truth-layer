@@ -737,6 +737,7 @@ export type PublicClaim = {
     profit_factor: number;
   }[];
   issuer?: ClaimIssuer;
+  profile?: PublicTrustProfile | null;
   scope: {
     period_start: string;
     period_end: string;
@@ -1254,6 +1255,7 @@ function ensurePublicClaim(row: PublicClaimDirectoryItem): PublicClaimDirectoryI
       locked_trade_set_hash: null,
     },
     issuer: ensureClaimIssuer(row.issuer),
+    profile: row?.profile ? ensurePublicTrustProfile(row.profile) : null,
     lineage: ensureClaimLineage(row.lineage),
     trade_set_hash: row.trade_set_hash ?? "—",
   };

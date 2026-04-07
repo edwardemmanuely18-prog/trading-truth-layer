@@ -925,10 +925,16 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                           {row.profile && (
                             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                               <Link
-                                href={`/profile/${row.profile.workspace_id}`}
-                                className="text-slate-500 hover:underline"
+                                href={
+                                  row.profile?.workspace_id
+                                    ? `/profile/${Number(row.profile.workspace_id)}`
+                                    : "#"
+                                }
+                                className={`text-slate-500 ${
+                                  row.profile?.workspace_id ? "hover:underline" : "cursor-not-allowed opacity-50"
+                                }`}
                               >
-                                {row.profile.name}
+                                {row.profile?.name ?? "—"}
                               </Link>
 
                               <span
@@ -964,10 +970,18 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                         <td className="px-3 py-3">
                           {row.profile ? (
                             <Link
-                              href={`/profile/${row.profile.workspace_id}`}
-                              className="font-medium text-slate-900 hover:underline"
+                              href={
+                                row.profile?.workspace_id
+                                  ? `/profile/${Number(row.profile.workspace_id)}`
+                                  : "#"
+                              }
+                              className={`text-slate-500 ${
+                                row.profile?.workspace_id
+                                  ? "hover:underline"
+                                  : "cursor-not-allowed opacity-50"
+                              }`}
                             >
-                              {row.profile.name}
+                              {row.profile?.name ?? "—"}
                             </Link>
                           ) : (
                             "—"
@@ -1128,8 +1142,14 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                               </Link>
 
                               <Link
-                                href={`/profile/${row.profile?.workspace_id}`}
-                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                                href={
+                                  row.profile?.workspace_id
+                                    ? `/profile/${Number(row.profile.workspace_id)}`
+                                    : "#"
+                                }
+                                className={`rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium ${
+                                  row.profile?.workspace_id ? "hover:bg-slate-50" : "cursor-not-allowed opacity-50"
+                                }`}
                               >
                                 Profile
                               </Link>
