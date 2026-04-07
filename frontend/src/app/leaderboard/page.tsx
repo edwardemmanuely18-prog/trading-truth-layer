@@ -198,7 +198,18 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
     const scope = safeScope(claim);
     const lifecycle = safeLifecycle(claim);
 
-    const trust_score = computeTrustScore({
+    // ===============================
+    // Phase 10 — Dispute Awareness
+    // ===============================
+
+    // Future-ready: backend will send disputes_count
+    const disputes_count = Number((claim as any)?.disputes_count ?? 0);
+    const has_active_dispute = disputes_count > 0;
+
+    // penalty model (can be tuned later)
+    const dispute_penalty_factor = has_active_dispute ? 0.75 : 1;
+
+    const base_trust_score = computeTrustScore({
       ...claim,
       verification_status: lifecycle.status,
       verified_at: lifecycle.verified_at,
@@ -208,6 +219,8 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
       },
     });
 
+    const trust_score = Number((base_trust_score * dispute_penalty_factor).toFixed(2));
+
     const network = inferClaimNetworkContext(claim, trust_score);
 
     const trust_weighted_pnl = (Number(claim.net_pnl ?? 0) * trust_score) / 100;
@@ -216,6 +229,8 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
     return {
       claim_schema_id: claim.claim_schema_id,
       claim_hash: claim.claim_hash,
+      has_active_dispute,
+      dispute_penalty_factor,
       exposure_level: resolveExposureLevelFromClaim(claim),
       name: claim.name,
       verification_status: claim.verification_status,
@@ -793,6 +808,9 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
             Ranked by {rankingLabel}. Only locked and public claims are included so that
             leaderboard positions remain tied to canonical public records with verification-grade distribution paths.
           </div>
+          <div className="mt-2 text-xs text-slate-400">
+            Claims with active disputes are automatically penalized in trust scoring and ranking.
+          </div>
 
           {claimRows.length === 0 ? (
             <div className="mt-4 text-slate-600">No claims match the selected leaderboard filters.</div>
@@ -823,7 +841,12 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                 </thead>
                 <tbody>
                   {claimRows.map((row, index) => {
-                    const trustBand = resolveTrustBand(row.trust_score);
+                    const trustBand = row.has_active_dispute
+                      ? {
+                          label: "Contested",
+                          className: "border-red-300 bg-red-100 text-red-800",
+                        }
+                      : resolveTrustBand(row.trust_score);
                     const verificationPath = `/verify/${row.claim_hash}`;
                     const publicViewPath = `/claim/${row.claim_schema_id}/public`;
                     const qrImageUrl = buildQrImageUrl(verificationPath);
@@ -879,11 +902,19 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                         </td>
 
                         <td className="px-3 py-3">
-                          <TrustBadge
-                            status={row.verification_status}
-                            verifiedAt={row.verified_at}
-                            lockedAt={row.locked_at}
-                          />
+                          <div className="flex flex-col gap-2">
+                            <TrustBadge
+                              status={row.verification_status}
+                              verifiedAt={row.verified_at}
+                              lockedAt={row.locked_at}
+                            />
+
+                            {row.has_active_dispute && (
+                              <span className="inline-flex rounded-full border border-red-300 bg-red-100 px-3 py-1 text-xs font-semibold text-red-800">
+                                contested
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         <td className="px-3 py-3 font-semibold tabular-nums">
