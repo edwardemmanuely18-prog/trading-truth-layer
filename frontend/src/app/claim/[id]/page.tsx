@@ -459,25 +459,63 @@ export default function ClaimDetailPage() {
           </div>
         </div>
 
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
+          This claim is part of a lineage chain.
+          Root defines the origin of the claim set,
+          while parent defines the immediate previous version.
+          Version depth reflects iteration history and evolution.
+        </div>
+
         <div className="space-y-6">
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
             <h2 className="text-xl font-semibold">Lineage</h2>
             <div className="mt-4 space-y-3 text-sm">
               <div>
-                <div className="text-slate-500">Claim ID</div>
-                <div className="font-medium">{claim.id}</div>
+                <div className="text-slate-500">Current Claim</div>
+                <div className="font-medium">
+                  <Link href={`/claim/${claim.id}`} className="text-blue-600 hover:underline">
+                    #{claim.id}
+                  </Link>
+                </div>
               </div>
+
               <div>
-                <div className="text-slate-500">Root Claim ID</div>
-                <div className="font-medium">{claim.root_claim_id ?? "—"}</div>
+                <div className="text-slate-500">Root Claim</div>
+                <div className="font-medium">
+                  {claim.root_claim_id ? (
+                    <Link
+                      href={`/claim/${claim.root_claim_id}`}
+                      className="text-blue-600 hover:underline"
+                    >
+                      #{claim.root_claim_id}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </div>
               </div>
+
               <div>
-                <div className="text-slate-500">Parent Claim ID</div>
-                <div className="font-medium">{claim.parent_claim_id ?? "—"}</div>
+                <div className="text-slate-500">Parent Claim</div>
+                <div className="font-medium">
+                  {claim.parent_claim_id ? (
+                    <Link
+                      href={`/claim/${claim.parent_claim_id}`}
+                      className="text-blue-600 hover:underline"
+                    >
+                      #{claim.parent_claim_id}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </div>
               </div>
+
               <div>
-                <div className="text-slate-500">Version Number</div>
-                <div className="font-medium">{claim.version_number ?? "—"}</div>
+                <div className="text-slate-500">Version Depth</div>
+                <div className="font-medium">
+                  v{claim.version_number ?? 1}
+                </div>
               </div>
             </div>
           </div>
@@ -495,12 +533,14 @@ export default function ClaimDetailPage() {
                     className="block rounded-xl border border-slate-200 p-3 transition hover:bg-slate-50"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="font-medium">{version.name}</div>
+                      <div className="font-medium">
+                        {version.name} (v{version.version_number})
+                      </div>
                       <StatusBadge status={version.status} />
                     </div>
+
                     <div className="mt-2 text-xs text-slate-500">
-                      version {version.version_number} · root {version.root_claim_id ?? "—"} · parent{" "}
-                      {version.parent_claim_id ?? "—"}
+                      root: {version.root_claim_id ?? "—"} · parent: {version.parent_claim_id ?? "—"}
                     </div>
                   </Link>
                 ))}
