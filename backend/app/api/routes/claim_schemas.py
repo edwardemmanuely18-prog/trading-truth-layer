@@ -536,6 +536,104 @@ def resolve_claim_dispute_context(schema: ClaimSchema, db: Session):
     }
 
 
+def compute_backend_trust_score(
+    schema: ClaimSchema,
+    metrics: dict,
+    integrity_status: str,
+    dispute_ctx: dict,
+):
+    score = 0.0
+
+    if integrity_status == "valid":
+        score += 40
+
+    if schema.status == "locked":
+        score += 20
+    elif schema.status in {"published", "verified"}:
+        score += 12
+
+    trade_count = int(metrics.get("trade_count", 0) or 0)
+    if trade_count >= 50:
+        score += 20
+    elif trade_count >= 20:
+        score += 15
+    elif trade_count >= 10:
+        score += 10
+    elif trade_count > 0:
+        score += 5
+
+    if schema.verified_at:
+        score += 10
+
+    if schema.visibility == "public":
+        score += 10
+    elif schema.visibility == "unlisted":
+        score += 6
+
+    penalty_factor = float(dispute_ctx.get("dispute_penalty_factor", 1.0) or 1.0)
+    score = score * penalty_factor
+
+    return round(min(score, 100.0), 2)
+
+
+def resolve_claim_origin_type(schema: ClaimSchema):
+    version_number = int(schema.version_number or 1)
+    has_parent = schema.parent_claim_id is not None
+    has_root = schema.root_claim_id is not None
+
+    if version_number > 1:
+        return "versioned"
+    if has_parent or has_root:
+        return "derived"
+    return "independent"
+
+
+def compute_backend_network_score(schema: ClaimSchema, trust_score: float):
+    claim_origin_type = resolve_claim_origin_type(schema)
+    version_number = int(schema.version_number or 1)
+
+    if claim_origin_type == "independent":
+        independence_weight = 1.0
+        lineage_penalty = 1.0
+        version_decay = 1.0
+        version_depth = 0
+        network_context_label = "Independent"
+    elif claim_origin_type == "derived":
+        independence_weight = 0.90
+        lineage_penalty = 0.92
+        version_decay = 1.0
+        version_depth = 1
+        network_context_label = "Derived"
+    else:
+        independence_weight = 0.94
+        lineage_penalty = 0.96
+        version_depth = max(version_number - 1, 1)
+        version_decay = max(0.82, 1 - version_depth * 0.03)
+        network_context_label = "Versioned"
+
+    network_score = trust_score * independence_weight * lineage_penalty * version_decay
+
+    return {
+        "claim_origin_type": claim_origin_type,
+        "root_claim_ref": f"claim#{schema.root_claim_id}" if schema.root_claim_id else None,
+        "parent_claim_ref": f"claim#{schema.parent_claim_id}" if schema.parent_claim_id else None,
+        "version_depth": version_depth,
+        "independence_weight": round(independence_weight, 2),
+        "lineage_penalty": round(lineage_penalty, 2),
+        "version_decay": round(version_decay, 2),
+        "network_score": round(network_score, 2),
+        "network_context_label": network_context_label,
+    }
+
+
+def resolve_trust_band(score: float):
+    if score >= 85:
+        return "high"
+    if score >= 60:
+        return "moderate"
+    return "low"
+
+
 def build_equity_curve(trades: list[Trade]):
     ordered = sorted(
         trades,
@@ -832,7 +930,12 @@ def build_issuer_payload(schema: ClaimSchema, db: Session):
 def build_claim_list_row(schema: ClaimSchema, db: Session):
     filtered_trades = resolve_schema_trades(schema, db)
     metrics = compute_trade_metrics(filtered_trades)
+    integrity_status = resolve_claim_integrity_status(schema, filtered_trades)
     dispute_ctx = resolve_claim_dispute_context(schema, db)
+    trust_score = compute_backend_trust_score(schema, metrics, integrity_status, dispute_ctx)
+    network_ctx = compute_backend_network_score(schema, trust_score)
+    trust_weighted_pnl = round(float(metrics["net_pnl"]) * trust_score / 100.0, 4)
+    network_weighted_pnl = round(float(metrics["net_pnl"]) * network_ctx["network_score"] / 100.0, 4)
 
     trade_set_hash = schema.locked_trade_set_hash
     if not trade_set_hash:
@@ -844,7 +947,7 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
         "claim_schema_id": schema.id,
         "claim_hash": claim_hash,
         "issuer": build_issuer_payload(schema, db),
-        "integrity_status": resolve_claim_integrity_status(schema, filtered_trades),
+        "integrity_status": integrity_status,
         "public_view_path": f"/claim/{schema.id}/public",
         "verify_path": f"/verify/{claim_hash}",
         "name": schema.name,
@@ -856,8 +959,16 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
         "leaderboard": build_leaderboard(filtered_trades),
         "disputes_count": dispute_ctx["disputes_count"],
         "active_disputes_count": dispute_ctx["active_disputes_count"],
+        "disputes_count": dispute_ctx["disputes_count"],
+        "active_disputes_count": dispute_ctx["active_disputes_count"],
         "has_active_dispute": dispute_ctx["has_active_dispute"],
         "dispute_penalty_factor": dispute_ctx["dispute_penalty_factor"],
+        "trust_score": trust_score,
+        "trust_band": "contested" if dispute_ctx["has_active_dispute"] else resolve_trust_band(trust_score),
+        "trust_weighted_pnl": trust_weighted_pnl,
+        "network_score": network_ctx["network_score"],
+        "network_weighted_pnl": network_weighted_pnl,
+        "network": network_ctx,
         "scope": {
             "period_start": schema.period_start,
             "period_end": schema.period_end,
@@ -910,6 +1021,10 @@ def build_public_claim_payload(schema: ClaimSchema, db: Session):
         trade_set_hash = compute_trade_set_hash(filtered_trades)
 
     integrity_status = resolve_claim_integrity_status(schema, filtered_trades)
+    trust_score = compute_backend_trust_score(schema, metrics, integrity_status, dispute_ctx)
+    network_ctx = compute_backend_network_score(schema, trust_score)
+    trust_weighted_pnl = round(float(metrics["net_pnl"]) * trust_score / 100.0, 4)
+    network_weighted_pnl = round(float(metrics["net_pnl"]) * network_ctx["network_score"] / 100.0, 4)
 
     scope = resolve_schema_trade_scope(schema, db)
     included_rows = build_included_trade_scope_rows(scope["included"])
@@ -933,6 +1048,12 @@ def build_public_claim_payload(schema: ClaimSchema, db: Session):
         "leaderboard": leaderboard,
         "issuer": issuer,
         "disputes": dispute_ctx,
+        "trust_score": trust_score,
+        "trust_band": "contested" if dispute_ctx["has_active_dispute"] else resolve_trust_band(trust_score),
+        "trust_weighted_pnl": trust_weighted_pnl,
+        "network_score": network_ctx["network_score"],
+        "network_weighted_pnl": network_weighted_pnl,
+        "network": network_ctx,
         "scope": {
             "period_start": schema.period_start,
             "period_end": schema.period_end,
