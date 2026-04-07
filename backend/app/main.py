@@ -15,6 +15,7 @@ from app.models import (
     User,
     WorkspaceMembership,
     WorkspaceInvite,
+    ClaimDispute,
 )
 from app.api.routes.health import router as health_router
 from app.api.routes.auth import router as auth_router
@@ -26,6 +27,7 @@ from app.api.routes.audit import router as audit_router
 from app.api.routes.invites import router as invites_router
 from app.api.routes.billing import router as billing_router
 from app.api.routes.platform import router as platform_router
+from app.api.routes.claim_disputes import router as claim_disputes_router
 from app.core.security import hash_password
 
 
@@ -69,6 +71,37 @@ def ensure_claim_schema_columns():
             )
 
 
+def ensure_claim_dispute_table():
+    inspector = inspect(engine)
+
+    if "claim_disputes" in inspector.get_table_names():
+        return
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS claim_disputes (
+                    id INTEGER PRIMARY KEY,
+                    claim_schema_id INTEGER NOT NULL,
+                    workspace_id INTEGER NOT NULL,
+                    status VARCHAR NOT NULL DEFAULT 'open',
+                    challenge_type VARCHAR NOT NULL DEFAULT 'general_review',
+                    reason_code VARCHAR NOT NULL DEFAULT 'other',
+                    summary VARCHAR NOT NULL,
+                    evidence_note TEXT NOT NULL DEFAULT '',
+                    reporter_user_id INTEGER NOT NULL,
+                    reviewer_user_id INTEGER,
+                    resolution_note TEXT,
+                    opened_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL,
+                    resolved_at DATETIME
+                )
+                """
+            )
+        )
+
+        
 def backfill_claim_hashes():
     from app.api.routes.claim_schemas import compute_claim_hash
 
@@ -104,6 +137,7 @@ app.add_middleware(
 def on_startup():
     Base.metadata.create_all(bind=engine)
     ensure_claim_schema_columns()
+    ensure_claim_dispute_table()
     backfill_claim_hashes()
 
     db = SessionLocal()
@@ -225,3 +259,4 @@ app.include_router(audit_router)
 app.include_router(invites_router)
 app.include_router(billing_router)
 app.include_router(platform_router)
+app.include_router(claim_disputes_router)
