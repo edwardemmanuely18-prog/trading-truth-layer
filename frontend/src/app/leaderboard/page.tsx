@@ -228,6 +228,9 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
     return {
       claim_schema_id: claim.claim_schema_id,
       claim_hash: claim.claim_hash,
+
+      profile: (claim as any)?.profile ?? null,
+
       has_active_dispute,
       dispute_penalty_factor,
       exposure_level: resolveExposureLevelFromClaim(claim),
@@ -514,6 +517,34 @@ function resolveTrustBand(score: number) {
   };
 }
 
+function resolveProfileTrustBand(score: number) {
+  if (score >= 85) {
+    return {
+      label: "Institutional",
+      className: "border-emerald-300 bg-emerald-100 text-emerald-900",
+    };
+  }
+
+  if (score >= 70) {
+    return {
+      label: "Strong",
+      className: "border-blue-200 bg-blue-100 text-blue-800",
+    };
+  }
+
+  if (score >= 55) {
+    return {
+      label: "Developing",
+      className: "border-amber-200 bg-amber-100 text-amber-800",
+    };
+  }
+
+  return {
+    label: "Fragile",
+    className: "border-red-200 bg-red-100 text-red-800",
+  };
+}
+
 function SummaryCard({
   label,
   value,
@@ -751,7 +782,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <SummaryCard
             label="Public Claims"
             value={claims.length}
@@ -779,6 +810,20 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                 : "—"
             }
             hint="Top current value for the active ranking mode"
+          />
+          <SummaryCard
+            label="Avg Profile Trust"
+            value={
+              claimRows.length
+                ? formatNumber(
+                    claimRows.reduce(
+                      (acc, r) => acc + (r.profile?.average_trust_score ?? 0),
+                      0
+                    ) / claimRows.length
+                  )
+                : "—"
+            }
+            hint="Average issuer-level trust across ranked claims"
           />
         </div>
 
@@ -860,6 +905,39 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
 
                         <td className="px-3 py-3">
                           <div className="font-medium text-slate-950">{row.name}</div>
+
+                          {row.profile && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                              <span className="text-slate-500">
+                                {row.profile.name}
+                              </span>
+
+                              <span
+                                className={`inline-flex rounded-full border px-2 py-1 font-semibold ${
+                                  resolveProfileTrustBand(row.profile.average_trust_score).className
+                                }`}
+                              >
+                                {
+                                  resolveProfileTrustBand(row.profile.average_trust_score).label
+                                }
+                              </span>
+
+                              <span className="text-slate-400">
+                                avg trust: {formatNumber(row.profile.average_trust_score)}
+                              </span>
+
+                              <span className="text-slate-400">
+                                claims: {row.profile.locked_claims_count}
+                              </span>
+
+                              {row.profile.contested_claims_count > 0 && (
+                                <span className="text-red-600 font-semibold">
+                                  {row.profile.contested_claims_count} disputed
+                                </span>
+                              )}
+                            </div>
+                          )}
+
                           <div className="mt-1 text-xs text-slate-500">claim #{row.claim_schema_id}</div>
                           <div className="mt-1 font-mono text-xs text-slate-500">{row.short_hash}</div>
                         </td>
