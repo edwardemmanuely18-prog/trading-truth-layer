@@ -947,6 +947,24 @@ export default function WorkspaceClaimDetailPage() {
   const [equityCurve, setEquityCurve] = useState<ClaimEquityCurve | null>(null);
   const [claimTrades, setClaimTrades] = useState<ClaimTradeEvidence | null>(null);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
+  // ===============================
+  // Phase 9 — Claim Disputes State
+  // ===============================
+  type ClaimDispute = {
+    id: number;
+    status: string;
+    challenge_type: string;
+    reason_code: string;
+    summary: string;
+    created_at: string;
+  };
+
+  const [disputes, setDisputes] = useState<ClaimDispute[]>([]);
+  const [loadingDisputes, setLoadingDisputes] = useState(false);
+  const [creatingDispute, setCreatingDispute] = useState(false);
+
+  const [newDisputeSummary, setNewDisputeSummary] = useState("");
+  const [newDisputeReason, setNewDisputeReason] = useState("general_review");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [checkingIntegrity, setCheckingIntegrity] = useState(false);
@@ -1018,7 +1036,7 @@ export default function WorkspaceClaimDetailPage() {
     setError(null);
 
     try {
-      const [claimRes, previewRes, versionsRes, auditRes, equityRes, tradesRes, usageRes] =
+      const [claimRes, previewRes, versionsRes, auditRes, equityRes, tradesRes, usageRes, disputesRes] =
         await Promise.all([
           api.getClaimSchema(claimId),
           api.getClaimPreview(claimId),
@@ -1027,6 +1045,7 @@ export default function WorkspaceClaimDetailPage() {
           api.getClaimEquityCurve(claimId),
           api.getClaimTrades(claimId).catch(() => emptyTradeEvidence(claimId)),
           api.getWorkspaceUsage(workspaceId).catch(() => null),
+          fetch(`/api/claim-schemas/${claimId}/disputes`).then(r => r.json()).catch(() => []),
         ]);
 
       setClaim(claimRes);
@@ -1036,6 +1055,7 @@ export default function WorkspaceClaimDetailPage() {
       setEquityCurve(equityRes);
       setClaimTrades(tradesRes ?? emptyTradeEvidence(claimId));
       setUsage(usageRes);
+      setDisputes(Array.isArray(disputesRes) ? disputesRes : []);
 
       if (normalizeText(claimRes.status) === "locked") {
         try {
@@ -1093,6 +1113,35 @@ export default function WorkspaceClaimDetailPage() {
   );
 
   const handleIntegrityCheck = useCallback(async () => {
+    // ===============================
+    // Phase 9 — Create Dispute
+    // ===============================
+    const handleCreateDispute = async () => {
+      if (!claimId || !newDisputeSummary.trim()) return;
+
+      setCreatingDispute(true);
+
+      try {
+        await fetch(`/api/claim-schemas/${claimId}/disputes`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            claim_schema_id: claimId,
+            summary: newDisputeSummary,
+            reason_code: newDisputeReason,
+          }),
+        });
+
+        setNewDisputeSummary("");
+        await loadClaimPage();
+      } catch (err) {
+        console.error("Failed to create dispute", err);
+      } finally {
+        setCreatingDispute(false);
+      }
+    };
     if (!claimId) return;
     setCheckingIntegrity(true);
     setError(null);
@@ -1113,6 +1162,34 @@ export default function WorkspaceClaimDetailPage() {
       setCheckingIntegrity(false);
     }
   }, [claimId]);
+
+  const handleCreateDispute = useCallback(async () => {
+  if (!claimId || !newDisputeSummary.trim()) return;
+
+  setCreatingDispute(true);
+
+  try {
+    await fetch(`/api/claim-schemas/${claimId}/disputes`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        claim_schema_id: claimId,
+        summary: newDisputeSummary.trim(),
+        reason_code: newDisputeReason,
+      }),
+    });
+
+    setNewDisputeSummary("");
+    setNewDisputeReason("general_review");
+    await loadClaimPage();
+  } catch (err) {
+    setError(err instanceof Error ? err.message : "Failed to create dispute");
+  } finally {
+    setCreatingDispute(false);
+  }
+}, [claimId, newDisputeSummary, newDisputeReason, loadClaimPage]);
 
   if (!workspaceId || Number.isNaN(workspaceId)) {
     return <div className="p-6 text-red-600">Invalid workspace id.</div>;
@@ -1354,6 +1431,18 @@ export default function WorkspaceClaimDetailPage() {
           integrity={integrity}
         />
 
+        {disputes.length > 0 && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm">
+            <div className="text-sm font-semibold text-red-900">
+              Active Governance Challenges
+            </div>
+            <div className="mt-2 text-sm text-red-700">
+              This claim has {disputes.length} active dispute(s). Trust posture is contested.
+              External consumers should interpret results with caution until resolution.
+            </div>
+          </div>
+        )}
+
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard
             label="Trade Count"
@@ -1375,6 +1464,70 @@ export default function WorkspaceClaimDetailPage() {
             value={formatPercent(preview.win_rate, 2)}
             hint="Winning trades as percentage"
           />
+        </section>
+
+        {/* ===============================
+          Phase 9 — Dispute Panel
+        ================================ */}
+        <section className="rounded-2xl border bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Disputes & Challenges</h2>
+          </div>
+
+          {/* Create Dispute */}
+          {!isMember && (
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-medium">Raise a dispute</div>
+
+              <textarea
+                value={newDisputeSummary}
+                onChange={(e) => setNewDisputeSummary(e.target.value)}
+                placeholder="Describe the issue with this claim..."
+                className="mt-2 w-full rounded-lg border p-2 text-sm"
+              />
+
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={handleCreateDispute}
+                  disabled={creatingDispute}
+                  className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
+                >
+                  {creatingDispute ? "Submitting..." : "Submit Dispute"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Dispute List */}
+          <div className="mt-4 space-y-3">
+            {disputes.length === 0 ? (
+              <div className="text-sm text-slate-500">
+                No disputes raised for this claim.
+              </div>
+            ) : (
+              disputes.map((d) => (
+                <div
+                  key={d.id}
+                  className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                >
+                  <div className="flex justify-between">
+                    <div className="text-sm font-semibold">
+                      {d.challenge_type}
+                    </div>
+                    <span className="text-xs text-slate-500">{d.status}</span>
+                  </div>
+
+                  <div className="mt-2 text-sm text-slate-700">
+                    {d.summary}
+                  </div>
+
+                  <div className="mt-2 text-xs text-slate-500">
+                    {formatDateTime(d.created_at)}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.3fr_1fr]">
