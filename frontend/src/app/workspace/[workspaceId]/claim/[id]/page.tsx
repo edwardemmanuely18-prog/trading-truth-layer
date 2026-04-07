@@ -911,6 +911,47 @@ function UpgradeContextCard({
   );
 }
 
+function ClaimGraph({
+  currentId,
+  rootId,
+  parentId,
+}: {
+  currentId: number;
+  rootId?: number | null;
+  parentId?: number | null;
+}) {
+  const nodes = [];
+
+  if (rootId) nodes.push({ label: `claim#${rootId}`, id: rootId });
+  if (parentId && parentId !== rootId)
+    nodes.push({ label: `claim#${parentId}`, id: parentId });
+
+  nodes.push({ label: `claim#${currentId}`, id: currentId, current: true });
+
+  return (
+    <div className="mt-4 flex items-center gap-3 overflow-x-auto">
+      {nodes.map((node, idx) => (
+        <div key={node.id} className="flex items-center gap-3">
+          <Link
+            href={`/workspace/${node.id ? "" : ""}/claim/${node.id}`}
+            className={`rounded-xl border px-3 py-2 text-sm font-medium ${
+              node.current
+                ? "bg-slate-900 text-white"
+                : "bg-white hover:bg-slate-50"
+            }`}
+          >
+            {node.label}
+          </Link>
+
+          {idx < nodes.length - 1 && (
+            <span className="text-slate-400">→</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function WorkspaceClaimDetailPage() {
   const params = useParams();
   const pathname = usePathname();
@@ -1837,6 +1878,12 @@ const handleRejectDispute = useCallback(async (id: number) => {
           <div className="space-y-6">
             <div className="rounded-2xl border bg-white p-5 shadow-sm">
               <h2 className="text-xl font-semibold">Lineage & Claim Graph</h2>
+
+              <ClaimGraph
+                currentId={claim.id}
+                rootId={claim.root_claim_id}
+                parentId={claim.parent_claim_id}
+              />
 
               <div className="mt-4 flex flex-wrap gap-2">
                 <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${networkClassName}`}>
