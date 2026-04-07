@@ -1035,6 +1035,7 @@ def build_public_profile_response(workspace_id: int, db: Session):
 def build_claim_list_row(schema: ClaimSchema, db: Session):
     filtered_trades = resolve_schema_trades(schema, db)
     metrics = compute_trade_metrics(filtered_trades)
+    leaderboard = build_leaderboard(filtered_trades)
     integrity_status = resolve_claim_integrity_status(schema, filtered_trades)
     dispute_ctx = resolve_claim_dispute_context(schema, db)
     trust_score = compute_backend_trust_score(schema, metrics, integrity_status, dispute_ctx)
