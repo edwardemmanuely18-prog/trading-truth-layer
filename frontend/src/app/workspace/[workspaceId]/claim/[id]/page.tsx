@@ -14,6 +14,7 @@ import {
   type ClaimTradeScopeReason,
   type ClaimTradeScopeRow,
   type ClaimVersion,
+  type ClaimDispute,
   type WorkspaceUsageSummary,
 } from "../../../../../lib/api";
 import Navbar from "../../../../../components/Navbar";
@@ -950,15 +951,7 @@ export default function WorkspaceClaimDetailPage() {
   // ===============================
   // Phase 9 — Claim Disputes State
   // ===============================
-  type ClaimDispute = {
-    id: number;
-    status: string;
-    challenge_type: string;
-    reason_code: string;
-    summary: string;
-    created_at: string;
-  };
-
+  
   const [disputes, setDisputes] = useState<ClaimDispute[]>([]);
   const [loadingDisputes, setLoadingDisputes] = useState(false);
   const [creatingDispute, setCreatingDispute] = useState(false);
@@ -1045,7 +1038,7 @@ export default function WorkspaceClaimDetailPage() {
           api.getClaimEquityCurve(claimId),
           api.getClaimTrades(claimId).catch(() => emptyTradeEvidence(claimId)),
           api.getWorkspaceUsage(workspaceId).catch(() => null),
-          fetch(`/api/claim-schemas/${claimId}/disputes`).then(r => r.json()).catch(() => []),
+          api.getClaimDisputes(claimId).catch(() => []),
         ]);
 
       setClaim(claimRes);
@@ -1116,32 +1109,7 @@ export default function WorkspaceClaimDetailPage() {
     // ===============================
     // Phase 9 — Create Dispute
     // ===============================
-    const handleCreateDispute = async () => {
-      if (!claimId || !newDisputeSummary.trim()) return;
-
-      setCreatingDispute(true);
-
-      try {
-        await fetch(`/api/claim-schemas/${claimId}/disputes`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            claim_schema_id: claimId,
-            summary: newDisputeSummary,
-            reason_code: newDisputeReason,
-          }),
-        });
-
-        setNewDisputeSummary("");
-        await loadClaimPage();
-      } catch (err) {
-        console.error("Failed to create dispute", err);
-      } finally {
-        setCreatingDispute(false);
-      }
-    };
+    
     if (!claimId) return;
     setCheckingIntegrity(true);
     setError(null);
@@ -1169,20 +1137,14 @@ export default function WorkspaceClaimDetailPage() {
   setCreatingDispute(true);
 
   try {
-    await fetch(`/api/claim-schemas/${claimId}/disputes`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        claim_schema_id: claimId,
-        summary: newDisputeSummary.trim(),
-        reason_code: newDisputeReason,
-      }),
+    await api.createClaimDispute(claimId, {
+      summary: newDisputeSummary.trim(),
+      reason_code: newDisputeReason,
     });
 
     setNewDisputeSummary("");
     setNewDisputeReason("general_review");
+
     await loadClaimPage();
   } catch (err) {
     setError(err instanceof Error ? err.message : "Failed to create dispute");
@@ -1190,6 +1152,32 @@ export default function WorkspaceClaimDetailPage() {
     setCreatingDispute(false);
   }
 }, [claimId, newDisputeSummary, newDisputeReason, loadClaimPage]);
+
+  const handleResolveDispute = useCallback(async (id: number) => {
+  try {
+    await api.updateClaimDisputeStatus(id, {
+      status: "resolved",
+      resolution_note: "Resolved via internal review",
+    });
+
+    await loadClaimPage();
+  } catch {
+    setError("Failed to resolve dispute");
+  }
+}, [loadClaimPage]);
+
+const handleRejectDispute = useCallback(async (id: number) => {
+  try {
+    await api.updateClaimDisputeStatus(id, {
+      status: "rejected",
+      resolution_note: "Rejected after review",
+    });
+
+    await loadClaimPage();
+  } catch {
+    setError("Failed to reject dispute");
+  }
+}, [loadClaimPage]);
 
   if (!workspaceId || Number.isNaN(workspaceId)) {
     return <div className="p-6 text-red-600">Invalid workspace id.</div>;
@@ -1432,13 +1420,19 @@ export default function WorkspaceClaimDetailPage() {
         />
 
         {disputes.length > 0 && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm">
+          <div className="rounded-2xl border border-red-300 bg-red-50 p-5 shadow-sm">
             <div className="text-sm font-semibold text-red-900">
-              Active Governance Challenges
+              Governance Challenge Active
             </div>
-            <div className="mt-2 text-sm text-red-700">
-              This claim has {disputes.length} active dispute(s). Trust posture is contested.
-              External consumers should interpret results with caution until resolution.
+
+            <div className="mt-2 text-sm text-red-800">
+              {disputes.length} dispute(s) detected.
+              This claim is in a contested trust state.
+            </div>
+
+            <div className="mt-2 text-xs text-red-700">
+              Public credibility, leaderboard ranking, and verification trust
+              should be treated as degraded until disputes are resolved.
             </div>
           </div>
         )}
@@ -1510,11 +1504,19 @@ export default function WorkspaceClaimDetailPage() {
                   key={d.id}
                   className="rounded-xl border border-slate-200 bg-slate-50 p-4"
                 >
-                  <div className="flex justify-between">
-                    <div className="text-sm font-semibold">
-                      {d.challenge_type}
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="text-sm font-semibold">
+                        {d.challenge_type}
+                      </div>
+                      <div className="text-xs text-slate-500 mt-1">
+                        {d.reason_code}
+                      </div>
                     </div>
-                    <span className="text-xs text-slate-500">{d.status}</span>
+
+                    <span className="text-xs font-medium">
+                      {d.status}
+                    </span>
                   </div>
 
                   <div className="mt-2 text-sm text-slate-700">
@@ -1522,8 +1524,27 @@ export default function WorkspaceClaimDetailPage() {
                   </div>
 
                   <div className="mt-2 text-xs text-slate-500">
-                    {formatDateTime(d.created_at)}
+                    {formatDateTime(d.opened_at)}
                   </div>
+
+                  {/* Resolution actions */}
+                  {canManageClaimActions && d.status === "open" && (
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => handleResolveDispute(d.id)}
+                        className="rounded-lg bg-green-600 px-3 py-1 text-xs text-white"
+                      >
+                        Resolve
+                      </button>
+
+                      <button
+                        onClick={() => handleRejectDispute(d.id)}
+                        className="rounded-lg bg-red-600 px-3 py-1 text-xs text-white"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))
             )}
