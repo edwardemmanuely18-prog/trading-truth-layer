@@ -950,6 +950,27 @@ export type ClaimDispute = {
   resolved_at?: string | null;
 };
 
+export type PublicTrustProfile = {
+  profile_id: string;
+  workspace_id: number;
+  name: string;
+  type: string;
+  network: string;
+  claims_count: number;
+  locked_claims_count: number;
+  contested_claims_count: number;
+  average_trust_score: number;
+  average_network_score: number;
+  total_net_pnl: number;
+  trust_profile_band: string;
+};
+
+export type PublicProfileResponse = {
+  profile: PublicTrustProfile;
+  claims: PublicClaimDirectoryItem[];
+  claims_count: number;
+};
+
 export type ApiErrorPayload = {
   code?: string;
   message?: string;
@@ -1498,6 +1519,33 @@ function ensureClaimDispute(row: Partial<ClaimDispute>): ClaimDispute {
     opened_at: String(row.opened_at ?? ""),
     updated_at: String(row.updated_at ?? ""),
     resolved_at: row.resolved_at ?? null,
+  };
+}
+
+function ensurePublicTrustProfile(
+  row?: Partial<PublicTrustProfile> | null
+): PublicTrustProfile {
+  return {
+    profile_id: String(row?.profile_id ?? ""),
+    workspace_id: Number(row?.workspace_id ?? 0),
+    name: String(row?.name ?? ""),
+    type: String(row?.type ?? "workspace"),
+    network: String(row?.network ?? "internal"),
+    claims_count: Number(row?.claims_count ?? 0),
+    locked_claims_count: Number(row?.locked_claims_count ?? 0),
+    contested_claims_count: Number(row?.contested_claims_count ?? 0),
+    average_trust_score: Number(row?.average_trust_score ?? 0),
+    average_network_score: Number(row?.average_network_score ?? 0),
+    total_net_pnl: Number(row?.total_net_pnl ?? 0),
+    trust_profile_band: String(row?.trust_profile_band ?? "fragile"),
+  };
+}
+
+function ensurePublicProfileResponse(row: PublicProfileResponse): PublicProfileResponse {
+  return {
+    profile: ensurePublicTrustProfile(row?.profile),
+    claims: Array.isArray(row?.claims) ? row.claims.map(ensurePublicClaim) : [],
+    claims_count: Number(row?.claims_count ?? 0),
   };
 }
 
@@ -2051,6 +2099,14 @@ export const api = {
     return apiFetch<EvidenceBundle>(withDevUser(`/claim-schemas/${claimSchemaId}/evidence-bundle`), {
       cache: "no-store",
     });
+  },
+
+  getPublicProfile: async (workspaceId: number): Promise<PublicProfileResponse> => {
+    const row = await apiFetch<PublicProfileResponse>(`/profiles/${workspaceId}`, {
+      cache: "no-store",
+    });
+
+    return ensurePublicProfileResponse(row);
   },
 
   getPublicClaim: async (claimSchemaId: number): Promise<PublicClaim> => {
