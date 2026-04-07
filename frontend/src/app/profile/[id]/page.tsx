@@ -178,100 +178,101 @@ export default async function PublicProfilePage({ params }: PageProps) {
 
         {!loadError && profile ? (
           <>
-            <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
             <div className="mb-8 rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                <div className="text-sm font-semibold text-blue-900">
+                  <div className="text-sm font-semibold text-blue-900">
                     Public Trust Proof
-                </div>
-                <div className="mt-1 text-sm text-blue-800">
+                  </div>
+                  <div className="mt-1 text-sm text-blue-800">
                     This profile is a verifiable public trust surface backed by locked claims,
                     audit history, and network-aware scoring.
-                </div>
+                  </div>
 
-                <div className="mt-3 text-xs font-mono text-blue-700">
+                  <div className="mt-3 font-mono text-xs text-blue-700">
                     /profile/{profile.workspace_id}
-                </div>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                <Link
+                  <Link
                     href={`/profile/${profile.workspace_id}`}
                     className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-medium hover:bg-blue-100"
-                >
+                  >
                     Open Profile
-                </Link>
+                  </Link>
 
-                <Link
+                  <Link
                     href="/leaderboard"
                     className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-medium hover:bg-blue-100"
-                >
+                  >
                     Leaderboard
                   </Link>
                 </div>
               </div>
             </div>
 
-              <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
-                <h2 className="text-xl font-semibold">Embed Trust Widget</h2>
+            <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold">Embed Trust Widget</h2>
 
-                <div className="mt-2 text-sm text-slate-500">
-                    Embed this profile’s trust surface into external websites or communities.
-                </div>
-
-                <div className="mt-4 overflow-x-auto rounded-lg bg-slate-900 p-4 font-mono text-xs text-green-400">
-                    {`<iframe src="/profile/${profile.workspace_id}" width="100%" height="600"></iframe>`}
-                </div>
+              <div className="mt-2 text-sm text-slate-500">
+                  Embed this profile’s trust surface into external websites or communities.
               </div>
+
+              <div className="mt-4 overflow-x-auto rounded-lg bg-slate-900 p-4 font-mono text-xs text-green-400">
+                  {`<iframe src="/profile/${profile.workspace_id}" width="100%" height="600"></iframe>`}
+              </div>
+              </div>
+
+              <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div>
+                  <div>
                   <div className="text-sm text-slate-500">Issuer Identity</div>
                   <h2 className="mt-2 text-2xl font-semibold text-slate-950">
-                    {profile.name}
+                      {profile.name}
                   </h2>
 
                   <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <span
+                      <span
                       className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${profileBand.className}`}
-                    >
+                      >
                       {profileBand.label}
-                    </span>
+                      </span>
 
-                    <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                      <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
                       {profile.type}
-                    </span>
+                      </span>
 
-                    <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                      <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
                       {profile.network}
-                    </span>
+                      </span>
 
-                    <span className="text-xs text-slate-400">
+                      <span className="text-xs text-slate-400">
                       {profile.profile_id}
-                    </span>
+                      </span>
                   </div>
-                </div>
+                  </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                   <div>
-                    <span className="font-medium text-slate-900">Workspace ID:</span>{" "}
-                    {profile.workspace_id}
+                      <span className="font-medium text-slate-900">Workspace ID:</span>{" "}
+                      {profile.workspace_id}
                   </div>
                   <div className="mt-2">
-                    <span className="font-medium text-slate-900">Claims surfaced:</span>{" "}
-                    {data?.claims_count ?? 0}
+                      <span className="font-medium text-slate-900">Claims surfaced:</span>{" "}
+                      {data?.claims_count ?? 0}
                   </div>
                   <div className="mt-2">
-                    <Link
+                      <Link
                       href="/leaderboard"
                       className="text-slate-900 underline underline-offset-4"
-                    >
+                      >
                       Back to Leaderboard
-                    </Link>
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
             <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
               <SummaryCard
@@ -437,11 +438,11 @@ export default async function PublicProfilePage({ params }: PageProps) {
                               {formatDateTime(claim.lifecycle?.locked_at)}
                             </td>
 
-                            <td className="relative px-3 py-3">
-                              <div className="relative z-10 flex flex-wrap gap-2">
+                            <td className="px-3 py-3">
+                              <div className="flex flex-wrap gap-2">
                                 <Link
                                   href={`/claim/${claim.claim_schema_id}/public`}
-                                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
                                 >
                                   Public Record
                                 </Link>
@@ -454,10 +455,10 @@ export default async function PublicProfilePage({ params }: PageProps) {
                                 </Link>
 
                                 <Link
-                                  href={`/profile/${profile.workspace_id}`}
+                                  href={`/claim/${claim.claim_schema_id}/public`}
                                   className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
                                 >
-                                  Profile Proof
+                                  Claim Proof
                                 </Link>
                               </div>
                             </td>
