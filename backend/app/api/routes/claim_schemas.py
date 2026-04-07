@@ -1049,53 +1049,62 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
     claim_hash = schema.claim_hash or compute_claim_hash(schema)
 
     return {
-        "claim_schema_id": schema.id,
-        "claim_hash": claim_hash,
-        "issuer": build_issuer_payload(schema, db),
-        "profile": build_public_trust_profile_for_workspace(schema.workspace_id, db),
-        "integrity_status": integrity_status,
-        "public_view_path": f"/claim/{schema.id}/public",
-        "verify_path": f"/verify/{claim_hash}",
-        "name": schema.name,
-        "verification_status": schema.status,
-        "trade_count": metrics["trade_count"],
-        "net_pnl": metrics["net_pnl"],
-        "profit_factor": metrics["profit_factor"],
-        "win_rate": metrics["win_rate"],
-        "leaderboard": build_leaderboard(filtered_trades),
-        "disputes_count": dispute_ctx["disputes_count"],
-        "active_disputes_count": dispute_ctx["active_disputes_count"],
-        "has_active_dispute": dispute_ctx["has_active_dispute"],
-        "dispute_penalty_factor": dispute_ctx["dispute_penalty_factor"],
-        "trust_score": trust_score,
-        "trust_band": "contested" if dispute_ctx["has_active_dispute"] else resolve_trust_band(trust_score),
-        "trust_weighted_pnl": trust_weighted_pnl,
-        "network_score": network_ctx["network_score"],
-        "network_weighted_pnl": network_weighted_pnl,
-        "network": network_ctx,
-        "scope": {
-            "period_start": schema.period_start,
-            "period_end": schema.period_end,
-            "included_members": json.loads(schema.included_member_ids_json or "[]"),
-            "included_symbols": json.loads(schema.included_symbols_json or "[]"),
-            "methodology_notes": schema.methodology_notes,
-            "visibility": schema.visibility,
-        },
-        "lifecycle": {
-            "status": schema.status,
-            "verified_at": schema.verified_at.isoformat() if schema.verified_at else None,
-            "published_at": schema.published_at.isoformat() if schema.published_at else None,
-            "locked_at": schema.locked_at.isoformat() if schema.locked_at else None,
-            "locked_trade_set_hash": schema.locked_trade_set_hash,
-        },
-        "lineage": {
-            "parent_claim_id": schema.parent_claim_id,
-            "root_claim_id": schema.root_claim_id,
-            "version_number": schema.version_number,
-        },
-        "trade_set_hash": trade_set_hash,
-        "is_publicly_accessible": is_claim_publicly_accessible(schema),
-    }
+    "claim_schema_id": schema.id,
+    "claim_hash": claim_hash,
+
+    "issuer": build_issuer_payload(schema, db),
+
+    "integrity_status": integrity_status,
+    "public_view_path": f"/claim/{schema.id}/public",
+    "verify_path": f"/verify/{claim_hash}",
+
+    "name": schema.name,
+    "verification_status": schema.status,
+
+    "trade_count": metrics["trade_count"],
+    "net_pnl": metrics["net_pnl"],
+    "profit_factor": metrics["profit_factor"],
+    "win_rate": metrics["win_rate"],
+
+    "leaderboard": leaderboard,
+
+    "disputes_count": dispute_ctx["disputes_count"],
+    "active_disputes_count": dispute_ctx["active_disputes_count"],
+    "has_active_dispute": dispute_ctx["has_active_dispute"],
+    "dispute_penalty_factor": dispute_ctx["dispute_penalty_factor"],
+
+    "trust_score": trust_score,
+    "trust_band": "contested" if dispute_ctx["has_active_dispute"] else resolve_trust_band(trust_score),
+    "trust_weighted_pnl": trust_weighted_pnl,
+
+    "network_score": network_ctx["network_score"],
+    "network_weighted_pnl": network_weighted_pnl,
+    "network": network_ctx,
+
+    "scope": {
+        "period_start": schema.period_start,
+        "period_end": schema.period_end,
+        "included_members": json.loads(schema.included_member_ids_json or "[]"),
+        "included_symbols": json.loads(schema.included_symbols_json or "[]"),
+        "methodology_notes": schema.methodology_notes,
+        "visibility": schema.visibility,
+    },
+
+    "lifecycle": {
+        "status": schema.status,
+        "verified_at": schema.verified_at.isoformat() if schema.verified_at else None,
+        "published_at": schema.published_at.isoformat() if schema.published_at else None,
+        "locked_at": schema.locked_at.isoformat() if schema.locked_at else None,
+    },
+
+    "lineage": {
+        "parent_claim_id": schema.parent_claim_id,
+        "root_claim_id": schema.root_claim_id,
+        "version_number": schema.version_number,
+    },
+
+    "is_publicly_accessible": is_claim_publicly_accessible(schema),
+}
 
 
 def build_public_claim_payload(schema: ClaimSchema, db: Session):
