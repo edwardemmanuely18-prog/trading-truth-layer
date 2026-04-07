@@ -179,6 +179,58 @@ export default async function PublicProfilePage({ params }: PageProps) {
         {!loadError && profile ? (
           <>
             <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
+            <div className="mb-8 rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                    <div className="text-sm font-semibold text-blue-900">
+                        Public Trust Proof
+                    </div>
+                    <div className="mt-1 text-sm text-blue-800">
+                        This profile is a verifiable public trust surface backed by locked claims,
+                        audit history, and network-aware scoring.
+                    </div>
+
+                    <div className="mt-3 text-xs text-blue-700 font-mono">
+                        https://tradingtruthlayer.com/profile/{profile.workspace_id}
+                    </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                    <button
+                        onClick={() =>
+                        navigator.clipboard.writeText(
+                            `${typeof window !== "undefined" ? window.location.origin : ""}/profile/${profile.workspace_id}`
+                        )
+                        }
+                        className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-medium hover:bg-blue-100"
+                    >
+                        Copy Link
+                    </button>
+
+                    <a
+                        href={`https://twitter.com/intent/tweet?text=Verified%20Trading%20Profile&url=${encodeURIComponent(
+                        `/profile/${profile.workspace_id}`
+                        )}`}
+                        target="_blank"
+                        className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-medium hover:bg-blue-100"
+                    >
+                        Share
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
+              <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
+                <h2 className="text-xl font-semibold">Embed Trust Widget</h2>
+
+                <div className="mt-2 text-sm text-slate-500">
+                    Embed this profile’s trust surface into external websites or communities.
+                </div>
+
+                <div className="mt-4 rounded-lg bg-slate-900 p-4 text-xs text-green-400 font-mono overflow-x-auto">
+              {`<iframe src="${typeof window !== "undefined" ? window.location.origin : ""}/profile/${profile.workspace_id}" width="100%" height="600" />`}
+                </div>
+              </div>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <div className="text-sm text-slate-500">Issuer Identity</div>
@@ -334,6 +386,9 @@ export default async function PublicProfilePage({ params }: PageProps) {
                               <div className="mt-1 font-mono text-xs text-slate-500">
                                 {claim.claim_hash}
                               </div>
+                              <div className="mt-1 text-[10px] text-blue-500">
+                                publicly verifiable · shareable · canonical
+                              </div>
                             </td>
 
                             <td className="px-3 py-3">
@@ -392,18 +447,30 @@ export default async function PublicProfilePage({ params }: PageProps) {
                             <td className="px-3 py-3">
                               <div className="flex flex-wrap gap-2">
                                 <Link
-                                  href={`/claim/${claim.claim_schema_id}/public`}
-                                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                                    href={`/claim/${claim.claim_schema_id}/public`}
+                                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
                                 >
-                                  Public Record
+                                    Public Record
                                 </Link>
+
                                 <Link
-                                  href={`/verify/${claim.claim_hash}`}
-                                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                                    href={`/verify/${claim.claim_hash}`}
+                                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
                                 >
-                                  Verify
+                                    Verify
                                 </Link>
-                              </div>
+
+                                <button
+                                    onClick={() =>
+                                    navigator.clipboard.writeText(
+                                        `${typeof window !== "undefined" ? window.location.origin : ""}/verify/${claim.claim_hash}`
+                                    )
+                                    }
+                                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                                >
+                                    Copy Proof
+                                </button>
+                                </div>
                             </td>
                           </tr>
                         );
