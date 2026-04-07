@@ -437,27 +437,27 @@ export default async function PublicProfilePage({ params }: PageProps) {
                               {formatDateTime(claim.lifecycle?.locked_at)}
                             </td>
 
-                            <td className="px-3 py-3">
-                              <div className="flex flex-wrap gap-2">
+                            <td className="relative px-3 py-3">
+                              <div className="relative z-10 flex flex-wrap gap-2">
                                 <Link
-                                    href={`/claim/${claim.claim_schema_id}/public`}
-                                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                                  href={`/claim/${claim.claim_schema_id}/public`}
+                                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
                                 >
-                                    Public Record
+                                  Public Record
                                 </Link>
 
                                 <Link
-                                    href={`/verify/${claim.claim_hash}`}
-                                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                                  href={`/verify/${claim.claim_hash}`}
+                                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
                                 >
-                                    Verify
+                                  Verify
                                 </Link>
 
                                 <Link
-                                    href={`/profile/${profile.workspace_id}`}
-                                    className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                                  href={`/profile/${profile.workspace_id}`}
+                                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
                                 >
-                                    Profile Proof
+                                  Profile Proof
                                 </Link>
                               </div>
                             </td>
