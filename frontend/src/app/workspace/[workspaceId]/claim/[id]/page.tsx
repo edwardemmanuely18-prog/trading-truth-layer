@@ -911,6 +911,27 @@ function UpgradeContextCard({
   );
 }
 
+type ClaimGraphNodeRole = "root" | "parent" | "current";
+
+type ClaimGraphNode = {
+  id: number;
+  label: string;
+  role: ClaimGraphNodeRole;
+  description: string;
+};
+
+function graphNodeTone(role: ClaimGraphNodeRole) {
+  if (role === "root") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-900";
+  }
+
+  if (role === "parent") {
+    return "border-amber-200 bg-amber-50 text-amber-900";
+  }
+
+  return "border-slate-900 bg-slate-900 text-white";
+}
+
 function ClaimGraph({
   workspaceId,
   currentId,
@@ -922,57 +943,94 @@ function ClaimGraph({
   rootId?: number | null;
   parentId?: number | null;
 }) {
-  const nodes = [];
+  const nodes: ClaimGraphNode[] = [];
 
   if (rootId) {
     nodes.push({
       id: rootId,
-      label: `Root #${rootId}`,
-      type: "root",
+      label: `Claim #${rootId}`,
+      role: "root",
+      description: "Origin node",
     });
   }
 
   if (parentId && parentId !== rootId) {
     nodes.push({
       id: parentId,
-      label: `Parent #${parentId}`,
-      type: "parent",
+      label: `Claim #${parentId}`,
+      role: "parent",
+      description: "Immediate parent",
     });
   }
 
   nodes.push({
     id: currentId,
-    label: `Current #${currentId}`,
-    type: "current",
+    label: `Claim #${currentId}`,
+    role: "current",
+    description: "Current node",
   });
 
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-4">
-      {nodes.map((node, idx) => (
-        <div key={node.id} className="flex items-center gap-3">
-          <Link
-            href={`/workspace/${workspaceId}/claim/${node.id}`}
-            className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
-              node.type === "current"
-                ? "bg-slate-900 text-white"
-                : node.type === "root"
-                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                : node.type === "parent"
-                ? "bg-amber-50 border-amber-200 text-amber-800"
-                : "bg-white hover:bg-slate-50"
-            }`}
-          >
-            {node.label}
-          </Link>
-
-          {idx < nodes.length - 1 && (
-            <div className="flex flex-col items-center">
-              <span className="text-slate-400 text-xs">derives</span>
-              <span className="text-slate-400">↓</span>
-            </div>
-          )}
+    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">Graph View</div>
+          <div className="mt-1 text-xs text-slate-500">
+            Workspace-aware lineage graph for governed claim evolution.
+          </div>
         </div>
-      ))}
+
+        <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+          nodes: {nodes.length}
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-wrap items-center gap-4">
+        {nodes.map((node, idx) => (
+          <div key={`${node.role}-${node.id}`} className="flex items-center gap-4">
+            <Link
+              href={`/workspace/${workspaceId}/claim/${node.id}`}
+              className={`min-w-[160px] rounded-2xl border px-4 py-3 shadow-sm transition hover:shadow ${graphNodeTone(
+                node.role
+              )}`}
+            >
+              <div className="text-xs uppercase tracking-wide opacity-80">
+                {node.role}
+              </div>
+              <div className="mt-1 text-sm font-semibold">{node.label}</div>
+              <div className="mt-1 text-xs opacity-80">{node.description}</div>
+            </Link>
+
+            {idx < nodes.length - 1 ? (
+              <div className="flex min-w-[72px] flex-col items-center text-slate-400">
+                <span className="text-[10px] uppercase tracking-wide">flows to</span>
+                <span className="text-xl leading-none">→</span>
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
+          <div className="font-medium text-slate-900">Root</div>
+          <div className="mt-1">
+            {rootId ? `claim#${rootId}` : "self-originated"}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
+          <div className="font-medium text-slate-900">Parent</div>
+          <div className="mt-1">
+            {parentId ? `claim#${parentId}` : "no direct parent"}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
+          <div className="font-medium text-slate-900">Current</div>
+          <div className="mt-1">{`claim#${currentId}`}</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1904,6 +1962,10 @@ const handleRejectDispute = useCallback(async (id: number) => {
             <div className="rounded-2xl border bg-white p-5 shadow-sm">
               <h2 className="text-xl font-semibold">Lineage & Claim Graph</h2>
 
+              <div className="mt-2 text-sm text-slate-500">
+                Visual lineage map for root, parent, and current claim nodes inside the governed claim network.
+              </div>
+
               <ClaimGraph
                 workspaceId={workspaceId}
                 currentId={claim.id}
@@ -1918,6 +1980,33 @@ const handleRejectDispute = useCallback(async (id: number) => {
                 <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
                   issuer: {issuerName}
                 </span>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {claim.root_claim_id ? (
+                  <Link
+                    href={`/workspace/${workspaceId}/claim/${claim.root_claim_id}`}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Open Root Node
+                  </Link>
+                ) : null}
+
+                {claim.parent_claim_id ? (
+                  <Link
+                    href={`/workspace/${workspaceId}/claim/${claim.parent_claim_id}`}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Open Parent Node
+                  </Link>
+                ) : null}
+
+                <Link
+                  href={`/workspace/${workspaceId}/claim/${claim.id}`}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Re-center Current Node
+                </Link>
               </div>
 
               <div className="mt-4 space-y-3 text-sm">
