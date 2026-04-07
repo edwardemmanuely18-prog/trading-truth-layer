@@ -20,6 +20,7 @@ from reportlab.graphics.shapes import Drawing
 from reportlab.graphics import renderPDF
 from reportlab.graphics.barcode import qr
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.api.deps import (
     get_current_user,
@@ -30,6 +31,7 @@ from app.api.deps import (
 from app.core.db import get_db
 from app.models.audit_event import AuditEvent
 from app.models.claim_schema import ClaimSchema
+from app.models.claim_dispute import ClaimDispute
 from app.models.trade import Trade
 from app.models.user import User
 from app.models.workspace import Workspace
@@ -506,6 +508,34 @@ def compute_trade_metrics(trades: list[Trade]):
     }
 
 
+def resolve_claim_dispute_context(schema: ClaimSchema, db: Session):
+    disputes = (
+        db.query(ClaimDispute)
+        .filter(ClaimDispute.claim_schema_id == schema.id)
+        .all()
+    )
+
+    total = len(disputes)
+
+    active = [d for d in disputes if d.status == "open"]
+    resolved = [d for d in disputes if d.status == "resolved"]
+
+    has_active = len(active) > 0
+
+    # penalty logic (authoritative backend rule)
+    penalty_factor = 1.0
+    if has_active:
+        penalty_factor = 0.7  # ← your trust penalty
+
+    return {
+        "disputes_count": total,
+        "active_disputes_count": len(active),
+        "resolved_disputes_count": len(resolved),
+        "has_active_dispute": has_active,
+        "dispute_penalty_factor": penalty_factor,
+    }
+
+
 def build_equity_curve(trades: list[Trade]):
     ordered = sorted(
         trades,
@@ -802,6 +832,7 @@ def build_issuer_payload(schema: ClaimSchema, db: Session):
 def build_claim_list_row(schema: ClaimSchema, db: Session):
     filtered_trades = resolve_schema_trades(schema, db)
     metrics = compute_trade_metrics(filtered_trades)
+    dispute_ctx = resolve_claim_dispute_context(schema, db)
 
     trade_set_hash = schema.locked_trade_set_hash
     if not trade_set_hash:
@@ -823,6 +854,10 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
         "profit_factor": metrics["profit_factor"],
         "win_rate": metrics["win_rate"],
         "leaderboard": build_leaderboard(filtered_trades),
+        "disputes_count": dispute_ctx["disputes_count"],
+        "active_disputes_count": dispute_ctx["active_disputes_count"],
+        "has_active_dispute": dispute_ctx["has_active_dispute"],
+        "dispute_penalty_factor": dispute_ctx["dispute_penalty_factor"],
         "scope": {
             "period_start": schema.period_start,
             "period_end": schema.period_end,
@@ -851,7 +886,24 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
 def build_public_claim_payload(schema: ClaimSchema, db: Session):
     filtered_trades = resolve_schema_trades(schema, db)
     metrics = compute_trade_metrics(filtered_trades)
+    dispute_ctx = resolve_claim_dispute_context(schema, db)
     leaderboard = build_leaderboard(filtered_trades)
+
+    # apply dispute penalty to leaderboard scores
+    if dispute_ctx["has_active_dispute"]:
+        for row in leaderboard:
+            row["net_pnl_adjusted"] = round(
+                row["net_pnl"] * dispute_ctx["dispute_penalty_factor"], 4
+            )
+    else:
+        for row in leaderboard:
+            row["net_pnl_adjusted"] = row["net_pnl"]
+
+    # re-rank based on adjusted pnl
+    leaderboard.sort(key=lambda x: x["net_pnl_adjusted"], reverse=True)
+
+    for idx, row in enumerate(leaderboard, start=1):
+        row["rank"] = idx
 
     trade_set_hash = schema.locked_trade_set_hash
     if not trade_set_hash:
@@ -880,6 +932,7 @@ def build_public_claim_payload(schema: ClaimSchema, db: Session):
         "win_rate": metrics["win_rate"],
         "leaderboard": leaderboard,
         "issuer": issuer,
+        "disputes": dispute_ctx,
         "scope": {
             "period_start": schema.period_start,
             "period_end": schema.period_end,
