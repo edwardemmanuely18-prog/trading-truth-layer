@@ -27,7 +27,8 @@ function isPublicTrustPath(currentPath: string) {
     currentPath === "/leaderboard" ||
     currentPath === "/schema" ||
     startsWithPath(currentPath, "/claim") ||
-    startsWithPath(currentPath, "/verify")
+    startsWithPath(currentPath, "/verify") ||
+    startsWithPath(currentPath, "/profile")
   );
 }
 
@@ -81,12 +82,14 @@ export default function Navbar({ workspaceId = 1 }: Props) {
   const publicClaimsHref = "/claims";
   const leaderboardHref = "/leaderboard";
   const claimBuilderHref = "/schema";
+  const publicProfileHref = `/profile/${workspaceId}`;
 
   const dashboardHref = `${base}/dashboard`;
   const importHref = `${base}/import`;
   const ledgerHref = `${base}/ledger`;
   const workspaceSchemaHref = `${base}/schema`;
   const claimsHref = `${base}/claims`;
+  const latestClaimHref = latestClaimId ? `${base}/claim/${latestClaimId}` : null;
   const evidenceHref = latestClaimId
     ? `${base}/evidence?claimId=${latestClaimId}`
     : `${base}/evidence`;
@@ -97,7 +100,9 @@ export default function Navbar({ workspaceId = 1 }: Props) {
     currentPath === "/claims" || startsWithPath(currentPath, "/claim");
   const leaderboardActive = currentPath === "/leaderboard";
   const schemaBuilderActive = currentPath === "/schema";
+  const publicProfileActive = startsWithPath(currentPath, "/profile");
   const publicTrustActive = isPublicTrustPath(currentPath);
+
   const dashboardActive = startsWithPath(currentPath, dashboardHref);
   const importActive = startsWithPath(currentPath, importHref);
   const ledgerActive = startsWithPath(currentPath, ledgerHref);
@@ -105,6 +110,9 @@ export default function Navbar({ workspaceId = 1 }: Props) {
   const claimsActive =
     startsWithPath(currentPath, claimsHref) ||
     startsWithPath(currentPath, `${base}/claim`);
+  const latestClaimActive = latestClaimHref
+    ? startsWithPath(currentPath, latestClaimHref)
+    : false;
   const evidenceActive =
     startsWithPath(currentPath, `${base}/evidence`) ||
     (startsWithPath(currentPath, `${base}/claim`) && currentPath.endsWith("/evidence"));
@@ -119,16 +127,54 @@ export default function Navbar({ workspaceId = 1 }: Props) {
 
   return (
     <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-4">
-        <div className="flex flex-wrap items-center gap-4">
-          <Link href="/" className="text-lg font-bold text-slate-900">
-            Trading Truth Layer
-          </Link>
+      <div className="mx-auto max-w-7xl px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <Link href="/" className="text-lg font-bold text-slate-900">
+              Trading Truth Layer
+            </Link>
 
-          <WorkspaceSwitcher />
+            <WorkspaceSwitcher />
+
+            <div className="hidden rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600 md:block">
+              {publicTrustActive ? "Public Trust Layer" : `Workspace #${workspaceId}`}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="text-sm">
+              <div className="flex items-center gap-2">
+                <div className="font-medium text-slate-900">{user?.name || "User"}</div>
+
+                {!loading && workspaceRole ? (
+                  <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                    {workspaceRole}
+                  </span>
+                ) : null}
+
+                <span className="text-[10px] text-slate-400">workspace:{workspaceId}</span>
+              </div>
+
+              <div className="text-xs text-slate-500">{user?.email || "—"}</div>
+            </div>
+
+            <button
+              type="button"
+              onClick={logout}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
+            >
+              Logout
+            </button>
+          </div>
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="mt-3 text-[10px] text-slate-400">
+          {publicTrustActive
+            ? "Mode: Public Trust Surface"
+            : "Mode: Internal Governance Surface"}
+        </div>
+
+        <div className="mt-2 flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             <span>Public Trust Layer</span>
             <div className="h-px w-6 bg-slate-200" />
@@ -136,88 +182,92 @@ export default function Navbar({ workspaceId = 1 }: Props) {
           </div>
 
           <nav className="flex flex-wrap items-center gap-2">
-          <Link href={publicClaimsHref} className={navClass(publicClaimsActive)}>
-            Public Records
-          </Link>
-
-          <Link href={leaderboardHref} className={navClass(leaderboardActive)}>
-            Trust Leaderboard
-          </Link>
-
-          <Link href={claimBuilderHref} className={navClass(schemaBuilderActive)}>
-            Claim Builder
-          </Link>
-
-          <div className="mx-1 hidden h-6 w-px bg-slate-200 md:block" />
-
-          <Link href={dashboardHref} className={navClass(dashboardActive)}>
-            Dashboard
-          </Link>
-
-          {canSeeImport ? (
-            <Link href={importHref} className={navClass(importActive)}>
-              Import
+            <Link href={publicClaimsHref} className={navClass(publicClaimsActive)}>
+              Public Records
             </Link>
-          ) : null}
 
-          <Link href={ledgerHref} className={navClass(ledgerActive)}>
-            Ledger
-          </Link>
-
-          {canSeeSchema ? (
-            <Link href={workspaceSchemaHref} className={navClass(workspaceSchemaActive)}>
-              Schema Registry
+            <Link href={leaderboardHref} className={navClass(leaderboardActive)}>
+              Trust Leaderboard
             </Link>
-          ) : null}
 
-          <Link href={claimsHref} className={navClass(claimsActive)}>
-            Internal Claims
-          </Link>
-
-          <Link href={evidenceHref} className={navClass(evidenceActive)}>
-            Evidence Review
-          </Link>
-
-          {canSeeMembers ? (
-            <Link href={membersHref} className={navClass(membersActive)}>
-              Members
+            <Link href={publicProfileHref} className={navClass(publicProfileActive)}>
+              Profile
             </Link>
-          ) : null}
 
-          <Link href={settingsHref} className={navClass(settingsActive)}>
-            Settings & Billing
-          </Link>
-        </nav>
-      </div>
+            <Link href={claimBuilderHref} className={navClass(schemaBuilderActive)}>
+              Claim Builder
+            </Link>
 
-      {publicTrustActive ? (
-        <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-          You are viewing a public trust-layer surface designed for verification, distribution, and external review.
+            <div className="mx-1 hidden h-6 w-px bg-slate-200 md:block" />
+
+            {latestClaimHref ? (
+              <Link href={latestClaimHref} className={navClass(latestClaimActive)}>
+                Latest Claim
+              </Link>
+            ) : null}
+
+            <Link href={dashboardHref} className={navClass(dashboardActive)}>
+              Dashboard
+            </Link>
+
+            {canSeeImport ? (
+              <Link href={importHref} className={navClass(importActive)}>
+                Import
+              </Link>
+            ) : null}
+
+            <Link href={ledgerHref} className={navClass(ledgerActive)}>
+              Ledger
+            </Link>
+
+            {canSeeSchema ? (
+              <Link href={workspaceSchemaHref} className={navClass(workspaceSchemaActive)}>
+                Schema Registry
+              </Link>
+            ) : null}
+
+            <Link href={claimsHref} className={navClass(claimsActive)}>
+              Internal Claims
+            </Link>
+
+            <Link href={evidenceHref} className={navClass(evidenceActive)}>
+              Evidence Review
+            </Link>
+
+            {canSeeMembers ? (
+              <Link href={membersHref} className={navClass(membersActive)}>
+                Members
+              </Link>
+            ) : null}
+
+            <Link href={settingsHref} className={navClass(settingsActive)}>
+              Settings & Billing
+            </Link>
+          </nav>
         </div>
-      ) : null}
 
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-          <div className="text-sm">
+        {publicTrustActive ? (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+            <span>
+              Public trust-layer surface (verification, distribution, external review).
+            </span>
+
             <div className="flex items-center gap-2">
-              <div className="font-medium text-slate-900">{user?.name || "User"}</div>
-              {!loading && workspaceRole ? (
-                <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                  {workspaceRole}
-                </span>
-              ) : null}
+              <Link
+                href="/leaderboard"
+                className="rounded-md border border-blue-300 px-2 py-1 hover:bg-blue-100"
+              >
+                Leaderboard
+              </Link>
+              <Link
+                href="/claims"
+                className="rounded-md border border-blue-300 px-2 py-1 hover:bg-blue-100"
+              >
+                Public Records
+              </Link>
             </div>
-
-            <div className="text-xs text-slate-500">{user?.email || "—"}</div>
           </div>
-
-          <button
-            type="button"
-            onClick={logout}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
-          >
-            Logout
-          </button>
-        </div>
+        ) : null}
       </div>
     </header>
   );
