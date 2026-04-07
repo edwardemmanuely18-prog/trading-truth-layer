@@ -926,6 +926,30 @@ export type ClaimIntegrityResult = {
   verified_at: string;
 };
 
+export type ClaimDisputeStatus = "open" | "under_review" | "resolved" | "rejected";
+
+export type ClaimDispute = {
+  id: number;
+  claim_schema_id: number;
+  workspace_id: number;
+
+  status: ClaimDisputeStatus;
+  challenge_type: string;
+  reason_code: string;
+
+  summary: string;
+  evidence_note?: string | null;
+
+  reporter_user_id: number;
+  reviewer_user_id?: number | null;
+
+  resolution_note?: string | null;
+
+  opened_at: string;
+  updated_at: string;
+  resolved_at?: string | null;
+};
+
 export type ApiErrorPayload = {
   code?: string;
   message?: string;
@@ -1447,6 +1471,33 @@ function ensureClaimTradeEvidence(row: ClaimTradeEvidence): ClaimTradeEvidence {
           excluded_trade_count: excludedRows.length,
           excluded_breakdown: {},
         },
+  };
+}
+
+function ensureClaimDispute(row: Partial<ClaimDispute>): ClaimDispute {
+  return {
+    id: Number(row.id ?? 0),
+    claim_schema_id: Number(row.claim_schema_id ?? 0),
+    workspace_id: Number(row.workspace_id ?? 0),
+
+    status: (row.status ?? "open") as ClaimDisputeStatus,
+    challenge_type: String(row.challenge_type ?? "general_review"),
+    reason_code: String(row.reason_code ?? "other"),
+
+    summary: String(row.summary ?? ""),
+    evidence_note: row.evidence_note ?? null,
+
+    reporter_user_id: Number(row.reporter_user_id ?? 0),
+    reviewer_user_id:
+      typeof row.reviewer_user_id === "number"
+        ? row.reviewer_user_id
+        : row.reviewer_user_id ?? null,
+
+    resolution_note: row.resolution_note ?? null,
+
+    opened_at: String(row.opened_at ?? ""),
+    updated_at: String(row.updated_at ?? ""),
+    resolved_at: row.resolved_at ?? null,
   };
 }
 
@@ -2124,6 +2175,57 @@ export const api = {
 
     return normalizeVerifyPayload(row);
   },
+
+    // =========================
+    // Phase 9 — Claim Disputes
+    // =========================
+
+    getClaimDisputes: async (claimSchemaId: number): Promise<ClaimDispute[]> => {
+      const rows = await apiFetch<ClaimDispute[]>(
+        withDevUser(`/claim-schemas/${claimSchemaId}/disputes`),
+        { cache: "no-store" }
+      );
+
+      return Array.isArray(rows) ? rows.map(ensureClaimDispute) : [];
+    },
+
+    createClaimDispute: async (
+      claimSchemaId: number,
+      payload: {
+        summary: string;
+        evidence_note?: string;
+        challenge_type?: string;
+        reason_code?: string;
+      }
+    ): Promise<ClaimDispute> => {
+      const row = await apiFetch<ClaimDispute>(
+        withDevUser(`/claim-schemas/${claimSchemaId}/disputes`),
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        }
+      );
+
+      return ensureClaimDispute(row);
+    },
+
+    updateClaimDisputeStatus: async (
+      disputeId: number,
+      payload: {
+        status: ClaimDisputeStatus;
+        resolution_note?: string;
+      }
+    ): Promise<ClaimDispute> => {
+      const row = await apiFetch<ClaimDispute>(
+        withDevUser(`/claim-disputes/${disputeId}`),
+        {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        }
+      );
+
+      return ensureClaimDispute(row);
+    },
 
   getClaimIntegrity: async (claimSchemaId: number): Promise<ClaimIntegrityResult> => {
     return apiFetch<ClaimIntegrityResult>(
