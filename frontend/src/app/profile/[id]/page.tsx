@@ -180,45 +180,38 @@ export default async function PublicProfilePage({ params }: PageProps) {
           <>
             <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
             <div className="mb-8 rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div>
-                    <div className="text-sm font-semibold text-blue-900">
-                        Public Trust Proof
-                    </div>
-                    <div className="mt-1 text-sm text-blue-800">
-                        This profile is a verifiable public trust surface backed by locked claims,
-                        audit history, and network-aware scoring.
-                    </div>
-
-                    <div className="mt-3 text-xs text-blue-700 font-mono">
-                        https://tradingtruthlayer.com/profile/{profile.workspace_id}
-                    </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                    <button
-                        onClick={() =>
-                        navigator.clipboard.writeText(
-                            `${typeof window !== "undefined" ? window.location.origin : ""}/profile/${profile.workspace_id}`
-                        )
-                        }
-                        className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-medium hover:bg-blue-100"
-                    >
-                        Copy Link
-                    </button>
-
-                    <a
-                        href={`https://twitter.com/intent/tweet?text=Verified%20Trading%20Profile&url=${encodeURIComponent(
-                        `/profile/${profile.workspace_id}`
-                        )}`}
-                        target="_blank"
-                        className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-medium hover:bg-blue-100"
-                    >
-                        Share
-                      </a>
-                    </div>
-                  </div>
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                <div className="text-sm font-semibold text-blue-900">
+                    Public Trust Proof
                 </div>
+                <div className="mt-1 text-sm text-blue-800">
+                    This profile is a verifiable public trust surface backed by locked claims,
+                    audit history, and network-aware scoring.
+                </div>
+
+                <div className="mt-3 text-xs font-mono text-blue-700">
+                    /profile/{profile.workspace_id}
+                </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                <Link
+                    href={`/profile/${profile.workspace_id}`}
+                    className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-medium hover:bg-blue-100"
+                >
+                    Open Profile
+                </Link>
+
+                <Link
+                    href="/leaderboard"
+                    className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-medium hover:bg-blue-100"
+                >
+                    Leaderboard
+                  </Link>
+                </div>
+              </div>
+            </div>
 
               <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
                 <h2 className="text-xl font-semibold">Embed Trust Widget</h2>
@@ -227,8 +220,8 @@ export default async function PublicProfilePage({ params }: PageProps) {
                     Embed this profile’s trust surface into external websites or communities.
                 </div>
 
-                <div className="mt-4 rounded-lg bg-slate-900 p-4 text-xs text-green-400 font-mono overflow-x-auto">
-              {`<iframe src="${typeof window !== "undefined" ? window.location.origin : ""}/profile/${profile.workspace_id}" width="100%" height="600" />`}
+                <div className="mt-4 overflow-x-auto rounded-lg bg-slate-900 p-4 font-mono text-xs text-green-400">
+                    {`<iframe src="/profile/${profile.workspace_id}" width="100%" height="600"></iframe>`}
                 </div>
               </div>
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -460,17 +453,13 @@ export default async function PublicProfilePage({ params }: PageProps) {
                                     Verify
                                 </Link>
 
-                                <button
-                                    onClick={() =>
-                                    navigator.clipboard.writeText(
-                                        `${typeof window !== "undefined" ? window.location.origin : ""}/verify/${claim.claim_hash}`
-                                    )
-                                    }
+                                <Link
+                                    href={`/profile/${profile.workspace_id}`}
                                     className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
                                 >
-                                    Copy Proof
-                                </button>
-                                </div>
+                                    Profile Proof
+                                </Link>
+                              </div>
                             </td>
                           </tr>
                         );
