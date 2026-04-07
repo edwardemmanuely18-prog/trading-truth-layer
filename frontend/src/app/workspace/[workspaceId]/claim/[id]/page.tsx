@@ -912,31 +912,53 @@ function UpgradeContextCard({
 }
 
 function ClaimGraph({
+  workspaceId,
   currentId,
   rootId,
   parentId,
 }: {
+  workspaceId: number;
   currentId: number;
   rootId?: number | null;
   parentId?: number | null;
 }) {
   const nodes = [];
 
-  if (rootId) nodes.push({ label: `claim#${rootId}`, id: rootId });
-  if (parentId && parentId !== rootId)
-    nodes.push({ label: `claim#${parentId}`, id: parentId });
+  if (rootId) {
+    nodes.push({
+      id: rootId,
+      label: `Root #${rootId}`,
+      type: "root",
+    });
+  }
 
-  nodes.push({ label: `claim#${currentId}`, id: currentId, current: true });
+  if (parentId && parentId !== rootId) {
+    nodes.push({
+      id: parentId,
+      label: `Parent #${parentId}`,
+      type: "parent",
+    });
+  }
+
+  nodes.push({
+    id: currentId,
+    label: `Current #${currentId}`,
+    type: "current",
+  });
 
   return (
-    <div className="mt-4 flex items-center gap-3 overflow-x-auto">
+    <div className="mt-4 flex flex-wrap items-center gap-4">
       {nodes.map((node, idx) => (
         <div key={node.id} className="flex items-center gap-3">
           <Link
-            href={`/workspace/${node.id ? "" : ""}/claim/${node.id}`}
-            className={`rounded-xl border px-3 py-2 text-sm font-medium ${
-              node.current
+            href={`/workspace/${workspaceId}/claim/${node.id}`}
+            className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
+              node.type === "current"
                 ? "bg-slate-900 text-white"
+                : node.type === "root"
+                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                : node.type === "parent"
+                ? "bg-amber-50 border-amber-200 text-amber-800"
                 : "bg-white hover:bg-slate-50"
             }`}
           >
@@ -944,7 +966,10 @@ function ClaimGraph({
           </Link>
 
           {idx < nodes.length - 1 && (
-            <span className="text-slate-400">→</span>
+            <div className="flex flex-col items-center">
+              <span className="text-slate-400 text-xs">derives</span>
+              <span className="text-slate-400">↓</span>
+            </div>
           )}
         </div>
       ))}
@@ -1880,6 +1905,7 @@ const handleRejectDispute = useCallback(async (id: number) => {
               <h2 className="text-xl font-semibold">Lineage & Claim Graph</h2>
 
               <ClaimGraph
+                workspaceId={workspaceId}
                 currentId={claim.id}
                 rootId={claim.root_claim_id}
                 parentId={claim.parent_claim_id}
