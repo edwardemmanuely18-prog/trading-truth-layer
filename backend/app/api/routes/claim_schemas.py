@@ -634,6 +634,16 @@ def resolve_trust_band(score: float):
     return "low"
 
 
+def resolve_profile_trust_band(score: float):
+    if score >= 85:
+        return "institutional"
+    if score >= 70:
+        return "strong"
+    if score >= 55:
+        return "developing"
+    return "fragile"
+
+
 def build_equity_curve(trades: list[Trade]):
     ordered = sorted(
         trades,
@@ -918,12 +928,82 @@ def resolve_claim_integrity_status(schema: ClaimSchema, trades: list[Trade]) -> 
 
 def build_issuer_payload(schema: ClaimSchema, db: Session):
     workspace = get_workspace_or_404(schema.workspace_id, db)
+    profile = build_public_trust_profile_for_workspace(schema.workspace_id, db)
 
     return {
         "id": workspace.id,
         "name": workspace.name,
         "type": "workspace",
         "network": "internal",
+        "profile": profile,
+    }
+
+
+def build_public_trust_profile_for_workspace(workspace_id: int, db: Session):
+    workspace = get_workspace_or_404(workspace_id, db)
+
+    claims = (
+        db.query(ClaimSchema)
+        .filter(ClaimSchema.workspace_id == workspace_id)
+        .all()
+    )
+
+    public_claims = [
+        schema
+        for schema in claims
+        if schema.visibility in {"public", "unlisted"}
+    ]
+    locked_claims = [
+        schema
+        for schema in public_claims
+        if schema.status == "locked"
+    ]
+
+    trust_scores = []
+    network_scores = []
+    total_net_pnl = 0.0
+    contested_claims_count = 0
+
+    for schema in locked_claims:
+        filtered_trades = resolve_schema_trades(schema, db)
+        metrics = compute_trade_metrics(filtered_trades)
+        dispute_ctx = resolve_claim_dispute_context(schema, db)
+        integrity_status = resolve_claim_integrity_status(schema, filtered_trades)
+        trust_score = compute_backend_trust_score(
+            schema, metrics, integrity_status, dispute_ctx
+        )
+        network_ctx = compute_backend_network_score(schema, trust_score)
+
+        trust_scores.append(trust_score)
+        network_scores.append(network_ctx["network_score"])
+        total_net_pnl += float(metrics.get("net_pnl", 0.0) or 0.0)
+
+        if dispute_ctx["has_active_dispute"]:
+            contested_claims_count += 1
+
+    claims_count = len(public_claims)
+    locked_claims_count = len(locked_claims)
+
+    average_trust_score = (
+        round(sum(trust_scores) / len(trust_scores), 2) if trust_scores else 0.0
+    )
+    average_network_score = (
+        round(sum(network_scores) / len(network_scores), 2) if network_scores else 0.0
+    )
+
+    return {
+        "profile_id": f"workspace:{workspace.id}",
+        "workspace_id": workspace.id,
+        "name": workspace.name,
+        "type": "workspace",
+        "network": "internal",
+        "claims_count": claims_count,
+        "locked_claims_count": locked_claims_count,
+        "contested_claims_count": contested_claims_count,
+        "average_trust_score": average_trust_score,
+        "average_network_score": average_network_score,
+        "total_net_pnl": round(total_net_pnl, 4),
+        "trust_profile_band": resolve_profile_trust_band(average_trust_score),
     }
 
 
@@ -947,6 +1027,7 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
         "claim_schema_id": schema.id,
         "claim_hash": claim_hash,
         "issuer": build_issuer_payload(schema, db),
+        "profile": build_public_trust_profile_for_workspace(schema.workspace_id, db),
         "integrity_status": integrity_status,
         "public_view_path": f"/claim/{schema.id}/public",
         "verify_path": f"/verify/{claim_hash}",
@@ -957,8 +1038,6 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
         "profit_factor": metrics["profit_factor"],
         "win_rate": metrics["win_rate"],
         "leaderboard": build_leaderboard(filtered_trades),
-        "disputes_count": dispute_ctx["disputes_count"],
-        "active_disputes_count": dispute_ctx["active_disputes_count"],
         "disputes_count": dispute_ctx["disputes_count"],
         "active_disputes_count": dispute_ctx["active_disputes_count"],
         "has_active_dispute": dispute_ctx["has_active_dispute"],
@@ -1047,6 +1126,7 @@ def build_public_claim_payload(schema: ClaimSchema, db: Session):
         "win_rate": metrics["win_rate"],
         "leaderboard": leaderboard,
         "issuer": issuer,
+        "profile": build_public_trust_profile_for_workspace(schema.workspace_id, db),
         "disputes": dispute_ctx,
         "trust_score": trust_score,
         "trust_band": "contested" if dispute_ctx["has_active_dispute"] else resolve_trust_band(trust_score),
