@@ -157,6 +157,10 @@ function inferClaimNetworkContext(
         ? "Derived"
         : "Versioned";
 
+  <div className="text-[10px] text-slate-400">
+    graph-aware lineage scoring
+  </div>      
+
   return {
     claim_origin_type,
     root_claim_hash,
@@ -849,6 +853,10 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
 
         <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-semibold">Claim Rankings</h2>
+          <div className="mt-2 text-xs text-slate-400">
+            Each row represents a verified claim entity linked to an issuer profile.
+            Profiles aggregate trust across claims and serve as the primary credibility surface.
+          </div>
           <div className="mt-2 max-w-3xl text-sm text-slate-500">
             Ranked by {rankingLabel}. Only locked and public claims are included so that
             leaderboard positions remain tied to canonical public records with verification-grade distribution paths.
@@ -866,6 +874,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                   <tr className="border-b text-left text-slate-500">
                     <th className="px-3 py-3">Rank</th>
                     <th className="px-3 py-3">Claim</th>
+                    <th className="px-3 py-3">Profile</th>
                     <th className="px-3 py-3">Period</th>
                     <th className="px-3 py-3">Status</th>
                     <th className="px-3 py-3">Trades</th>
@@ -904,13 +913,23 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                         <td className="px-3 py-3 font-semibold tabular-nums">{index + 1}</td>
 
                         <td className="px-3 py-3">
-                          <div className="font-medium text-slate-950">{row.name}</div>
+                          <div className="font-medium text-slate-950">
+                            <Link
+                              href={`/claim/${row.claim_schema_id}/public`}
+                              className="hover:underline"
+                            >
+                              {row.name}
+                            </Link>
+                          </div>
 
                           {row.profile && (
                             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                              <span className="text-slate-500">
+                              <Link
+                                href={`/profile/${row.profile.workspace_id}`}
+                                className="text-slate-500 hover:underline"
+                              >
                                 {row.profile.name}
-                              </span>
+                              </Link>
 
                               <span
                                 className={`inline-flex rounded-full border px-2 py-1 font-semibold ${
@@ -940,6 +959,19 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
 
                           <div className="mt-1 text-xs text-slate-500">claim #{row.claim_schema_id}</div>
                           <div className="mt-1 font-mono text-xs text-slate-500">{row.short_hash}</div>
+                        </td>
+
+                        <td className="px-3 py-3">
+                          {row.profile ? (
+                            <Link
+                              href={`/profile/${row.profile.workspace_id}`}
+                              className="font-medium text-slate-900 hover:underline"
+                            >
+                              {row.profile.name}
+                            </Link>
+                          ) : (
+                            "—"
+                          )}
                         </td>
 
                         <td className="px-3 py-3">
@@ -1013,6 +1045,10 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                               <div>depth: {row.version_depth}</div>
                               <div>root: {row.root_claim_hash ?? "self"}</div>
                               <div>parent: {row.parent_claim_hash ?? "none"}</div>
+                            </div>
+
+                            <div className="text-[10px] text-slate-400">
+                              graph-aware lineage scoring
                             </div>
                           </div>
                         </td>
@@ -1089,6 +1125,13 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                                 className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
                               >
                                 Public Record
+                              </Link>
+
+                              <Link
+                                href={`/profile/${row.profile?.workspace_id}`}
+                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
+                              >
+                                Profile
                               </Link>
                             </div>
 
