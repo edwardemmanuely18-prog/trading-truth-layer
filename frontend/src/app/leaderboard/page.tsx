@@ -233,6 +233,7 @@ function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
       claim_schema_id: claim.claim_schema_id,
       claim_hash: claim.claim_hash,
 
+      issuer: claim.issuer ?? null,
       profile: (claim as any)?.profile ?? null,
 
       has_active_dispute,
@@ -905,6 +906,15 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                     const publicViewPath = `/claim/${row.claim_schema_id}/public`;
                     const qrImageUrl = buildQrImageUrl(verificationPath);
 
+                    const profileWorkspaceId =
+                      row.profile?.workspace_id ??
+                      row.issuer?.id ??
+                      null;
+
+                    const profileHref = profileWorkspaceId
+                      ? `/profile/${Number(profileWorkspaceId)}`
+                      : "#";
+
                     return (
                       <tr
                         key={`${row.claim_schema_id}-${row.claim_hash}`}
@@ -970,18 +980,12 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                         <td className="px-3 py-3">
                           {row.profile ? (
                             <Link
-                              href={
-                                row.profile?.workspace_id
-                                  ? `/profile/${Number(row.profile.workspace_id)}`
-                                  : "#"
-                              }
+                              href={profileHref}
                               className={`text-slate-500 ${
-                                row.profile?.workspace_id
-                                  ? "hover:underline"
-                                  : "cursor-not-allowed opacity-50"
+                                profileWorkspaceId ? "hover:underline" : "cursor-not-allowed opacity-50"
                               }`}
                             >
-                              {row.profile?.name ?? "—"}
+                              {row.profile?.name ?? row.issuer?.name ?? "—"}
                             </Link>
                           ) : (
                             "—"
@@ -1142,13 +1146,9 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                               </Link>
 
                               <Link
-                                href={
-                                  row.profile?.workspace_id
-                                    ? `/profile/${Number(row.profile.workspace_id)}`
-                                    : "#"
-                                }
+                                href={profileHref}
                                 className={`rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium ${
-                                  row.profile?.workspace_id ? "hover:bg-slate-50" : "cursor-not-allowed opacity-50"
+                                  profileWorkspaceId ? "hover:bg-slate-50" : "cursor-not-allowed opacity-50"
                                 }`}
                               >
                                 Profile
