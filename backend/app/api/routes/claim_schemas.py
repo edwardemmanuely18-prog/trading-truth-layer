@@ -1007,6 +1007,31 @@ def build_public_trust_profile_for_workspace(workspace_id: int, db: Session):
     }
 
 
+def build_public_profile_response(workspace_id: int, db: Session):
+    profile = build_public_trust_profile_for_workspace(workspace_id, db)
+
+    claims = (
+        db.query(ClaimSchema)
+        .filter(
+            ClaimSchema.workspace_id == workspace_id,
+            ClaimSchema.visibility.in_(["public", "unlisted"]),
+        )
+        .all()
+    )
+
+    claim_rows = [
+        build_claim_list_row(schema, db)
+        for schema in claims
+        if is_claim_publicly_accessible(schema)
+    ]
+
+    return {
+        "profile": profile,
+        "claims": claim_rows,
+        "claims_count": len(claim_rows),
+    }
+
+
 def build_claim_list_row(schema: ClaimSchema, db: Session):
     filtered_trades = resolve_schema_trades(schema, db)
     metrics = compute_trade_metrics(filtered_trades)
@@ -3956,3 +3981,12 @@ def verify_claim_schema_integrity(
         "hash_match": integrity_ok,
         "verified_at": datetime.utcnow().isoformat(),
     }
+
+@router.get("/profiles/{workspace_id}")
+def get_public_profile(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    workspace = get_workspace_or_404(workspace_id, db)
+
+    return build_public_profile_response(workspace.id, db)
