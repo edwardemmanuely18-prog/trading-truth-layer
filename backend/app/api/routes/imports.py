@@ -349,14 +349,6 @@ def configure_auto_import(
 def ingest_stream_event(
     workspace_id: int,
     payload: dict,
-):
-    source_type = str(payload.get("source_type", "ibkr")).strip().lower()
-    trade = payload.get("trade")
-
-@router.post("/workspaces/{workspace_id}/imports/stream-event")
-def ingest_stream_event(
-    workspace_id: int,
-    payload: dict,
     db: Session = Depends(get_db),
 ):
     source_type = _normalize_webhook_source(payload.get("source_type", "ibkr"))
