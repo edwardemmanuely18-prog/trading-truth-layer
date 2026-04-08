@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.models.trade import Trade
@@ -247,6 +248,7 @@ def import_csv_trades(
         "errors": errors[:20],
     }
 
+
 def import_broker_trades(
     *,
     db: Session,
@@ -261,22 +263,25 @@ def import_broker_trades(
     rows = parse_rows_by_source(normalized_source, content)
     result = process_import_rows(rows, source_type=normalized_source)
 
+    # Base counts from normalization stage
     rows_received = int(result["stats"]["received"] or 0)
     rows_imported = 0
-    rows_rejected = 0
+    rows_rejected = int(result["stats"]["rejected"] or 0)
     rows_skipped_duplicates = int(result["stats"]["duplicates"] or 0)
     errors: list[str] = []
 
-    normalized_preview = result.get("normalized", [])[:20]
+    # Start previews from normalization stage
     rejected_preview = list(result.get("rejected", []))
     duplicate_preview = list(result.get("duplicates", []))
 
+    # Accepted preview should only show trades actually accepted into persistence stage
+    accepted_preview: list[dict] = []
+
     locked_trade_lookup = build_locked_trade_lookup(db, workspace_id)
+    seen_persisted_fingerprints: set[str] = set()
 
-    for idx, trade_row in enumerate(result["normalized"], start=1):
+    for idx, trade_row in enumerate(result.get("normalized", []), start=1):
         try:
-            from datetime import datetime
-
             timestamp_raw = trade_row.get("timestamp")
             opened_at = None
 
@@ -297,10 +302,12 @@ def import_broker_trades(
 
             if opened_at is None:
                 rows_rejected += 1
-                rejected_preview.append({
-                    "row": trade_row,
-                    "reason": "Invalid timestamp",
-                })
+                rejected_preview.append(
+                    {
+                        "row": trade_row,
+                        "reason": "Invalid timestamp",
+                    }
+                )
                 errors.append(f"Row {idx}: invalid timestamp")
                 continue
 
@@ -310,9 +317,8 @@ def import_broker_trades(
             price = float(trade_row.get("price") or 0)
             pnl = trade_row.get("pnl")
             pnl = float(pnl) if pnl is not None else None
-            external_id = trade_row.get("external_id")
 
-            # temporary safe defaults until richer account/member mapping is added
+            # Temporary safe defaults until broker/member mapping is added
             member_id = 999
             currency = "USD"
             source_system = normalized_source.upper()
@@ -333,12 +339,26 @@ def import_broker_trades(
             )
             if conflict:
                 rows_rejected += 1
-                rejected_preview.append({
-                    "row": trade_row,
-                    "reason": f"Conflicts with locked claim {conflict.id}",
-                })
+                rejected_preview.append(
+                    {
+                        "row": trade_row,
+                        "reason": f"Conflicts with locked claim {conflict.id}",
+                    }
+                )
                 errors.append(
                     f"Row {idx}: conflicts with locked claim {conflict.id} by exact locked trade match"
+                )
+                continue
+
+            # Deduplicate within this persistence pass
+            if fingerprint in seen_persisted_fingerprints:
+                rows_skipped_duplicates += 1
+                duplicate_preview.append(
+                    {
+                        "row": trade_row,
+                        "reason": "Duplicate trade fingerprint",
+                        "fingerprint": fingerprint,
+                    }
                 )
                 continue
 
@@ -353,11 +373,13 @@ def import_broker_trades(
 
             if existing:
                 rows_skipped_duplicates += 1
-                duplicate_preview.append({
-                    "row": trade_row,
-                    "reason": "Duplicate trade fingerprint",
-                    "fingerprint": fingerprint,
-                })
+                duplicate_preview.append(
+                    {
+                        "row": trade_row,
+                        "reason": "Duplicate trade fingerprint",
+                        "fingerprint": fingerprint,
+                    }
+                )
                 continue
 
             trade = Trade(
@@ -378,13 +400,24 @@ def import_broker_trades(
             )
             db.add(trade)
             rows_imported += 1
+            seen_persisted_fingerprints.add(fingerprint)
+
+            accepted_preview.append(
+                {
+                    **trade_row,
+                    "source_type": normalized_source,
+                    "fingerprint": fingerprint,
+                }
+            )
 
         except Exception as e:
             rows_rejected += 1
-            rejected_preview.append({
-                "row": trade_row,
-                "reason": str(e),
-            })
+            rejected_preview.append(
+                {
+                    "row": trade_row,
+                    "reason": str(e),
+                }
+            )
             errors.append(f"Row {idx}: {str(e)}")
 
     batch = ImportBatch(
@@ -432,7 +465,7 @@ def import_broker_trades(
         "rows_rejected": rows_rejected,
         "rows_skipped_duplicates": rows_skipped_duplicates,
         "errors": errors[:20],
-        "normalized_preview": normalized_preview[:20],
+        "normalized_preview": accepted_preview[:20],
         "rejected_preview": rejected_preview[:20],
         "duplicate_preview": duplicate_preview[:20],
     }
