@@ -13,6 +13,7 @@ from app.services.trade_import import (
     process_import_rows,
 )
 from app.services.ingestion_service import import_csv_trades
+from app.services.ingestion_service import import_broker_trades
 
 router = APIRouter()
 
@@ -150,11 +151,12 @@ async def upload_import_file(
     file_bytes = await file.read()
 
     # Persist accepted rows into Trade via existing ingestion service
-    result = import_csv_trades(
+    result = import_broker_trades(
         db=db,
         workspace_id=workspace_id,
         filename=file.filename,
         content=file_bytes,
+        source_type=normalized_source,
         actor_user_id=None,
     )
 

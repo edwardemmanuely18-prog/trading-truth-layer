@@ -5,6 +5,7 @@ from app.models.import_batch import ImportBatch
 from app.models.claim_schema import ClaimSchema
 from app.services.adapters.csv_adapter import CSVTradeAdapter
 from app.services.audit_service import log_audit_event
+from app.services.trade_import import parse_rows_by_source, process_import_rows
 
 
 def build_trade_fingerprint(
@@ -239,6 +240,172 @@ def import_csv_trades(
         "workspace_id": workspace_id,
         "filename": filename,
         "format_type": format_type,
+        "rows_received": rows_received,
+        "rows_imported": rows_imported,
+        "rows_rejected": rows_rejected,
+        "rows_skipped_duplicates": rows_skipped_duplicates,
+        "errors": errors[:20],
+    }
+
+def import_broker_trades(
+    *,
+    db: Session,
+    workspace_id: int,
+    filename: str,
+    content: bytes,
+    source_type: str,
+    actor_user_id: int | None = None,
+):
+    normalized_source = (source_type or "csv").strip().lower()
+
+    rows = parse_rows_by_source(normalized_source, content)
+    result = process_import_rows(rows, source_type=normalized_source)
+
+    rows_received = int(result["stats"]["received"] or 0)
+    rows_imported = 0
+    rows_rejected = int(result["stats"]["rejected"] or 0)
+    rows_skipped_duplicates = int(result["stats"]["duplicates"] or 0)
+    errors: list[str] = []
+
+    locked_trade_lookup = build_locked_trade_lookup(db, workspace_id)
+
+    for idx, trade_row in enumerate(result["normalized"], start=1):
+        try:
+            from datetime import datetime
+
+            timestamp_raw = trade_row.get("timestamp")
+            opened_at = None
+
+            if isinstance(timestamp_raw, datetime):
+                opened_at = timestamp_raw
+            elif isinstance(timestamp_raw, str) and timestamp_raw.strip():
+                text = timestamp_raw.strip()
+                for fmt in [
+                    "%Y-%m-%d %H:%M:%S",
+                    "%Y-%m-%d %H:%M",
+                    "%Y-%m-%dT%H:%M:%S",
+                ]:
+                    try:
+                        opened_at = datetime.strptime(text, fmt)
+                        break
+                    except Exception:
+                        pass
+
+            if opened_at is None:
+                rows_rejected += 1
+                errors.append(f"Row {idx}: invalid timestamp")
+                continue
+
+            symbol = str(trade_row.get("symbol") or "").strip().upper()
+            side = str(trade_row.get("side") or "").strip().upper()
+            quantity = float(trade_row.get("quantity") or 0)
+            price = float(trade_row.get("price") or 0)
+            pnl = trade_row.get("pnl")
+            pnl = float(pnl) if pnl is not None else None
+            external_id = trade_row.get("external_id")
+
+            # temporary safe defaults until richer account/member mapping is added
+            member_id = 999
+            currency = "USD"
+            source_system = normalized_source.upper()
+
+            fingerprint = build_trade_fingerprint(
+                workspace_id=workspace_id,
+                member_id=member_id,
+                symbol=symbol,
+                side=side,
+                opened_at=opened_at,
+                entry_price=price,
+                quantity=quantity,
+            )
+
+            conflict = find_locked_claim_conflict_for_fingerprint(
+                locked_trade_lookup=locked_trade_lookup,
+                fingerprint=fingerprint,
+            )
+            if conflict:
+                rows_rejected += 1
+                errors.append(
+                    f"Row {idx}: conflicts with locked claim {conflict.id} by exact locked trade match"
+                )
+                continue
+
+            existing = (
+                db.query(Trade)
+                .filter(
+                    Trade.workspace_id == workspace_id,
+                    Trade.trade_fingerprint == fingerprint,
+                )
+                .first()
+            )
+
+            if existing:
+                rows_skipped_duplicates += 1
+                continue
+
+            trade = Trade(
+                workspace_id=workspace_id,
+                member_id=member_id,
+                symbol=symbol,
+                side=side,
+                opened_at=opened_at,
+                closed_at=None,
+                entry_price=price,
+                exit_price=None,
+                quantity=quantity,
+                net_pnl=pnl,
+                currency=currency,
+                strategy_tag=f"{normalized_source}_import",
+                source_system=source_system,
+                trade_fingerprint=fingerprint,
+            )
+            db.add(trade)
+            rows_imported += 1
+
+        except Exception as e:
+            rows_rejected += 1
+            errors.append(f"Row {idx}: {str(e)}")
+
+    batch = ImportBatch(
+        workspace_id=workspace_id,
+        filename=filename,
+        source_type=normalized_source,
+        rows_received=rows_received,
+        rows_imported=rows_imported,
+        rows_rejected=rows_rejected,
+        rows_skipped_duplicates=rows_skipped_duplicates,
+    )
+    db.add(batch)
+    db.commit()
+    db.refresh(batch)
+
+    log_audit_event(
+        db,
+        event_type="trade_import_completed",
+        entity_type="import_batch",
+        entity_id=batch.id,
+        workspace_id=workspace_id,
+        old_state=None,
+        new_state={
+            "import_batch_id": batch.id,
+            "filename": filename,
+            "format_type": normalized_source,
+            "rows_received": rows_received,
+            "rows_imported": rows_imported,
+            "rows_rejected": rows_rejected,
+            "rows_skipped_duplicates": rows_skipped_duplicates,
+        },
+        metadata={
+            "source": "ingestion_service.import_broker_trades",
+            "actor_user_id": actor_user_id,
+            "error_count": len(errors),
+        },
+    )
+
+    return {
+        "workspace_id": workspace_id,
+        "filename": filename,
+        "format_type": normalized_source,
         "rows_received": rows_received,
         "rows_imported": rows_imported,
         "rows_rejected": rows_rejected,
