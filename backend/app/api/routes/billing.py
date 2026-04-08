@@ -64,7 +64,7 @@ def require_workspace_owner(workspace_id: int, current_user: User, db: Session):
 
 
 def normalize_plan_code(plan_code: str | None) -> str:
-    allowed = {"starter", "pro", "growth", "business"}
+    allowed = {"sandbox", "starter", "pro", "growth", "business"}
     value = str(plan_code or "").strip().lower()
     return value if value in allowed else "starter"
 
@@ -171,6 +171,16 @@ def fallback_period_end_for_cycle(billing_cycle: str) -> datetime:
 def get_plan_catalog():
     return [
         {
+            "code": "sandbox",
+            "name": "Sandbox",
+            "billing": {
+                "monthly_price_usd": 0,
+                "annual_price_usd": 0,
+                "stripe_price_lookup_key_monthly": None,
+                "stripe_price_lookup_key_annual": None,
+            },
+        },
+        {
             "code": "starter",
             "name": "Starter",
             "billing": {
@@ -226,6 +236,71 @@ def get_frontend_base_url() -> str:
     return value.rstrip("/")
 
 
+def get_active_billing_provider(workspace: Workspace) -> str:
+    provider = str(workspace.billing_provider or "").strip().lower()
+    if provider in {"paddle", "stripe", "manual"}:
+        return provider
+
+    if paddle_is_ready():
+        return "paddle"
+    if stripe_is_ready():
+        return "stripe"
+    if manual_billing_is_ready():
+        return "manual"
+    return "none"
+
+
+def get_billing_provider_display_label(provider: str | None) -> str:
+    normalized = str(provider or "").strip().lower()
+    if normalized == "paddle":
+        return "Paddle"
+    if normalized == "stripe":
+        return "Stripe"
+    if normalized == "manual":
+        return "Manual Billing"
+    return "Unconfigured"
+
+
+def get_paddle_environment() -> str:
+    base_url = paddle_api_base_url().lower()
+    api_key = str(getattr(settings, "PADDLE_API_KEY", "") or "").strip().lower()
+
+    if "sandbox" in base_url or api_key.startswith("test_") or api_key.startswith("pdl_sdbx"):
+        return "sandbox"
+    return "live"
+
+
+def should_expose_manual_billing(workspace: Workspace) -> bool:
+    if not manual_billing_is_ready():
+        return False
+
+    active_provider = get_active_billing_provider(workspace)
+
+    # Hide manual instructions when Paddle or Stripe automation is already active.
+    if active_provider in {"paddle", "stripe"}:
+        return False
+
+    return True
+
+
+def get_provider_customer_id(workspace: Workspace, provider: str | None) -> str | None:
+    normalized = str(provider or "").strip().lower()
+    if normalized == "paddle":
+        return workspace.paddle_customer_id
+    if normalized == "stripe":
+        return workspace.stripe_customer_id
+    return None
+
+
+def get_provider_subscription_id(workspace: Workspace, provider: str | None) -> str | None:
+    normalized = str(provider or "").strip().lower()
+    if normalized == "paddle":
+        return workspace.paddle_subscription_id
+    if normalized == "stripe":
+        return workspace.stripe_subscription_id
+    return None
+
+
 def get_checkout_return_url(workspace_id: int) -> str:
     return f"{get_frontend_base_url()}/workspace/{workspace_id}/settings"
 
@@ -241,6 +316,8 @@ def get_price_lookup_key(plan_code: str, billing_cycle: str) -> str:
 
 def get_paddle_price_catalog() -> dict[str, str]:
     return {
+        "sandbox_monthly": "",
+        "sandbox_annual": "",
         "starter_monthly": "pri_01kmjj018j0ym1aw9ywhz3znw0",
         "starter_annual": "pri_01kmjj3f7jdg0sef6p39e22jmq",
         "pro_monthly": "pri_01kmjj708hzybp3a8gdv93mpg9",
@@ -789,6 +866,20 @@ def get_workspace_billing_foundation(
     effective_plan_code = resolve_effective_plan_code(workspace)
     billing_status = normalize_billing_status(workspace.billing_status)
 
+    active_provider = get_active_billing_provider(workspace)
+    provider_label = get_billing_provider_display_label(active_provider)
+    manual_visible = should_expose_manual_billing(workspace)
+
+    checkout_mode = (
+        "paddle_checkout_ready"
+        if paddle_is_ready()
+        else "stripe_checkout_ready"
+        if stripe_is_ready()
+        else "manual_billing_ready"
+        if manual_billing_is_ready()
+        else "placeholder_until_checkout"
+    )
+
     return {
         "workspace_id": workspace.id,
         "plan_code": configured_plan_code,
@@ -805,6 +896,14 @@ def get_workspace_billing_foundation(
         "paddle_transaction_id": workspace.paddle_transaction_id,
         "paddle_price_id": workspace.paddle_price_id,
         "billing_provider": workspace.billing_provider,
+        "active_billing_provider": active_provider,
+        "billing_provider_label": provider_label,
+        "provider_customer_id": get_provider_customer_id(workspace, active_provider),
+        "provider_subscription_id": get_provider_subscription_id(workspace, active_provider),
+        "provider_environment": (
+            get_paddle_environment() if active_provider == "paddle" else "live"
+        ),
+        "manual_billing_visible": manual_visible,
         "subscription_current_period_end": (
             workspace.subscription_current_period_end.isoformat()
             if workspace.subscription_current_period_end
@@ -817,7 +916,7 @@ def get_workspace_billing_foundation(
         "stripe_ready": {
             "has_customer_id": bool(workspace.stripe_customer_id),
             "has_subscription_id": bool(workspace.stripe_subscription_id),
-            "integration_status": "ready_for_stripe_foundation",
+            "integration_status": "fallback_only",
             "billing_enabled": bool(getattr(settings, "STRIPE_BILLING_ENABLED", False)),
             "secret_key_configured": bool(settings.STRIPE_SECRET_KEY and settings.STRIPE_SECRET_KEY.strip()),
             "package_installed": stripe is not None,
@@ -832,25 +931,19 @@ def get_workspace_billing_foundation(
             ),
             "has_customer_id": bool(workspace.paddle_customer_id),
             "has_subscription_id": bool(workspace.paddle_subscription_id),
-            "price_catalog_count": len(get_paddle_price_catalog()),
+            "price_catalog_count": len([v for v in get_paddle_price_catalog().values() if v]),
+            "environment": get_paddle_environment(),
         },
         "manual_billing": {
             "enabled": manual_payment_details["enabled"],
             "ready": manual_billing_is_ready(),
+            "visible": manual_visible,
             "payment_method": manual_payment_details["payment_method"],
         },
-        "manual_payment_details": manual_payment_details,
+        "manual_payment_details": manual_payment_details if manual_visible else None,
         "checkout_state": {
             "can_start_checkout": True,
-            "mode": (
-                "paddle_checkout_ready"
-                if paddle_is_ready()
-                else "stripe_checkout_ready"
-                if stripe_is_ready()
-                else "manual_billing_ready"
-                if manual_billing_is_ready()
-                else "placeholder_until_checkout"
-            ),
+            "mode": checkout_mode,
             "portal_available": bool(workspace.paddle_subscription_id or workspace.stripe_customer_id),
         },
     }
@@ -877,6 +970,27 @@ def create_billing_checkout_session(
     resolved_plan_code = normalize_plan_code(payload.plan_code)
     billing_cycle = normalize_billing_cycle(payload.billing_cycle)
     checkout_intent = checkout_intent_for_target_plan(workspace, resolved_plan_code)
+
+    if resolved_plan_code == "sandbox":
+        workspace.plan_code = "sandbox"
+        workspace.billing_provider = None
+        workspace.billing_status = "inactive"
+        workspace.subscription_current_period_end = None
+        workspace.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(workspace)
+
+        return {
+            "mode": "sandbox_activation",
+            "checkout_url": None,
+            "url": None,
+            "workspace_id": workspace.id,
+            "current_plan_code": current_plan_code,
+            "target_plan_code": resolved_plan_code,
+            "billing_cycle": billing_cycle,
+            "checkout_intent": "sandbox_activation",
+            "message": "Sandbox environment activated. No checkout is required for this plan.",
+        }
 
     if not can_start_checkout_for_target_plan(workspace, resolved_plan_code):
         return {
