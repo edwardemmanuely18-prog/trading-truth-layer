@@ -322,6 +322,9 @@ export type WorkspaceStripeReadiness = {
   has_customer_id: boolean;
   has_subscription_id: boolean;
   integration_status: string;
+  billing_enabled?: boolean;
+  secret_key_configured?: boolean;
+  package_installed?: boolean;
 };
 
 export type WorkspaceUsageSummary = {
@@ -405,6 +408,12 @@ export type WorkspaceBillingFoundation = {
   plan_mismatch?: boolean;
   billing_email?: string | null;
   billing_provider?: string | null;
+  active_billing_provider?: string | null;
+  billing_provider_label?: string | null;
+  provider_customer_id?: string | null;
+  provider_subscription_id?: string | null;
+  provider_environment?: string | null;
+  manual_billing_visible?: boolean;
   stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;
   paddle_customer_id?: string | null;
@@ -431,10 +440,12 @@ export type WorkspaceBillingFoundation = {
     has_customer_id: boolean;
     has_subscription_id: boolean;
     price_catalog_count: number;
+    environment?: string | null;
   };
   manual_billing?: {
     enabled: boolean;
     ready: boolean;
+    visible?: boolean;
     payment_method?: string | null;
   };
   manual_payment_details?: ManualPaymentDetails;
@@ -1002,6 +1013,25 @@ export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError;
 }
 
+export function resolveBillingProviderLabel(
+  foundation?: WorkspaceBillingFoundation | null
+): string {
+  const provider = String(
+    foundation?.billing_provider_label ||
+      foundation?.active_billing_provider ||
+      foundation?.billing_provider ||
+      ""
+  )
+    .trim()
+    .toLowerCase();
+
+  if (provider === "paddle") return "Paddle";
+  if (provider === "stripe") return "Stripe";
+  if (provider === "manual" || provider === "manual billing") return "Manual Billing";
+  if (provider === "none" || !provider) return "Unconfigured";
+  return foundation?.billing_provider_label || provider;
+}
+
 export function getApiErrorCode(error: unknown): string | null {
   if (!isApiError(error)) return null;
   return error.payload?.code ?? null;
@@ -1280,11 +1310,13 @@ function ensureWorkspaceUsageSummary(row: WorkspaceUsageSummary): WorkspaceUsage
       claims: ensureUsageDimension(row?.usage?.claims),
       storage_mb: ensureUsageDimension(row?.usage?.storage_mb),
     },
-    stripe_ready: {
+     stripe_ready: {
       has_customer_id: Boolean(row?.stripe_ready?.has_customer_id),
       has_subscription_id: Boolean(row?.stripe_ready?.has_subscription_id),
-      integration_status:
-        row?.stripe_ready?.integration_status || "ready_for_stripe_foundation",
+      integration_status: row?.stripe_ready?.integration_status || "fallback_only",
+      billing_enabled: Boolean(row?.stripe_ready?.billing_enabled),
+      secret_key_configured: Boolean(row?.stripe_ready?.secret_key_configured),
+      package_installed: Boolean(row?.stripe_ready?.package_installed),
     },
     governance: row?.governance
       ? {
@@ -1355,6 +1387,12 @@ function ensureWorkspaceBillingFoundation(
     billing_status_is_paid: Boolean(row?.billing_status_is_paid),
     plan_mismatch: Boolean(row?.plan_mismatch),
     billing_provider: row?.billing_provider ?? null,
+    active_billing_provider: row?.active_billing_provider ?? row?.billing_provider ?? null,
+    billing_provider_label: row?.billing_provider_label ?? null,
+    provider_customer_id: row?.provider_customer_id ?? null,
+    provider_subscription_id: row?.provider_subscription_id ?? null,
+    provider_environment: row?.provider_environment ?? null,
+    manual_billing_visible: Boolean(row?.manual_billing_visible),
     stripe_customer_id: row?.stripe_customer_id ?? null,
     stripe_subscription_id: row?.stripe_subscription_id ?? null,
     paddle_customer_id: row?.paddle_customer_id ?? null,
@@ -1368,8 +1406,7 @@ function ensureWorkspaceBillingFoundation(
     stripe_ready: {
       has_customer_id: Boolean(row?.stripe_ready?.has_customer_id),
       has_subscription_id: Boolean(row?.stripe_ready?.has_subscription_id),
-      integration_status:
-        row?.stripe_ready?.integration_status || "ready_for_stripe_foundation",
+      integration_status: row?.stripe_ready?.integration_status || "fallback_only",
       billing_enabled: Boolean(row?.stripe_ready?.billing_enabled),
       secret_key_configured: Boolean(row?.stripe_ready?.secret_key_configured),
       package_installed: Boolean(row?.stripe_ready?.package_installed),
@@ -1382,16 +1419,21 @@ function ensureWorkspaceBillingFoundation(
           has_customer_id: Boolean(row.paddle_ready.has_customer_id),
           has_subscription_id: Boolean(row.paddle_ready.has_subscription_id),
           price_catalog_count: Number(row.paddle_ready.price_catalog_count ?? 0),
+          environment: row.paddle_ready.environment ?? null,
         }
       : undefined,
     manual_billing: row?.manual_billing
       ? {
           enabled: Boolean(row.manual_billing.enabled),
           ready: Boolean(row.manual_billing.ready),
+          visible: Boolean(row.manual_billing.visible),
           payment_method: row.manual_billing.payment_method ?? null,
         }
       : undefined,
-    manual_payment_details: ensureManualPaymentDetails(row?.manual_payment_details),
+    manual_payment_details:
+      row?.manual_billing_visible || row?.manual_billing?.visible
+        ? ensureManualPaymentDetails(row?.manual_payment_details)
+        : undefined,
     checkout_state: {
       can_start_checkout: Boolean(row?.checkout_state?.can_start_checkout),
       mode: row?.checkout_state?.mode || "placeholder_until_checkout",
