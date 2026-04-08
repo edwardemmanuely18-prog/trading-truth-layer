@@ -22,12 +22,16 @@ type NormalizedTradePreviewRow = {
   symbol?: string;
   side?: string;
   quantity?: number | string;
-  price?: number | string;
-  pnl?: number | string;
-  timestamp?: string;
+  entry_price?: number | string;
+  exit_price?: number | string;
+  net_pnl?: number | string;
+  opened_at?: string;
+  closed_at?: string;
   external_id?: string;
   fingerprint?: string;
   source_type?: string;
+  source_system?: string;
+  currency?: string;
 };
 
 type RejectedPreviewRow = {
@@ -49,7 +53,9 @@ function formatPercent(value?: number | null) {
 function formatSourceStatus(source: ImportSourceType, selected: boolean) {
   if (selected) return "selected";
   if (source === "csv") return "active";
-  return "planned";
+  if (source === "mt5") return "active";
+  if (source === "ibkr") return "active";
+  return "active";
 }
 
 function sourceCardClass(source: ImportSourceType, selected: boolean) {
@@ -333,7 +339,7 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
       });
 
       setStatus(
-        `Real-time ingestion foundation ping sent for ${
+        `Real-time ingestion event processed for ${
           sourceType === "ibkr" ? "IBKR" : "MT5"
         }.`
       );
@@ -391,23 +397,36 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
             <div className="font-semibold text-slate-900">Selected Source</div>
             <div className="mt-2">{sourceTitle}</div>
+            <div className="mt-1 text-xs text-slate-500">
+              {sourceType === "csv"
+                ? "Batch ingestion active"
+                : sourceType === "mt5"
+                  ? "MT5 adapter active"
+                  : "IBKR adapter active"}
+            </div>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
             <div className="font-semibold text-slate-900">Auto-import Pipelines</div>
-            <div className="mt-2">{autoImportEnabled ? "Enabled" : "Disabled"}</div>
+            <div className="mt-2">{autoImportEnabled ? "Enabled" : "Available"}</div>
+            <div className="mt-1 text-xs text-slate-500">
+              Configuration endpoint active for CSV, MT5, and IBKR.
+            </div>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
             <div className="font-semibold text-slate-900">Real-time Ingestion</div>
-            <div className="mt-2">{realTimeEnabled ? "Foundation active" : "Foundation inactive"}</div>
+            <div className="mt-2">{realTimeEnabled ? "Enabled" : "Available"}</div>
+            <div className="mt-1 text-xs text-slate-500">
+              Stream-event ingestion and webhook ingestion are now active in backend.
+            </div>
           </div>
         </div>
 
         <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-          CSV, MT5, and IBKR now share the same broker-neutral ingestion surface. Auto-import and
-          real-time controls here are orchestration foundations; production-grade scheduling and
-          streaming should be completed in backend services and infra.
+          CSV, MT5, and IBKR are active ingestion paths on the shared broker-neutral pipeline.
+          Auto-import configuration is available, and real-time ingestion now routes through the
+          live backend ingestion surface.
         </div>
       </div>
 
@@ -565,22 +584,22 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
                       <th className="px-3 py-2 text-left">Symbol</th>
                       <th className="px-3 py-2 text-left">Side</th>
                       <th className="px-3 py-2 text-left">Qty</th>
-                      <th className="px-3 py-2 text-left">Price</th>
+                      <th className="px-3 py-2 text-left">Entry</th>
                       <th className="px-3 py-2 text-left">PnL</th>
-                      <th className="px-3 py-2 text-left">Timestamp</th>
+                      <th className="px-3 py-2 text-left">Opened At</th>
                       <th className="px-3 py-2 text-left">Source</th>
                     </tr>
                   </thead>
                   <tbody>
                     {preview.map((row, i) => (
-                      <tr key={`${row.external_id ?? row.symbol ?? "row"}-${i}`} className="border-t">
+                      <tr key={`${row.external_id ?? row.fingerprint ?? row.symbol ?? "row"}-${i}`} className="border-t">
                         <td className="px-3 py-2">{row.symbol ?? "—"}</td>
                         <td className="px-3 py-2">{row.side ?? "—"}</td>
                         <td className="px-3 py-2">{row.quantity ?? "—"}</td>
-                        <td className="px-3 py-2">{row.price ?? "—"}</td>
-                        <td className="px-3 py-2">{row.pnl ?? "—"}</td>
-                        <td className="px-3 py-2">{row.timestamp ?? "—"}</td>
-                        <td className="px-3 py-2">{row.source_type ?? sourceType}</td>
+                        <td className="px-3 py-2">{row.entry_price ?? "—"}</td>
+                        <td className="px-3 py-2">{row.net_pnl ?? "—"}</td>
+                        <td className="px-3 py-2">{row.opened_at ?? "—"}</td>
+                        <td className="px-3 py-2">{row.source_type ?? row.source_system ?? sourceType}</td>
                       </tr>
                     ))}
                   </tbody>
