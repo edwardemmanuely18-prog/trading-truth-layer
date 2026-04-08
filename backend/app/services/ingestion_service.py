@@ -263,9 +263,13 @@ def import_broker_trades(
 
     rows_received = int(result["stats"]["received"] or 0)
     rows_imported = 0
-    rows_rejected = int(result["stats"]["rejected"] or 0)
+    rows_rejected = 0
     rows_skipped_duplicates = int(result["stats"]["duplicates"] or 0)
     errors: list[str] = []
+
+    normalized_preview = result.get("normalized", [])[:20]
+    rejected_preview = list(result.get("rejected", []))
+    duplicate_preview = list(result.get("duplicates", []))
 
     locked_trade_lookup = build_locked_trade_lookup(db, workspace_id)
 
@@ -293,6 +297,10 @@ def import_broker_trades(
 
             if opened_at is None:
                 rows_rejected += 1
+                rejected_preview.append({
+                    "row": trade_row,
+                    "reason": "Invalid timestamp",
+                })
                 errors.append(f"Row {idx}: invalid timestamp")
                 continue
 
@@ -325,6 +333,10 @@ def import_broker_trades(
             )
             if conflict:
                 rows_rejected += 1
+                rejected_preview.append({
+                    "row": trade_row,
+                    "reason": f"Conflicts with locked claim {conflict.id}",
+                })
                 errors.append(
                     f"Row {idx}: conflicts with locked claim {conflict.id} by exact locked trade match"
                 )
@@ -341,6 +353,11 @@ def import_broker_trades(
 
             if existing:
                 rows_skipped_duplicates += 1
+                duplicate_preview.append({
+                    "row": trade_row,
+                    "reason": "Duplicate trade fingerprint",
+                    "fingerprint": fingerprint,
+                })
                 continue
 
             trade = Trade(
@@ -364,6 +381,10 @@ def import_broker_trades(
 
         except Exception as e:
             rows_rejected += 1
+            rejected_preview.append({
+                "row": trade_row,
+                "reason": str(e),
+            })
             errors.append(f"Row {idx}: {str(e)}")
 
     batch = ImportBatch(
@@ -411,4 +432,7 @@ def import_broker_trades(
         "rows_rejected": rows_rejected,
         "rows_skipped_duplicates": rows_skipped_duplicates,
         "errors": errors[:20],
+        "normalized_preview": normalized_preview[:20],
+        "rejected_preview": rejected_preview[:20],
+        "duplicate_preview": duplicate_preview[:20],
     }
