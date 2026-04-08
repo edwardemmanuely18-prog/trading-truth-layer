@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from datetime import datetime
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.models.import_batch import ImportBatch
+from app.services.trade_import import parse_csv_rows, process_import_rows
 
 router = APIRouter()
 
@@ -47,10 +49,8 @@ def create_import_batch(
     db: Session = Depends(get_db),
 ):
     """
-    This is the canonical ingestion entry point.
-
-    All import sources (manual, CSV, MT5, IBKR)
-    should eventually hit this endpoint.
+    Canonical ingestion entry point.
+    All source types should eventually route through this import control layer.
     """
 
     filename = payload.get("filename", "manual_import")
@@ -67,7 +67,6 @@ def create_import_batch(
         created_at=datetime.utcnow(),
     )
 
-    # optional future field
     if hasattr(batch, "status"):
         batch.status = "processing"
 
@@ -79,6 +78,60 @@ def create_import_batch(
         "id": batch.id,
         "status": getattr(batch, "status", "processing"),
         "message": "Import batch created",
+    }
+
+
+# -----------------------------
+# CSV INGESTION
+# -----------------------------
+@router.post("/workspaces/{workspace_id}/imports/csv")
+async def upload_csv_import(
+    workspace_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing filename")
+
+    if not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Only CSV files are supported")
+
+    file_bytes = await file.read()
+    rows = parse_csv_rows(file_bytes)
+    result = process_import_rows(rows)
+
+    batch = ImportBatch(
+        workspace_id=workspace_id,
+        filename=file.filename,
+        source_type="csv",
+        rows_received=result["stats"]["received"],
+        rows_imported=result["stats"]["accepted"],
+        rows_rejected=result["stats"]["rejected"],
+        rows_skipped_duplicates=0,
+        created_at=datetime.utcnow(),
+    )
+
+    if hasattr(batch, "status"):
+        batch.status = "completed"
+
+    db.add(batch)
+    db.commit()
+    db.refresh(batch)
+
+    return {
+        "id": batch.id,
+        "workspace_id": workspace_id,
+        "filename": file.filename,
+        "source_type": "csv",
+        "status": getattr(batch, "status", "completed"),
+        "rows_received": batch.rows_received,
+        "rows_imported": batch.rows_imported,
+        "rows_rejected": batch.rows_rejected,
+        "rows_skipped_duplicates": batch.rows_skipped_duplicates,
+        "created_at": batch.created_at.isoformat() if batch.created_at else None,
+        "normalized_preview": result["normalized"][:20],
+        "rejected_preview": result["rejected"][:20],
+        "message": "CSV import processed",
     }
 
 
