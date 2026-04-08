@@ -513,10 +513,20 @@ function resolvePrimaryBillingAction(params: {
       disabled = !canSeeUpgrade || checkoutLoading;
     }
   } else if (selected === configured) {
+  if (!canSeeUpgrade) {
     label = "Current Plan Selected";
-    helper = "Choose a different plan to start a new upgrade checkout.";
+    helper = "Only workspace owners can change billing or upgrade plans.";
+    disabled = true;
+  } else if (billingInactive && configured !== "starter") {
+    label = "Activate Billing";
+    helper = "Billing is not active yet for this plan. Activate billing to enforce this workspace tier.";
+    disabled = checkoutLoading;
+  } else {
+    label = "Plan Active";
+    helper = "Your workspace is operating within its current plan capacity.";
     disabled = true;
   }
+}
 
   return { label, helper, disabled };
 }
