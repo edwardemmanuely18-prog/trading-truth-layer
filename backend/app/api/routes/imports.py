@@ -12,6 +12,7 @@ from app.services.trade_import import (
     parse_rows_by_source,
     process_import_rows,
 )
+from app.services.ingestion_service import import_csv_trades
 
 router = APIRouter()
 
@@ -148,33 +149,18 @@ async def upload_import_file(
 
     file_bytes = await file.read()
 
-    try:
-        rows = parse_rows_by_source(normalized_source, file_bytes)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Failed to parse import file: {exc}") from exc
-
-    result = process_import_rows(rows, source_type=normalized_source)
-
-    batch = create_batch_record(
+    # Persist accepted rows into Trade via existing ingestion service
+    result = import_csv_trades(
         db=db,
         workspace_id=workspace_id,
         filename=file.filename,
-        source_type=normalized_source,
-        rows_received=result["stats"]["received"],
-        rows_imported=result["stats"]["accepted"],
-        rows_rejected=result["stats"]["rejected"],
-        rows_skipped_duplicates=result["stats"]["duplicates"],
-        status="completed",
+        content=file_bytes,
+        actor_user_id=None,
     )
 
     return {
-        **serialize_import_batch(batch),
+        **result,
         "mode": mode,
-        "normalized_preview": result["normalized"][:20],
-        "rejected_preview": result["rejected"][:20],
-        "duplicate_preview": result["duplicates"][:20],
         "job_payload": build_import_job_payload(
             workspace_id=workspace_id,
             source_type=normalized_source,
