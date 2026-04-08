@@ -9,11 +9,13 @@ type Props = {
 };
 
 type ImportSourceType = "csv" | "mt5" | "ibkr";
+type ImportCadence = "hourly" | "daily";
 
 type ImportStats = {
   received: number;
   imported: number;
   rejected: number;
+  duplicates: number;
 };
 
 type NormalizedTradePreviewRow = {
@@ -24,10 +26,18 @@ type NormalizedTradePreviewRow = {
   pnl?: number | string;
   timestamp?: string;
   external_id?: string;
+  fingerprint?: string;
+  source_type?: string;
 };
 
 type RejectedPreviewRow = {
   reason?: string;
+  row?: Record<string, unknown>;
+};
+
+type DuplicatePreviewRow = {
+  reason?: string;
+  fingerprint?: string;
   row?: Record<string, unknown>;
 };
 
@@ -36,52 +46,54 @@ function formatPercent(value?: number | null) {
   return `${(Number(value) * 100).toFixed(1)}%`;
 }
 
-function formatAdapterStatus(source: ImportSourceType, enabled: boolean) {
-  if (source === "csv") return enabled ? "active" : "disabled";
-  return enabled ? "ready" : "planned";
+function formatSourceStatus(source: ImportSourceType, selected: boolean) {
+  if (selected) return "selected";
+  if (source === "csv") return "active";
+  return "planned";
 }
 
-function sourceBadgeClass(source: ImportSourceType, enabled: boolean) {
-  if (source === "csv") {
-    return enabled
-      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-      : "border-slate-200 bg-slate-100 text-slate-600";
+function sourceCardClass(source: ImportSourceType, selected: boolean) {
+  if (selected) {
+    return "border-slate-900 bg-slate-900 text-white shadow-sm";
   }
 
-  return enabled
-    ? "border-blue-200 bg-blue-50 text-blue-800"
-    : "border-amber-200 bg-amber-50 text-amber-800";
+  if (source === "csv") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100";
+  }
+
+  if (source === "mt5") {
+    return "border-blue-200 bg-blue-50 text-blue-900 hover:bg-blue-100";
+  }
+
+  return "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100";
 }
 
-function SourceSelectorCard({
+function SourceCard({
   source,
-  selected,
-  enabled,
   title,
   subtitle,
+  selected,
   onSelect,
 }: {
   source: ImportSourceType;
-  selected: boolean;
-  enabled: boolean;
   title: string;
   subtitle: string;
+  selected: boolean;
   onSelect: (source: ImportSourceType) => void;
 }) {
   return (
     <button
       type="button"
       onClick={() => onSelect(source)}
-      className={`w-full rounded-2xl border p-4 text-left transition ${
+      className={`w-full rounded-2xl border p-4 text-left transition ${sourceCardClass(
+        source,
         selected
-          ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-          : "border-slate-200 bg-white hover:bg-slate-50"
-      }`}
+      )}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold">{title}</div>
-          <div className={`mt-1 text-xs ${selected ? "text-slate-300" : "text-slate-500"}`}>
+          <div className={`mt-1 text-xs ${selected ? "text-slate-300" : "opacity-80"}`}>
             {subtitle}
           </div>
         </div>
@@ -90,32 +102,38 @@ function SourceSelectorCard({
           className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
             selected
               ? "border-white/20 bg-white/10 text-white"
-              : sourceBadgeClass(source, enabled)
+              : "border-current/20 bg-white/40"
           }`}
         >
-          {formatAdapterStatus(source, enabled)}
+          {formatSourceStatus(source, selected)}
         </span>
       </div>
     </button>
   );
 }
 
-function SectionCard({
-  title,
-  subtitle,
-  children,
+function StatCard({
+  label,
+  value,
+  tone = "neutral",
 }: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
+  label: string;
+  value: number;
+  tone?: "neutral" | "success" | "danger" | "warning";
 }) {
+  const className =
+    tone === "success"
+      ? "bg-emerald-50 text-emerald-900"
+      : tone === "danger"
+        ? "bg-red-50 text-red-900"
+        : tone === "warning"
+          ? "bg-amber-50 text-amber-900"
+          : "bg-slate-50 text-slate-900";
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-4">
-        <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-        {subtitle ? <div className="mt-1 text-sm text-slate-500">{subtitle}</div> : null}
-      </div>
-      {children}
+    <div className={`rounded-xl p-4 text-sm ${className}`}>
+      <div className="opacity-75">{label}</div>
+      <div className="mt-1 text-lg font-semibold">{value}</div>
     </div>
   );
 }
@@ -125,17 +143,23 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
 
   const [sourceType, setSourceType] = useState<ImportSourceType>("csv");
   const [file, setFile] = useState<File | null>(null);
+
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [usageLoading, setUsageLoading] = useState(true);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
 
   const [preview, setPreview] = useState<NormalizedTradePreviewRow[]>([]);
   const [rejectedPreview, setRejectedPreview] = useState<RejectedPreviewRow[]>([]);
+  const [duplicatePreview, setDuplicatePreview] = useState<DuplicatePreviewRow[]>([]);
   const [stats, setStats] = useState<ImportStats | null>(null);
 
   const [autoImportEnabled, setAutoImportEnabled] = useState(false);
+  const [autoImportSaving, setAutoImportSaving] = useState(false);
+  const [autoImportCadence, setAutoImportCadence] = useState<ImportCadence>("daily");
+
   const [realTimeEnabled, setRealTimeEnabled] = useState(false);
 
   const workspaceRole = getWorkspaceRole(workspaceId);
@@ -184,6 +208,15 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
     };
   }, [workspaceId]);
 
+  function resetImportFeedback() {
+    setStatus(null);
+    setError(null);
+    setPreview([]);
+    setRejectedPreview([]);
+    setDuplicatePreview([]);
+    setStats(null);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -199,51 +232,43 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
       return;
     }
 
-    if (sourceType !== "csv") {
-      setError(
-        `${sourceTitle} is not wired to a live backend adapter yet. Build the backend connector before enabling this source.`
-      );
-      setStatus(null);
-      return;
-    }
-
     if (!file) {
-      setError("Please select a CSV file.");
+      setError(`Please select a ${sourceType.toUpperCase()} CSV file.`);
       setStatus(null);
       return;
     }
 
     setLoading(true);
-    setStatus(null);
-    setError(null);
-    setPreview([]);
-    setRejectedPreview([]);
-    setStats(null);
+    resetImportFeedback();
 
     try {
-      const result = await api.importTradesCsv(workspaceId, file);
+      const result = await api.uploadImportFile(workspaceId, file, sourceType);
 
       setStats({
-        received: result.rows_received,
-        imported: result.rows_imported,
-        rejected: result.rows_rejected,
+        received: Number(result?.rows_received ?? 0),
+        imported: Number(result?.rows_imported ?? 0),
+        rejected: Number(result?.rows_rejected ?? 0),
+        duplicates: Number(result?.rows_skipped_duplicates ?? 0),
       });
 
       setPreview(
-        Array.isArray((result as any).normalized_preview)
-          ? ((result as any).normalized_preview as NormalizedTradePreviewRow[])
-          : []
+        Array.isArray(result?.normalized_preview) ? result.normalized_preview : []
       );
-
       setRejectedPreview(
-        Array.isArray((result as any).rejected_preview)
-          ? ((result as any).rejected_preview as RejectedPreviewRow[])
-          : []
+        Array.isArray(result?.rejected_preview) ? result.rejected_preview : []
+      );
+      setDuplicatePreview(
+        Array.isArray(result?.duplicate_preview) ? result.duplicate_preview : []
       );
 
       setStatus(
-        `Import complete. Received: ${result.rows_received}, Imported: ${result.rows_imported}, Rejected: ${result.rows_rejected}`
+        `${sourceType.toUpperCase()} import complete. Received: ${result?.rows_received ?? 0}, Imported: ${
+          result?.rows_imported ?? 0
+        }, Rejected: ${result?.rows_rejected ?? 0}, Duplicates: ${
+          result?.rows_skipped_duplicates ?? 0
+        }`
       );
+
       setFile(null);
 
       try {
@@ -260,38 +285,105 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
     }
   }
 
+  async function handleAutoImportToggle() {
+    setAutoImportSaving(true);
+    setError(null);
+
+    try {
+      const nextValue = !autoImportEnabled;
+
+      await api.configureAutoImport(workspaceId, {
+        source_type: sourceType,
+        enabled: nextValue,
+        cadence: autoImportCadence,
+      });
+
+      setAutoImportEnabled(nextValue);
+      setStatus(
+        `Auto-import ${nextValue ? "enabled" : "disabled"} for ${sourceType.toUpperCase()} (${autoImportCadence}).`
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update auto-import settings");
+    } finally {
+      setAutoImportSaving(false);
+    }
+  }
+
+  async function handleRealTimeToggle() {
+    const nextValue = !realTimeEnabled;
+    setRealTimeEnabled(nextValue);
+
+    if (!nextValue) {
+      setStatus("Real-time ingestion toggle turned off locally.");
+      return;
+    }
+
+    try {
+      await api.sendStreamEvent(workspaceId, {
+        source_type: sourceType === "ibkr" ? "ibkr" : "mt5",
+        trade: {
+          symbol: "DEMO",
+          side: "buy",
+          quantity: 1,
+          price: 100,
+          pnl: 0,
+          timestamp: new Date().toISOString(),
+          external_id: `demo-${Date.now()}`,
+        },
+      });
+
+      setStatus(
+        `Real-time ingestion foundation ping sent for ${
+          sourceType === "ibkr" ? "IBKR" : "MT5"
+        }.`
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to send real-time ingestion event"
+      );
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <SectionCard
-        title="Broker Integration Console"
-        subtitle="Select an ingestion source and route trade evidence into the canonical import pipeline."
-      >
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold">Broker Integration Console</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Select an ingestion source and route trade evidence into the canonical import pipeline.
+          </p>
+        </div>
+
         <div className="grid gap-4 md:grid-cols-3">
-          <SourceSelectorCard
+          <SourceCard
             source="csv"
             selected={sourceType === "csv"}
-            enabled={true}
             title="CSV Upload"
             subtitle="Canonical batch ingestion"
-            onSelect={setSourceType}
+            onSelect={(source) => {
+              setSourceType(source);
+              resetImportFeedback();
+            }}
           />
-
-          <SourceSelectorCard
+          <SourceCard
             source="mt5"
             selected={sourceType === "mt5"}
-            enabled={false}
             title="MT5 Adapter"
-            subtitle="MetaTrader connector surface"
-            onSelect={setSourceType}
+            subtitle="MetaTrader export ingestion"
+            onSelect={(source) => {
+              setSourceType(source);
+              resetImportFeedback();
+            }}
           />
-
-          <SourceSelectorCard
+          <SourceCard
             source="ibkr"
             selected={sourceType === "ibkr"}
-            enabled={false}
             title="IBKR Adapter"
-            subtitle="Institutional broker connector"
-            onSelect={setSourceType}
+            subtitle="Institutional broker export ingestion"
+            onSelect={(source) => {
+              setSourceType(source);
+              resetImportFeedback();
+            }}
           />
         </div>
 
@@ -303,31 +395,30 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
             <div className="font-semibold text-slate-900">Auto-import Pipelines</div>
-            <div className="mt-2">
-              {autoImportEnabled ? "Enabled" : "Not connected yet"}
-            </div>
+            <div className="mt-2">{autoImportEnabled ? "Enabled" : "Disabled"}</div>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
             <div className="font-semibold text-slate-900">Real-time Ingestion</div>
-            <div className="mt-2">
-              {realTimeEnabled ? "Streaming active" : "Not connected yet"}
-            </div>
+            <div className="mt-2">{realTimeEnabled ? "Foundation active" : "Foundation inactive"}</div>
           </div>
         </div>
 
         <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-          CSV is live now. MT5, IBKR, auto-import pipelines, and real-time ingestion require backend
-          adapters, scheduled jobs, or streaming infrastructure. This form exposes the control
-          surface and readiness state, while the actual connectors should be implemented in backend
-          services and import orchestration.
+          CSV, MT5, and IBKR now share the same broker-neutral ingestion surface. Auto-import and
+          real-time controls here are orchestration foundations; production-grade scheduling and
+          streaming should be completed in backend services and infra.
         </div>
-      </SectionCard>
+      </div>
 
-      <SectionCard
-        title="Import Permissions & Capacity"
-        subtitle="Import rights are gated by workspace role and plan usage."
-      >
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold">Import Permissions & Capacity</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Import rights are controlled by workspace role and current trade usage limits.
+          </p>
+        </div>
+
         {usageLoading ? (
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
             Loading import permissions and trade usage...
@@ -365,23 +456,23 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
             </div>
           </div>
         )}
-      </SectionCard>
+      </div>
 
-      <SectionCard
-        title="CSV Import"
-        subtitle="Canonical fallback ingestion surface. Use this while adapters are still being connected."
-      >
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold">Source Upload & Pipeline Controls</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Upload a broker export file, inspect ingestion results, and configure import orchestration.
+          </p>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="file"
             accept=".csv"
             onChange={(e) => {
               setFile(e.target.files?.[0] || null);
-              setError(null);
-              setStatus(null);
-              setPreview([]);
-              setRejectedPreview([]);
-              setStats(null);
+              resetImportFeedback();
             }}
             className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm"
           />
@@ -390,30 +481,54 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
             <div className="text-sm text-slate-500">Selected file: {selectedFileSummary}</div>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="submit"
-              disabled={loading || !canImport}
-              className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? "Importing..." : "Upload CSV"}
-            </button>
+          <div className="grid gap-4 lg:grid-cols-[1fr_220px_220px]">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="submit"
+                disabled={loading || !canImport}
+                className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? `Importing ${sourceType.toUpperCase()}...` : `Upload ${sourceType.toUpperCase()}`}
+              </button>
+            </div>
 
-            <button
-              type="button"
-              onClick={() => setAutoImportEnabled((value) => !value)}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              {autoImportEnabled ? "Auto-import: On" : "Auto-import: Off"}
-            </button>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Auto-import cadence
+              </label>
+              <select
+                value={autoImportCadence}
+                onChange={(e) => setAutoImportCadence(e.target.value as ImportCadence)}
+                className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+              >
+                <option value="daily">daily</option>
+                <option value="hourly">hourly</option>
+              </select>
+            </div>
 
-            <button
-              type="button"
-              onClick={() => setRealTimeEnabled((value) => !value)}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              {realTimeEnabled ? "Real-time: On" : "Real-time: Off"}
-            </button>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleAutoImportToggle}
+                disabled={autoImportSaving || !canImportByRole}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {autoImportSaving
+                  ? "Saving..."
+                  : autoImportEnabled
+                    ? "Disable Auto-import"
+                    : "Enable Auto-import"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRealTimeToggle}
+                disabled={!canImportByRole}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {realTimeEnabled ? "Disable Real-time" : "Enable Real-time"}
+              </button>
+            </div>
           </div>
 
           {error ? (
@@ -429,21 +544,11 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
           ) : null}
 
           {stats ? (
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-xl bg-slate-50 p-4 text-sm">
-                <div className="text-slate-500">Received</div>
-                <div className="text-lg font-semibold">{stats.received}</div>
-              </div>
-
-              <div className="rounded-xl bg-emerald-50 p-4 text-sm">
-                <div className="text-emerald-700">Imported</div>
-                <div className="text-lg font-semibold text-emerald-800">{stats.imported}</div>
-              </div>
-
-              <div className="rounded-xl bg-red-50 p-4 text-sm">
-                <div className="text-red-700">Rejected</div>
-                <div className="text-lg font-semibold text-red-800">{stats.rejected}</div>
-              </div>
+            <div className="grid gap-4 md:grid-cols-4">
+              <StatCard label="Received" value={stats.received} />
+              <StatCard label="Imported" value={stats.imported} tone="success" />
+              <StatCard label="Rejected" value={stats.rejected} tone="danger" />
+              <StatCard label="Duplicates" value={stats.duplicates} tone="warning" />
             </div>
           ) : null}
 
@@ -463,10 +568,11 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
                       <th className="px-3 py-2 text-left">Price</th>
                       <th className="px-3 py-2 text-left">PnL</th>
                       <th className="px-3 py-2 text-left">Timestamp</th>
+                      <th className="px-3 py-2 text-left">Source</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {preview.map((row: NormalizedTradePreviewRow, i: number) => (
+                    {preview.map((row, i) => (
                       <tr key={`${row.external_id ?? row.symbol ?? "row"}-${i}`} className="border-t">
                         <td className="px-3 py-2">{row.symbol ?? "—"}</td>
                         <td className="px-3 py-2">{row.side ?? "—"}</td>
@@ -474,6 +580,7 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
                         <td className="px-3 py-2">{row.price ?? "—"}</td>
                         <td className="px-3 py-2">{row.pnl ?? "—"}</td>
                         <td className="px-3 py-2">{row.timestamp ?? "—"}</td>
+                        <td className="px-3 py-2">{row.source_type ?? sourceType}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -484,9 +591,7 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
 
           {rejectedPreview.length > 0 ? (
             <div className="mt-2">
-              <h3 className="mb-2 text-sm font-semibold text-red-700">
-                Rejected Rows
-              </h3>
+              <h3 className="mb-2 text-sm font-semibold text-red-700">Rejected Rows</h3>
 
               <div className="overflow-x-auto rounded-xl border bg-red-50">
                 <table className="min-w-full text-xs">
@@ -497,7 +602,7 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {rejectedPreview.map((row: RejectedPreviewRow, i: number) => (
+                    {rejectedPreview.map((row, i) => (
                       <tr key={`rejected-${i}`} className="border-t">
                         <td className="px-3 py-2">{row.reason ?? "Unknown rejection"}</td>
                         <td className="px-3 py-2 font-mono text-[11px] text-slate-700">
@@ -510,8 +615,35 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
               </div>
             </div>
           ) : null}
+
+          {duplicatePreview.length > 0 ? (
+            <div className="mt-2">
+              <h3 className="mb-2 text-sm font-semibold text-amber-700">Duplicate Rows</h3>
+
+              <div className="overflow-x-auto rounded-xl border bg-amber-50">
+                <table className="min-w-full text-xs">
+                  <thead className="text-amber-700">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Reason</th>
+                      <th className="px-3 py-2 text-left">Fingerprint</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {duplicatePreview.map((row, i) => (
+                      <tr key={`duplicate-${i}`} className="border-t">
+                        <td className="px-3 py-2">{row.reason ?? "Duplicate"}</td>
+                        <td className="px-3 py-2 font-mono text-[11px] text-slate-700">
+                          {row.fingerprint ?? "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
         </form>
-      </SectionCard>
+      </div>
     </div>
   );
 }
