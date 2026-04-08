@@ -1,23 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import { useAuth } from "../components/AuthProvider";
-
-declare global {
-  interface Window {
-    Paddle?: {
-      Environment?: {
-        set?: (value: string) => void;
-      };
-      Initialize?: (config: Record<string, unknown>) => void;
-    };
-  }
-}
-
-const PADDLE_SCRIPT_SRC = "https://cdn.paddle.com/paddle/v2/paddle.js";
-const PADDLE_CLIENT_TOKEN = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || "";
-const PADDLE_ENV = (process.env.NEXT_PUBLIC_PADDLE_ENV || "").trim().toLowerCase();
 
 function SurfaceCard({
   title,
@@ -34,24 +19,26 @@ function SurfaceCard({
   );
 }
 
-function appendUniqueDebugLine(
-  setter: React.Dispatch<React.SetStateAction<string[]>>,
-  line: string
-) {
-  setter((prev) => {
-    if (prev.includes(line)) return prev;
-    return [...prev, line];
-  });
+function MetricCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="text-sm text-slate-500">{label}</div>
+      <div className="mt-2 text-2xl font-semibold text-slate-900">{value}</div>
+      <div className="mt-2 text-sm text-slate-600">{hint}</div>
+    </div>
+  );
 }
 
 export default function HomePage() {
   const { user, workspaces, loading, logout } = useAuth();
-
-  const [checkoutBanner, setCheckoutBanner] = useState<string | null>(null);
-  const [checkoutBannerTone, setCheckoutBannerTone] = useState<"info" | "success" | "error">(
-    "info"
-  );
-  const [debugLines, setDebugLines] = useState<string[]>([]);
 
   const firstWorkspace = workspaces[0] ?? null;
 
@@ -59,187 +46,6 @@ export default function HomePage() {
     if (!firstWorkspace) return null;
     return `/workspace/${firstWorkspace.workspace_id}/dashboard`;
   }, [firstWorkspace]);
-
-  const checkoutHandledRef = useRef<string | null>(null);
-  const paddleInitializedRef = useRef(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    let cancelled = false;
-    let attachedScript: HTMLScriptElement | null = null;
-    let existingScript: HTMLScriptElement | null = null;
-
-    const setBanner = (
-      tone: "info" | "success" | "error",
-      message: string
-    ) => {
-      if (cancelled) return;
-      setCheckoutBannerTone(tone);
-      setCheckoutBanner(message);
-    };
-
-    const addDebug = (line: string) => {
-      if (cancelled) return;
-      appendUniqueDebugLine(setDebugLines, line);
-    };
-
-    const url = new URL(window.location.href);
-    const rawPtxn = url.searchParams.get("_ptxn");
-    const rawLegacyPtxn = url.searchParams.get("ptxn");
-    const transactionId = rawPtxn?.startsWith("txn_")
-      ? rawPtxn
-      : rawLegacyPtxn?.startsWith("txn_")
-        ? rawLegacyPtxn
-        : null;
-
-    const initialDebugLines = [
-      "build=homepage-paddle-debug",
-      `href=${window.location.href}`,
-      `raw__ptxn=${rawPtxn || "null"}`,
-      `raw_ptxn=${rawLegacyPtxn || "null"}`,
-      `transaction_id=${transactionId || "null"}`,
-      `token_present=${PADDLE_CLIENT_TOKEN ? "yes" : "no"}`,
-      `token_prefix=${PADDLE_CLIENT_TOKEN ? PADDLE_CLIENT_TOKEN.slice(0, 12) : "none"}`,
-      `env=${PADDLE_ENV || "unset"}`,
-    ];
-
-    setDebugLines(initialDebugLines);
-
-    if (!transactionId) {
-      setBanner("info", "No Paddle transaction handoff detected on this page.");
-      return;
-    }
-
-    if (checkoutHandledRef.current === transactionId) return;
-    checkoutHandledRef.current = transactionId;
-
-    if (!PADDLE_CLIENT_TOKEN) {
-      setBanner(
-        "error",
-        "Paddle checkout handoff detected, but NEXT_PUBLIC_PADDLE_CLIENT_TOKEN is missing."
-      );
-      return;
-    }
-
-    const handlePaddleReady = () => {
-      if (cancelled) return;
-
-      if (!window.Paddle?.Initialize) {
-        setBanner("error", "Paddle.js loaded, but Paddle.Initialize is unavailable.");
-        return;
-      }
-
-      if (paddleInitializedRef.current) {
-        setBanner("info", "Paddle is already initialized.");
-        return;
-      }
-
-      try {
-        const tokenLooksSandbox =
-          PADDLE_CLIENT_TOKEN.startsWith("test_") ||
-          PADDLE_CLIENT_TOKEN.startsWith("pdl_sdbx") ||
-          PADDLE_ENV === "sandbox";
-
-        if (tokenLooksSandbox && window.Paddle?.Environment?.set) {
-          window.Paddle.Environment.set("sandbox");
-          addDebug("paddle_environment=sandbox");
-        } else {
-          addDebug("paddle_environment=live_or_unset");
-        }
-
-        window.Paddle.Initialize({
-          token: PADDLE_CLIENT_TOKEN,
-          eventCallback: (event: any) => {
-            const eventName = String(event?.name || "").toLowerCase() || "unknown";
-            addDebug(`event=${eventName}`);
-
-            if (eventName === "checkout.loaded" || eventName === "checkout.opened") {
-              setBanner("info", "Secure Paddle checkout opened.");
-            }
-
-            if (eventName === "checkout.closed") {
-              setBanner("info", "Checkout was closed.");
-            }
-
-            if (eventName === "checkout.completed") {
-              setBanner("success", "Checkout completed successfully.");
-            }
-
-            if (eventName === "checkout.error" || eventName === "checkout.failed") {
-              setBanner("error", "Paddle checkout reported an error.");
-            }
-          },
-          checkout: {
-            settings: {
-              displayMode: "overlay",
-              theme: "light",
-              locale: "en",
-            },
-          },
-        });
-
-        paddleInitializedRef.current = true;
-        setBanner("info", "Paddle initialized. Waiting for checkout overlay...");
-      } catch (error) {
-        setBanner(
-          "error",
-          error instanceof Error
-            ? `Failed to initialize Paddle.js: ${error.message}`
-            : "Failed to initialize Paddle.js."
-        );
-      }
-    };
-
-    const handleScriptLoad = () => {
-      addDebug("script=loaded");
-      handlePaddleReady();
-    };
-
-    const handleScriptError = () => {
-      addDebug("script=error");
-      setBanner("error", "Failed to load Paddle.js from CDN.");
-    };
-
-    existingScript = document.querySelector<HTMLScriptElement>(
-      `script[src="${PADDLE_SCRIPT_SRC}"]`
-    );
-
-    if (existingScript) {
-      addDebug("script=existing");
-
-      if (window.Paddle?.Initialize) {
-        handlePaddleReady();
-      } else {
-        existingScript.addEventListener("load", handleScriptLoad, { once: true });
-        existingScript.addEventListener("error", handleScriptError, { once: true });
-      }
-    } else {
-      addDebug("script=injecting");
-
-      const script = document.createElement("script");
-      script.src = PADDLE_SCRIPT_SRC;
-      script.async = true;
-      script.onload = handleScriptLoad;
-      script.onerror = handleScriptError;
-      document.head.appendChild(script);
-      attachedScript = script;
-    }
-
-    return () => {
-      cancelled = true;
-
-      if (existingScript) {
-        existingScript.removeEventListener("load", handleScriptLoad);
-        existingScript.removeEventListener("error", handleScriptError);
-      }
-
-      if (attachedScript) {
-        attachedScript.onload = null;
-        attachedScript.onerror = null;
-      }
-    };
-  }, []);
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -273,67 +79,139 @@ export default function HomePage() {
                   Sign Out
                 </button>
               </>
-            ) : null}
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/register"
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 pt-6">
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 shadow-sm">
-          PADDLE HANDOFF BUILD ACTIVE
+      <section className="mx-auto max-w-7xl px-6 py-16">
+        <div className="max-w-4xl">
+          <div className="inline-flex rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 shadow-sm">
+            Broker-neutral verification infrastructure
+          </div>
+
+          <h1 className="mt-6 text-5xl font-bold tracking-tight text-slate-900 sm:text-6xl">
+            Turn trading activity into verifiable claims, canonical ledgers, and dispute-ready proof.
+          </h1>
+
+          <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-600">
+            Trading Truth Layer gives trading operators, communities, and serious performance
+            businesses a governance-grade system for ingestion, verification, claim publication,
+            and evidence preservation.
+          </p>
+
+          <div className="mt-8 flex flex-wrap gap-3">
+            {user && primaryWorkspaceHref ? (
+              <Link
+                href={primaryWorkspaceHref}
+                className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Enter Workspace
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/register"
+                  className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                >
+                  Create Workspace
+                </Link>
+                <Link
+                  href="/login"
+                  className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50"
+                >
+                  Sign In
+                </Link>
+              </>
+            )}
+
+            <Link
+              href="/public/claims"
+              className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50"
+            >
+              Explore Public Claims
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-12 grid gap-4 md:grid-cols-3">
+          <MetricCard
+            label="Verification Posture"
+            value="Governance-first"
+            hint="Claims are structured, hashed, attributable, and evidence-backed."
+          />
+          <MetricCard
+            label="Ingestion Surface"
+            value="CSV · MT5 · IBKR · Webhook"
+            hint="Multiple ingestion paths route into the same canonical trade pipeline."
+          />
+          <MetricCard
+            label="Operational Output"
+            value="Public proof"
+            hint="Verified claims can become auditable, externally checkable trust surfaces."
+          />
         </div>
       </section>
 
-      {checkoutBanner ? (
-        <section className="mx-auto max-w-7xl px-6 pt-4">
-          <div
-            className={`rounded-2xl border p-4 text-sm shadow-sm ${
-              checkoutBannerTone === "success"
-                ? "border-green-200 bg-green-50 text-green-800"
-                : checkoutBannerTone === "error"
-                  ? "border-red-200 bg-red-50 text-red-700"
-                  : "border-blue-200 bg-blue-50 text-blue-800"
-            }`}
-          >
-            {checkoutBanner}
-          </div>
-        </section>
-      ) : null}
-
-      <section className="mx-auto max-w-7xl px-6 pt-4">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-700 shadow-sm">
-          <div className="font-semibold text-slate-900">Paddle debug</div>
-          <div className="mt-2 space-y-1">
-            {debugLines.map((line, index) => (
-              <div key={`${line}-${index}`} className="break-all font-mono">
-                {line}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-6 py-12">
-        <h1 className="text-5xl font-bold tracking-tight">Verified Trading Claims OS</h1>
-        <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-600">
-          Broker-neutral verification infrastructure for trading communities, operators, and
-          performance claims. Convert raw trading activity into canonical ledgers, standardized
-          claims, verified leaderboards, and dispute-ready evidence packs.
-        </p>
-
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
+      <section className="mx-auto max-w-7xl px-6 pb-16">
+        <div className="grid gap-4 md:grid-cols-3">
           <SurfaceCard
             title="Canonical Trade Ledger"
-            description="Normalize imported trading activity into a durable, queryable source of truth."
+            description="Normalize imported trading activity into a durable, queryable source of truth that supports verification, governance, and downstream evidence generation."
           />
           <SurfaceCard
             title="Claims Schema Engine"
-            description="Define exactly what is included in a performance claim, with clear methodology and exclusions."
+            description="Define exactly what is included in a claim, including time window, participants, symbols, exclusions, and methodology, with full lineage across versions."
           />
           <SurfaceCard
             title="Evidence Pack Generator"
-            description="Export signed, dispute-ready claim artifacts with trade-set hashes and reproducible metrics."
+            description="Produce dispute-ready artifacts with reproducible metrics, trade-set hashes, lifecycle traceability, and externally reviewable verification surfaces."
           />
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-6 pb-20">
+        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+          <div className="max-w-3xl">
+            <h2 className="text-2xl font-semibold text-slate-900">Commercial posture</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-600">
+              The product is designed around a controlled commercial ladder:
+              Sandbox for limited evaluation, then Starter, Pro, Growth, and Business for real
+              operational deployment.
+            </p>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="text-sm font-semibold text-slate-900">Sandbox</div>
+              <div className="mt-2 text-sm text-slate-600">
+                Limited evaluation environment for product proof, onboarding, and safe experimentation.
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="text-sm font-semibold text-slate-900">Paid operational tiers</div>
+              <div className="mt-2 text-sm text-slate-600">
+                Starter and above unlock real governed capacity for claims, trades, members,
+                verification workflows, and commercial trust surfaces.
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </main>
