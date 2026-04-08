@@ -78,6 +78,41 @@ function formatBooleanLabel(value?: boolean) {
   return value ? "yes" : "no";
 }
 
+function formatBillingProviderLabel(
+  billingFoundation?: WorkspaceBillingFoundation | null
+) {
+  const label =
+    billingFoundation?.billing_provider_label ||
+    billingFoundation?.active_billing_provider ||
+    billingFoundation?.billing_provider;
+
+  const normalized = normalizeText(label);
+
+  if (normalized === "paddle") return "Paddle";
+  if (normalized === "stripe") return "Stripe";
+  if (normalized === "manual" || normalized === "manual billing") return "Manual Billing";
+  if (normalized === "none" || !normalized) return "Unconfigured";
+  return label || "Unconfigured";
+}
+
+function formatCheckoutModeLabel(mode?: string | null) {
+  const normalized = normalizeText(mode);
+
+  if (normalized === "paddle_checkout_ready") return "Paddle checkout ready";
+  if (normalized === "stripe_checkout_ready") return "Stripe checkout ready";
+  if (normalized === "manual_billing_ready") return "Manual billing ready";
+  if (normalized === "placeholder_until_checkout") return "Checkout not configured";
+  if (normalized === "sandbox_activation") return "Sandbox activation";
+  return mode || "Unknown";
+}
+
+function formatProviderEnvironmentLabel(value?: string | null) {
+  const normalized = normalizeText(value);
+  if (!normalized) return "live";
+  if (normalized === "sandbox") return "sandbox";
+  return normalized;
+}
+
 function formatCapabilityStatus(params: {
   enabled?: boolean;
   fallbackWhenDisabled: string;
@@ -390,7 +425,7 @@ function ManualPaymentCard({
   const details = billingFoundation?.manual_payment_details ?? null;
   const manualBilling = billingFoundation?.manual_billing ?? null;
 
-  if (!manualBilling?.enabled || !details) {
+  if (!manualBilling?.enabled || !manualBilling?.visible || !details) {
     return null;
   }
 
@@ -658,7 +693,7 @@ function UpgradeSummaryPanel({
             {formatPlanCodeLabel(selectedPlanCode)}
           </div>
           <div className="mt-2 text-sm text-slate-600">
-            Billing cycle: {formatPlanCodeLabel(selectedBillingCycle)}
+            Billing cycle: {selectedPlanCode === "sandbox" ? "No billing required" : formatPlanCodeLabel(selectedBillingCycle)}
           </div>
         </div>
       </div>
@@ -1128,7 +1163,27 @@ export default function WorkspaceSettingsPage() {
     upgradeRecommendation?.recommended_plan_name ||
     formatPlanCodeLabel(upgradeRecommendation?.recommended_plan_code);
 
-  const currentPlanBilling = configuredPlanItem?.billing || settings?.plan_detail?.billing;
+    const currentPlanBilling = configuredPlanItem?.billing || settings?.plan_detail?.billing;
+
+  const billingProviderLabel = formatBillingProviderLabel(billingFoundation);
+  const providerCustomerId =
+    billingFoundation?.provider_customer_id ||
+    (normalizeText(billingFoundation?.active_billing_provider) === "paddle"
+      ? billingFoundation?.paddle_customer_id
+      : billingFoundation?.stripe_customer_id) ||
+    null;
+  const providerSubscriptionId =
+    billingFoundation?.provider_subscription_id ||
+    (normalizeText(billingFoundation?.active_billing_provider) === "paddle"
+      ? billingFoundation?.paddle_subscription_id
+      : billingFoundation?.stripe_subscription_id) ||
+    null;
+  const providerEnvironment = formatProviderEnvironmentLabel(
+    billingFoundation?.provider_environment ||
+      billingFoundation?.paddle_ready?.environment ||
+      "live"
+  );
+
 
   const primaryAction = resolvePrimaryBillingAction({
     configuredPlanCode,
@@ -1276,15 +1331,8 @@ export default function WorkspaceSettingsPage() {
               />
               <SummaryCard
                 label="Billing Mode"
-                value={
-                  billingFoundation?.manual_billing?.enabled &&
-                  billingFoundation?.checkout_state?.mode === "manual_billing_ready"
-                    ? "Manual billing"
-                    : billingFoundation?.checkout_state.mode ||
-                      usage?.stripe_ready.integration_status ||
-                      "ready_for_stripe_foundation"
-                }
-                hint="Checkout mode / foundation state"
+                value={formatCheckoutModeLabel(billingFoundation?.checkout_state?.mode)}
+                hint={`Active provider: ${billingProviderLabel}`}
               />
               <SummaryCard
                 label="Claims Used"
@@ -1495,7 +1543,7 @@ export default function WorkspaceSettingsPage() {
                     <div>
                       <h2 className="text-2xl font-semibold">Billing Foundation</h2>
                       <p className="mt-1 text-sm text-slate-500">
-                        Current plan state, checkout readiness, portal access, and monetization foundations.
+                        Active billing provider, checkout readiness, subscription linkage, and commercial plan posture.
                       </p>
                     </div>
 
@@ -1582,43 +1630,39 @@ export default function WorkspaceSettingsPage() {
 
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
                     <div className="rounded-xl bg-slate-50 p-4">
-                      <div className="text-sm text-slate-500">Stripe Customer</div>
+                      <div className="text-sm text-slate-500">{billingProviderLabel} Customer</div>
                       <div className="mt-1 break-all font-mono text-xs text-slate-700">
-                        {settings?.stripe_customer_id || "Not connected"}
+                        {providerCustomerId || "Not connected"}
                       </div>
                     </div>
 
                     <div className="rounded-xl bg-slate-50 p-4">
-                      <div className="text-sm text-slate-500">Stripe Subscription</div>
+                      <div className="text-sm text-slate-500">{billingProviderLabel} Subscription</div>
                       <div className="mt-1 break-all font-mono text-xs text-slate-700">
-                        {settings?.stripe_subscription_id || "Not connected"}
+                        {providerSubscriptionId || "Not connected"}
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                     <div>
+                      Active Billing Provider:{" "}
+                      <span className="font-medium">{billingProviderLabel}</span>
+                    </div>
+                    <div className="mt-2">
+                      Provider Environment:{" "}
+                      <span className="font-medium">{providerEnvironment}</span>
+                    </div>
+                    <div className="mt-2">
                       Subscription Period End:{" "}
                       <span className="font-medium">
                         {formatDateTime(settings?.subscription_current_period_end)}
                       </span>
                     </div>
                     <div className="mt-2">
-                      Stripe Integration Status:{" "}
-                      <span className="font-medium">
-                        {billingFoundation?.stripe_ready.integration_status || "ready_for_stripe_foundation"}
-                      </span>
-                    </div>
-                    <div className="mt-2">
                       Checkout Mode:{" "}
                       <span className="font-medium">
-                        {billingFoundation?.checkout_state.mode || "placeholder_until_checkout"}
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      Billing Enabled:{" "}
-                      <span className="font-medium">
-                        {formatBooleanLabel(billingFoundation?.stripe_ready.billing_enabled)}
+                        {formatCheckoutModeLabel(billingFoundation?.checkout_state.mode)}
                       </span>
                     </div>
                     <div className="mt-2">
@@ -1634,27 +1678,33 @@ export default function WorkspaceSettingsPage() {
                       </span>
                     </div>
                     <div className="mt-2">
-                      Secret Key Configured:{" "}
+                      Paddle Enabled:{" "}
                       <span className="font-medium">
-                        {formatBooleanLabel(billingFoundation?.stripe_ready.secret_key_configured)}
+                        {formatBooleanLabel(billingFoundation?.paddle_ready?.enabled)}
                       </span>
                     </div>
                     <div className="mt-2">
-                      Stripe Package Installed:{" "}
+                      Paddle API Key Configured:{" "}
                       <span className="font-medium">
-                        {formatBooleanLabel(billingFoundation?.stripe_ready.package_installed)}
+                        {formatBooleanLabel(billingFoundation?.paddle_ready?.api_key_configured)}
                       </span>
                     </div>
                     <div className="mt-2">
-                      Customer Connected:{" "}
+                      Paddle Webhook Secret Configured:{" "}
                       <span className="font-medium">
-                        {billingFoundation?.stripe_ready.has_customer_id ? "yes" : "no"}
+                        {formatBooleanLabel(billingFoundation?.paddle_ready?.webhook_secret_configured)}
                       </span>
                     </div>
                     <div className="mt-2">
-                      Subscription Connected:{" "}
+                      Provider Customer Connected:{" "}
                       <span className="font-medium">
-                        {billingFoundation?.stripe_ready.has_subscription_id ? "yes" : "no"}
+                        {providerCustomerId ? "yes" : "no"}
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      Provider Subscription Connected:{" "}
+                      <span className="font-medium">
+                        {providerSubscriptionId ? "yes" : "no"}
                       </span>
                     </div>
                     <div className="mt-2">
