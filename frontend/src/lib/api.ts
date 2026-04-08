@@ -2017,6 +2017,85 @@ export const api = {
     return res.json() as Promise<ImportCsvResult>;
   },
 
+  // =========================================
+  // PHASE 16 — BROKER IMPORT LAYER
+  // =========================================
+
+  uploadImportFile: async (
+    workspaceId: number,
+    file: File,
+    sourceType: "csv" | "mt5" | "ibkr" = "csv"
+  ): Promise<any> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("source_type", sourceType);
+    formData.append("mode", "manual");
+
+    const headers = getAuthHeaders();
+
+    const res = await fetch(
+      `${API_BASE}${withDevUser(`/workspaces/${workspaceId}/imports/upload`)}`,
+      {
+        method: "POST",
+        headers,
+        body: formData,
+      }
+    );
+
+    if (!res.ok) {
+      const rawText = await res.text();
+      const payload = parseApiErrorPayload(rawText);
+
+      throw new ApiError(
+        payload?.message || "Import upload failed",
+        res.status,
+        payload,
+        rawText
+      );
+    }
+
+    return res.json();
+  },
+
+  // -----------------------------
+  // AUTO IMPORT CONFIG
+  // -----------------------------
+  configureAutoImport: async (
+    workspaceId: number,
+    payload: {
+      source_type: "csv" | "mt5" | "ibkr";
+      enabled: boolean;
+      cadence: "hourly" | "daily";
+    }
+  ) => {
+    return apiFetch(
+      withDevUser(`/workspaces/${workspaceId}/imports/auto`),
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+  },
+
+  // -----------------------------
+  // REAL-TIME STREAM (IBKR FUTURE)
+  // -----------------------------
+  sendStreamEvent: async (
+    workspaceId: number,
+    payload: {
+      source_type: "ibkr" | "mt5";
+      trade: Record<string, any>;
+    }
+  ) => {
+    return apiFetch(
+      withDevUser(`/workspaces/${workspaceId}/imports/stream-event`),
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+  },
+
   createClaimSchema: async (payload: ClaimSchemaCreatePayload): Promise<ClaimSchema> => {
     return apiFetch<ClaimSchema>(withDevUser(`/claim-schemas`), {
       method: "POST",
