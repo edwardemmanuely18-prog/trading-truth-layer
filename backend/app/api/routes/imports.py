@@ -12,10 +12,53 @@ from app.services.trade_import import (
     parse_rows_by_source,
     process_import_rows,
 )
-from app.services.ingestion_service import import_csv_trades
-from app.services.ingestion_service import import_broker_trades
+from app.services.ingestion_service import (
+    import_broker_trades,
+    import_csv_trades,
+    persist_runtime_trade_rows,
+)
 
 router = APIRouter()
+
+WEBHOOK_ALLOWED_SOURCES = {"csv", "mt5", "ibkr", "custom", "webhook"}
+
+
+def _normalize_webhook_source(source_type: str | None) -> str:
+    normalized = str(source_type or "webhook").strip().lower()
+    if normalized == "custom":
+        return "webhook"
+    return normalized
+
+
+def _adapt_webhook_trade(raw_trade: dict, source_type: str) -> dict:
+    return {
+        "symbol": raw_trade.get("symbol") or raw_trade.get("ticker") or raw_trade.get("instrument"),
+        "side": raw_trade.get("side") or raw_trade.get("action") or raw_trade.get("type"),
+        "quantity": raw_trade.get("quantity") or raw_trade.get("qty") or raw_trade.get("size"),
+        "entry_price": raw_trade.get("entry_price") or raw_trade.get("price") or raw_trade.get("fill_price"),
+        "exit_price": raw_trade.get("exit_price"),
+        "net_pnl": raw_trade.get("net_pnl") or raw_trade.get("pnl") or raw_trade.get("profit"),
+        "opened_at": raw_trade.get("opened_at") or raw_trade.get("timestamp") or raw_trade.get("time"),
+        "closed_at": raw_trade.get("closed_at"),
+        "member_id": raw_trade.get("member_id"),
+        "currency": raw_trade.get("currency"),
+        "strategy_tag": raw_trade.get("strategy_tag"),
+        "source_system": raw_trade.get("source_system") or source_type.upper(),
+        "external_id": raw_trade.get("external_id") or raw_trade.get("id") or raw_trade.get("trade_id"),
+    }
+
+
+def _extract_webhook_trade_rows(payload: dict) -> list[dict]:
+    trades = payload.get("trades")
+
+    if isinstance(trades, list):
+        return trades
+
+    trade = payload.get("trade")
+    if isinstance(trade, dict):
+        return [trade]
+
+    return []
 
 
 # -----------------------------
@@ -116,6 +159,56 @@ def create_import_batch(
         "id": batch.id,
         "status": getattr(batch, "status", "processing"),
         "message": "Import batch created",
+    }
+
+
+# -----------------------------
+# WEBHOOK INGESTION
+# -----------------------------
+@router.post("/webhooks/trades")
+def ingest_webhook_trades(
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    workspace_id_raw = payload.get("workspace_id")
+    try:
+        workspace_id = int(workspace_id_raw)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Missing or invalid workspace_id")
+
+    source_type = _normalize_webhook_source(payload.get("source_type"))
+
+    if source_type not in WEBHOOK_ALLOWED_SOURCES:
+        raise HTTPException(status_code=400, detail=f"Unsupported source type: {source_type}")
+
+    raw_trades = _extract_webhook_trade_rows(payload)
+    if not raw_trades:
+        raise HTTPException(status_code=400, detail="Missing trade payload")
+
+    adapted_rows = [
+        _adapt_webhook_trade(raw_trade, source_type)
+        for raw_trade in raw_trades
+        if isinstance(raw_trade, dict)
+    ]
+
+    if not adapted_rows:
+        raise HTTPException(status_code=400, detail="No valid trade objects supplied")
+
+    filename = str(payload.get("filename") or f"{source_type}_webhook")
+
+    result = persist_runtime_trade_rows(
+        db=db,
+        workspace_id=workspace_id,
+        filename=filename,
+        source_type=source_type,
+        normalized_rows=adapted_rows,
+        actor_user_id=None,
+        audit_source="imports.ingest_webhook_trades",
+    )
+
+    return {
+        **result,
+        "message": "Webhook trades ingested",
     }
 
 
@@ -260,23 +353,44 @@ def ingest_stream_event(
     source_type = str(payload.get("source_type", "ibkr")).strip().lower()
     trade = payload.get("trade")
 
-    if source_type not in {"csv", "mt5", "ibkr"}:
+@router.post("/workspaces/{workspace_id}/imports/stream-event")
+def ingest_stream_event(
+    workspace_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    source_type = _normalize_webhook_source(payload.get("source_type", "ibkr"))
+    trade = payload.get("trade")
+
+    if source_type not in WEBHOOK_ALLOWED_SOURCES:
         raise HTTPException(status_code=400, detail=f"Unsupported source type: {source_type}")
 
     if not isinstance(trade, dict):
         raise HTTPException(status_code=400, detail="Missing trade payload")
 
+    adapted_trade = _adapt_webhook_trade(trade, source_type)
     event_payload = build_stream_event_payload(
         workspace_id=workspace_id,
         source_type=source_type,
-        trade=trade,
+        trade=adapted_trade,
+    )
+
+    result = persist_runtime_trade_rows(
+        db=db,
+        workspace_id=workspace_id,
+        filename=f"{source_type}_stream_event",
+        source_type=source_type,
+        normalized_rows=[adapted_trade],
+        actor_user_id=None,
+        audit_source="imports.ingest_stream_event",
     )
 
     return {
+        **result,
         "workspace_id": workspace_id,
         "source_type": source_type,
         "event": event_payload,
-        "message": "Real-time ingestion event accepted (foundation only)",
+        "message": "Real-time ingestion event processed",
     }
 
 
