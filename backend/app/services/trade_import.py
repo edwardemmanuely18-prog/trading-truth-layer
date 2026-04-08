@@ -1,3 +1,5 @@
+# (FULL FILE — upgraded version)
+
 from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple, Set
@@ -31,13 +33,11 @@ def normalize_symbol(value: Any) -> str:
     return normalize_text(value).upper()
 
 
-def normalize_timestamp(value: Any) -> str | None:
+def parse_datetime(value: Any) -> datetime | None:
     raw = normalize_text(value)
     if not raw:
         return None
 
-    # foundation only: preserve input when parse is uncertain
-    # if parse succeeds, convert to ISO-like string
     candidates = [
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%d %H:%M",
@@ -51,12 +51,11 @@ def normalize_timestamp(value: Any) -> str | None:
 
     for fmt in candidates:
         try:
-            dt = datetime.strptime(raw, fmt)
-            return dt.isoformat(sep=" ")
+            return datetime.strptime(raw, fmt)
         except Exception:
             pass
 
-    return raw
+    return None
 
 
 def normalize_side(value: Any) -> str:
@@ -79,9 +78,9 @@ def build_trade_fingerprint(trade: Dict[str, Any]) -> str:
             normalize_symbol(trade.get("symbol")),
             normalize_side(trade.get("side")),
             str(safe_float(trade.get("quantity"))),
-            str(safe_float(trade.get("price"))),
-            str(safe_float(trade.get("pnl"))),
-            normalize_text(trade.get("timestamp")),
+            str(safe_float(trade.get("entry_price"))),
+            str(safe_float(trade.get("net_pnl"))),
+            normalize_text(trade.get("opened_at")),
             normalize_text(trade.get("external_id")),
             normalize_text(trade.get("source_type")),
         ]
@@ -89,32 +88,20 @@ def build_trade_fingerprint(trade: Dict[str, Any]) -> str:
 
 
 # ----------------------------------------
-# SOURCE-SPECIFIC ROW MAPPERS
+# SOURCE-SPECIFIC ROW MAPPERS (UPGRADED)
 # ----------------------------------------
-
-def map_csv_row(row: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        "symbol": row.get("symbol") or row.get("Symbol"),
-        "side": row.get("side") or row.get("Side"),
-        "quantity": row.get("quantity") or row.get("Qty"),
-        "price": row.get("price") or row.get("Price"),
-        "pnl": row.get("pnl") or row.get("PnL"),
-        "timestamp": row.get("timestamp") or row.get("Time"),
-        "external_id": row.get("id") or row.get("Ticket"),
-        "source_type": "csv",
-        "raw_row": row,
-    }
-
 
 def map_mt5_row(row: Dict[str, Any]) -> Dict[str, Any]:
     return {
-        "symbol": row.get("Symbol") or row.get("symbol"),
-        "side": row.get("Type") or row.get("type") or row.get("side"),
-        "quantity": row.get("Volume") or row.get("volume") or row.get("quantity"),
-        "price": row.get("Price") or row.get("price"),
-        "pnl": row.get("Profit") or row.get("profit") or row.get("pnl"),
-        "timestamp": row.get("Time") or row.get("time") or row.get("timestamp"),
-        "external_id": row.get("Ticket") or row.get("ticket") or row.get("id"),
+        "symbol": row.get("Symbol"),
+        "side": row.get("Type"),
+        "quantity": row.get("Volume"),
+        "entry_price": row.get("Price"),
+        "exit_price": row.get("Price") if row.get("Profit") else None,
+        "net_pnl": row.get("Profit"),
+        "opened_at": row.get("Time"),
+        "closed_at": row.get("Time"),
+        "external_id": row.get("Ticket"),
         "source_type": "mt5",
         "raw_row": row,
     }
@@ -122,36 +109,55 @@ def map_mt5_row(row: Dict[str, Any]) -> Dict[str, Any]:
 
 def map_ibkr_row(row: Dict[str, Any]) -> Dict[str, Any]:
     return {
-        "symbol": row.get("Symbol") or row.get("symbol"),
-        "side": row.get("Buy/Sell") or row.get("buy_sell") or row.get("side"),
-        "quantity": row.get("Quantity") or row.get("quantity") or row.get("Qty"),
-        "price": row.get("TradePrice") or row.get("price") or row.get("Price"),
-        "pnl": row.get("Realized P&L") or row.get("RealizedPnL") or row.get("pnl"),
-        "timestamp": row.get("Date/Time") or row.get("datetime") or row.get("timestamp"),
-        "external_id": row.get("TradeID") or row.get("trade_id") or row.get("id"),
+        "symbol": row.get("Symbol"),
+        "side": row.get("Buy/Sell"),
+        "quantity": row.get("Quantity"),
+        "entry_price": row.get("TradePrice"),
+        "exit_price": row.get("TradePrice"),
+        "net_pnl": row.get("Realized P&L"),
+        "opened_at": row.get("Date/Time"),
+        "closed_at": row.get("Date/Time"),
+        "external_id": row.get("TradeID"),
         "source_type": "ibkr",
         "raw_row": row,
     }
 
 
+def map_csv_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "symbol": row.get("symbol"),
+        "side": row.get("side"),
+        "quantity": row.get("quantity"),
+        "entry_price": row.get("price"),
+        "exit_price": None,
+        "net_pnl": row.get("pnl"),
+        "opened_at": row.get("timestamp"),
+        "closed_at": None,
+        "external_id": row.get("id"),
+        "source_type": "csv",
+        "raw_row": row,
+    }
+
+
 # ----------------------------------------
-# CANONICAL TRADE NORMALIZATION
+# NORMALIZATION (UPGRADED)
 # ----------------------------------------
 
 def normalize_trade(raw: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Convert raw trade input into canonical broker-neutral format.
-    """
+    opened_at = parse_datetime(raw.get("opened_at"))
+    closed_at = parse_datetime(raw.get("closed_at"))
 
     normalized = {
         "symbol": normalize_symbol(raw.get("symbol")),
         "side": normalize_side(raw.get("side")),
         "quantity": safe_float(raw.get("quantity")),
-        "price": safe_float(raw.get("price")),
-        "pnl": safe_float(raw.get("pnl")),
-        "timestamp": normalize_timestamp(raw.get("timestamp")),
+        "entry_price": safe_float(raw.get("entry_price")),
+        "exit_price": safe_float(raw.get("exit_price"), None),
+        "net_pnl": safe_float(raw.get("net_pnl"), None),
+        "opened_at": opened_at,
+        "closed_at": closed_at,
         "external_id": normalize_text(raw.get("external_id")) or None,
-        "source_type": normalize_text(raw.get("source_type")) or "manual",
+        "source_type": normalize_text(raw.get("source_type")),
     }
 
     normalized["fingerprint"] = build_trade_fingerprint(normalized)
@@ -159,7 +165,7 @@ def normalize_trade(raw: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ----------------------------------------
-# VALIDATION
+# VALIDATION (UPGRADED)
 # ----------------------------------------
 
 def validate_trade(trade: Dict[str, Any]) -> Tuple[bool, str]:
@@ -172,14 +178,14 @@ def validate_trade(trade: Dict[str, Any]) -> Tuple[bool, str]:
     if trade["quantity"] <= 0:
         return False, "Invalid quantity"
 
-    if trade["timestamp"] is None:
-        return False, "Missing timestamp"
+    if trade["opened_at"] is None:
+        return False, "Missing opened_at"
 
     return True, ""
 
 
 # ----------------------------------------
-# INGESTION ENGINE
+# INGESTION ENGINE (UPGRADED)
 # ----------------------------------------
 
 def process_import_rows(
@@ -188,15 +194,6 @@ def process_import_rows(
     source_type: str = "csv",
     existing_fingerprints: Set[str] | None = None,
 ) -> Dict[str, Any]:
-    """
-    Main ingestion processor.
-
-    Returns:
-    - normalized rows
-    - rejected rows
-    - duplicate rows
-    - stats
-    """
 
     normalized: List[Dict[str, Any]] = []
     rejected: List[Dict[str, Any]] = []
@@ -206,31 +203,17 @@ def process_import_rows(
     existing = existing_fingerprints or set()
 
     for row in rows:
-        row = dict(row)
-        row["source_type"] = source_type
-
         trade = normalize_trade(row)
         ok, reason = validate_trade(trade)
 
         if not ok:
-            rejected.append(
-                {
-                    "row": row,
-                    "reason": reason,
-                }
-            )
+            rejected.append({"row": row, "reason": reason})
             continue
 
         fingerprint = trade["fingerprint"]
 
         if fingerprint in seen or fingerprint in existing:
-            duplicates.append(
-                {
-                    "row": row,
-                    "reason": "Duplicate trade fingerprint",
-                    "fingerprint": fingerprint,
-                }
-            )
+            duplicates.append({"row": row, "reason": "Duplicate", "fingerprint": fingerprint})
             continue
 
         seen.add(fingerprint)
@@ -253,55 +236,20 @@ def process_import_rows(
 # PARSERS
 # ----------------------------------------
 
-def parse_csv_text(text: str) -> List[Dict[str, Any]]:
+def parse_rows_by_source(source_type: str, file_bytes: bytes) -> List[Dict[str, Any]]:
+    text = file_bytes.decode("utf-8")
     reader = csv.DictReader(StringIO(text))
+
+    if source_type == "mt5":
+        return [map_mt5_row(row) for row in reader]
+
+    if source_type == "ibkr":
+        return [map_ibkr_row(row) for row in reader]
+
     return [map_csv_row(row) for row in reader]
 
-
-def parse_csv_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
-    text = file_bytes.decode("utf-8")
-    return parse_csv_text(text)
-
-
-def parse_mt5_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
-    """
-    Foundation parser for MT5 CSV-like exports.
-    """
-    text = file_bytes.decode("utf-8")
-    reader = csv.DictReader(StringIO(text))
-    return [map_mt5_row(row) for row in reader]
-
-
-def parse_ibkr_rows(file_bytes: bytes) -> List[Dict[str, Any]]:
-    """
-    Foundation parser for IBKR CSV-like exports.
-    """
-    text = file_bytes.decode("utf-8")
-    reader = csv.DictReader(StringIO(text))
-    return [map_ibkr_row(row) for row in reader]
-
-
 # ----------------------------------------
-# SOURCE ROUTER
-# ----------------------------------------
-
-def parse_rows_by_source(source_type: str, file_bytes: bytes) -> List[Dict[str, Any]]:
-    source = normalize_text(source_type).lower()
-
-    if source == "csv":
-        return parse_csv_rows(file_bytes)
-
-    if source == "mt5":
-        return parse_mt5_rows(file_bytes)
-
-    if source == "ibkr":
-        return parse_ibkr_rows(file_bytes)
-
-    raise ValueError(f"Unsupported source type: {source_type}")
-
-
-# ----------------------------------------
-# AUTO-IMPORT / REAL-TIME FOUNDATIONS
+# AUTO-IMPORT JOB PAYLOAD (RESTORE)
 # ----------------------------------------
 
 def build_import_job_payload(
@@ -311,27 +259,23 @@ def build_import_job_payload(
     filename: str | None = None,
     mode: str = "manual",
 ) -> Dict[str, Any]:
-    """
-    Foundation payload for future scheduled and streaming ingestion jobs.
-    """
-
     return {
         "workspace_id": workspace_id,
-        "source_type": normalize_text(source_type).lower(),
+        "source_type": source_type,
         "filename": filename,
-        "mode": normalize_text(mode).lower() or "manual",
+        "mode": mode,
         "requested_at": datetime.utcnow().isoformat(),
     }
 
+# ----------------------------------------
+# STREAM EVENT PAYLOAD (RESTORE)
+# ----------------------------------------
 
 def build_stream_event_payload(
     workspace_id: int,
     source_type: str,
     trade: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """
-    Foundation shape for future real-time ingestion.
-    """
     normalized = normalize_trade(
         {
             **trade,
