@@ -78,6 +78,26 @@ function formatBooleanLabel(value?: boolean) {
   return value ? "yes" : "no";
 }
 
+function formatCapabilityStatus(params: {
+  enabled?: boolean;
+  fallbackWhenDisabled: string;
+  foundationLabel?: string;
+}) {
+  const { enabled, fallbackWhenDisabled, foundationLabel } = params;
+  if (enabled) return "enabled";
+  return foundationLabel || fallbackWhenDisabled;
+}
+
+function formatReadinessSourceLabel(provider?: string | null) {
+  const normalized = normalizeText(provider);
+  if (!normalized) return "internal";
+  if (normalized === "mt5") return "MT5";
+  if (normalized === "ibkr") return "IBKR";
+  if (normalized === "csv") return "CSV";
+  if (normalized === "webhook") return "Webhook";
+  return provider || "internal";
+}
+
 function getNextPlanCode(planCode?: string | null): string | null {
   const normalized = normalizeText(planCode);
   const index = PLAN_ORDER.findIndex((item) => item === normalized);
@@ -1722,7 +1742,7 @@ export default function WorkspaceSettingsPage() {
                   <div>
                     <h2 className="text-2xl font-semibold">Platform Readiness</h2>
                     <p className="mt-1 text-sm text-slate-500">
-                      External verification, API access, and integration readiness layer.
+                      External verification, API exposure, broker-ingestion posture, and webhook readiness layer.
                     </p>
                   </div>
 
@@ -1736,28 +1756,55 @@ export default function WorkspaceSettingsPage() {
                   <div className="rounded-xl border bg-slate-50 p-4">
                     <div className="text-sm text-slate-500">External Verification</div>
                     <div className="mt-1 font-semibold">
-                      {platformReadiness?.capabilities.external_verification_enabled ? "enabled" : "disabled"}
+                      {formatCapabilityStatus({
+                        enabled: platformReadiness?.capabilities.external_verification_enabled,
+                        fallbackWhenDisabled: "internal only",
+                      })}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Public verification exposure and external trust-surface posture.
                     </div>
                   </div>
 
                   <div className="rounded-xl border bg-slate-50 p-4">
                     <div className="text-sm text-slate-500">API Access</div>
                     <div className="mt-1 font-semibold">
-                      {platformReadiness?.capabilities.api_access_enabled ? "enabled" : "disabled"}
+                      {formatCapabilityStatus({
+                        enabled: platformReadiness?.capabilities.api_access_enabled,
+                        fallbackWhenDisabled: "foundation ready",
+                        foundationLabel: "foundation ready",
+                      })}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      API layer posture for external systems and automated ingestion flows.
                     </div>
                   </div>
 
                   <div className="rounded-xl border bg-slate-50 p-4">
                     <div className="text-sm text-slate-500">Broker Integration</div>
                     <div className="mt-1 font-semibold">
-                      {platformReadiness?.capabilities.broker_import_enabled ? "enabled" : "not connected"}
+                      {formatCapabilityStatus({
+                        enabled: platformReadiness?.capabilities.broker_import_enabled,
+                        fallbackWhenDisabled: "active foundation",
+                        foundationLabel: "active foundation",
+                      })}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      CSV, MT5, and IBKR ingestion are available on the shared broker-neutral pipeline.
                     </div>
                   </div>
 
                   <div className="rounded-xl border bg-slate-50 p-4">
                     <div className="text-sm text-slate-500">Webhook Ingestion</div>
                     <div className="mt-1 font-semibold">
-                      {platformReadiness?.capabilities.webhook_ingestion_enabled ? "enabled" : "disabled"}
+                      {formatCapabilityStatus({
+                        enabled: platformReadiness?.capabilities.webhook_ingestion_enabled,
+                        fallbackWhenDisabled: "foundation active",
+                        foundationLabel: "foundation active",
+                      })}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Webhook and stream-event ingestion surfaces are available in backend.
                     </div>
                   </div>
                 </div>
@@ -1772,14 +1819,16 @@ export default function WorkspaceSettingsPage() {
                           key={`src-${idx}`}
                           className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs"
                         >
-                          {src.provider}
+                          {formatReadinessSourceLabel(src.provider)}
                         </span>
                       ))}
                     </div>
                   </div>
                 ) : (
-                  <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                    No external integrations connected yet. This workspace is operating in internal verification mode.
+                  <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                    No explicit external connection metadata has been registered yet, but this workspace
+                    already has active broker-import and webhook-ingestion foundations available through
+                    the shared ingestion surface.
                   </div>
                 )}
 
@@ -1788,63 +1837,45 @@ export default function WorkspaceSettingsPage() {
                     Recommended next step: {platformReadiness.recommended_next_step}
                   </div>
                 ) : null}
-                {/* PHASE 6.4 — Integration Action Surface */}
-                <div className="mt-6 space-y-4">
-
-                  {/* Broker Integration CTA */}
-                  {!platformReadiness?.capabilities.broker_import_enabled && (
-                    <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <div className="text-sm font-semibold text-slate-900">
-                        Connect Broker
-                      </div>
-                      <div className="mt-1 text-sm text-slate-600">
-                        Enable direct trade ingestion from broker accounts to power external verification pipelines.
-                      </div>
-                      <button
-                        type="button"
-                        className="mt-3 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-                      >
-                        Connect Broker (coming soon)
-                      </button>
+                                <div className="mt-6 space-y-4">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="text-sm font-semibold text-slate-900">
+                      Broker Import Surface
                     </div>
-                  )}
-
-                  {/* API Access CTA */}
-                  {!platformReadiness?.capabilities.api_access_enabled && (
-                    <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <div className="text-sm font-semibold text-slate-900">
-                        Enable API Access
-                      </div>
-                      <div className="mt-1 text-sm text-slate-600">
-                        Activate API endpoints for external systems, institutional pipelines, and automated verification flows.
-                      </div>
-                      <button
-                        type="button"
-                        className="mt-3 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-                      >
-                        Enable API (coming soon)
-                      </button>
+                    <div className="mt-1 text-sm text-slate-600">
+                      Broker-neutral ingestion is active. CSV upload, MT5 adapter ingestion, and IBKR
+                      adapter ingestion already route through the canonical trade pipeline.
                     </div>
-                  )}
-
-                  {/* Webhook CTA */}
-                  {!platformReadiness?.capabilities.webhook_ingestion_enabled && (
-                    <div className="rounded-xl border border-slate-200 bg-white p-4">
-                      <div className="text-sm font-semibold text-slate-900">
-                        Enable Webhook Ingestion
-                      </div>
-                      <div className="mt-1 text-sm text-slate-600">
-                        Allow external systems to push trade or verification data into this workspace.
-                      </div>
-                      <button
-                        type="button"
-                        className="mt-3 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-                      >
-                        Configure Webhooks (coming soon)
-                      </button>
+                    <div className="mt-3 inline-flex rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800">
+                      Active in import console
                     </div>
-                  )}
+                  </div>
 
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="text-sm font-semibold text-slate-900">
+                      API Access Layer
+                    </div>
+                    <div className="mt-1 text-sm text-slate-600">
+                      API exposure is moving toward external ingestion and verification workflows. This
+                      workspace is currently in foundation-ready posture for broader API activation.
+                    </div>
+                    <div className="mt-3 inline-flex rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-800">
+                      Foundation ready
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="text-sm font-semibold text-slate-900">
+                      Webhook Ingestion Surface
+                    </div>
+                    <div className="mt-1 text-sm text-slate-600">
+                      Webhook and stream-event ingestion are available in backend and can receive external
+                      trade payloads through the runtime persistence layer.
+                    </div>
+                    <div className="mt-3 inline-flex rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800">
+                      Active foundation
+                    </div>
+                  </div>
                 </div>
               </div>
 
