@@ -643,28 +643,28 @@ export default function PublicVerifyClaimPage() {
 
           <div className="flex flex-wrap gap-2">
             <Link
-              href="/claims"
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
-            >
-              Public Claims
-            </Link>
-
-            <Link
               href={publicViewUrl}
-              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
             >
               Open Public View
             </Link>
 
-            <CopyButton value={verificationUrl} label="Copy Verify Link" />
+            <CopyButton value={verificationUrl} label="Copy Verification Link" />
 
             <button
               type="button"
               onClick={() => void handleShare()}
               className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
             >
-              Share
+              Share Verification
             </button>
+
+            <Link
+              href="/claims"
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
+            >
+              Back to Public Claims
+            </Link>
           </div>
         </div>
 
@@ -675,22 +675,21 @@ export default function PublicVerifyClaimPage() {
         <div className="mb-8 rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="text-sm text-indigo-700">
-                External Verification Endpoint · Phase 6
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-700">
+                Canonical Verification Endpoint
               </div>
-              <div className="mt-1 text-lg font-semibold text-indigo-900">
-                Canonical Verification Surface (API-Addressable)
+              <div className="mt-1 text-xl font-semibold text-indigo-950">
+                Machine-readable proof surface for external validation
               </div>
-              <div className="mt-2 max-w-2xl text-sm text-indigo-800">
-                This route is designed to be consumed both by humans and external systems.
-                It exposes a canonical identity, trade-set fingerprint, lifecycle state,
-                and verification posture suitable for platform integrations, audit pipelines,
-                and third-party validation.
+              <div className="mt-2 max-w-3xl text-sm leading-7 text-indigo-900">
+                This route is the authoritative verification surface for the claim. It exposes
+                canonical identity, trade-set fingerprint, lifecycle state, and integrity posture
+                for human review, platform integrations, and audit-grade validation.
               </div>
             </div>
 
             <span className="rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs font-semibold text-indigo-800">
-              exposure: {exposureLevel}
+              EXPOSURE: {String(exposureLevel || "unknown").toUpperCase()}
             </span>
           </div>
 
@@ -723,67 +722,34 @@ export default function PublicVerifyClaimPage() {
         </div>
 
         {v7Payload ? (
-          <div className="mb-8 rounded-2xl border border-indigo-200 bg-indigo-50 p-6 shadow-sm">
-            <div className="text-sm text-indigo-700">
-              External Verification Payload · Phase 7
+          <div className="mb-8 rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-700">
+              Portable verification metadata
             </div>
 
-            <div className="mt-2 text-lg font-semibold text-indigo-900">
-              Portable Verification Record (API-Ready)
-            </div>
-
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              
-              {/* Issuer */}
-              <div className="rounded-xl border bg-white p-4 text-sm">
+            <div className="mt-2 grid gap-3 md:grid-cols-2 xl:grid-cols-4 text-sm">
+              <div className="rounded-xl border bg-white p-4">
                 <div className="text-slate-500">Issuer</div>
-                <div className="mt-1 font-semibold">
-                  {v7Payload.issuer?.name}
-                </div>
-                <div className="text-xs text-slate-500">
-                  network: {v7Payload.issuer?.network}
-                </div>
+                <div className="mt-1 font-semibold text-slate-900">{v7Payload.issuer?.name || "—"}</div>
               </div>
 
-              <div className="rounded-xl border bg-white p-4 text-sm">
+              <div className="rounded-xl border bg-white p-4">
                 <div className="text-slate-500">Network State</div>
-                <div className="mt-1 font-semibold">{networkLabel}</div>
+                <div className="mt-1 font-semibold text-slate-900">{networkLabel}</div>
               </div>
 
-              {/* Exposure */}
-              <div className="rounded-xl border bg-white p-4 text-sm">
+              <div className="rounded-xl border bg-white p-4">
                 <div className="text-slate-500">Exposure Level</div>
-                <div className="mt-1 font-semibold">
-                  {v7Payload.network_identity?.exposure_level}
+                <div className="mt-1 font-semibold text-slate-900">
+                  {v7Payload.network_identity?.exposure_level || "—"}
                 </div>
               </div>
 
-              {/* Canonical Identity */}
-              <div className="rounded-xl border bg-white p-4 text-sm">
-                <div className="text-slate-500">Canonical Claim Hash</div>
-                <div className="mt-1 font-mono text-xs break-all">
-                  {v7Payload.network_identity?.claim_hash}
-                </div>
-              </div>
-
-              {/* Integrity */}
-              <div className="rounded-xl border bg-white p-4 text-sm">
+              <div className="rounded-xl border bg-white p-4">
                 <div className="text-slate-500">Integrity Status</div>
-                <div className="mt-1 font-semibold">
-                  {v7Payload.integrity_record?.status}
+                <div className="mt-1 font-semibold text-slate-900">
+                  {v7Payload.integrity_record?.status || "—"}
                 </div>
-              </div>
-            </div>
-
-            {/* Proof summary */}
-            <div className="mt-5 rounded-xl border bg-white p-4 text-sm">
-              <div className="text-slate-500">Proof Summary</div>
-
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                <div>canonical: {String(v7Payload.proof_summary?.canonical)}</div>
-                <div>portable: {String(v7Payload.proof_summary?.portable)}</div>
-                <div>api_addressable: {String(v7Payload.proof_summary?.api_addressable)}</div>
-                <div>integrity_valid: {String(v7Payload.proof_summary?.integrity_valid)}</div>
               </div>
             </div>
           </div>
@@ -796,24 +762,28 @@ export default function PublicVerifyClaimPage() {
         >
 
         <div className="mt-4 rounded-xl bg-white/70 p-4 text-sm text-slate-700">
-          <div className="font-medium text-slate-900">How to read this verification</div>
+          <div className="font-medium text-slate-900">How to interpret this verification</div>
 
           <div className="mt-2 leading-6">
-            This record represents a <span className="font-medium">{trustState}</span>.
-            External trust should consider three independent signals:
+            This record is currently classified as <span className="font-medium">{trustState}</span>.
           </div>
 
-          <ul className="mt-2 list-disc pl-5 space-y-1">
-            <li>
-              <span className="font-medium">Integrity:</span> whether the trade-set hash matches the canonical fingerprint
-            </li>
-            <li>
-              <span className="font-medium">Lifecycle:</span> whether the claim is verified, published, or locked
-            </li>
-            <li>
-              <span className="font-medium">Exposure:</span> whether the claim is public or restricted
-            </li>
-          </ul>
+          <div className="mt-3 grid gap-2 md:grid-cols-3">
+            <div className="rounded-lg bg-white px-3 py-2">
+              <span className="font-medium text-slate-900">Integrity</span>
+              <div className="mt-1 text-slate-600">Trade-set hash matches canonical fingerprint.</div>
+            </div>
+
+            <div className="rounded-lg bg-white px-3 py-2">
+              <span className="font-medium text-slate-900">Lifecycle</span>
+              <div className="mt-1 text-slate-600">Claim status determines governance finality.</div>
+            </div>
+
+            <div className="rounded-lg bg-white px-3 py-2">
+              <span className="font-medium text-slate-900">Exposure</span>
+              <div className="mt-1 text-slate-600">Visibility defines how the claim is distributed.</div>
+            </div>
+          </div>
         </div>  
           <div className="text-sm text-slate-500">Verification Result · Cryptographic Integrity Check</div>
 
@@ -984,7 +954,7 @@ export default function PublicVerifyClaimPage() {
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="text-sm text-slate-500">Claim Hash</div>
-                  <div className="mt-2 rounded-xl bg-white p-3 font-mono text-xs break-all text-slate-700">
+                  <div className="mt-2 rounded-xl bg-white p-3 font-mono text-[11px] leading-5 break-all text-slate-700">
                     {verifiedResult.claim_hash || "—"}
                   </div>
                   <div className="mt-2 text-sm text-slate-500">{shortHash(verifiedResult.claim_hash)}</div>
@@ -995,7 +965,7 @@ export default function PublicVerifyClaimPage() {
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="text-sm text-slate-500">Trade Set Hash</div>
-                  <div className="mt-2 rounded-xl bg-white p-3 font-mono text-xs break-all text-slate-700">
+                  <div className="mt-2 rounded-xl bg-white p-3 font-mono text-[11px] leading-5 break-all text-slate-700">
                     {verifiedResult.trade_set_hash || "—"}
                   </div>
                   <div className="mt-2 text-sm text-slate-500">{shortHash(verifiedResult.trade_set_hash)}</div>
@@ -1219,12 +1189,16 @@ export default function PublicVerifyClaimPage() {
           )}
         </div>
 
-        <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-semibold">Verified Trade Evidence</h2>
-              <div className="mt-2 text-sm text-slate-500">
-                Public trade-level evidence derived from the verified in-scope claim trade set.
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Evidence Inspection Layer
+              </div>
+              <h2 className="mt-2 text-2xl font-semibold">Verified Trade Evidence</h2>
+              <div className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
+                Trade-level evidence supporting the verified claim scope. This section is intended for
+                deeper inspection after identity, lifecycle, and integrity have been reviewed above.
               </div>
             </div>
 
@@ -1284,8 +1258,8 @@ export default function PublicVerifyClaimPage() {
           </div>
 
           <div>
-            This verification surface is designed for investors, trading communities,
-            prop firms, and audit workflows requiring standardized proof of trading performance.
+            This verification route is designed for investors, trading communities, prop firms,
+            auditors, and external systems that require standardized proof of trading performance.
           </div>
         </div>
       </main>
