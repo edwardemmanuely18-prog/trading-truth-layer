@@ -14,7 +14,7 @@ function SurfaceCard({
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <h3 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+      <p className="mt-2 text-sm leading-7 text-slate-600">{description}</p>
     </div>
   );
 }
@@ -32,7 +32,7 @@ function MetricCard({
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="text-sm text-slate-500">{label}</div>
       <div className="mt-2 text-2xl font-semibold text-slate-900">{value}</div>
-      <div className="mt-2 text-sm text-slate-600">{hint}</div>
+      <div className="mt-2 text-sm leading-7 text-slate-600">{hint}</div>
     </div>
   );
 }
@@ -46,6 +46,39 @@ export default function HomePage() {
     if (!firstWorkspace) return null;
     return `/workspace/${firstWorkspace.workspace_id}/dashboard`;
   }, [firstWorkspace]);
+
+  const featureCards = [
+    {
+      title: "From screenshots to proof",
+      description:
+        "Replace unverifiable trading claims with structured, cryptographically verifiable records that can be independently reviewed.",
+    },
+    {
+      title: "Canonical trade ledger",
+      description:
+        "Normalize raw trading activity into a durable, queryable, and audit-ready source of truth for claims and governance.",
+    },
+    {
+      title: "Claim definition engine",
+      description:
+        "Define exactly what a claim includes — time window, members, symbols, exclusions, and methodology — with full lineage across versions.",
+    },
+    {
+      title: "Verification layer",
+      description:
+        "Every claim produces a verification surface with identity, integrity, lifecycle state, and externally reviewable trust posture.",
+    },
+    {
+      title: "Evidence-grade outputs",
+      description:
+        "Generate dispute-ready artifacts with trade-level evidence, reproducible metrics, lifecycle traceability, and public proof surfaces.",
+    },
+    {
+      title: "Multi-source ingestion",
+      description:
+        "CSV, MT5, IBKR, and webhooks all route into a unified verification pipeline that feeds the same canonical ledger.",
+    },
+  ];
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -101,19 +134,29 @@ export default function HomePage() {
 
       <section className="mx-auto max-w-7xl px-6 py-16">
         <div className="max-w-4xl">
-          <div className="inline-flex rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 shadow-sm">
-            Broker-neutral verification infrastructure
+          <div className="inline-flex rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 shadow-sm">
+            Trust infrastructure for trading
           </div>
 
-          <h1 className="mt-6 text-5xl font-bold tracking-tight text-slate-900 sm:text-6xl">
-            Turn trading activity into verifiable claims, canonical ledgers, and dispute-ready proof.
+          <h1 className="mt-6 text-5xl font-bold leading-[1.05] tracking-tight text-slate-900 sm:text-6xl">
+            Turn trading activity into
+            <br />
+            verifiable performance records,
+            <br />
+            canonical ledgers, and
+            <br />
+            dispute-ready proof.
           </h1>
 
           <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-600">
-            Trading Truth Layer gives trading operators, communities, and serious performance
-            businesses a governance-grade system for ingestion, verification, claim publication,
-            and evidence preservation.
+            Trading Truth Layer replaces screenshots and unverifiable claims with
+            cryptographically verifiable records. Every claim becomes auditable,
+            attributable, and externally provable.
           </p>
+
+          <div className="mt-6 text-sm text-slate-500">
+            Built for trading communities, prop firms, educators, and serious operators.
+          </div>
 
           <div className="mt-8 flex flex-wrap gap-3">
             {user && primaryWorkspaceHref ? (
@@ -144,8 +187,25 @@ export default function HomePage() {
               href="/public/claims"
               className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-50"
             >
-              Explore Public Claims
+              Explore Public Proof
             </Link>
+          </div>
+        </div>
+
+        <div className="mt-16 max-w-3xl">
+          <h2 className="text-2xl font-semibold text-slate-900">
+            The problem: trading has no trust infrastructure
+          </h2>
+
+          <div className="mt-4 space-y-2 text-slate-600">
+            <div>• Performance claims are easy to fake</div>
+            <div>• Screenshots are not verifiable</div>
+            <div>• Results are hard to standardize</div>
+            <div>• Disputes are expensive and subjective</div>
+          </div>
+
+          <div className="mt-6 font-medium text-slate-700">
+            Trading Truth Layer fixes this by turning activity into verifiable proof.
           </div>
         </div>
 
@@ -163,52 +223,65 @@ export default function HomePage() {
           <MetricCard
             label="Operational Output"
             value="Public proof"
-            hint="Verified claims can become auditable, externally checkable trust surfaces."
+            hint="Verified claims become auditable, externally checkable trust surfaces."
           />
         </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-6 pb-16">
-        <div className="grid gap-4 md:grid-cols-3">
-          <SurfaceCard
-            title="Canonical Trade Ledger"
-            description="Normalize imported trading activity into a durable, queryable source of truth that supports verification, governance, and downstream evidence generation."
-          />
-          <SurfaceCard
-            title="Claims Schema Engine"
-            description="Define exactly what is included in a claim, including time window, participants, symbols, exclusions, and methodology, with full lineage across versions."
-          />
-          <SurfaceCard
-            title="Evidence Pack Generator"
-            description="Produce dispute-ready artifacts with reproducible metrics, trade-set hashes, lifecycle traceability, and externally reviewable verification surfaces."
-          />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {featureCards.map((card) => (
+            <SurfaceCard
+              key={card.title}
+              title={card.title}
+              description={card.description}
+            />
+          ))}
         </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-6 pb-20">
         <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
           <div className="max-w-3xl">
-            <h2 className="text-2xl font-semibold text-slate-900">Commercial posture</h2>
+            <h2 className="text-2xl font-semibold text-slate-900">Commercial rollout</h2>
             <p className="mt-3 text-sm leading-7 text-slate-600">
-              The product is designed around a controlled commercial ladder:
-              Sandbox for limited evaluation, then Starter, Pro, Growth, and Business for real
-              operational deployment.
+              Trading Truth Layer is deployed through a controlled progression.
+              Teams can evaluate safely, then move into production-grade operational tiers as
+              verification workflows mature.
             </p>
+          </div>
+
+          <div className="mt-6 space-y-3 text-sm text-slate-600">
+            <div>
+              <span className="font-semibold text-slate-900">Sandbox:</span> evaluation,
+              onboarding, and safe experimentation
+            </div>
+
+            <div>
+              <span className="font-semibold text-slate-900">Starter → Growth:</span>
+              production-grade claim workflows, verification surfaces, and governed capacity
+            </div>
+
+            <div>
+              <span className="font-semibold text-slate-900">Business:</span>
+              full-scale governance, audit, and external trust infrastructure
+            </div>
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
               <div className="text-sm font-semibold text-slate-900">Sandbox</div>
-              <div className="mt-2 text-sm text-slate-600">
-                Limited evaluation environment for product proof, onboarding, and safe experimentation.
+              <div className="mt-2 text-sm leading-6 text-slate-600">
+                Limited evaluation environment for product proof, onboarding, and safe
+                experimentation before commercial deployment.
               </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <div className="text-sm font-semibold text-slate-900">Paid operational tiers</div>
-              <div className="mt-2 text-sm text-slate-600">
-                Starter and above unlock real governed capacity for claims, trades, members,
-                verification workflows, and commercial trust surfaces.
+              <div className="text-sm font-semibold text-slate-900">Operational tiers</div>
+              <div className="mt-2 text-sm leading-6 text-slate-600">
+                Paid tiers unlock governed capacity for claims, trades, members, verification
+                workflows, and externally reviewable trust surfaces.
               </div>
             </div>
           </div>
