@@ -26,6 +26,7 @@ function isPublicTrustPath(currentPath: string) {
     currentPath === "/claims" ||
     currentPath === "/leaderboard" ||
     currentPath === "/schema" ||
+    currentPath === "/how-it-works" ||
     startsWithPath(currentPath, "/claim") ||
     startsWithPath(currentPath, "/verify") ||
     startsWithPath(currentPath, "/profile")
@@ -79,6 +80,8 @@ export default function Navbar({ workspaceId = 1 }: Props) {
   const currentPath = normalizePath(pathname);
   const base = `/workspace/${workspaceId}`;
 
+  const homeHref = "/";
+  const howItWorksHref = "/how-it-works";
   const publicClaimsHref = "/claims";
   const leaderboardHref = "/leaderboard";
   const claimBuilderHref = "/schema";
@@ -96,6 +99,8 @@ export default function Navbar({ workspaceId = 1 }: Props) {
   const membersHref = `${base}/members`;
   const settingsHref = `${base}/settings`;
 
+  const homeActive = currentPath === "/";
+  const howItWorksActive = currentPath === "/how-it-works";
   const publicClaimsActive =
     currentPath === "/claims" || startsWithPath(currentPath, "/claim");
   const leaderboardActive = currentPath === "/leaderboard";
@@ -125,14 +130,29 @@ export default function Navbar({ workspaceId = 1 }: Props) {
       : "rounded-xl px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100";
   }
 
+  function utilityNavClass(active: boolean) {
+    return active
+      ? "rounded-lg border border-slate-300 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white"
+      : "rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50";
+  }
+
   return (
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto max-w-7xl px-6 py-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-4">
-            <Link href="/" className="text-lg font-bold text-slate-900">
+            <Link href={homeHref} className="text-lg font-bold text-slate-900">
               Trading Truth Layer
             </Link>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href={homeHref} className={utilityNavClass(homeActive)}>
+                Home
+              </Link>
+              <Link href={howItWorksHref} className={utilityNavClass(howItWorksActive)}>
+                How It Works
+              </Link>
+            </div>
 
             <WorkspaceSwitcher />
 
@@ -200,15 +220,15 @@ export default function Navbar({ workspaceId = 1 }: Props) {
 
             <div className="mx-1 hidden h-6 w-px bg-slate-200 md:block" />
 
-            {latestClaimHref ? (
-              <Link href={latestClaimHref} className={navClass(latestClaimActive)}>
-                Latest Claim
-              </Link>
-            ) : null}
-
             <Link href={dashboardHref} className={navClass(dashboardActive)}>
               Dashboard
             </Link>
+
+            {latestClaimHref ? (
+              <Link href={latestClaimHref} className={navClass(latestClaimActive)}>
+                Latest Record
+              </Link>
+            ) : null}
 
             {canSeeImport ? (
               <Link href={importHref} className={navClass(importActive)}>
@@ -227,7 +247,7 @@ export default function Navbar({ workspaceId = 1 }: Props) {
             ) : null}
 
             <Link href={claimsHref} className={navClass(claimsActive)}>
-              Internal Claims
+              Claim Library
             </Link>
 
             <Link href={evidenceHref} className={navClass(evidenceActive)}>
@@ -249,10 +269,16 @@ export default function Navbar({ workspaceId = 1 }: Props) {
         {publicTrustActive ? (
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
             <span>
-              Public trust-layer surface (verification, distribution, external review).
+              Public trust-layer surface for verification, distribution, and external review.
             </span>
 
             <div className="flex items-center gap-2">
+              <Link
+                href={howItWorksHref}
+                className="rounded-md border border-blue-300 px-2 py-1 hover:bg-blue-100"
+              >
+                How It Works
+              </Link>
               <Link
                 href="/leaderboard"
                 className="rounded-md border border-blue-300 px-2 py-1 hover:bg-blue-100"
