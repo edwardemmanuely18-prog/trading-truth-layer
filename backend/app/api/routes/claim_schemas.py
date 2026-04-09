@@ -165,6 +165,48 @@ def workspace_limits_disabled() -> bool:
     return parse_bool_like(dotenv_value)
 
 
+def normalize_plan_code(value: str | None) -> str:
+    allowed = {"sandbox", "starter", "pro", "growth", "business"}
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in allowed else "starter"
+
+
+def normalize_billing_status(value: str | None) -> str:
+    allowed = {
+        "inactive",
+        "active",
+        "trialing",
+        "past_due",
+        "canceled",
+        "unpaid",
+        "pending_manual_review",
+    }
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in allowed else "inactive"
+
+
+def is_paid_billing_status(status: str | None) -> bool:
+    return normalize_billing_status(status) in {"active", "trialing"}
+
+
+def resolve_effective_workspace_plan_code(workspace: Workspace) -> str:
+    configured_plan = normalize_plan_code(workspace.plan_code)
+    billing_status = normalize_billing_status(workspace.billing_status)
+
+    if configured_plan in {"sandbox", "starter"}:
+        return configured_plan
+
+    if is_paid_billing_status(billing_status):
+        return configured_plan
+
+    return "starter"
+
+
+def sandbox_public_visibility_allowed(visibility: str) -> bool:
+    normalized_visibility = normalize_visibility(visibility)
+    return normalized_visibility in {"private", "unlisted"}
+
+
 def is_claim_publicly_accessible(schema: ClaimSchema) -> bool:
     return (
         schema.visibility in {"public", "unlisted"}
@@ -3284,6 +3326,12 @@ def create_claim_schema(
 
     visibility = normalize_visibility(payload.visibility)
 
+    workspace = get_workspace_or_404(payload.workspace_id, db)
+    effective_plan_code = resolve_effective_workspace_plan_code(workspace)
+
+    if effective_plan_code == "sandbox" and visibility == "public":
+        visibility = "unlisted"
+
     schema = ClaimSchema(
         workspace_id=payload.workspace_id,
         name=payload.name.strip(),
@@ -3360,7 +3408,15 @@ def update_claim_schema(
     schema.included_symbols_json = json.dumps(normalize_symbol_list(payload.included_symbols_json))
     schema.excluded_trade_ids_json = json.dumps(normalize_int_list(payload.excluded_trade_ids_json))
     schema.methodology_notes = payload.methodology_notes or ""
-    schema.visibility = normalize_visibility(payload.visibility)
+
+    workspace = get_workspace_or_404(schema.workspace_id, db)
+    effective_plan_code = resolve_effective_workspace_plan_code(workspace)
+
+    next_visibility = normalize_visibility(payload.visibility)
+    if effective_plan_code == "sandbox" and next_visibility == "public":
+        next_visibility = "unlisted"
+
+    schema.visibility = next_visibility
 
     db.commit()
     db.refresh(schema)
@@ -3573,16 +3629,22 @@ def publish_claim_schema(
     if schema.visibility == "private":
         schema.visibility = "unlisted"
 
-    # 🔒 PUBLIC EXPOSURE CONTROL (ADD THIS BLOCK HERE)
-    if schema.visibility in ["public", "unlisted"]:
-        workspace = get_workspace_or_404(schema.workspace_id, db)
-        workspace_plan_code = workspace.plan_code or "starter"
+    workspace = get_workspace_or_404(schema.workspace_id, db)
+    effective_plan_code = resolve_effective_workspace_plan_code(workspace)
 
-        allowed = can_create_public_claim(schema.workspace_id, workspace_plan_code, db)
+    # Sandbox cannot publish to fully public visibility.
+    # It may still use unlisted verification surfaces for controlled evaluation.
+    if effective_plan_code == "sandbox" and not sandbox_public_visibility_allowed(schema.visibility):
+        schema.visibility = "unlisted"
+
+    # Public/unlisted exposure should be governed by the effective entitlement tier,
+    # not merely the configured commercial target.
+    if schema.visibility in {"public", "unlisted"}:
+        allowed = can_create_public_claim(schema.workspace_id, effective_plan_code, db)
         if not allowed:
             raise HTTPException(
                 status_code=403,
-                detail="Public claim limit reached. Upgrade required."
+                detail="Public claim limit reached for the current effective workspace tier."
             )
 
     db.commit()
@@ -3608,6 +3670,7 @@ def publish_claim_schema(
             "visibility_changed": original_visibility != schema.visibility,
             "original_visibility": original_visibility,
             "effective_visibility": schema.visibility,
+            "effective_plan_code": effective_plan_code,
         },
     )
 
