@@ -16,7 +16,7 @@ import {
   type PlatformReadiness,
 } from "../../../../lib/api";
 
-const PLAN_ORDER = ["starter", "pro", "growth", "business"] as const;
+const PLAN_ORDER = ["sandbox", "starter", "pro", "growth", "business"] as const;
 
 function formatDateTime(value?: string | null) {
   if (!value) return "—";
@@ -71,6 +71,7 @@ function formatDimensionLabel(value: string) {
 function formatPlanCodeLabel(value?: string | null) {
   const normalized = normalizeText(value);
   if (!normalized) return "Starter";
+  if (normalized === "sandbox") return "Sandbox";
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
@@ -163,9 +164,11 @@ function PlanBadge({ plan }: { plan?: string | null }) {
   const normalized = normalizeText(plan);
 
   const className =
-    normalized === "pro" || normalized === "growth" || normalized === "business" || normalized === "team"
-      ? "border-blue-200 bg-blue-50 text-blue-800"
-      : "border-slate-200 bg-slate-100 text-slate-700";
+    normalized === "sandbox"
+      ? "border-purple-200 bg-purple-50 text-purple-800"
+      : normalized === "pro" || normalized === "growth" || normalized === "business" || normalized === "team"
+        ? "border-blue-200 bg-blue-50 text-blue-800"
+        : "border-slate-200 bg-slate-100 text-slate-700";
 
   return (
     <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
@@ -335,7 +338,9 @@ function PlanCard({
       </div>
 
       <p className={`mt-2 text-sm ${isConfigured && !isSelected ? "text-slate-200" : "text-slate-600"}`}>
-        {plan.description}
+        {normalizeText(plan.code) === "sandbox"
+          ? "Controlled evaluation environment for product proof, limited governed capacity, and safe pre-billing exploration."
+          : plan.description}
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -435,7 +440,7 @@ function ManualPaymentCard({
         <div>
           <h2 className="text-2xl font-semibold text-blue-950">Manual Payment Instructions</h2>
           <p className="mt-1 text-sm text-blue-900">
-            Stripe is not active for this deployment. Subscribers should pay manually using the
+            Automated billing is not active for this deployment. Subscribers should pay manually using the
             details below, then you verify payment and activate access internally.
           </p>
         </div>
@@ -525,7 +530,9 @@ function resolvePrimaryBillingAction(params: {
   const selected = normalizeText(selectedPlanCode);
   const billing = normalizeText(billingStatus);
 
-  const paidPlan = configured !== "starter";
+  const configuredIsPaidPlan = !["sandbox", "starter"].includes(configured);
+  const selectedIsSandbox = selected === "sandbox";
+  const selectedIsPaidPlan = !["sandbox", "starter"].includes(selected);
   const billingInactive =
     billingStatusIsPaid === undefined ? !["active", "trialing"].includes(billing) : !billingStatusIsPaid;
 
@@ -533,7 +540,11 @@ function resolvePrimaryBillingAction(params: {
   let helper: string | null = null;
   let disabled = !canSeeUpgrade || checkoutLoading;
 
-  if (paidPlan && billingInactive) {
+  if (selectedIsSandbox && selected !== configured) {
+    label = "Activate Sandbox";
+    helper = "Switch this workspace into the controlled evaluation environment. No checkout is required.";
+    disabled = !canSeeUpgrade || checkoutLoading;
+  } else if (configuredIsPaidPlan && billingInactive) {
     if (selected === configured) {
       label = "Activate Billing";
       helper = "Complete billing for the currently configured paid workspace tier.";
@@ -542,26 +553,41 @@ function resolvePrimaryBillingAction(params: {
       label = "Upgrade and Activate";
       helper = "Move to a higher commercial tier and start billing for that upgraded plan.";
       disabled = !canSeeUpgrade || checkoutLoading;
+    } else if (selected === "starter") {
+      label = "Move to Starter";
+      helper = "Switch this workspace back to Starter without activating billing.";
+      disabled = !canSeeUpgrade || checkoutLoading;
     } else {
       label = "Change Billing Target";
       helper = "Select a different target tier before starting checkout.";
       disabled = !canSeeUpgrade || checkoutLoading;
     }
   } else if (selected === configured) {
-  if (!canSeeUpgrade) {
-    label = "Current Plan Selected";
-    helper = "Only workspace owners can change billing or upgrade plans.";
-    disabled = true;
-  } else if (billingInactive && configured !== "starter") {
-    label = "Activate Billing";
-    helper = "Billing is not active yet for this plan. Activate billing to enforce this workspace tier.";
-    disabled = checkoutLoading;
-  } else {
-    label = "Plan Active";
-    helper = "Your workspace is operating within its current plan capacity.";
-    disabled = true;
+    if (!canSeeUpgrade) {
+      label = "Current Plan Selected";
+      helper = "Only workspace owners can change billing or upgrade plans.";
+      disabled = true;
+    } else if (billingInactive && selectedIsPaidPlan) {
+      label = "Activate Billing";
+      helper = "Billing is not active yet for this plan. Activate billing to enforce this workspace tier.";
+      disabled = checkoutLoading;
+    } else if (configured === "sandbox") {
+      label = "Sandbox Active";
+      helper = "This workspace is operating in the controlled evaluation environment.";
+      disabled = true;
+    } else {
+      label = "Plan Active";
+      helper = "Your workspace is operating within its current plan capacity.";
+      disabled = true;
+    }
+  } else if (!selectedIsPaidPlan) {
+    label = selected === "starter" ? "Move to Starter" : "Activate Sandbox";
+    helper =
+      selected === "starter"
+        ? "Switch this workspace to Starter without initiating checkout."
+        : "Switch this workspace into the controlled evaluation environment.";
+    disabled = !canSeeUpgrade || checkoutLoading;
   }
-}
 
   return { label, helper, disabled };
 }
@@ -695,6 +721,11 @@ function UpgradeSummaryPanel({
           <div className="mt-2 text-sm text-slate-600">
             Billing cycle: {selectedPlanCode === "sandbox" ? "No billing required" : formatPlanCodeLabel(selectedBillingCycle)}
           </div>
+          {selectedPlanCode === "sandbox" ? (
+            <div className="mt-2 text-xs text-slate-500">
+              Sandbox is a controlled evaluation tier and does not initiate Paddle checkout.
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -709,7 +740,15 @@ function UpgradeSummaryPanel({
         </div>
       ) : null}
 
-      {governance?.billing_activation_recommended ? (
+      {selectedPlanCode === "sandbox" && normalizeText(configuredPlanCode) !== "sandbox" ? (
+        <div className="mt-4 rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-900">
+          <div className="font-medium">Sandbox activation path</div>
+          <div className="mt-2">
+            This will move the workspace into the controlled evaluation tier. No billing checkout is required,
+            and the workspace will operate under Sandbox limits until you later move to a paid plan.
+          </div>
+        </div>
+      ) : governance?.billing_activation_recommended ? (
         <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
           <div className="font-medium">Activate billing first</div>
           <div className="mt-2">
@@ -1318,9 +1357,11 @@ export default function WorkspaceSettingsPage() {
               <SummaryCard
                 label="Billing Status"
                 value={
-                  normalizeText(settings?.billing_status) === "active"
-                    ? "active"
-                    : "inactive (action required)"
+                  normalizeText(configuredPlanCode) === "sandbox"
+                    ? "sandbox (no billing)"
+                    : normalizeText(settings?.billing_status) === "active"
+                      ? "active"
+                      : "inactive (action required)"
                 }
                 hint="Subscription state"
               />
@@ -1897,7 +1938,7 @@ export default function WorkspaceSettingsPage() {
                     Recommended next step: {platformReadiness.recommended_next_step}
                   </div>
                 ) : null}
-                                <div className="mt-6 space-y-4">
+                <div className="mt-6 space-y-4">
                   <div className="rounded-xl border border-slate-200 bg-white p-4">
                     <div className="text-sm font-semibold text-slate-900">
                       Broker Import Surface
@@ -1952,6 +1993,11 @@ export default function WorkspaceSettingsPage() {
                       <span className="font-semibold">{configuredPlanName}</span>. Billing is still inactive,
                       so backend enforcement may temporarily apply the effective active plan{" "}
                       <span className="font-semibold">{effectivePlanName}</span>.
+                    </div>
+                  ) : normalizeText(configuredPlanCode) === "sandbox" ? (
+                    <div className="mt-4 rounded-xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-900">
+                      These cards show the controlled evaluation limits for Sandbox. This workspace can be used
+                      for product proof and internal testing without initiating commercial billing.
                     </div>
                   ) : null}
 
