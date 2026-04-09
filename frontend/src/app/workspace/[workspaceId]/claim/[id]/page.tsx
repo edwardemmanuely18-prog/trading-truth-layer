@@ -54,6 +54,10 @@ function normalizeText(value?: string | null) {
   return String(value || "").toLowerCase().trim();
 }
 
+function isSandboxPlan(value?: string | null): boolean {
+  return normalizeText(value) === "sandbox";
+}
+
 function resolveCanonicalLineage(row: {
   root_claim_id?: number | null;
   parent_claim_id?: number | null;
@@ -1093,6 +1097,7 @@ export default function WorkspaceClaimDetailPage() {
     (claimUsage?.limit ?? 0) > 0 && (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
 
   const effectivePlanCode = usage?.effective_plan_code || usage?.plan_code || null;
+  const isSandbox = isSandboxPlan(effectivePlanCode);
 
   const isBlockedByPlan = !qaOverrideActive && claimLimitReached;
 
@@ -1108,6 +1113,8 @@ export default function WorkspaceClaimDetailPage() {
 
   const claimStatusNormalized = normalizeText(claim?.status);
   const claimVisibilityNormalized = normalizeText(claim?.visibility);
+  const sandboxPublicBlocked =
+  isSandbox && claimVisibilityNormalized === "public";
 
   const publicRouteReady =
     claimVisibilityNormalized === "public" &&
@@ -1409,8 +1416,10 @@ const handleRejectDispute = useCallback(async (id: number) => {
 
               <PageNavButton href={internalHref} label="Internal View" active={isInternalActive} />
               <PageNavButton href={evidenceHref} label="Evidence" active={isEvidenceActive} />
-              {publicViewHref ? (
+              {publicViewHref && !isSandbox ? (
                 <PageNavButton href={publicViewHref} label="Public View" active={false} />
+              ) : publicViewHref && isSandbox ? (
+                <PageNavButton href={publicViewHref} label="Public (Locked in Sandbox)" active={false} disabled />
               ) : null}
               {verifyRouteHref ? (
                 <PageNavButton href={verifyRouteHref} label="Verify Route" active={false} />
@@ -1494,11 +1503,13 @@ const handleRejectDispute = useCallback(async (id: number) => {
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
               <div className="text-sm text-slate-500">Exposure state · distribution posture</div>
               <div className="mt-2 text-lg font-semibold text-slate-900">
-                {claim.visibility === "private"
-                  ? "Internal only"
-                  : claim.visibility === "unlisted"
-                    ? "Hash-based access"
-                    : "Publicly routable"}
+                {isSandbox && claim.visibility === "public"
+                  ? "Sandbox restricted (downgraded to unlisted)"
+                  : claim.visibility === "private"
+                    ? "Internal only"
+                    : claim.visibility === "unlisted"
+                      ? "Hash-based access"
+                      : "Publicly routable"}
               </div>
               <div className="mt-2 text-sm text-slate-600">
                 {claim.visibility === "private"
@@ -1524,6 +1535,25 @@ const handleRejectDispute = useCallback(async (id: number) => {
             </div>
           </div>
         </section>
+
+        {isSandbox ? (
+          <div className="rounded-2xl border border-violet-200 bg-violet-50 p-5 shadow-sm">
+            <div className="text-sm font-semibold text-violet-900">
+              Sandbox Evaluation Environment
+            </div>
+
+            <div className="mt-2 text-sm text-violet-800">
+              This workspace is operating under a controlled evaluation tier. 
+              Claim creation, versioning, and verification flows are available, 
+              but public exposure and high-capacity usage are intentionally constrained.
+            </div>
+
+            <div className="mt-3 text-xs text-violet-700">
+              Use unlisted verification links for sharing during evaluation. 
+              Upgrade to unlock full public claim distribution and higher capacity limits.
+            </div>
+          </div>
+        ) : null}
 
         {isMember ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -2077,10 +2107,16 @@ const handleRejectDispute = useCallback(async (id: number) => {
                   </div>
                 </div>
 
-                <div className="rounded-xl bg-slate-50 p-4">
+                <div className={`rounded-xl p-4 ${
+                  isSandbox
+                    ? "bg-slate-100 border border-slate-200 text-slate-500"
+                    : "bg-slate-50"
+                }`}>
                   <div className="font-medium">Public</div>
-                  <div className="mt-1 text-slate-600">
-                    Public directory and verification-ready exposure when lifecycle permits.
+                  <div className="mt-1">
+                    {isSandbox
+                      ? "Public exposure is restricted in Sandbox. Use unlisted verification instead."
+                      : "Public directory and verification-ready exposure when lifecycle permits."}
                   </div>
                 </div>
               </div>
