@@ -104,7 +104,7 @@ function Pill({
   className?: string;
 }) {
   return (
-    <div className={`rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
+    <div className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
       {children}
     </div>
   );
@@ -283,17 +283,9 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
   function validateForm(): FormErrors {
     const nextErrors: FormErrors = {};
 
-    if (!name.trim()) {
-      nextErrors.name = "Claim name is required.";
-    }
-
-    if (!periodStart.trim()) {
-      nextErrors.periodStart = "Period start is required.";
-    }
-
-    if (!periodEnd.trim()) {
-      nextErrors.periodEnd = "Period end is required.";
-    }
+    if (!name.trim()) nextErrors.name = "Claim name is required.";
+    if (!periodStart.trim()) nextErrors.periodStart = "Period start is required.";
+    if (!periodEnd.trim()) nextErrors.periodEnd = "Period end is required.";
 
     if (periodStart && periodEnd && periodStart > periodEnd) {
       nextErrors.periodEnd = "Period end must be on or after period start.";
@@ -352,9 +344,7 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
     const nextErrors = validateForm();
     setErrors(nextErrors);
 
-    if (Object.keys(nextErrors).length > 0) {
-      return;
-    }
+    if (Object.keys(nextErrors).length > 0) return;
 
     setLoading(true);
 
@@ -419,7 +409,7 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
             </p>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-base text-slate-700">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4 text-base text-slate-700 shadow-sm">
             <div className="font-medium">Workspace</div>
             <div className="mt-2 text-2xl font-semibold text-slate-950">#{workspaceId}</div>
           </div>
@@ -477,7 +467,7 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
         ) : null}
 
         <form onSubmit={handleSubmit} className="mt-6">
-          <div className="grid gap-6 xl:grid-cols-[1.65fr_0.95fr_0.8fr]">
+          <div className="grid gap-6 xl:grid-cols-[1.55fr_1fr]">
             <div className="space-y-5">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">Claim Name</label>
@@ -492,9 +482,7 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Period Start
-                  </label>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Period Start</label>
                   <input
                     type="date"
                     value={periodStart}
@@ -651,20 +639,6 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
               </div>
 
               <div className="rounded-3xl border border-slate-200 bg-white p-5">
-                <h3 className="text-xl font-semibold text-slate-950">Lifecycle Reminder</h3>
-                <div className="mt-4 space-y-2.5 text-sm leading-6 text-slate-700">
-                  <div>1. Create draft claim</div>
-                  <div>2. Review internal preview</div>
-                  <div>3. Edit draft if needed</div>
-                  <div>4. Verify claim</div>
-                  <div>5. Publish claim</div>
-                  <div>6. Lock claim</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="rounded-3xl border border-slate-200 bg-white p-4">
                 <h3 className="text-xl font-semibold text-slate-950">Builder Guidance</h3>
                 <div className="mt-3 space-y-3 text-sm leading-7 text-slate-700">
                   <p>
@@ -679,16 +653,28 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-slate-200 bg-white p-4">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5">
                 <h3 className="text-xl font-semibold text-slate-950">Visibility Guidance</h3>
                 <div className="mt-3 text-sm leading-7 text-slate-700">
                   {visibilitySummary(visibility)}
                 </div>
               </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-5">
+                <h3 className="text-xl font-semibold text-slate-950">Lifecycle Reminder</h3>
+                <div className="mt-4 space-y-2.5 text-sm leading-6 text-slate-700">
+                  <div>1. Create draft claim</div>
+                  <div>2. Review internal preview</div>
+                  <div>3. Edit draft if needed</div>
+                  <div>4. Verify claim</div>
+                  <div>5. Publish claim</div>
+                  <div>6. Lock claim</div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 xl:grid-cols-[1.65fr_1fr]">
+          <div className="mt-6 grid gap-5 xl:grid-cols-[1.7fr_1fr]">
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
               <div className="text-xl font-semibold text-slate-950">Live Structured Summary</div>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -750,7 +736,7 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
             </div>
           ) : null}
 
-          <div className="mt-6 flex flex-wrap items-center gap-3">
+          <div className="mt-7 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-5">
             <button
               type="submit"
               disabled={loading || usageLoading}
@@ -781,9 +767,9 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
         currentPlanCode={usage?.plan_code || null}
         usageLabel={
           claimUsage
-            ? `${claimUsage.used ?? 0} / ${claimUsage.limit ?? "—"}${
-                claimUsage.ratio !== null && claimUsage.ratio !== undefined
-                  ? ` · ${formatPercent(claimUsage.ratio)}`
+            ? `${claimUsage?.used ?? 0} / ${claimUsage?.limit ?? "—"}${
+                claimUsage?.ratio !== null && claimUsage?.ratio !== undefined
+                  ? ` · ${formatPercent(claimUsage?.ratio)}`
                   : ""
               }`
             : `Effective plan: ${effectivePlanName}`
