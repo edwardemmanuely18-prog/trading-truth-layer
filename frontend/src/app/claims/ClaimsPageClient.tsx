@@ -493,6 +493,123 @@ function buildLineageSummary(row: any) {
   };
 }
 
+function resolveComparisonPreferredClaim(left: any, right: any) {
+  if (!left || !right) return null;
+
+  const leftTrust = computeTrustScore({
+    ...left,
+    verification_status: resolveStatus(left),
+    verified_at: resolveVerifiedAt(left),
+    scope: {
+      ...(left?.scope || {}),
+      visibility: resolveVisibility(left),
+    },
+  });
+
+  const rightTrust = computeTrustScore({
+    ...right,
+    verification_status: resolveStatus(right),
+    verified_at: resolveVerifiedAt(right),
+    scope: {
+      ...(right?.scope || {}),
+      visibility: resolveVisibility(right),
+    },
+  });
+
+  const leftIntegrity = normalize(left?.integrity_status);
+  const rightIntegrity = normalize(right?.integrity_status);
+
+  if (leftIntegrity === "valid" && rightIntegrity !== "valid") return "left";
+  if (rightIntegrity === "valid" && leftIntegrity !== "valid") return "right";
+
+  if (leftTrust > rightTrust) return "left";
+  if (rightTrust > leftTrust) return "right";
+
+  const leftNet = Number(left?.net_pnl ?? 0);
+  const rightNet = Number(right?.net_pnl ?? 0);
+
+  if (leftNet > rightNet) return "left";
+  if (rightNet > leftNet) return "right";
+
+  return null;
+}
+
+function buildComparisonDecisionSummary(left: any, right: any) {
+  const preferred = resolveComparisonPreferredClaim(left, right);
+  if (!preferred || !left || !right) return null;
+
+  const winner = preferred === "left" ? left : right;
+  const loser = preferred === "left" ? right : left;
+
+  const winnerName = safeString(winner?.name, "Selected Claim");
+  const loserName = safeString(loser?.name, "Selected Claim");
+
+  const winnerTrust = computeTrustScore({
+    ...winner,
+    verification_status: resolveStatus(winner),
+    verified_at: resolveVerifiedAt(winner),
+    scope: {
+      ...(winner?.scope || {}),
+      visibility: resolveVisibility(winner),
+    },
+  });
+
+  const loserTrust = computeTrustScore({
+    ...loser,
+    verification_status: resolveStatus(loser),
+    verified_at: resolveVerifiedAt(loser),
+    scope: {
+      ...(loser?.scope || {}),
+      visibility: resolveVisibility(loser),
+    },
+  });
+
+  const winnerIntegrity = normalize(winner?.integrity_status);
+  const loserIntegrity = normalize(loser?.integrity_status);
+
+  if (winnerIntegrity === "valid" && loserIntegrity !== "valid") {
+    return `${winnerName} demonstrates stronger verification credibility because its canonical integrity state is valid, while ${loserName} shows a weaker or compromised integrity posture.`;
+  }
+
+  return `${winnerName} currently presents the stronger trust profile based on trust score, verification posture, and comparative performance credibility against ${loserName}.`;
+}
+
+function resolveIntegrityHeadline(value: string) {
+  const normalized = normalize(value);
+
+  if (normalized === "valid") {
+    return "Verified · Locked · Hash Match Confirmed";
+  }
+
+  if (normalized === "compromised") {
+    return "Locked · Integrity Breach Detected";
+  }
+
+  if (normalized === "not_checked") {
+    return "Published · Integrity Review Pending";
+  }
+
+  return "Verification State Review";
+}
+
+function resolveIntegritySupportText(value: string) {
+  const normalized = normalize(value);
+
+  if (normalized === "valid") {
+    return "Trust state: canonical hash and lifecycle signals support this record as a high-trust verification reference.";
+  }
+
+  if (normalized === "compromised") {
+    return "Trust state: integrity breach detected — this claim should not be relied upon for verification, leaderboard ranking, or capital allocation decisions without further investigation.";
+  }
+
+  if (normalized === "not_checked") {
+    return "Trust state: record is externally visible, but cryptographic finalization has not yet been fully confirmed.";
+  }
+
+  return "Trust state: verification posture is available, but integrity certainty remains limited.";
+}
+
 export default function ClaimsPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -745,6 +862,35 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
 
       <main className="mx-auto max-w-[1400px] px-6 py-10">
         <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-6 rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Trust Layer Status
+                </div>
+                <div className="mt-2 text-xl font-semibold text-slate-950">
+                  Public Verification Surface Active
+                </div>
+                <div className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
+                  This directory operates as the external trust layer for lifecycle-governed trading claims,
+                  combining public record distribution, canonical verification routes, and integrity-aware comparison.
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full border border-green-200 bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+                  Verification Enabled
+                </span>
+                <span className="rounded-full border border-blue-200 bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">
+                  Public Exposure Active
+                </span>
+                <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                  Hash-Verifiable Records
+                </span>
+              </div>
+            </div>
+          </div>
+
           <div className="text-sm text-slate-500">Trading Truth Layer · Public Claim Directory</div>
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">
             Verified Claims
@@ -799,7 +945,7 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
         </section>
 
         <section className="mt-8 rounded-[32px] border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="grid gap-4 xl:grid-cols-4">
+          <div className="grid gap-4 xl:grid-cols-2">
             <div>
               <label className="text-sm font-medium text-slate-700">Search</label>
               <input
@@ -828,7 +974,9 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                 <option value="issuer_asc">Issuer A → Z</option>
               </select>
             </div>
+          </div>
 
+          <div className="mt-5 grid gap-4 xl:grid-cols-2">
             <div>
               <label className="text-sm font-medium text-slate-700">Status</label>
               <select
@@ -881,38 +1029,44 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
             </div>
           </div>
 
-          <div className="mt-5 flex flex-wrap gap-2">
-            {[
-              { key: "newest", label: "Newest" },
-              { key: "best net pnl", label: "Best Net PnL" },
-              { key: "best profit factor", label: "Best Profit Factor" },
-              { key: "best win rate", label: "Best Win Rate" },
-              { key: "best trust score", label: "Best Trust Score" },
-              { key: "trust weighted pnl", label: "Trust-Weighted PnL" },
-              { key: "best network state", label: "Best Network State" },
-              { key: "issuer a-z", label: "Issuer A → Z" },
-              { key: "independent only", label: "Independent Only" },
-              { key: "derived only", label: "Derived Only" },
-              { key: "versioned only", label: "Versioned Only" },
-              { key: "locked only", label: "Locked Only" },
-              { key: "public only", label: "Public Only" },
-            ].map((item) => {
-              const active = quickFilter === item.key;
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setQuickMode(item.key)}
-                  className={
-                    active
-                      ? "rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-                      : "rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                  }
-                >
-                  {item.label}
-                </button>
-              );
-            })}
+          <div className="mt-6">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              Advanced Filters
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: "newest", label: "Newest" },
+                { key: "best net pnl", label: "Best Net PnL" },
+                { key: "best profit factor", label: "Best Profit Factor" },
+                { key: "best win rate", label: "Best Win Rate" },
+                { key: "best trust score", label: "Best Trust Score" },
+                { key: "trust weighted pnl", label: "Trust-Weighted PnL" },
+                { key: "best network state", label: "Best Network State" },
+                { key: "issuer a-z", label: "Issuer A → Z" },
+                { key: "independent only", label: "Independent Only" },
+                { key: "derived only", label: "Derived Only" },
+                { key: "versioned only", label: "Versioned Only" },
+                { key: "locked only", label: "Locked Only" },
+                { key: "public only", label: "Public Only" },
+              ].map((item) => {
+                const active = quickFilter === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setQuickMode(item.key)}
+                    className={
+                      active
+                        ? "rounded-full bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
+                        : "rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                    }
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </section>
 
@@ -972,6 +1126,15 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                   Compare claim identity, lifecycle, proof fingerprints, performance metrics, and methodology in a single structured surface.
                 </div>
               </div>
+
+              {buildComparisonDecisionSummary(compareLeft, compareRight) ? (
+                <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+                  <div className="font-semibold">Comparison Decision Signal</div>
+                  <div className="mt-2">
+                    {buildComparisonDecisionSummary(compareLeft, compareRight)}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="grid gap-4 xl:grid-cols-2">
                 {[compareLeft, compareRight].filter(Boolean).map((row) => {
@@ -1281,7 +1444,17 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
             </div>
           </section>
         ) : (
-          <div className="mt-8 space-y-6">
+          <div className="mt-10 border-t border-slate-200 pt-8">
+            <div className="mb-5">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Public Claim Records
+              </div>
+              <div className="mt-2 text-lg font-semibold text-slate-950">
+                Verification-ready records in the public trust layer
+              </div>
+            </div>
+
+            <div className="space-y-6">
             {filteredRows.map((row) => {
               const trustScore = computeTrustScore({
                 ...row,
@@ -1470,6 +1643,21 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                       verifiedAt={String(resolveVerifiedAt(row) ?? "")}
                       lockedAt={String(resolveLockedAt(row) ?? "")}
                     />
+
+                    <div className={`mt-3 rounded-2xl border p-4 text-sm ${
+                      resolvedIntegrity === "valid"
+                        ? "border-green-200 bg-green-50 text-green-900"
+                        : resolvedIntegrity === "compromised"
+                          ? "border-red-200 bg-red-50 text-red-900"
+                          : "border-amber-200 bg-amber-50 text-amber-900"
+                    }`}>
+                      <div className="font-semibold">
+                        {resolveIntegrityHeadline(resolvedIntegrity)}
+                      </div>
+                      <div className="mt-2">
+                        {resolveIntegritySupportText(resolvedIntegrity)}
+                      </div>
+                    </div>
                   </div>
 
                   <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1508,10 +1696,12 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                     </div>
                   </div>
 
-                  <div className="rounded-3xl bg-slate-50 p-4">
-                    <div className="text-sm text-slate-500">Trust Score</div>
-                    <div className="mt-2 flex flex-wrap items-center gap-3">
-                      <div className="text-[24px] font-bold leading-none text-slate-950">
+                  <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      Trust Score
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <div className="text-3xl font-bold leading-none text-slate-950">
                         {trustScore}
                       </div>
                       <span
@@ -1520,7 +1710,7 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                         {trustBand.label}
                       </span>
                     </div>
-                    <div className="mt-2 text-sm text-slate-500">
+                    <div className="mt-3 text-sm leading-6 text-slate-500">
                       Composite trust score derived from lifecycle state, integrity, visibility,
                       and verification posture within the trust network.
                     </div>
@@ -1533,9 +1723,10 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                       </div>
 
                       <div className="mt-3 text-sm leading-7 text-slate-600">
-                        Use the canonical verification route for independent validation and the public record
-                        route for presentation, sharing, and distribution across communities, investor review,
-                        and audit-oriented workflows.
+                        This claim is distributed through two complementary trust surfaces:
+                        the canonical verification route for cryptographic and machine-readable validation,
+                        and the public record route for presentation, sharing, and structured external review.
+                        Both surfaces resolve back to the same canonical claim fingerprint.
                       </div>
 
                       <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -1709,6 +1900,7 @@ const compareRightTrustBand = resolveTrustBand(compareRightTrustScore);
                 </section>
               );
             })}
+            </div>
           </div>
         )}
       </main>
