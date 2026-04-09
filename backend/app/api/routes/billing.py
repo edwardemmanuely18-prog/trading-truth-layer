@@ -98,8 +98,8 @@ def resolve_effective_plan_code(workspace: Workspace) -> str:
     configured_plan = normalize_plan_code(workspace.plan_code)
     billing_status = normalize_billing_status(workspace.billing_status)
 
-    if configured_plan == "starter":
-        return "starter"
+    if configured_plan in {"sandbox", "starter"}:
+        return configured_plan
 
     if is_paid_billing_status(billing_status):
         return configured_plan
@@ -539,10 +539,13 @@ def can_start_checkout_for_target_plan(workspace: Workspace, target_plan_code: s
     target_normalized = normalize_plan_code(target_plan_code)
     billing_status = normalize_billing_status(workspace.billing_status)
 
+    if target_normalized == "sandbox":
+        return target_normalized != configured_plan_code
+
     if target_normalized != configured_plan_code:
         return True
 
-    if configured_plan_code == "starter":
+    if configured_plan_code in {"sandbox", "starter"}:
         return False
 
     return not is_paid_billing_status(billing_status)
@@ -552,10 +555,13 @@ def checkout_intent_for_target_plan(workspace: Workspace, target_plan_code: str)
     configured_plan_code = normalize_plan_code(workspace.plan_code)
     target_normalized = normalize_plan_code(target_plan_code)
 
+    if target_normalized == "sandbox":
+        return "sandbox_activation" if target_normalized != configured_plan_code else "no_op"
+
     if target_normalized != configured_plan_code:
         return "plan_change"
 
-    if target_normalized == "starter":
+    if target_normalized in {"sandbox", "starter"}:
         return "no_op"
 
     if is_paid_billing_status(workspace.billing_status):
