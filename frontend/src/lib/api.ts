@@ -1032,6 +1032,14 @@ export function resolveBillingProviderLabel(
   return foundation?.billing_provider_label || provider;
 }
 
+export function isSandboxBillingFoundation(
+  foundation?: WorkspaceBillingFoundation | null
+): boolean {
+  return isSandboxPlanCode(
+    foundation?.effective_plan_code ?? foundation?.plan_code ?? null
+  );
+}
+
 export function getApiErrorCode(error: unknown): string | null {
   if (!isApiError(error)) return null;
   return error.payload?.code ?? null;
@@ -1138,20 +1146,33 @@ function ensureLeaderboard<T extends { leaderboard?: unknown }>(row: T) {
   };
 }
 
-function ensurePlanBilling(row?: Partial<PlanBilling> | null): PlanBilling {
+function isSandboxPlanCode(value?: string | null): boolean {
+  return String(value ?? "").toLowerCase().trim() === "sandbox";
+}
+
+function ensurePlanBilling(
+  row?: Partial<PlanBilling> | null,
+  planCode?: string | null
+): PlanBilling {
+  const sandbox = isSandboxPlanCode(planCode);
+
   return {
     monthly_price_usd:
       typeof row?.monthly_price_usd === "number"
         ? row.monthly_price_usd
-        : row?.monthly_price_usd ?? null,
+        : row?.monthly_price_usd ?? (sandbox ? 0 : null),
     annual_price_usd:
       typeof row?.annual_price_usd === "number"
         ? row.annual_price_usd
-        : row?.annual_price_usd ?? null,
+        : row?.annual_price_usd ?? (sandbox ? 0 : null),
     currency: row?.currency ?? "USD",
     billing_interval: row?.billing_interval ?? "monthly",
-    stripe_price_lookup_key_monthly: row?.stripe_price_lookup_key_monthly ?? null,
-    stripe_price_lookup_key_annual: row?.stripe_price_lookup_key_annual ?? null,
+    stripe_price_lookup_key_monthly: sandbox
+      ? null
+      : row?.stripe_price_lookup_key_monthly ?? null,
+    stripe_price_lookup_key_annual: sandbox
+      ? null
+      : row?.stripe_price_lookup_key_annual ?? null,
   };
 }
 
@@ -1196,18 +1217,22 @@ function ensureWorkspacePlanDetail(
 ): WorkspacePlanDetail | undefined {
   if (!row) return undefined;
 
+  const code = String(row.code ?? "");
+
   return {
-    code: String(row.code ?? ""),
+    code,
     name: String(row.name ?? ""),
     description: String(row.description ?? ""),
     recommended_for: Array.isArray(row.recommended_for) ? row.recommended_for.map(String) : [],
-    billing: ensurePlanBilling(row.billing),
+    billing: ensurePlanBilling(row.billing, code),
   };
 }
 
 function ensurePlanCatalogItem(row: Partial<PlanCatalogItem>): PlanCatalogItem {
+  const code = String(row.code ?? "");
+
   return {
-    code: String(row.code ?? ""),
+    code,
     name: String(row.name ?? ""),
     description: String(row.description ?? ""),
     limits: {
@@ -1218,7 +1243,7 @@ function ensurePlanCatalogItem(row: Partial<PlanCatalogItem>): PlanCatalogItem {
     },
     recommended_for: Array.isArray(row.recommended_for) ? row.recommended_for.map(String) : [],
     public_price_hint: row.public_price_hint ?? undefined,
-    billing: ensurePlanBilling(row.billing),
+    billing: ensurePlanBilling(row.billing, code),
   };
 }
 
@@ -1400,8 +1425,12 @@ function ensureWorkspaceBillingFoundation(
     paddle_transaction_id: row?.paddle_transaction_id ?? null,
     paddle_price_id: row?.paddle_price_id ?? null,
     prices: {
-      monthly_price_usd: row?.prices?.monthly_price_usd ?? null,
-      annual_price_usd: row?.prices?.annual_price_usd ?? null,
+      monthly_price_usd:
+        row?.prices?.monthly_price_usd ??
+        (isSandboxPlanCode(row?.plan_code) ? 0 : null),
+      annual_price_usd:
+        row?.prices?.annual_price_usd ??
+        (isSandboxPlanCode(row?.plan_code) ? 0 : null),
     },
     stripe_ready: {
       has_customer_id: Boolean(row?.stripe_ready?.has_customer_id),
