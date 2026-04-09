@@ -8,8 +8,8 @@ import { useAuth } from "../../components/AuthProvider";
 const ClaimSchemaForm = dynamic(() => import("../../components/ClaimSchemaForm"), {
   ssr: false,
   loading: () => (
-    <div className="rounded-2xl border bg-white p-6 shadow-sm">
-      Loading schema builder...
+    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="text-sm font-medium text-slate-600">Loading schema builder...</div>
     </div>
   ),
 });
@@ -22,9 +22,9 @@ function StatusCard({
   body: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{body}</p>
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+      <p className="mt-2 text-sm leading-7 text-slate-600">{body}</p>
     </div>
   );
 }
@@ -39,13 +39,21 @@ function StepCard({
   body: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
       <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
         {step}
       </div>
-      <h3 className="mt-3 text-base font-semibold text-slate-900">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{body}</p>
+      <h3 className="mt-4 text-xl font-semibold tracking-tight text-slate-950">{title}</h3>
+      <p className="mt-3 text-sm leading-7 text-slate-600">{body}</p>
     </div>
+  );
+}
+
+function Pill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+      {children}
+    </span>
   );
 }
 
@@ -59,13 +67,19 @@ export default function SchemaPage() {
     return `/workspace/${firstWorkspace.workspace_id}/dashboard`;
   }, [firstWorkspace]);
 
+  const sessionSummary = useMemo(() => {
+    if (loading) return "Authenticating current user and workspace session.";
+    if (user) return `Signed in as ${user.name}.`;
+    return "You are not signed in yet.";
+  }, [loading, user]);
+
   const workspaceSummary = useMemo(() => {
     if (!workspaces.length) {
       return "No connected workspace detected yet.";
     }
 
     if (workspaces.length === 1) {
-      return `1 workspace available for claim operations.`;
+      return "1 workspace available for claim operations.";
     }
 
     return `${workspaces.length} workspaces available for claim operations.`;
@@ -76,7 +90,7 @@ export default function SchemaPage() {
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
           <div>
-            <div className="text-lg font-bold tracking-tight">Trading Truth Layer</div>
+            <div className="text-lg font-bold tracking-tight text-slate-950">Trading Truth Layer</div>
             <div className="text-sm text-slate-500">Claims Schema Builder</div>
           </div>
 
@@ -128,49 +142,33 @@ export default function SchemaPage() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-10">
-        <section className="mb-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="mb-8 rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm md:p-8">
           <div className="grid gap-6 xl:grid-cols-[1.35fr_0.9fr]">
             <div>
               <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
                 Guided Claim Creation
               </div>
 
-              <h1 className="mt-4 text-3xl font-bold tracking-tight">Claims Schema Builder</h1>
+              <h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-950 md:text-4xl">
+                Claims Schema Builder
+              </h1>
 
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
-                Define the exact scope, evidence universe, methodology, and exposure posture for a
+              <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">
+                Define the exact scope, evidence universe, methodology, and visibility posture for a
                 lifecycle-governed performance claim. This page is the structured entry point for
                 creating claims that can later be verified, published, locked, and publicly audited.
               </p>
 
               <div className="mt-5 flex flex-wrap items-center gap-2">
-                <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  draft-first workflow
-                </span>
-                <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  scope-controlled evidence
-                </span>
-                <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  public verification compatible
-                </span>
+                <Pill>draft-first workflow</Pill>
+                <Pill>scope-controlled evidence</Pill>
+                <Pill>public verification compatible</Pill>
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-              <StatusCard
-                title="Session State"
-                body={
-                  loading
-                    ? "Authenticating current user and workspace session."
-                    : user
-                      ? `Signed in as ${user.name}.`
-                      : "You are not signed in yet."
-                }
-              />
-              <StatusCard
-                title="Workspace Readiness"
-                body={workspaceSummary}
-              />
+              <StatusCard title="Session State" body={sessionSummary} />
+              <StatusCard title="Workspace Readiness" body={workspaceSummary} />
             </div>
           </div>
         </section>
@@ -203,10 +201,10 @@ export default function SchemaPage() {
             <ClaimSchemaForm />
           </div>
 
-          <div className="space-y-5">
+          <aside className="space-y-5">
             <StatusCard
               title="Builder Rules"
-              body="Claims should be created as drafts first. Scope and methodology should be finalized before verification, because downstream lifecycle transitions depend on this definition."
+              body="Claims should be created as drafts first. Scope and methodology should be finalized before verification because downstream lifecycle transitions depend on this definition."
             />
 
             <StatusCard
@@ -218,7 +216,7 @@ export default function SchemaPage() {
               title="Recommended Sequence"
               body="Create draft → review scope → verify claim → publish claim → lock claim → review public verification surface."
             />
-          </div>
+          </aside>
         </section>
       </main>
     </div>
