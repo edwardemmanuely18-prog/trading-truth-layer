@@ -524,21 +524,6 @@ export default function WorkspaceEvidencePage() {
   const isInternalActive = pathname === internalHref;
   const isEvidenceActive = pathname === `/workspace/${workspaceId}/evidence`;
 
-  const exportJsonName = `evidence_pack_claim_${claimId}_${truncateMiddle(
-    evidencePack.claim_hash || claim.claim_hash || "",
-    12,
-    4,
-  ).replace(/\.\.\./g, "")}.json`;
-  const exportZipName = `evidence_bundle_claim_${claimId}_${truncateMiddle(
-    evidencePack.claim_hash || claim.claim_hash || "",
-    12,
-    4,
-  ).replace(/\.\.\./g, "")}.zip`;
-  const exportPdfName = `claim_report_${claimId}_${truncateMiddle(
-    evidencePack.claim_hash || claim.claim_hash || "",
-    12,
-    4,
-  ).replace(/\.\.\./g, "")}.pdf`;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -898,23 +883,7 @@ export default function WorkspaceEvidencePage() {
             payload={evidencePack}
           />
 
-          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-sm font-medium text-slate-700">Export naming</div>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <div className="rounded-xl bg-white p-3">
-                <div className="text-xs uppercase tracking-wide text-slate-500">JSON</div>
-                <div className="mt-1 break-all text-sm text-slate-700">{exportJsonName}</div>
-              </div>
-              <div className="rounded-xl bg-white p-3">
-                <div className="text-xs uppercase tracking-wide text-slate-500">ZIP</div>
-                <div className="mt-1 break-all text-sm text-slate-700">{exportZipName}</div>
-              </div>
-              <div className="rounded-xl bg-white p-3">
-                <div className="text-xs uppercase tracking-wide text-slate-500">PDF</div>
-                <div className="mt-1 break-all text-sm text-slate-700">{exportPdfName}</div>
-              </div>
-            </div>
-          </div>
+          
         </SectionCard>
       </main>
     </div>
