@@ -54,6 +54,63 @@ function truncateMiddle(value?: string | null, start = 12, end = 10) {
   return `${value.slice(0, start)}...${value.slice(-end)}`;
 }
 
+function readNumber(value: unknown): number | null {
+  return typeof value === "number" && !Number.isNaN(value) ? value : null;
+}
+
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function inferScopeSummary(evidencePack: EvidencePack | null, publicClaim: PublicClaim | null) {
+  const pack = readRecord(evidencePack as unknown);
+  const publicRecord = readRecord(publicClaim as unknown);
+
+  const candidates: Array<Record<string, unknown> | null> = [
+    readRecord(pack?.summary),
+    readRecord(pack?.scope_summary),
+    readRecord(pack?.claim_scope_summary),
+    readRecord(publicRecord?.summary),
+    readRecord(publicRecord?.scope_summary),
+    readRecord(readRecord(publicRecord?.scope)?.summary),
+  ];
+
+  const summary = candidates.find(Boolean) ?? null;
+  const breakdown =
+    readRecord(summary?.excluded_breakdown) ??
+    readRecord(summary?.breakdown) ??
+    readRecord(summary?.excluded_reasons) ??
+    {};
+
+  return {
+    workspaceTradeCount:
+      readNumber(summary?.workspace_trade_count) ??
+      readNumber(summary?.workspace_trades) ??
+      readNumber(summary?.total_workspace_trades) ??
+      null,
+    includedTradeCount:
+      readNumber(summary?.included_trade_count) ??
+      readNumber(summary?.included_trades) ??
+      readNumber(summary?.in_scope_trade_count) ??
+      readNumber(summary?.in_scope_rows) ??
+      null,
+    excludedTradeCount:
+      readNumber(summary?.excluded_trade_count) ??
+      readNumber(summary?.excluded_trades) ??
+      readNumber(summary?.out_of_scope_trade_count) ??
+      null,
+    inScopeEvidenceRows:
+      readNumber(summary?.in_scope_evidence_rows) ??
+      readNumber(summary?.in_scope_rows) ??
+      readNumber(summary?.included_trade_count) ??
+      readNumber(summary?.included_trades) ??
+      null,
+    breakdown,
+  };
+}
+
 function StatusBadge({ status }: { status?: string | null }) {
   const normalized = normalizeText(status);
 
@@ -179,6 +236,55 @@ function StatCard({
       <div className="text-sm text-slate-500">{label}</div>
       <div className="mt-2 text-2xl font-semibold">{value}</div>
       {hint ? <div className="mt-2 text-xs text-slate-500">{hint}</div> : null}
+    </div>
+  );
+}
+
+function ScopeStatCard({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  tone?: "neutral" | "positive" | "negative";
+}) {
+  const toneClass =
+    tone === "positive"
+      ? "bg-green-50 text-green-900"
+      : tone === "negative"
+        ? "bg-red-50 text-red-900"
+        : "bg-slate-50 text-slate-900";
+
+  const labelClass =
+    tone === "positive"
+      ? "text-green-700"
+      : tone === "negative"
+        ? "text-red-700"
+        : "text-slate-500";
+
+  return (
+    <div className={`rounded-xl px-4 py-3 ${toneClass}`}>
+      <div className={`text-sm ${labelClass}`}>{label}</div>
+      <div className="mt-1 text-xl font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function SectionCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border bg-white p-5 shadow-sm">
+      <h2 className="text-xl font-semibold">{title}</h2>
+      {subtitle ? <div className="mt-2 text-sm text-slate-500">{subtitle}</div> : null}
+      <div className="mt-4">{children}</div>
     </div>
   );
 }
@@ -394,6 +500,11 @@ export default function WorkspaceEvidencePage() {
     locked_trade_set_hash: claim.locked_trade_set_hash,
   };
 
+  const scopeSummary = inferScopeSummary(evidencePack, publicClaim);
+  const breakdownRows = Object.entries(scopeSummary.breakdown)
+    .filter(([, value]) => typeof value === "number" && value > 0)
+    .sort((a, b) => Number(b[1]) - Number(a[1]));
+
   const publicRouteReady = Boolean(
     publicClaim &&
       claim.visibility === "public" &&
@@ -412,6 +523,22 @@ export default function WorkspaceEvidencePage() {
 
   const isInternalActive = pathname === internalHref;
   const isEvidenceActive = pathname === `/workspace/${workspaceId}/evidence`;
+
+  const exportJsonName = `evidence_pack_claim_${claimId}_${truncateMiddle(
+    evidencePack.claim_hash || claim.claim_hash || "",
+    12,
+    4,
+  ).replace(/\.\.\./g, "")}.json`;
+  const exportZipName = `evidence_bundle_claim_${claimId}_${truncateMiddle(
+    evidencePack.claim_hash || claim.claim_hash || "",
+    12,
+    4,
+  ).replace(/\.\.\./g, "")}.zip`;
+  const exportPdfName = `claim_report_${claimId}_${truncateMiddle(
+    evidencePack.claim_hash || claim.claim_hash || "",
+    12,
+    4,
+  ).replace(/\.\.\./g, "")}.pdf`;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -443,54 +570,6 @@ export default function WorkspaceEvidencePage() {
               </div>
 
               <div className="mt-3 text-slate-600">{claim.name}</div>
-
-              <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-sm text-slate-500">Claim fingerprint</div>
-                  <div className="mt-2 font-mono text-sm text-slate-800">
-                    {truncateMiddle(evidencePack.claim_hash || claim.claim_hash || "—")}
-                  </div>
-                  <div className="mt-3">
-                    <CopyButton
-                      value={evidencePack.claim_hash || claim.claim_hash}
-                      label="Copy Claim Hash"
-                    />
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-sm text-slate-500">Trade-set fingerprint</div>
-                  <div className="mt-2 font-mono text-sm text-slate-800">
-                    {truncateMiddle(
-                      evidencePack.trade_set_hash || claim.locked_trade_set_hash || "—"
-                    )}
-                  </div>
-                  <div className="mt-3">
-                    <CopyButton
-                      value={evidencePack.trade_set_hash || claim.locked_trade_set_hash}
-                      label="Copy Trade Set Hash"
-                    />
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-sm text-slate-500">Exposure posture</div>
-                  <div className="mt-2 text-lg font-semibold text-slate-900">
-                    {claim.visibility === "private"
-                      ? "Internal only"
-                      : claim.visibility === "unlisted"
-                        ? "Direct-route verification"
-                        : "Publicly routable"}
-                  </div>
-                  <div className="mt-2 text-sm text-slate-600">
-                    {claim.visibility === "private"
-                      ? "Evidence remains internal."
-                      : claim.visibility === "unlisted"
-                        ? "External verification uses the claim hash path."
-                        : "External users can reach the public trust surface when lifecycle permits."}
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -503,29 +582,135 @@ export default function WorkspaceEvidencePage() {
               )}
             </div>
           </div>
-        </section>
 
-        <DownloadEvidenceButton
-          claimSchemaId={claimId}
-          claimHash={evidencePack.claim_hash}
-          payload={evidencePack}
-        />
+          <div className="mt-5 grid gap-4 lg:grid-cols-3">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm text-slate-500">Claim fingerprint</div>
+              <div className="mt-2 font-mono text-sm text-slate-800">
+                {truncateMiddle(evidencePack.claim_hash || claim.claim_hash || "—")}
+              </div>
+              <div className="mt-3">
+                <CopyButton
+                  value={evidencePack.claim_hash || claim.claim_hash}
+                  label="Copy Claim Hash"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm text-slate-500">Trade-set fingerprint</div>
+              <div className="mt-2 font-mono text-sm text-slate-800">
+                {truncateMiddle(evidencePack.trade_set_hash || claim.locked_trade_set_hash || "—")}
+              </div>
+              <div className="mt-3">
+                <CopyButton
+                  value={evidencePack.trade_set_hash || claim.locked_trade_set_hash}
+                  label="Copy Trade Set Hash"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm text-slate-500">Exposure posture</div>
+              <div className="mt-2 text-lg font-semibold text-slate-900">
+                {claim.visibility === "private"
+                  ? "Internal only"
+                  : claim.visibility === "unlisted"
+                    ? "Direct-route verification"
+                    : "Publicly routable"}
+              </div>
+              <div className="mt-2 text-sm text-slate-600">
+                {claim.visibility === "private"
+                  ? "Evidence remains internal."
+                  : claim.visibility === "unlisted"
+                    ? "External verification uses the claim hash path."
+                    : "External users can reach the public trust surface when lifecycle permits."}
+              </div>
+            </div>
+          </div>
+        </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Claim ID" value={String(claimId)} />
           <StatCard
             label="Trade Count"
-            value={typeof metricsSnapshot.trade_count === "number" ? String(metricsSnapshot.trade_count) : "—"}
+            value={
+              typeof metricsSnapshot.trade_count === "number"
+                ? String(metricsSnapshot.trade_count)
+                : "—"
+            }
           />
           <StatCard label="Net PnL" value={formatNumber(metricsSnapshot.net_pnl, 2)} />
           <StatCard label="Profit Factor" value={formatNumber(metricsSnapshot.profit_factor, 4)} />
         </section>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <h2 className="text-xl font-semibold">Evidence Summary</h2>
+        <SectionCard
+          title="Scope Summary"
+          subtitle="Explainability layer for what entered evidence computation and what was left out."
+        >
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <ScopeStatCard
+              label="Workspace Trades"
+              value={
+                scopeSummary.workspaceTradeCount !== null
+                  ? String(scopeSummary.workspaceTradeCount)
+                  : "—"
+              }
+            />
+            <ScopeStatCard
+              label="Included Trades"
+              value={
+                scopeSummary.includedTradeCount !== null
+                  ? String(scopeSummary.includedTradeCount)
+                  : "—"
+              }
+              tone="positive"
+            />
+            <ScopeStatCard
+              label="Excluded Trades"
+              value={
+                scopeSummary.excludedTradeCount !== null
+                  ? String(scopeSummary.excludedTradeCount)
+                  : "—"
+              }
+              tone="negative"
+            />
+            <ScopeStatCard
+              label="In-scope Evidence Rows"
+              value={
+                scopeSummary.inScopeEvidenceRows !== null
+                  ? String(scopeSummary.inScopeEvidenceRows)
+                  : "—"
+              }
+            />
+          </div>
 
-            <div className="mt-4 space-y-4">
+          <div className="mt-5">
+            <div className="mb-2 text-sm font-medium text-slate-700">Excluded breakdown</div>
+
+            {breakdownRows.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                No explicit exclusion breakdown is available in this evidence bundle.
+              </div>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {breakdownRows.map(([reason, count]) => (
+                  <div key={reason} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="text-sm text-slate-500">{reason}</div>
+                    <div className="mt-1 text-lg font-semibold">{String(count)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </SectionCard>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <SectionCard
+            title="Evidence Summary"
+            subtitle="Portable evidence facts describing what was exported."
+          >
+            <div className="space-y-4">
               <div>
                 <div className="text-sm text-slate-500">Exported At</div>
                 <div className="mt-1 font-medium">{formatDateTime(evidencePack.exported_at)}</div>
@@ -552,17 +737,18 @@ export default function WorkspaceEvidencePage() {
 
               <div>
                 <div className="text-sm text-slate-500">Methodology Notes</div>
-                <div className="mt-1 rounded-xl bg-slate-50 p-3 text-sm whitespace-pre-wrap text-slate-700">
+                <div className="mt-1 rounded-xl bg-slate-50 p-3 whitespace-pre-wrap text-sm text-slate-700">
                   {evidencePack.methodology_notes || "—"}
                 </div>
               </div>
             </div>
-          </div>
+          </SectionCard>
 
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <h2 className="text-xl font-semibold">Lifecycle & Integrity</h2>
-
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <SectionCard
+            title="Lifecycle & Integrity"
+            subtitle="Trust-state facts used to decide whether evidence can be externally relied on."
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <div className="text-sm text-slate-500">Status</div>
                 <div className="mt-1 font-medium">{lifecycle.status || "—"}</div>
@@ -617,62 +803,31 @@ export default function WorkspaceEvidencePage() {
                 Integrity result is available after lock state verification.
               </div>
             )}
-          </div>
+          </SectionCard>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
-          <EvidenceCard title="Schema Snapshot" value={safeJson(schemaSnapshot)} />
+          <EvidenceCard title="Claim Schema Snapshot" value={safeJson(schemaSnapshot)} />
           <EvidenceCard title="Metrics Snapshot" value={safeJson(metricsSnapshot)} />
           <EvidenceCard
             title="Bundle Manifest"
-            value={evidenceBundle ? safeJson(evidenceBundle.manifest) : "ZIP bundle preview not available."}
+            value={
+              evidenceBundle ? safeJson(evidenceBundle.manifest) : "ZIP bundle preview not available."
+            }
           />
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-xl font-semibold">Audit Timeline Preview</h2>
-              <div className="text-sm text-slate-500">{auditEvents.length} event(s)</div>
-            </div>
-
-            {auditEvents.length === 0 ? (
-              <div className="mt-4 text-sm text-slate-500">No audit events found for this claim.</div>
-            ) : (
-              <div className="mt-4 space-y-4">
-                {auditEvents.slice(0, 6).map((event) => {
-                  const metadata = tryParseJson(event.metadata_json);
-
-                  return (
-                    <div key={event.id} className="rounded-xl border border-slate-200 p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="font-medium">{event.event_type}</div>
-                        <div className="text-xs text-slate-500">{formatDateTime(event.created_at)}</div>
-                      </div>
-
-                      <div className="mt-2 text-xs text-slate-500">
-                        entity: {event.entity_type} / {event.entity_id}
-                      </div>
-
-                      <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
-                        {JSON.stringify(metadata, null, 2)}
-                      </pre>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <h2 className="text-xl font-semibold">Public Verification Snapshot</h2>
-
+          <SectionCard
+            title="Public Verification Snapshot"
+            subtitle="Preview of what external verifiers can reach after lifecycle and visibility gates are satisfied."
+          >
             {!publicClaim ? (
-              <div className="mt-4 text-sm text-slate-500">
+              <div className="text-sm text-slate-500">
                 Public claim view is not available for this claim yet.
               </div>
             ) : (
-              <div className="mt-4 space-y-4">
+              <div className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <div className="text-sm text-slate-500">Public Visibility</div>
@@ -694,8 +849,73 @@ export default function WorkspaceEvidencePage() {
                 </div>
               </div>
             )}
-          </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Audit Timeline Preview"
+            subtitle="Recorded evidence actions showing how this claim moved through the lifecycle."
+          >
+            <div className="mb-4 text-sm text-slate-500">{auditEvents.length} event(s)</div>
+
+            {auditEvents.length === 0 ? (
+              <div className="text-sm text-slate-500">No audit events found for this claim.</div>
+            ) : (
+              <div className="space-y-4">
+                {auditEvents.slice(0, 6).map((event) => {
+                  const metadata = tryParseJson(event.metadata_json);
+
+                  return (
+                    <div key={event.id} className="rounded-xl border border-slate-200 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="font-medium">{event.event_type}</div>
+                        <div className="text-xs text-slate-500">
+                          {formatDateTime(event.created_at)}
+                        </div>
+                      </div>
+
+                      <div className="mt-2 text-xs text-slate-500">
+                        entity: {event.entity_type} / {event.entity_id}
+                      </div>
+
+                      <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
+                        {JSON.stringify(metadata, null, 2)}
+                      </pre>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </SectionCard>
         </div>
+
+        <SectionCard
+          title="Evidence Exports"
+          subtitle="Portable artifacts for storage, dispute-ready handoff, and external review after evidence is understood."
+        >
+          <DownloadEvidenceButton
+            claimSchemaId={claimId}
+            claimHash={evidencePack.claim_hash}
+            payload={evidencePack}
+          />
+
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-medium text-slate-700">Export naming</div>
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl bg-white p-3">
+                <div className="text-xs uppercase tracking-wide text-slate-500">JSON</div>
+                <div className="mt-1 break-all text-sm text-slate-700">{exportJsonName}</div>
+              </div>
+              <div className="rounded-xl bg-white p-3">
+                <div className="text-xs uppercase tracking-wide text-slate-500">ZIP</div>
+                <div className="mt-1 break-all text-sm text-slate-700">{exportZipName}</div>
+              </div>
+              <div className="rounded-xl bg-white p-3">
+                <div className="text-xs uppercase tracking-wide text-slate-500">PDF</div>
+                <div className="mt-1 break-all text-sm text-slate-700">{exportPdfName}</div>
+              </div>
+            </div>
+          </div>
+        </SectionCard>
       </main>
     </div>
   );
