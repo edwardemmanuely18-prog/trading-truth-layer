@@ -564,6 +564,15 @@ export default function PublicVerifyClaimPage() {
 
   const leaderboard = Array.isArray(verifiedResult.leaderboard) ? verifiedResult.leaderboard : [];
   const integrityOk = normalizeText(verifiedResult.integrity_status) === "valid";
+  const lifecycleStatus = normalizeText(verifiedResult.verification_status);
+
+  const trustLevel = (() => {
+    if (!integrityOk) return "compromised";
+    if (lifecycleStatus === "locked") return "finalized";
+    if (lifecycleStatus === "published") return "public_verified";
+    if (lifecycleStatus === "verified") return "internally_verified";
+    return "unverified";
+  })();
   const verificationUrl =
     typeof window !== "undefined" ? window.location.href : `/verify/${verifiedResult.claim_hash}`;
   const publicViewUrl = `/claim/${verifiedResult.claim_schema_id}/public`;
@@ -580,13 +589,23 @@ export default function PublicVerifyClaimPage() {
   const publicCurvePoints = Array.isArray(verifiedResult.equity_curve?.curve)
     ? verifiedResult.equity_curve.curve
     : [];
+  const hasDisputes = Boolean((verifiedResult as any)?.has_active_disputes);  
 
  const exposureLevel = resolveVerificationExposureLevel(verifiedResult);   
- const trustState = integrityOk
-  ? normalizeText(verifiedResult.verification_status) === "locked"
-    ? "Finalized · Cryptographically Locked"
-    : "Verified · Public Record"
-  : "Integrity Mismatch · Not Trusted";
+ const trustState = (() => {
+  switch (trustLevel) {
+    case "finalized":
+      return "Finalized · Cryptographically Locked";
+    case "public_verified":
+      return "Published · Public Verification Record";
+    case "internally_verified":
+      return "Verified · Pre-Public State";
+    case "compromised":
+      return "Integrity Failure · Not Trustworthy";
+    default:
+      return "Unverified Record";
+  }
+})();
 
   async function handleShare() {
     try {
@@ -775,6 +794,27 @@ export default function PublicVerifyClaimPage() {
             integrityOk ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
           }`}
         >
+
+        <div className="mt-4 rounded-xl bg-white/70 p-4 text-sm text-slate-700">
+          <div className="font-medium text-slate-900">How to read this verification</div>
+
+          <div className="mt-2 leading-6">
+            This record represents a <span className="font-medium">{trustState}</span>.
+            External trust should consider three independent signals:
+          </div>
+
+          <ul className="mt-2 list-disc pl-5 space-y-1">
+            <li>
+              <span className="font-medium">Integrity:</span> whether the trade-set hash matches the canonical fingerprint
+            </li>
+            <li>
+              <span className="font-medium">Lifecycle:</span> whether the claim is verified, published, or locked
+            </li>
+            <li>
+              <span className="font-medium">Exposure:</span> whether the claim is public or restricted
+            </li>
+          </ul>
+        </div>  
           <div className="text-sm text-slate-500">Verification Result · Cryptographic Integrity Check</div>
 
           <div className="mt-2 text-xl font-semibold">
@@ -783,10 +823,27 @@ export default function PublicVerifyClaimPage() {
 
           <div className="mt-2 text-sm text-slate-600 max-w-2xl">
             {integrityOk
-              ? "The recomputed trade-set hash matches the stored canonical fingerprint. This record is cryptographically consistent and safe to trust."
-              : "The recomputed trade-set hash does NOT match the stored fingerprint. This record may have been altered or is inconsistent with its original state."}
+              ? "The recomputed trade-set hash matches the canonical fingerprint. This record is cryptographically consistent with its original state."
+              : "The recomputed trade-set hash does NOT match the canonical fingerprint. This record is inconsistent with its original state and should not be trusted without further investigation."}
           </div>
         </div>
+
+        {hasDisputes ? (
+          <div className="mb-8 rounded-2xl border border-red-300 bg-red-50 p-5 shadow-sm">
+            <div className="text-sm font-semibold text-red-900">
+              Active Governance Dispute
+            </div>
+
+            <div className="mt-2 text-sm text-red-800">
+              This claim currently has active disputes or challenges.
+            </div>
+
+            <div className="mt-2 text-xs text-red-700">
+              External trust, capital allocation decisions, and leaderboard interpretation
+              should be treated as provisional until disputes are resolved.
+            </div>
+          </div>
+        ) : null}
         <div className="mb-8 rounded-3xl border border-green-200 bg-green-50 p-6 shadow-sm">
           <div className="mb-5 rounded-xl border border-green-200 bg-white p-4">
             <div className="text-xs uppercase tracking-wide text-slate-500">
@@ -1221,8 +1278,15 @@ export default function PublicVerifyClaimPage() {
           </div>
         </div>
 
-        <div className="text-center text-xs text-slate-400">
-          Trading Truth Layer — Canonical verification infrastructure for trading claims
+        <div className="text-center text-xs text-slate-400 space-y-2">
+          <div>
+            Trading Truth Layer — Canonical verification infrastructure for trading claims
+          </div>
+
+          <div>
+            This verification surface is designed for investors, trading communities,
+            prop firms, and audit workflows requiring standardized proof of trading performance.
+          </div>
         </div>
       </main>
     </div>
