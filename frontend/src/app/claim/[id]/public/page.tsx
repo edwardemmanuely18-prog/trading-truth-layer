@@ -495,20 +495,36 @@ export default function PublicClaimPage() {
             <IntegrityBadge integrity={integrity} />
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-4">
+          <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto] items-center">
             <div>
               <div className="text-sm text-slate-500">Trust Score</div>
-              <div className="text-2xl font-semibold text-slate-900">
-                {trustScore}
-                <span className="text-sm text-slate-500"> / 100</span>
+
+              <div className="mt-1 flex items-center gap-4">
+                <div className="text-[36px] font-bold text-slate-950 leading-none">
+                  {trustScore}
+                </div>
+
+                <div className="text-sm text-slate-500">/ 100</div>
+
+                <span
+                  className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${trustBand.className}`}
+                >
+                  {trustBand.label}
+                </span>
               </div>
             </div>
 
-            <span
-              className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${trustBand.className}`}
-            >
-              {trustBand.label}
-            </span>
+            {integrity ? (
+              <div className="text-right">
+                <div className="text-xs uppercase tracking-wide text-slate-500">
+                  Integrity Status
+                </div>
+
+                <div className="mt-1 text-lg font-semibold text-slate-900">
+                  {integrity.hash_match ? "Hash Verified" : "Mismatch Detected"}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="mt-5 rounded-3xl border border-green-200 bg-green-50 p-6">
@@ -550,6 +566,19 @@ export default function PublicClaimPage() {
               The public surface presents performance and methodology, while the verification route
               acts as the canonical trust layer for independent validation, dispute resolution,
               and audit-grade verification.
+            </div>
+
+            <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-6">
+              <div className="text-base font-semibold text-slate-900">
+                Why this claim can be trusted
+              </div>
+
+              <div className="mt-3 space-y-2 text-sm text-slate-600">
+                <div>• Trade data is cryptographically hashed and verifiable</div>
+                <div>• Lifecycle state is enforced (draft → verified → locked)</div>
+                <div>• Public record is immutable once locked</div>
+                <div>• Independent verification route available</div>
+              </div>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -604,79 +633,75 @@ export default function PublicClaimPage() {
           ) : null}
 
           {verifyPath ? (
-            <div className="mt-6 grid gap-4 md:grid-cols-[1fr_220px]">
+            <div className="mt-6 grid gap-4 md:grid-cols-[1fr_220px] items-center">
+
               <div className="rounded-2xl border border-slate-200 bg-white p-5">
                 <div className="text-sm font-semibold text-slate-900">
-                  External Verification Access
+                  Scan to Independently Verify
                 </div>
+
                 <div className="mt-2 text-sm text-slate-600">
-                  Scan this QR code to open the canonical verification route. This ensures
-                  independent validation of claim integrity, lifecycle state, and fingerprint consistency.
+                  This QR code opens the canonical verification route.
+                  Use it to independently validate integrity, lifecycle state,
+                  and cryptographic fingerprint consistency.
                 </div>
               </div>
 
-              <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-white p-4">
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                    verifyPath
-                  )}`}
-                  alt="Verification QR"
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(verifyPath)}`}
                   className="h-[160px] w-[160px]"
                 />
+                <div className="text-xs text-slate-500">Scan to verify</div>
               </div>
+
             </div>
           ) : null}
 
-          <div className="mt-5 flex flex-wrap gap-3">
+          <div className="mt-6 flex flex-wrap gap-3 items-center">
+
+            {/* PRIMARY ACTION */}
+            {verifyPath && (
+              <button
+                onClick={() => window.open(verifyPath, "_blank")}
+                className="rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                Open Verification (Canonical)
+              </button>
+            )}
+
+            {/* SECONDARY */}
             <button
-              type="button"
               onClick={() => void handleCopyLink()}
-              disabled={copying}
-              className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
             >
-              {copying ? "Copying..." : "Copy Public Link"}
+              Copy Public Link
             </button>
 
-            {verifyPath ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => void handleCopyVerifyLink()}
-                  className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                >
-                  {verifyLinkCopied ? "Copied" : "Copy Verify Link"}
-                </button>
+            {verifyPath && (
+              <button
+                onClick={() => void handleCopyVerifyLink()}
+                className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+              >
+                Copy Verify Link
+              </button>
+            )}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (typeof window !== "undefined" && verifyPath) {
-                      window.open(verifyPath, "_blank", "noopener,noreferrer");
-                    }
-                  }}
-                  className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                >
-                  Open Verify Route
-                </button>
-              </>
-            ) : null}
-
+            {/* TERTIARY */}
             <button
-              type="button"
               onClick={() => void handleNativeShare()}
-              className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
+              className="text-sm text-slate-600 underline"
             >
               Share
             </button>
 
             <button
-              type="button"
               onClick={() => void handleCopyClaimHash()}
-              disabled={!claimHash}
-              className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="text-sm text-slate-600 underline"
             >
-              Copy Claim Hash
+              Copy Hash
             </button>
+
           </div>
 
           {linkMessage ? <div className="mt-3 text-sm text-slate-500">{linkMessage}</div> : null}
@@ -708,7 +733,7 @@ export default function PublicClaimPage() {
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
               <div className="text-xs uppercase tracking-wide text-slate-500">Claim hash</div>
-              <div className="mt-2 break-all font-mono text-sm text-slate-800">
+              <div className="mt-2 break-all font-mono text-xs text-slate-700 bg-slate-100 px-2 py-1 rounded">
                 {claimHash || "—"}
               </div>
               <div className="mt-2 text-sm text-slate-500">{shortHash(claimHash)}</div>
