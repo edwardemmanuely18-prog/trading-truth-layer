@@ -408,121 +408,17 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
     }
   }
 
-  const sequence = [
-    {
-      step: "STEP 1",
-      title: "Define Claim Identity",
-      detail:
-        "Set the claim name and reporting period. This anchors the record and its time-bounded verification scope.",
-    },
-    {
-      step: "STEP 2",
-      title: "Build Scope",
-      detail:
-        "Choose included members, symbols, and explicit exclusions so the evidence set is deterministic and reviewable.",
-    },
-    {
-      step: "STEP 3",
-      title: "Set Exposure",
-      detail:
-        "Choose private, unlisted, or public exposure so later lifecycle actions align with intended verification visibility.",
-    },
-    {
-      step: "STEP 4",
-      title: "Progress Lifecycle",
-      detail:
-        "After creation, move the draft through verify, publish, and lock to create a public trust-grade verification record.",
-    },
-  ];
+  
 
   return (
     <>
-      <div className="space-y-6">
-        <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-            <div>
-              <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700">
-                Guided claim creation
-              </div>
-
-              <h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-950">
-                Claims Schema Builder
-              </h2>
-
-              <p className="mt-4 max-w-4xl text-base leading-8 text-slate-700">
-                Define the exact scope, evidence universe, methodology, and exposure posture for a
-                lifecycle-governed performance claim. This page is the structured entry point for
-                creating claims that can later be verified, published, locked, and publicly audited.
-              </p>
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                <Pill className="border-slate-200 bg-slate-50 text-slate-700">
-                  draft-first workflow
-                </Pill>
-                <Pill className="border-slate-200 bg-slate-50 text-slate-700">
-                  scope-controlled evidence
-                </Pill>
-                <Pill className="border-slate-200 bg-slate-50 text-slate-700">
-                  public verification compatible
-                </Pill>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                <div className="text-xl font-semibold text-slate-950">Session State</div>
-                <div className="mt-3 text-base text-slate-700">
-                  Signed in and ready to create a governed draft claim.
-                </div>
-              </div>
-
-              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                <div className="text-xl font-semibold text-slate-950">Workspace Readiness</div>
-                {usageLoading ? (
-                  <div className="mt-3 text-base text-slate-600">Loading claim usage…</div>
-                ) : (
-                  <div className="mt-3 space-y-2 text-base text-slate-700">
-                    <div>Workspace #{workspaceId} available for claim operations.</div>
-                    <div>
-                      Claim usage: {claimUsage?.used ?? 0} / {claimUsage?.limit ?? "—"}
-                    </div>
-                    <div>Utilization: {formatPercent(claimUsage?.ratio)}</div>
-                    <div>
-                      Effective plan:{" "}
-                      <span className="font-semibold text-slate-950">{effectivePlanName}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="grid gap-4 xl:grid-cols-4">
-          {sequence.map((item) => (
-            <div
-              key={item.step}
-              className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm"
-            >
-              <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700">
-                {item.step}
-              </div>
-              <div className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
-                {item.title}
-              </div>
-              <div className="mt-3 text-base leading-7 text-slate-700">{item.detail}</div>
-            </div>
-          ))}
-        </section>
-
         <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <h3 className="text-3xl font-bold tracking-tight text-slate-950">Create Draft Claim</h3>
               <p className="mt-3 max-w-4xl text-base leading-8 text-slate-700">
                 Define the scope of a verification-ready performance claim. After creation, the draft
-                will open in the internal claim view for preview, editing, verification, publishing,
-                and locking.
+                opens in the internal claim view for review, verification, publishing, and locking.
               </p>
             </div>
 
@@ -584,7 +480,7 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
           ) : null}
 
           <form onSubmit={handleSubmit} className="mt-6">
-            <div className="grid gap-6 xl:grid-cols-[1.7fr_0.9fr_0.95fr]">
+            <div className="grid gap-6 xl:grid-cols-[1.65fr_0.95fr_0.8fr]">
               <div className="space-y-5">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700">Claim Name</label>
@@ -774,11 +670,17 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
 
               <div className="space-y-4">
                 <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                  <h3 className="text-xl font-semibold text-slate-950">Builder Rules</h3>
-                  <div className="mt-3 text-sm leading-7 text-slate-700">
-                    Claims should be created as drafts first. Scope and methodology should be
-                    finalized before verification, because downstream lifecycle transitions depend on
-                    this definition.
+                  <h3 className="text-xl font-semibold text-slate-950">Builder Guidance</h3>
+                  <div className="mt-3 space-y-3 text-sm leading-7 text-slate-700">
+                    <p>
+                      Claims should be created as drafts first. Scope and methodology should be
+                      finalized before verification because downstream lifecycle transitions depend on
+                      this definition.
+                    </p>
+                    <p>
+                      Recommended sequence: Create draft → review scope → verify claim → publish
+                      claim → lock claim → review public verification surface.
+                    </p>
                   </div>
                 </div>
 
@@ -786,14 +688,6 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
                   <h3 className="text-xl font-semibold text-slate-950">Visibility Guidance</h3>
                   <div className="mt-3 text-sm leading-7 text-slate-700">
                     {visibilitySummary(visibility)}
-                  </div>
-                </div>
-
-                <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                  <h3 className="text-xl font-semibold text-slate-950">Recommended Sequence</h3>
-                  <div className="mt-3 text-sm leading-7 text-slate-700">
-                    Create draft → review scope → verify claim → publish claim → lock claim → review
-                    public verification surface.
                   </div>
                 </div>
               </div>
@@ -865,7 +759,7 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
               <button
                 type="submit"
                 disabled={loading || usageLoading}
-                className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-2xl bg-slate-900 px-6 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? "Creating Draft..." : "Create Draft Claim"}
               </button>
@@ -881,7 +775,7 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
             </div>
           </form>
         </section>
-      </div>
+      
 
       <PaywallModal
         open={paywallState.open}
