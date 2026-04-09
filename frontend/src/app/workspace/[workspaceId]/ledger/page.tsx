@@ -134,8 +134,29 @@ export default function WorkspaceLedgerPage() {
   const [editTradeSuccess, setEditTradeSuccess] = useState<string | null>(null);
 
   const [deletingTradeId, setDeletingTradeId] = useState<number | null>(null);
+  // 🔥 Ledger filters
+  const [search, setSearch] = useState("");
+  const [symbolFilter, setSymbolFilter] = useState("");
+  const [sideFilter, setSideFilter] = useState("");
 
   const tradeUsage = usage?.usage?.trades;
+  // 🔥 Filtered trades
+  const filteredTrades = useMemo(() => {
+    return trades.filter((t) => {
+      const matchesSearch =
+        search === "" ||
+        t.symbol?.toLowerCase().includes(search.toLowerCase()) ||
+        String(t.member_id).includes(search);
+
+      const matchesSymbol =
+        symbolFilter === "" || t.symbol === symbolFilter;
+
+      const matchesSide =
+        sideFilter === "" || t.side === sideFilter;
+
+      return matchesSearch && matchesSymbol && matchesSide;
+    });
+  }, [trades, search, symbolFilter, sideFilter]);
   const tradeLimitReached =
     (tradeUsage?.limit ?? 0) > 0 && (tradeUsage?.used ?? 0) >= (tradeUsage?.limit ?? 0);
 
@@ -574,97 +595,49 @@ export default function WorkspaceLedgerPage() {
         </div>
 
         <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
-          <h2 className="text-xl font-semibold">Latest Audit Events</h2>
 
-          {latestAuditEvents.length === 0 ? (
-            <div className="mt-4 text-sm text-slate-500">No audit events found.</div>
-          ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-slate-500">
-                    <th className="px-3 py-2">ID</th>
-                    <th className="px-3 py-2">Event Type</th>
-                    <th className="px-3 py-2">Entity</th>
-                    <th className="px-3 py-2">Workspace</th>
-                    <th className="px-3 py-2">Created At</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {latestAuditEvents.map((event) => (
-                    <tr key={event.id} className="border-b last:border-0">
-                      <td className="px-3 py-2 font-medium">{event.id}</td>
-                      <td className="px-3 py-2">{event.event_type}</td>
-                      <td className="px-3 py-2">
-                        <div>{event.entity_type}</div>
-                        <div className="text-xs text-slate-500">{event.entity_id}</div>
-                      </td>
-                      <td className="px-3 py-2">{event.workspace_id ?? "—"}</td>
-                      <td className="px-3 py-2">{formatDateTime(event.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        {/* 🔥 Ledger Controls */}
+        <div className="mb-6 rounded-2xl border bg-white p-5 shadow-sm">
+          <h2 className="text-lg font-semibold mb-4">Ledger Controls</h2>
 
-        <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
-          <h2 className="text-xl font-semibold">Workspace Audit Ledger</h2>
+          <div className="grid gap-4 md:grid-cols-4">
+            <input
+              placeholder="Search symbol or member..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="rounded-xl border px-3 py-2 text-sm"
+            />
 
-          {workspaceAuditEvents.length === 0 ? (
-            <div className="mt-4 text-sm text-slate-500">No workspace audit events found.</div>
-          ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-slate-500">
-                    <th className="px-3 py-2">ID</th>
-                    <th className="px-3 py-2">Event</th>
-                    <th className="px-3 py-2">Entity</th>
-                    <th className="px-3 py-2">Old State</th>
-                    <th className="px-3 py-2">New State</th>
-                    <th className="px-3 py-2">Metadata</th>
-                    <th className="px-3 py-2">Created At</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {workspaceAuditEvents.map((event) => (
-                    <tr key={event.id} className="align-top border-b last:border-0">
-                      <td className="px-3 py-2 font-medium">{event.id}</td>
-                      <td className="px-3 py-2">{event.event_type}</td>
-                      <td className="px-3 py-2">
-                        <div>{event.entity_type}</div>
-                        <div className="text-xs text-slate-500">{event.entity_id}</div>
-                        {event.entity_type === "claim_schema" ? (
-                          <div className="mt-2">
-                            <Link
-                              href={`/workspace/${workspaceId}/claim/${event.entity_id}`}
-                              className="text-xs text-blue-600 hover:underline"
-                            >
-                              Open claim
-                            </Link>
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-slate-700">
-                        {summarizeJson(event.old_state)}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-slate-700">
-                        {summarizeJson(event.new_state)}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-slate-700">
-                        {summarizeJson(event.metadata_json)}
-                      </td>
-                      <td className="px-3 py-2">{formatDateTime(event.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+            <input
+              placeholder="Filter symbol (EURUSD)"
+              value={symbolFilter}
+              onChange={(e) => setSymbolFilter(e.target.value.toUpperCase())}
+              className="rounded-xl border px-3 py-2 text-sm"
+            />
 
+            <select
+              value={sideFilter}
+              onChange={(e) => setSideFilter(e.target.value)}
+              className="rounded-xl border px-3 py-2 text-sm"
+            >
+              <option value="">All Sides</option>
+              <option value="BUY">BUY</option>
+              <option value="SELL">SELL</option>
+            </select>
+
+            <button
+              onClick={() => {
+                setSearch("");
+                setSymbolFilter("");
+                setSideFilter("");
+              }}
+              className="rounded-xl border px-3 py-2 text-sm"
+            >
+              Reset Filters
+            </button>
+          </div>
+        </div>  
+          
         <div className="rounded-2xl border bg-white p-5 shadow-sm">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-semibold">Trade Ledger</h2>
@@ -1029,12 +1002,44 @@ export default function WorkspaceLedgerPage() {
           ) : null}
 
           <TradeTable
-            trades={trades}
+            trades={filteredTrades}
             canWriteTrades={canWriteTrades}
             onEditTrade={handleEditTrade}
             onDeleteTrade={handleDeleteTrade}
             deletingTradeId={deletingTradeId}
           />
+        </div>
+
+        <div className="mt-10 rounded-2xl border bg-white p-5 shadow-sm">
+          <h2 className="text-xl font-semibold">Audit Timeline</h2>
+
+          {workspaceAuditEvents.length === 0 ? (
+            <div className="mt-4 text-sm text-slate-500">No audit events found.</div>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-slate-500">
+                    <th className="px-3 py-2">Event</th>
+                    <th className="px-3 py-2">Entity</th>
+                    <th className="px-3 py-2">Summary</th>
+                    <th className="px-3 py-2">Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workspaceAuditEvents.map((event) => (
+                    <tr key={event.id} className="border-b">
+                      <td className="px-3 py-2">{event.event_type}</td>
+                      <td className="px-3 py-2">{event.entity_type}</td>
+                      <td className="px-3 py-2 text-xs">{summarizeJson(event.metadata_json)}</td>
+                      <td className="px-3 py-2">{formatDateTime(event.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            )}
+          </div>
         </div>
       </main>
     </div>
