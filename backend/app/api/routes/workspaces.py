@@ -65,7 +65,7 @@ def serialize_workspace_member(membership: WorkspaceMembership, user: User):
 
 
 def normalize_plan_code(plan_code: str | None) -> str:
-    allowed = {"starter", "pro", "growth", "business"}
+    allowed = {"sandbox", "starter", "pro", "growth", "business"}
     value = str(plan_code or "").strip().lower()
     return value if value in allowed else "starter"
 
@@ -91,11 +91,36 @@ def normalize_workspace_role(value: str | None) -> str:
 
 
 def get_plan_order() -> list[str]:
-    return ["starter", "pro", "growth", "business"]
+    return ["sandbox", "starter", "pro", "growth", "business"]
 
 
 def get_plan_catalog():
     return [
+        {
+            "code": "sandbox",
+            "name": "Sandbox",
+            "description": "Controlled evaluation environment for product proof and safe pre-billing exploration.",
+            "limits": {
+                "claim_limit": 2,
+                "trade_limit": 200,
+                "member_limit": 2,
+                "storage_limit_mb": 100,
+            },
+            "recommended_for": [
+                "internal demos",
+                "early product proof",
+                "controlled evaluation",
+            ],
+            "billing": {
+                "monthly_price_usd": 0,
+                "annual_price_usd": 0,
+                "currency": "USD",
+                "billing_interval": "none",
+                "stripe_price_lookup_key_monthly": None,
+                "stripe_price_lookup_key_annual": None,
+            },
+            "public_price_hint": "sandbox_controlled_evaluation",
+        },
         {
             "code": "starter",
             "name": "Starter",
@@ -216,8 +241,8 @@ def resolve_effective_plan_code(workspace: Workspace) -> str:
     configured_plan = normalize_plan_code(workspace.plan_code)
     billing_status = normalize_billing_status(workspace.billing_status)
 
-    if configured_plan == "starter":
-        return "starter"
+    if configured_plan in {"sandbox", "starter"}:
+        return configured_plan
 
     if is_paid_billing_status(billing_status):
         return configured_plan
@@ -248,7 +273,13 @@ def build_plan_governance_state(workspace: Workspace):
     plan_mismatch = configured_plan_code != effective_plan_code
     paid_access_active = is_paid_billing_status(billing_status)
 
-    if plan_mismatch and configured_plan_code != "starter":
+    if configured_plan_code == "sandbox":
+        reason = "sandbox_evaluation"
+        message = (
+            "Workspace is operating in the controlled evaluation environment. "
+            "Sandbox limits are active and no paid billing is required for this tier."
+        )
+    elif plan_mismatch and configured_plan_code != "starter":
         if billing_status == "pending_manual_review":
             reason = "pending_payment_review"
             message = (
@@ -404,7 +435,7 @@ def build_upgrade_recommendation(
                 "recommended_plan_is_distinct": False,
                 "upgrade_required_now": False,
                 "upgrade_recommended_soon": False,
-                "billing_activation_recommended": True,
+                "billing_activation_recommended": configured_normalized not in {"sandbox", "starter"},
                 "already_at_highest_tier": configured_index >= len(current_order) - 1,
                 "breached_dimensions": [],
                 "near_limit_dimensions": [],
@@ -423,7 +454,7 @@ def build_upgrade_recommendation(
                     "recommended_plan_is_distinct": True,
                     "upgrade_required_now": False,
                     "upgrade_recommended_soon": True,
-                    "billing_activation_recommended": True,
+                    "billing_activation_recommended": configured_normalized not in {"sandbox", "starter"},
                     "already_at_highest_tier": False,
                     "breached_dimensions": [],
                     "near_limit_dimensions": configured_near_limit_dimensions,
@@ -439,7 +470,7 @@ def build_upgrade_recommendation(
                 "recommended_plan_is_distinct": False,
                 "upgrade_required_now": False,
                 "upgrade_recommended_soon": False,
-                "billing_activation_recommended": True,
+                "billing_activation_recommended": configured_normalized not in {"sandbox", "starter"},
                 "already_at_highest_tier": True,
                 "breached_dimensions": [],
                 "near_limit_dimensions": configured_near_limit_dimensions,
@@ -485,7 +516,12 @@ def build_upgrade_recommendation(
         "recommended_plan_is_distinct": has_distinct_recommendation,
         "upgrade_required_now": has_breaches and has_distinct_recommendation,
         "upgrade_recommended_soon": (not has_breaches) and has_near_limits and has_distinct_recommendation,
-        "billing_activation_recommended": plan_mismatch and configured_index > effective_index and not has_distinct_recommendation,
+        "billing_activation_recommended": (
+            plan_mismatch
+            and configured_index > effective_index
+            and not has_distinct_recommendation
+            and configured_normalized not in {"sandbox", "starter"}
+        ),
         "already_at_highest_tier": already_at_highest_tier,
         "breached_dimensions": breached_dimensions,
         "near_limit_dimensions": near_limit_dimensions,
@@ -523,12 +559,12 @@ def create_workspace(
 ):
     workspace = Workspace(
         name=payload.name.strip(),
-        plan_code="starter",
+        plan_code="sandbox",
         billing_status="inactive",
-        claim_limit=5,
-        trade_limit=1000,
-        member_limit=3,
-        storage_limit_mb=500,
+        claim_limit=2,
+        trade_limit=200,
+        member_limit=2,
+        storage_limit_mb=100,
     )
     db.add(workspace)
     db.flush()
@@ -707,7 +743,7 @@ def get_workspace_usage(
         "stripe_ready": {
             "has_customer_id": bool(workspace.stripe_customer_id),
             "has_subscription_id": bool(workspace.stripe_subscription_id),
-            "integration_status": "ready_for_stripe_foundation",
+            "integration_status": "fallback_only",
         },
         "governance": {
             "has_any_over_limit": any(row["status"] == "over_limit" for row in usage.values()),
