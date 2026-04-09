@@ -6,6 +6,7 @@ import { useParams, usePathname } from "next/navigation";
 import {
   api,
   type AuditEvent,
+  type ClaimDispute,
   type ClaimEquityCurve,
   type ClaimIntegrityResult,
   type ClaimSchema,
@@ -14,7 +15,6 @@ import {
   type ClaimTradeScopeReason,
   type ClaimTradeScopeRow,
   type ClaimVersion,
-  type ClaimDispute,
   type WorkspaceUsageSummary,
 } from "../../../../../lib/api";
 import Navbar from "../../../../../components/Navbar";
@@ -63,14 +63,9 @@ function resolveCanonicalLineage(row: {
   parent_claim_id?: number | null;
   version_number?: number | null;
 }) {
-  const rootClaimId =
-    typeof row?.root_claim_id === "number" ? row.root_claim_id : null;
-
-  const parentClaimId =
-    typeof row?.parent_claim_id === "number" ? row.parent_claim_id : null;
-
-  const versionNumber =
-    typeof row?.version_number === "number" ? row.version_number : 1;
+  const rootClaimId = typeof row?.root_claim_id === "number" ? row.root_claim_id : null;
+  const parentClaimId = typeof row?.parent_claim_id === "number" ? row.parent_claim_id : null;
+  const versionNumber = typeof row?.version_number === "number" ? row.version_number : 1;
 
   return {
     rootClaimId,
@@ -330,21 +325,6 @@ function HashCard({
   );
 }
 
-function GovernanceCard({
-  title,
-  body,
-}: {
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-      <div className="mt-2 text-sm leading-6 text-slate-600">{body}</div>
-    </div>
-  );
-}
-
 function PageNavButton({
   href,
   label,
@@ -470,7 +450,6 @@ function GovernanceOverview({
   integrity: ClaimIntegrityResult | null;
 }) {
   const latestEvent = auditEvents[0] ?? null;
-  const lineageDepth = versions.length;
   const lineageSummary = buildLineageSummary(claim);
   const networkLabel = resolveNetworkLabel(claim);
   const networkClassName = networkTone(claim);
@@ -497,9 +476,11 @@ function GovernanceOverview({
         </span>
       </div>
 
-      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${networkClassName}`}>
-        network: {normalizeText(resolveClaimOriginType(claim))}
-      </span>
+      <div className="mt-3">
+        <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${networkClassName}`}>
+          network: {normalizeText(resolveClaimOriginType(claim))}
+        </span>
+      </div>
 
       <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -739,12 +720,12 @@ function UpgradeContextCard({
   const claimUsage = usage?.usage?.claims;
   const currentPlanName =
     usage?.plan_catalog?.find(
-      (plan) => normalizeText(plan.code) === normalizeText(usage?.plan_code)
+      (plan) => normalizeText(plan.code) === normalizeText(usage?.plan_code),
     )?.name || usage?.plan_code || "—";
 
   const effectivePlanName =
     usage?.plan_catalog?.find(
-      (plan) => normalizeText(plan.code) === normalizeText(usage?.effective_plan_code)
+      (plan) => normalizeText(plan.code) === normalizeText(usage?.effective_plan_code),
     )?.name ||
     usage?.effective_plan_code ||
     currentPlanName;
@@ -995,12 +976,10 @@ function ClaimGraph({
             <Link
               href={`/workspace/${workspaceId}/claim/${node.id}`}
               className={`min-w-[160px] rounded-2xl border px-4 py-3 shadow-sm transition hover:shadow ${graphNodeTone(
-                node.role
+                node.role,
               )}`}
             >
-              <div className="text-xs uppercase tracking-wide opacity-80">
-                {node.role}
-              </div>
+              <div className="text-xs uppercase tracking-wide opacity-80">{node.role}</div>
               <div className="mt-1 text-sm font-semibold">{node.label}</div>
               <div className="mt-1 text-xs opacity-80">{node.description}</div>
             </Link>
@@ -1018,16 +997,12 @@ function ClaimGraph({
       <div className="mt-5 grid gap-3 md:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
           <div className="font-medium text-slate-900">Root</div>
-          <div className="mt-1">
-            {rootId ? `claim#${rootId}` : "self-originated"}
-          </div>
+          <div className="mt-1">{rootId ? `claim#${rootId}` : "self-originated"}</div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
           <div className="font-medium text-slate-900">Parent</div>
-          <div className="mt-1">
-            {parentId ? `claim#${parentId}` : "no direct parent"}
-          </div>
+          <div className="mt-1">{parentId ? `claim#${parentId}` : "no direct parent"}</div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
@@ -1047,7 +1022,7 @@ export default function WorkspaceClaimDetailPage() {
   const workspaceId = useMemo(
     () =>
       Number(Array.isArray(params?.workspaceId) ? params.workspaceId[0] : params?.workspaceId),
-    [params]
+    [params],
   );
   const idParam = params?.id;
   const claimId = useMemo(() => Number(Array.isArray(idParam) ? idParam[0] : idParam), [idParam]);
@@ -1076,16 +1051,12 @@ export default function WorkspaceClaimDetailPage() {
   const [equityCurve, setEquityCurve] = useState<ClaimEquityCurve | null>(null);
   const [claimTrades, setClaimTrades] = useState<ClaimTradeEvidence | null>(null);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
-  // ===============================
-  // Phase 9 — Claim Disputes State
-  // ===============================
-  
   const [disputes, setDisputes] = useState<ClaimDispute[]>([]);
-  const [loadingDisputes, setLoadingDisputes] = useState(false);
-  const [creatingDispute, setCreatingDispute] = useState(false);
 
+  const [creatingDispute, setCreatingDispute] = useState(false);
   const [newDisputeSummary, setNewDisputeSummary] = useState("");
   const [newDisputeReason, setNewDisputeReason] = useState("general_review");
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [checkingIntegrity, setCheckingIntegrity] = useState(false);
@@ -1098,23 +1069,20 @@ export default function WorkspaceClaimDetailPage() {
 
   const effectivePlanCode = usage?.effective_plan_code || usage?.plan_code || null;
   const isSandbox = isSandboxPlan(effectivePlanCode);
-
   const isBlockedByPlan = !qaOverrideActive && claimLimitReached;
 
   const effectivePlanName =
     usage?.plan_catalog?.find(
-      (plan) => normalizeText(plan.code) === normalizeText(effectivePlanCode)
+      (plan) => normalizeText(plan.code) === normalizeText(effectivePlanCode),
     )?.name || effectivePlanCode || "—";
 
   const configuredPlanName =
     usage?.plan_catalog?.find(
-      (plan) => normalizeText(plan.code) === normalizeText(usage?.plan_code)
+      (plan) => normalizeText(plan.code) === normalizeText(usage?.plan_code),
     )?.name || usage?.plan_code || "—";
 
   const claimStatusNormalized = normalizeText(claim?.status);
   const claimVisibilityNormalized = normalizeText(claim?.visibility);
-  const sandboxPublicBlocked =
-  isSandbox && claimVisibilityNormalized === "public";
 
   const publicRouteReady =
     claimVisibilityNormalized === "public" &&
@@ -1140,12 +1108,11 @@ export default function WorkspaceClaimDetailPage() {
   const internalHref = `/workspace/${workspaceId}/claim/${claimId}`;
   const evidenceHref = `/workspace/${workspaceId}/evidence?claimId=${claimId}`;
   const verifyRouteHref =
-  ((claim as ClaimSchema & { verify_path?: string | null })?.verify_path ?? null) ||
-  (claim?.claim_hash ? `/verify/${claim.claim_hash}` : null);
-  
-  const canOpenVerifySurface = Boolean(
-    (publicRouteReady || unlistedRouteReady) && verifyRouteHref
-  );
+    ((claim as ClaimSchema & { verify_path?: string | null })?.verify_path ?? null) ||
+    (claim?.claim_hash ? `/verify/${claim.claim_hash}` : null);
+
+  const canOpenVerifySurface = Boolean((publicRouteReady || unlistedRouteReady) && verifyRouteHref);
+
   const publicViewHref =
     claimStatusNormalized === "published" || claimStatusNormalized === "locked"
       ? `/claim/${claimId}/public`
@@ -1160,17 +1127,25 @@ export default function WorkspaceClaimDetailPage() {
     setError(null);
 
     try {
-      const [claimRes, previewRes, versionsRes, auditRes, equityRes, tradesRes, usageRes, disputesRes] =
-        await Promise.all([
-          api.getClaimSchema(claimId),
-          api.getClaimPreview(claimId),
-          api.getClaimVersions(claimId),
-          api.getAuditEventsForEntity("claim_schema", claimId),
-          api.getClaimEquityCurve(claimId),
-          api.getClaimTrades(claimId).catch(() => emptyTradeEvidence(claimId)),
-          api.getWorkspaceUsage(workspaceId).catch(() => null),
-          api.getClaimDisputes(claimId).catch(() => []),
-        ]);
+      const [
+        claimRes,
+        previewRes,
+        versionsRes,
+        auditRes,
+        equityRes,
+        tradesRes,
+        usageRes,
+        disputesRes,
+      ] = await Promise.all([
+        api.getClaimSchema(claimId),
+        api.getClaimPreview(claimId),
+        api.getClaimVersions(claimId),
+        api.getAuditEventsForEntity("claim_schema", claimId),
+        api.getClaimEquityCurve(claimId),
+        api.getClaimTrades(claimId).catch(() => emptyTradeEvidence(claimId)),
+        api.getWorkspaceUsage(workspaceId).catch(() => null),
+        api.getClaimDisputes(claimId).catch(() => []),
+      ]);
 
       setClaim(claimRes);
       setPreview(previewRes);
@@ -1233,14 +1208,10 @@ export default function WorkspaceClaimDetailPage() {
       setClaim(updated);
       await loadClaimPage();
     },
-    [loadClaimPage]
+    [loadClaimPage],
   );
 
   const handleIntegrityCheck = useCallback(async () => {
-    // ===============================
-    // Phase 9 — Create Dispute
-    // ===============================
-    
     if (!claimId) return;
     setCheckingIntegrity(true);
     setError(null);
@@ -1263,52 +1234,58 @@ export default function WorkspaceClaimDetailPage() {
   }, [claimId]);
 
   const handleCreateDispute = useCallback(async () => {
-  if (!claimId || !newDisputeSummary.trim()) return;
+    if (!claimId || !newDisputeSummary.trim()) return;
 
-  setCreatingDispute(true);
+    setCreatingDispute(true);
 
-  try {
-    await api.createClaimDispute(claimId, {
-      summary: newDisputeSummary.trim(),
-      reason_code: newDisputeReason,
-    });
+    try {
+      await api.createClaimDispute(claimId, {
+        summary: newDisputeSummary.trim(),
+        reason_code: newDisputeReason,
+      });
 
-    setNewDisputeSummary("");
-    setNewDisputeReason("general_review");
+      setNewDisputeSummary("");
+      setNewDisputeReason("general_review");
 
-    await loadClaimPage();
-  } catch (err) {
-    setError(err instanceof Error ? err.message : "Failed to create dispute");
-  } finally {
-    setCreatingDispute(false);
-  }
-}, [claimId, newDisputeSummary, newDisputeReason, loadClaimPage]);
+      await loadClaimPage();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create dispute");
+    } finally {
+      setCreatingDispute(false);
+    }
+  }, [claimId, newDisputeSummary, newDisputeReason, loadClaimPage]);
 
-  const handleResolveDispute = useCallback(async (id: number) => {
-  try {
-    await api.updateClaimDisputeStatus(id, {
-      status: "resolved",
-      resolution_note: "Resolved via internal review",
-    });
+  const handleResolveDispute = useCallback(
+    async (id: number) => {
+      try {
+        await api.updateClaimDisputeStatus(id, {
+          status: "resolved",
+          resolution_note: "Resolved via internal review",
+        });
 
-    await loadClaimPage();
-  } catch {
-    setError("Failed to resolve dispute");
-  }
-}, [loadClaimPage]);
+        await loadClaimPage();
+      } catch {
+        setError("Failed to resolve dispute");
+      }
+    },
+    [loadClaimPage],
+  );
 
-const handleRejectDispute = useCallback(async (id: number) => {
-  try {
-    await api.updateClaimDisputeStatus(id, {
-      status: "rejected",
-      resolution_note: "Rejected after review",
-    });
+  const handleRejectDispute = useCallback(
+    async (id: number) => {
+      try {
+        await api.updateClaimDisputeStatus(id, {
+          status: "rejected",
+          resolution_note: "Rejected after review",
+        });
 
-    await loadClaimPage();
-  } catch {
-    setError("Failed to reject dispute");
-  }
-}, [loadClaimPage]);
+        await loadClaimPage();
+      } catch {
+        setError("Failed to reject dispute");
+      }
+    },
+    [loadClaimPage],
+  );
 
   if (!workspaceId || Number.isNaN(workspaceId)) {
     return <div className="p-6 text-red-600">Invalid workspace id.</div>;
@@ -1419,7 +1396,12 @@ const handleRejectDispute = useCallback(async (id: number) => {
               {publicViewHref && !isSandbox ? (
                 <PageNavButton href={publicViewHref} label="Public View" active={false} />
               ) : publicViewHref && isSandbox ? (
-                <PageNavButton href={publicViewHref} label="Public (Locked in Sandbox)" active={false} disabled />
+                <PageNavButton
+                  href={publicViewHref}
+                  label="Public (Locked in Sandbox)"
+                  active={false}
+                  disabled
+                />
               ) : null}
               {verifyRouteHref ? (
                 <PageNavButton href={verifyRouteHref} label="Verify Route" active={false} />
@@ -1538,19 +1520,17 @@ const handleRejectDispute = useCallback(async (id: number) => {
 
         {isSandbox ? (
           <div className="rounded-2xl border border-violet-200 bg-violet-50 p-5 shadow-sm">
-            <div className="text-sm font-semibold text-violet-900">
-              Sandbox Evaluation Environment
-            </div>
+            <div className="text-sm font-semibold text-violet-900">Sandbox Evaluation Environment</div>
 
             <div className="mt-2 text-sm text-violet-800">
-              This workspace is operating under a controlled evaluation tier. 
-              Claim creation, versioning, and verification flows are available, 
-              but public exposure and high-capacity usage are intentionally constrained.
+              This workspace is operating under a controlled evaluation tier. Claim creation,
+              versioning, and verification flows are available, but public exposure and high-capacity
+              usage are intentionally constrained.
             </div>
 
             <div className="mt-3 text-xs text-violet-700">
-              Use unlisted verification links for sharing during evaluation. 
-              Upgrade to unlock full public claim distribution and higher capacity limits.
+              Use unlisted verification links for sharing during evaluation. Upgrade to unlock full
+              public claim distribution and higher capacity limits.
             </div>
           </div>
         ) : null}
@@ -1573,23 +1553,20 @@ const handleRejectDispute = useCallback(async (id: number) => {
           integrity={integrity}
         />
 
-        {disputes.length > 0 && (
+        {disputes.length > 0 ? (
           <div className="rounded-2xl border border-red-300 bg-red-50 p-5 shadow-sm">
-            <div className="text-sm font-semibold text-red-900">
-              Governance Challenge Active
-            </div>
+            <div className="text-sm font-semibold text-red-900">Governance Challenge Active</div>
 
             <div className="mt-2 text-sm text-red-800">
-              {disputes.length} dispute(s) detected.
-              This claim is in a contested trust state.
+              {disputes.length} dispute(s) detected. This claim is in a contested trust state.
             </div>
 
             <div className="mt-2 text-xs text-red-700">
-              Public credibility, leaderboard ranking, and verification trust
-              should be treated as degraded until disputes are resolved.
+              Public credibility, leaderboard ranking, and verification trust should be treated as
+              degraded until disputes are resolved.
             </div>
           </div>
-        )}
+        ) : null}
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard
@@ -1597,11 +1574,7 @@ const handleRejectDispute = useCallback(async (id: number) => {
             value={String(preview.trade_count ?? 0)}
             hint="Total in-scope evidence rows"
           />
-          <MetricCard
-            label="Net PnL"
-            value={formatNumber(preview.net_pnl)}
-            hint="Aggregate net result"
-          />
+          <MetricCard label="Net PnL" value={formatNumber(preview.net_pnl)} hint="Aggregate net result" />
           <MetricCard
             label="Profit Factor"
             value={formatNumber(preview.profit_factor, 4)}
@@ -1614,132 +1587,43 @@ const handleRejectDispute = useCallback(async (id: number) => {
           />
         </section>
 
-        {/* ===============================
-          Phase 9 — Dispute Panel
-        ================================ */}
-        <section className="rounded-2xl border bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Disputes & Challenges</h2>
-          </div>
+        <section className="space-y-6">
+          <section className="grid gap-6 xl:grid-cols-[1.3fr_1fr]">
+            <HashCard
+              title="Claim Hash"
+              value={claim.claim_hash || preview.claim_hash || null}
+              copyLabel="Copy Claim Hash"
+            />
+            <HashCard
+              title="Locked Trade Set Hash"
+              value={claim.locked_trade_set_hash || null}
+              copyLabel="Copy Trade Set Hash"
+            />
+          </section>
 
-          {/* Create Dispute */}
-          {!isMember && (
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="text-sm font-medium">Raise a dispute</div>
+          {equityCurve ? (
+            <EquityCurveChart title="Internal Equity Curve" points={equityCurve.curve} />
+          ) : null}
 
-              <textarea
-                value={newDisputeSummary}
-                onChange={(e) => setNewDisputeSummary(e.target.value)}
-                placeholder="Describe the issue with this claim..."
-                className="mt-2 w-full rounded-lg border p-2 text-sm"
-              />
+          <ScopeSummaryCard evidence={claimTrades} />
 
-              <div className="mt-2 flex gap-2">
-                <button
-                  onClick={handleCreateDispute}
-                  disabled={creatingDispute}
-                  className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
-                >
-                  {creatingDispute ? "Submitting..." : "Submit Dispute"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Dispute List */}
-          <div className="mt-4 space-y-3">
-            {disputes.length === 0 ? (
-              <div className="text-sm text-slate-500">
-                No disputes raised for this claim.
-              </div>
-            ) : (
-              disputes.map((d) => (
-                <div
-                  key={d.id}
-                  className="rounded-xl border border-slate-200 bg-slate-50 p-4"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="text-sm font-semibold">
-                        {d.challenge_type}
-                      </div>
-                      <div className="text-xs text-slate-500 mt-1">
-                        {d.reason_code}
-                      </div>
-                    </div>
-
-                    <span className="text-xs font-medium">
-                      {d.status}
-                    </span>
-                  </div>
-
-                  <div className="mt-2 text-sm text-slate-700">
-                    {d.summary}
-                  </div>
-
-                  <div className="mt-2 text-xs text-slate-500">
-                    {formatDateTime(d.opened_at)}
-                  </div>
-
-                  {/* Resolution actions */}
-                  {canManageClaimActions && d.status === "open" && (
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        onClick={() => handleResolveDispute(d.id)}
-                        className="rounded-lg bg-green-600 px-3 py-1 text-xs text-white"
-                      >
-                        Resolve
-                      </button>
-
-                      <button
-                        onClick={() => handleRejectDispute(d.id)}
-                        className="rounded-lg bg-red-600 px-3 py-1 text-xs text-white"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-
-        <section className="grid gap-6 xl:grid-cols-[1.3fr_1fr]">
-          <HashCard
-            title="Claim Hash"
-            value={claim.claim_hash || preview.claim_hash || null}
-            copyLabel="Copy Claim Hash"
+          <ScopeTradesTable
+            title="Included Trades"
+            subtitle="Exact in-scope trades used to compute this claim, ordered by trade open time."
+            rows={claimTrades?.included_trades ?? []}
+            emptyText="No included trades were found for this claim."
           />
-          <HashCard
-            title="Locked Trade Set Hash"
-            value={claim.locked_trade_set_hash || null}
-            copyLabel="Copy Trade Set Hash"
+
+          <ScopeTradesTable
+            title="Excluded Trades"
+            subtitle="Trades excluded from the claim scope, with explicit exclusion reasons."
+            rows={claimTrades?.excluded_trades ?? []}
+            emptyText="No excluded trades were found for this claim."
+            showExclusionColumns={true}
           />
         </section>
 
-        {equityCurve ? (
-          <EquityCurveChart title="Internal Equity Curve" points={equityCurve.curve} />
-        ) : null}
-
-        <ScopeSummaryCard evidence={claimTrades} />
-
-        <ScopeTradesTable
-          title="Included Trades"
-          subtitle="Exact in-scope trades used to compute this claim, ordered by trade open time."
-          rows={claimTrades?.included_trades ?? []}
-          emptyText="No included trades were found for this claim."
-        />
-
-        <ScopeTradesTable
-          title="Excluded Trades"
-          subtitle="Trades excluded from the claim scope, with explicit exclusion reasons."
-          rows={claimTrades?.excluded_trades ?? []}
-          emptyText="No excluded trades were found for this claim."
-          showExclusionColumns={true}
-        />
-
-        <div className="grid gap-6 lg:grid-cols-3">
+                <div className="grid gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
             <div className="rounded-2xl border bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between gap-3">
@@ -1812,15 +1696,7 @@ const handleRejectDispute = useCallback(async (id: number) => {
                 ) : null}
               </div>
 
-              <div className="mt-5 grid gap-6 xl:grid-cols-[1.1fr_1fr]">
-                <UpgradeContextCard
-                  usage={usage}
-                  claimLimitReached={claimLimitReached}
-                  qaOverrideActive={qaOverrideActive}
-                  workspaceId={workspaceId}
-                  canManageActions={canManageClaimActions}
-                />
-
+              <div className="mt-5 grid gap-6 xl:grid-cols-[1fr_1.1fr]">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                   <div className="text-sm font-semibold text-slate-900">Action governance note</div>
                   <div className="mt-2 text-sm leading-6 text-slate-600">
@@ -1861,6 +1737,14 @@ const handleRejectDispute = useCallback(async (id: number) => {
                     </div>
                   </div>
                 </div>
+
+                <UpgradeContextCard
+                  usage={usage}
+                  claimLimitReached={claimLimitReached}
+                  qaOverrideActive={qaOverrideActive}
+                  workspaceId={workspaceId}
+                  canManageActions={canManageClaimActions}
+                />
               </div>
 
               {isBlockedByPlan ? (
@@ -1894,8 +1778,8 @@ const handleRejectDispute = useCallback(async (id: number) => {
                       : ""}
                   </div>
                   <div className="mt-2">
-                    This workspace is over the normal claim plan limit, but version creation
-                    remains enabled in this local QA environment.
+                    This workspace is over the normal claim plan limit, but version creation remains
+                    enabled in this local QA environment.
                   </div>
                 </div>
               ) : null}
@@ -1953,6 +1837,84 @@ const handleRejectDispute = useCallback(async (id: number) => {
               </div>
             </div>
 
+            <section className="rounded-2xl border bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold">Disputes & Challenges</h2>
+              </div>
+
+              {!isMember ? (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm font-medium">Raise a dispute</div>
+
+                  <textarea
+                    value={newDisputeSummary}
+                    onChange={(e) => setNewDisputeSummary(e.target.value)}
+                    placeholder="Describe the issue with this claim..."
+                    className="mt-2 w-full rounded-lg border p-2 text-sm"
+                  />
+
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleCreateDispute()}
+                      disabled={creatingDispute}
+                      className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
+                    >
+                      {creatingDispute ? "Submitting..." : "Submit Dispute"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="mt-4 space-y-3">
+                {disputes.length === 0 ? (
+                  <div className="text-sm text-slate-500">No disputes raised for this claim.</div>
+                ) : (
+                  disputes.map((d) => (
+                    <div
+                      key={d.id}
+                      className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="text-sm font-semibold">{d.challenge_type}</div>
+                          <div className="mt-1 text-xs text-slate-500">{d.reason_code}</div>
+                        </div>
+
+                        <span className="text-xs font-medium">{d.status}</span>
+                      </div>
+
+                      <div className="mt-2 text-sm text-slate-700">{d.summary}</div>
+
+                      <div className="mt-2 text-xs text-slate-500">{formatDateTime(d.opened_at)}</div>
+
+                      {canManageClaimActions && d.status === "open" ? (
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleResolveDispute(d.id)}
+                            className="rounded-lg bg-green-600 px-3 py-1 text-xs text-white"
+                          >
+                            Resolve
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => void handleRejectDispute(d.id)}
+                            className="rounded-lg bg-red-600 px-3 py-1 text-xs text-white"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+
+            <AuditTimeline events={auditEvents} />
+
             <div className="rounded-2xl border bg-white p-5 shadow-sm">
               <h2 className="text-xl font-semibold">Leaderboard</h2>
               {preview.leaderboard.length === 0 ? (
@@ -1984,8 +1946,6 @@ const handleRejectDispute = useCallback(async (id: number) => {
                 </div>
               )}
             </div>
-
-            <AuditTimeline events={auditEvents} />
           </div>
 
           <div className="space-y-6">
@@ -1993,7 +1953,8 @@ const handleRejectDispute = useCallback(async (id: number) => {
               <h2 className="text-xl font-semibold">Lineage & Claim Graph</h2>
 
               <div className="mt-2 text-sm text-slate-500">
-                Visual lineage map for root, parent, and current claim nodes inside the governed claim network.
+                Visual lineage map for root, parent, and current claim nodes inside the governed
+                claim network.
               </div>
 
               <ClaimGraph
@@ -2093,36 +2054,6 @@ const handleRejectDispute = useCallback(async (id: number) => {
             </div>
 
             <div className="rounded-2xl border bg-white p-5 shadow-sm">
-              <h2 className="text-xl font-semibold">Exposure Controls</h2>
-              <div className="mt-4 space-y-4 text-sm text-slate-700">
-                <div className="rounded-xl bg-slate-50 p-4">
-                  <div className="font-medium">Private</div>
-                  <div className="mt-1 text-slate-600">Internal-only claim visibility.</div>
-                </div>
-
-                <div className="rounded-xl bg-slate-50 p-4">
-                  <div className="font-medium">Unlisted</div>
-                  <div className="mt-1 text-slate-600">
-                    Non-directory exposure through direct verification path.
-                  </div>
-                </div>
-
-                <div className={`rounded-xl p-4 ${
-                  isSandbox
-                    ? "bg-slate-100 border border-slate-200 text-slate-500"
-                    : "bg-slate-50"
-                }`}>
-                  <div className="font-medium">Public</div>
-                  <div className="mt-1">
-                    {isSandbox
-                      ? "Public exposure is restricted in Sandbox. Use unlisted verification instead."
-                      : "Public directory and verification-ready exposure when lifecycle permits."}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border bg-white p-5 shadow-sm">
               <h2 className="text-xl font-semibold">Governance Guidance</h2>
               <div className="mt-4 space-y-4 text-sm text-slate-700">
                 <div className="rounded-xl bg-slate-50 p-4">
@@ -2148,6 +2079,15 @@ const handleRejectDispute = useCallback(async (id: number) => {
                     the point where external verification and dispute readiness become durable.
                   </div>
                 </div>
+
+                <div className="rounded-xl bg-slate-50 p-4">
+                  <div className="font-medium">Trust network principle</div>
+                  <div className="mt-1 text-slate-600">
+                    A trustworthy claim is not only a metric summary. It is a governed network node
+                    with preserved lineage, visible audit events, explainable scope, controlled
+                    exposure, and verifiable integrity.
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2171,10 +2111,37 @@ const handleRejectDispute = useCallback(async (id: number) => {
               </div>
             </div>
 
-            <GovernanceCard
-              title="Trust network principle"
-              body="A trustworthy claim is not only a metric summary. It is a governed network node with preserved lineage, visible audit events, explainable scope, controlled exposure, and verifiable integrity."
-            />
+            <div className="rounded-2xl border bg-white p-5 shadow-sm">
+              <h2 className="text-xl font-semibold">Exposure Controls</h2>
+              <div className="mt-4 space-y-4 text-sm text-slate-700">
+                <div className="rounded-xl bg-slate-50 p-4">
+                  <div className="font-medium">Private</div>
+                  <div className="mt-1 text-slate-600">Internal-only claim visibility.</div>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 p-4">
+                  <div className="font-medium">Unlisted</div>
+                  <div className="mt-1 text-slate-600">
+                    Non-directory exposure through direct verification path.
+                  </div>
+                </div>
+
+                <div
+                  className={`rounded-xl p-4 ${
+                    isSandbox
+                      ? "border border-slate-200 bg-slate-100 text-slate-500"
+                      : "bg-slate-50"
+                  }`}
+                >
+                  <div className="font-medium">Public</div>
+                  <div className="mt-1">
+                    {isSandbox
+                      ? "Public exposure is restricted in Sandbox. Use unlisted verification instead."
+                      : "Public directory and verification-ready exposure when lifecycle permits."}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </main>
