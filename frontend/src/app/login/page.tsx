@@ -18,27 +18,61 @@ function LoginPageInner() {
     [searchParams]
   );
 
-  const redirect = useMemo(
-    () => searchParams.get("redirect") || null,
-    [searchParams]
-  );
+  const redirect = useMemo(() => searchParams.get("redirect") || null, [searchParams]);
 
-  const [email, setEmail] = useState("owner@tradingtruthlayer.com");
-  const [password, setPassword] = useState("OwnerPass123!");
+  const prefilledEmail = useMemo(() => searchParams.get("email") || "", [searchParams]);
+
+  const [email, setEmail] = useState(prefilledEmail);
+  const [password, setPassword] = useState("");
+
+  const inviteRedirect = useMemo(() => {
+    if (!inviteToken) return null;
+    return `/invite/${encodeURIComponent(inviteToken)}`;
+  }, [inviteToken]);
+
+  const finalRedirect = useMemo(() => {
+    if (redirect) return redirect;
+    if (inviteRedirect) return inviteRedirect;
+    return null;
+  }, [redirect, inviteRedirect]);
+
+  const registerHref = useMemo(() => {
+    const params = new URLSearchParams();
+
+    if (inviteToken) {
+      params.set("token", inviteToken);
+    }
+
+    if (finalRedirect) {
+      params.set("redirect", finalRedirect);
+    }
+
+    if (email.trim()) {
+      params.set("email", email.trim());
+    } else if (prefilledEmail.trim()) {
+      params.set("email", prefilledEmail.trim());
+    }
+
+    const query = params.toString();
+    return query ? `/register?${query}` : "/register";
+  }, [inviteToken, finalRedirect, email, prefilledEmail]);
+
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (prefilledEmail) {
+      setEmail(prefilledEmail);
+    }
+  }, [prefilledEmail]);
 
   useEffect(() => {
     if (authLoading) return;
     if (!isAuthenticated || !user) return;
 
-    if (inviteToken) {
-      router.replace(`/invites/accept?token=${encodeURIComponent(inviteToken)}`);
-      return;
-    }
-
-    if (redirect) {
-      router.replace(redirect);
+    if (finalRedirect) {
+      router.replace(finalRedirect);
       return;
     }
 
@@ -56,7 +90,7 @@ function LoginPageInner() {
     }
 
     router.replace("/");
-  }, [authLoading, isAuthenticated, user, inviteToken, redirect, workspaces, router]);
+  }, [authLoading, isAuthenticated, user, finalRedirect, workspaces, router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -65,18 +99,12 @@ function LoginPageInner() {
       setLoading(true);
       setError(null);
 
-      const result = await api.login({ email, password });
+      const result = await api.login({
+        email: email.trim(),
+        password,
+      });
+
       await refresh();
-
-      if (inviteToken) {
-        router.push(`/invites/accept?token=${encodeURIComponent(inviteToken)}`);
-        return;
-      }
-
-      if (redirect) {
-        router.push(redirect);
-        return;
-      }
 
       const firstWorkspace = result.workspaces?.[0];
 
@@ -89,6 +117,11 @@ function LoginPageInner() {
             String(firstWorkspace.workspace_id)
           );
         }
+      }
+
+      if (finalRedirect) {
+        router.push(finalRedirect);
+        return;
       }
 
       if (firstWorkspace) {
@@ -130,7 +163,13 @@ function LoginPageInner() {
 
         {inviteToken ? (
           <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-            Sign in to accept your workspace invite after authentication.
+            Sign in with the invited email to continue to workspace invite acceptance.
+          </div>
+        ) : null}
+
+        {redirect && !inviteToken ? (
+          <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+            Sign in to continue to your requested page.
           </div>
         ) : null}
 
@@ -142,6 +181,7 @@ function LoginPageInner() {
               className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
               required
             />
           </div>
@@ -153,6 +193,7 @@ function LoginPageInner() {
               className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
               required
             />
           </div>
@@ -174,10 +215,7 @@ function LoginPageInner() {
 
         <div className="mt-6 border-t pt-4 text-sm text-slate-600">
           Need an account?{" "}
-          <Link
-            href={inviteToken ? `/register?token=${encodeURIComponent(inviteToken)}` : "/register"}
-            className="font-medium text-slate-900 hover:underline"
-          >
+          <Link href={registerHref} className="font-medium text-slate-900 hover:underline">
             Create one
           </Link>
         </div>
