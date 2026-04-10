@@ -52,6 +52,10 @@ function formatErrorMessage(raw: string) {
     return "You need to sign in before accepting this invite.";
   }
 
+  if (text.includes("Invite email does not match authenticated user")) {
+    return "The invited email does not match the account currently signed in.";
+  }
+
   try {
     const parsed = JSON.parse(text);
     const detail = parsed?.detail;
@@ -77,13 +81,17 @@ function getErrorTone(message: string) {
     return "red";
   }
 
+  if (lower.includes("does not match")) {
+    return "blue";
+  }
+
   return "red";
 }
 
 export default function InviteAcceptPage() {
   const params = useParams();
   const router = useRouter();
-  const { refresh } = useAuth();
+  const { user, refresh, logout } = useAuth();
 
   const token = useMemo(() => {
     const raw = Array.isArray(params?.token) ? params.token[0] : params?.token;
@@ -121,7 +129,12 @@ export default function InviteAcceptPage() {
   }, [token, refresh]);
 
   const workspaceId = result?.membership?.workspace_id;
+  const inviteEmail = result?.invite?.email || "";
+  const currentUserEmail = user?.email || result?.user?.email || "";
   const errorTone = error ? getErrorTone(error) : "red";
+  const isIdentityMismatch = Boolean(
+    error && error.toLowerCase().includes("does not match")
+  );
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-16 text-slate-900">
@@ -139,37 +152,79 @@ export default function InviteAcceptPage() {
             Accepting invite...
           </div>
         ) : error ? (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div
-              className={`rounded-xl border p-4 text-sm ${
+              className={`rounded-xl border p-5 text-sm ${
                 errorTone === "amber"
                   ? "border-amber-200 bg-amber-50 text-amber-800"
+                  : errorTone === "blue"
+                  ? "border-blue-200 bg-blue-50 text-blue-800"
                   : "border-red-200 bg-red-50 text-red-700"
               }`}
             >
-              {error}
+              <div className="mb-1 font-semibold">Invite could not be accepted</div>
+              <div>{error}</div>
+            </div>
+
+            {isIdentityMismatch ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
+                <div className="text-slate-500">Identity check</div>
+
+                <div className="mt-3 space-y-2">
+                  <div>
+                    <span className="text-slate-500">Invited email:</span>{" "}
+                    <span className="font-medium text-slate-900">
+                      {inviteEmail || "Unknown"}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-500">Current signed-in account:</span>{" "}
+                    <span className="font-medium text-slate-900">
+                      {currentUserEmail || "No authenticated session detected"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+              {isIdentityMismatch
+                ? "To accept this invite, sign in with the same email that received the invitation, or create that account first."
+                : "Review the invite state, then continue with the correct authentication or workspace path."}
             </div>
 
             <div className="flex flex-wrap gap-3">
               <Link
-                href="/login"
-                className="inline-flex rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+                href={`/login?redirect=/invite/${token}`}
+                className="inline-flex rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800"
               >
-                Go to Login
+                Sign in with invited account
               </Link>
+
+              <Link
+                href={`/register?redirect=/invite/${token}${
+                  inviteEmail ? `&email=${encodeURIComponent(inviteEmail)}` : ""
+                }`}
+                className="inline-flex rounded-xl border border-slate-300 px-5 py-2 text-sm font-medium hover:bg-slate-50"
+              >
+                Create account with invited email
+              </Link>
+
+              {user ? (
+                <button
+                  onClick={() => logout()}
+                  className="inline-flex rounded-xl border border-slate-300 px-5 py-2 text-sm font-medium hover:bg-slate-50"
+                >
+                  Sign out current account
+                </button>
+              ) : null}
 
               <Link
                 href="/"
                 className="inline-flex rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
               >
                 Go to Home
-              </Link>
-
-              <Link
-                href="/workspace/1/members"
-                className="inline-flex rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-              >
-                Open Members Page
               </Link>
             </div>
           </div>
