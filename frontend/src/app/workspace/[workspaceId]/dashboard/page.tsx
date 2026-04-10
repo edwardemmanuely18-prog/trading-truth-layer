@@ -146,6 +146,30 @@ function getLifecyclePriorityRank(status?: string | null) {
   }
 }
 
+function getOnboardingStageState(completed: boolean, unlocked: boolean) {
+  if (completed) {
+    return {
+      badge: "complete",
+      className: "border-green-200 bg-green-50 text-green-800",
+      summary: "Completed",
+    };
+  }
+
+  if (unlocked) {
+    return {
+      badge: "active",
+      className: "border-blue-200 bg-blue-50 text-blue-800",
+      summary: "Current step",
+    };
+  }
+
+  return {
+    badge: "pending",
+    className: "border-slate-200 bg-slate-50 text-slate-600",
+    summary: "Locked until prior step is complete",
+  };
+}
+
 function SummaryCard({
   label,
   value,
@@ -160,6 +184,41 @@ function SummaryCard({
       <div className="text-sm text-slate-500">{label}</div>
       <div className="mt-2 text-[24px] font-bold leading-none text-slate-950">{value}</div>
       {hint ? <div className="mt-2 text-xs text-slate-500">{hint}</div> : null}
+    </div>
+  );
+}
+
+function OnboardingStageCard({
+  step,
+  title,
+  description,
+  completed,
+  unlocked,
+}: {
+  step: number;
+  title: string;
+  description: string;
+  completed: boolean;
+  unlocked: boolean;
+}) {
+  const state = getOnboardingStageState(completed, unlocked);
+
+  return (
+    <div className={`rounded-2xl border p-5 ${state.className}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.16em]">
+            Step {step}
+          </div>
+          <div className="mt-2 text-sm font-semibold">{title}</div>
+        </div>
+
+        <span className="rounded-full border border-current/20 bg-white px-3 py-1 text-[11px] font-semibold">
+          {state.summary}
+        </span>
+      </div>
+
+      <div className="mt-3 text-sm leading-6">{description}</div>
     </div>
   );
 }
@@ -270,7 +329,7 @@ function RoleBanner({
         and trade import remain restricted to owner/operator roles.
       </p>
 
-      <div className="mt-4 flex flex-wrap gap-3">
+            <div className="mt-4 flex flex-wrap gap-3">
         <Link
           href={`/workspace/${workspaceId}/claims`}
           className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-medium hover:bg-amber-100"
@@ -290,6 +349,13 @@ function RoleBanner({
           className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-medium hover:bg-amber-100"
         >
           Open Evidence Center
+        </Link>
+
+        <Link
+          href={`/workspace/${workspaceId}/members`}
+          className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-medium hover:bg-amber-100"
+        >
+          Open Members & Invites
         </Link>
       </div>
     </div>
@@ -620,12 +686,18 @@ function EmptyWorkspacePanel({
   canImportTrades,
   createChecking,
   onCreateDraft,
+  tradeCount,
+  claimCount,
+  verifiedCount,
 }: {
   workspaceId: number;
   canCreateClaim: boolean;
   canImportTrades: boolean;
   createChecking: boolean;
   onCreateDraft: () => void;
+  tradeCount: number;
+  claimCount: number;
+  verifiedCount: number;
 }) {
   return (
     <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
@@ -643,27 +715,29 @@ function EmptyWorkspacePanel({
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-          <div className="text-sm font-semibold text-slate-900">Step 1 · Import trades</div>
-          <div className="mt-2 text-sm leading-6 text-slate-600">
-            Bring in CSV, MT5, IBKR, or webhook data to establish the canonical trade ledger.
-          </div>
-        </div>
+        <OnboardingStageCard
+          step={1}
+          title="Import canonical trade activity"
+          description="Bring in CSV, MT5, IBKR, or webhook data so the workspace has a canonical ledger to govern."
+          completed={tradeCount > 0}
+          unlocked={true}
+        />
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-          <div className="text-sm font-semibold text-slate-900">Step 2 · Create claim</div>
-          <div className="mt-2 text-sm leading-6 text-slate-600">
-            Define scope, methodology, participants, and included evidence for the record you want
-            to verify.
-          </div>
-        </div>
+        <OnboardingStageCard
+          step={2}
+          title="Author the first governed claim"
+          description="Define scope, methodology, participants, exclusions, and evidence posture for the first verifiable record."
+          completed={claimCount > 0}
+          unlocked={tradeCount > 0}
+        />
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-          <div className="text-sm font-semibold text-slate-900">Step 3 · Verify and publish</div>
-          <div className="mt-2 text-sm leading-6 text-slate-600">
-            Generate auditable metrics, integrity fingerprints, and public verification surfaces.
-          </div>
-        </div>
+        <OnboardingStageCard
+          step={3}
+          title="Verify and activate public proof"
+          description="Move the record into evidence-backed verification, integrity validation, and public trust distribution."
+          completed={verifiedCount > 0}
+          unlocked={tradeCount > 0 && claimCount > 0}
+        />
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">
@@ -687,6 +761,8 @@ function EmptyWorkspacePanel({
           </div>
         )}
 
+        <ActionLink href={`/workspace/${workspaceId}/members`} label="Invite Collaborators" />
+        <ActionLink href={`/claims`} label="Explore Public Proof" />
         <ActionLink href={`/how-it-works`} label="How It Works" />
       </div>
     </div>
@@ -870,60 +946,78 @@ export default function WorkspaceDashboardPage() {
   const claimCount = Number(dashboard.claim_count ?? 0);
   const isEmptyWorkspace = tradeCount === 0 && claimCount === 0;
 
-  const nextAction = (() => {
-    if (tradeCount === 0) {
-      return {
-        title: "Import trades",
-        description:
-          "Your workspace has no canonical trading activity yet. Import data first to activate the verification workflow.",
-        primaryLabel: "Import Trades",
-        primaryHref: `/workspace/${workspaceId}/import`,
-      };
-    }
+    const nextAction = (() => {
+    const actionCandidates = [
+      tradeCount === 0
+        ? {
+            priority: 100,
+            title: "Import canonical trade activity",
+            description:
+              "This workspace does not yet have canonical trading data. Import activity first so claim computation, evidence generation, and downstream verification can begin.",
+            primaryLabel: "Import Trades",
+            primaryHref: `/workspace/${workspaceId}/import`,
+          }
+        : null,
 
-    if (!activeDraft && claimCount === 0) {
-      return {
-        title: "Create your first claim",
-        description:
-          "Trade data is available. Define a claim scope so the system can compute governed metrics and produce evidence-backed records.",
-        primaryLabel: "Create First Claim",
-        primaryAction: "create",
-      };
-    }
+      activeDraft
+        ? {
+            priority: 90,
+            title: "Continue active draft claim",
+            description:
+              "A governed draft claim is awaiting completion. Finalize scope, methodology, and evidence posture so the record can move into verification.",
+            primaryLabel: "Open Draft Claim",
+            primaryHref: `/workspace/${workspaceId}/claim/${activeDraft.claim_schema_id}`,
+            secondaryLabel: "Open Evidence",
+            secondaryHref: `/workspace/${workspaceId}/evidence?claimId=${activeDraft.claim_schema_id}`,
+          }
+        : null,
 
-    if (activeDraft) {
-      return {
-        title: "Continue draft claim",
-        description:
-          "A draft claim is waiting for completion. Finalize scope and methodology so it can move into verification.",
-        primaryLabel: "Open Draft Claim",
-        primaryHref: `/workspace/${workspaceId}/claim/${activeDraft.claim_schema_id}`,
-        secondaryLabel: "Open Evidence",
-        secondaryHref: `/workspace/${workspaceId}/evidence?claimId=${activeDraft.claim_schema_id}`,
-      };
-    }
+      tradeCount > 0 && claimCount === 0
+        ? {
+            priority: 80,
+            title: "Create the first governed claim",
+            description:
+              "Trade data is already available. Define the first governed record so the workspace can produce reproducible metrics, evidence, and lifecycle outputs.",
+            primaryLabel: "Create First Claim",
+            primaryAction: "create",
+          }
+        : null,
 
-    if (verifiedClaims > lockedClaims) {
-      return {
-        title: "Lock verified output",
+      verifiedClaims > lockedClaims
+        ? {
+            priority: 70,
+            title: "Finalize verified output",
+            description:
+              "Verified claims exist but not all externally important records are locked. Finalizing them improves integrity posture and public trust readiness.",
+            primaryLabel: "Open Claim Library",
+            primaryHref: `/workspace/${workspaceId}/claims`,
+          }
+        : null,
+
+      {
+        priority: 10,
+        title: "Review governed output",
         description:
-          "Verified claims exist but not all finalized records are locked yet. Locking strengthens public trust and integrity posture.",
+          "The workspace is already producing governed records. Review claims, evidence, and public proof surfaces to maintain operational confidence.",
         primaryLabel: "Open Claim Library",
         primaryHref: `/workspace/${workspaceId}/claims`,
-      };
-    }
+        secondaryLabel: "Open Latest Record",
+        secondaryHref: latestLockedClaim
+          ? `/workspace/${workspaceId}/claim/${latestLockedClaim.claim_schema_id}`
+          : undefined,
+      },
+    ].filter(Boolean) as Array<{
+      priority: number;
+      title: string;
+      description: string;
+      primaryLabel: string;
+      primaryHref?: string;
+      primaryAction?: string;
+      secondaryLabel?: string;
+      secondaryHref?: string;
+    }>;
 
-    return {
-      title: "Review governed output",
-      description:
-        "The workspace is producing governed claims successfully. Review current records, evidence, and public trust surfaces.",
-      primaryLabel: "Open Claim Library",
-      primaryHref: `/workspace/${workspaceId}/claims`,
-      secondaryLabel: "Open Latest Record",
-      secondaryHref: latestLockedClaim
-        ? `/workspace/${workspaceId}/claim/${latestLockedClaim.claim_schema_id}`
-        : undefined,
-    };
+    return [...actionCandidates].sort((a, b) => b.priority - a.priority)[0];
   })();
 
   return (
@@ -933,12 +1027,14 @@ export default function WorkspaceDashboardPage() {
 
         <main className="mx-auto max-w-[1400px] px-6 py-10">
           <div className="mb-8">
-            <div className="text-sm text-slate-500">Trading Truth Layer · Workspace Operations</div>
-            <h1 className="mt-2 text-4xl font-bold">Workspace Dashboard</h1>
+            <div className="text-sm text-slate-500">
+              Trading Truth Layer · Workspace Operations
+            </div>
+            <h1 className="mt-2 text-4xl font-bold">Workspace Operations Center</h1>
             <p className="mt-3 max-w-3xl text-slate-600">
-              Control center for workspace {workspaceId}, including claim activity, ledger volume,
-              plan usage, and direct access to governed creation, evidence, and verification
-              workflows.
+              Govern trading activity, verification workflows, evidence production, plan posture,
+              and public trust distribution from a unified operational surface for workspace{" "}
+              {workspaceId}.
             </p>
           </div>
 
@@ -1027,6 +1123,9 @@ export default function WorkspaceDashboardPage() {
               canImportTrades={canImportTrades}
               createChecking={createChecking}
               onCreateDraft={() => void handleCreateDraftClick()}
+              tradeCount={tradeCount}
+              claimCount={claimCount}
+              verifiedCount={verifiedClaims}
             />
           ) : (
             <div className="mb-8 grid gap-6 lg:grid-cols-[1.3fr_1fr]">
@@ -1177,7 +1276,7 @@ export default function WorkspaceDashboardPage() {
                   </div>
                 </div>
 
-                <div className="mt-5 space-y-3">
+                                <div className="mt-5 space-y-3">
                   {canCreateClaim ? (
                     <ActionButton
                       onClick={() => void handleCreateDraftClick()}
@@ -1198,8 +1297,10 @@ export default function WorkspaceDashboardPage() {
                     </div>
                   )}
 
+                  <ActionLink href={`/workspace/${workspaceId}/members`} label="Invite Members" />
                   <ActionLink href={`/workspace/${workspaceId}/ledger`} label="Open Ledger" />
                   <ActionLink href={`/workspace/${workspaceId}/claims`} label="Open Claim Library" />
+                  <ActionLink href={`/claims`} label="Explore Public Proof" />
                   <ActionLink href={`/workspace/${workspaceId}/settings`} label="Open Settings & Billing" />
                 </div>
 
