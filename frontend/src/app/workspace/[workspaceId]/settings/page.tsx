@@ -134,13 +134,6 @@ function formatReadinessSourceLabel(provider?: string | null) {
   return provider || "internal";
 }
 
-function getNextPlanCode(planCode?: string | null): string | null {
-  const normalized = normalizeText(planCode);
-  const index = PLAN_ORDER.findIndex((item) => item === normalized);
-  if (index < 0) return null;
-  return PLAN_ORDER[index + 1] ?? null;
-}
-
 function getPlanFromCatalog(
   planCatalog: PlanCatalogItem[],
   planCode?: string | null
@@ -154,19 +147,16 @@ function getUsageRatio(used?: number, limit?: number): number | null {
   return used / limit;
 }
 
-function isNearLimit(used?: number, limit?: number): boolean {
-  const ratio = getUsageRatio(used, limit);
-  if (ratio === null) return false;
-  return ratio >= 0.8 && ratio <= 1;
-}
-
 function PlanBadge({ plan }: { plan?: string | null }) {
   const normalized = normalizeText(plan);
 
   const className =
     normalized === "sandbox"
       ? "border-purple-200 bg-purple-50 text-purple-800"
-      : normalized === "pro" || normalized === "growth" || normalized === "business" || normalized === "team"
+      : normalized === "pro" ||
+          normalized === "growth" ||
+          normalized === "business" ||
+          normalized === "team"
         ? "border-blue-200 bg-blue-50 text-blue-800"
         : "border-slate-200 bg-slate-100 text-slate-700";
 
@@ -441,7 +431,7 @@ function ManualPaymentCard({
           <h2 className="text-2xl font-semibold text-blue-950">Manual Payment Instructions</h2>
           <p className="mt-1 text-sm text-blue-900">
             Automated billing is not active for this deployment. Subscribers should pay manually using the
-            details below, then you verify payment and activate access internally.
+            details below, then payment is verified and access is activated internally.
           </p>
         </div>
 
@@ -536,7 +526,7 @@ function resolvePrimaryBillingAction(params: {
   const billingInactive =
     billingStatusIsPaid === undefined ? !["active", "trialing"].includes(billing) : !billingStatusIsPaid;
 
-  let label = "Upgrade Workspace";
+  let label = "Upgrade Plan";
   let helper: string | null = null;
   let disabled = !canSeeUpgrade || checkoutLoading;
 
@@ -549,17 +539,13 @@ function resolvePrimaryBillingAction(params: {
       label = "Activate Billing";
       helper = "Complete billing for the currently configured paid workspace tier.";
       disabled = !canSeeUpgrade || checkoutLoading;
-    } else if (PLAN_ORDER.findIndex((p) => p === selected) > PLAN_ORDER.findIndex((p) => p === configured)) {
+    } else if (selectedIsPaidPlan) {
       label = "Upgrade and Activate";
       helper = "Move to a higher commercial tier and start billing for that upgraded plan.";
       disabled = !canSeeUpgrade || checkoutLoading;
     } else if (selected === "starter") {
       label = "Move to Starter";
       helper = "Switch this workspace back to Starter without activating billing.";
-      disabled = !canSeeUpgrade || checkoutLoading;
-    } else {
-      label = "Change Billing Target";
-      helper = "Select a different target tier before starting checkout.";
       disabled = !canSeeUpgrade || checkoutLoading;
     }
   } else if (selected === configured) {
@@ -577,7 +563,7 @@ function resolvePrimaryBillingAction(params: {
       disabled = true;
     } else {
       label = "Plan Active";
-      helper = "Your workspace is operating within its current plan capacity.";
+      helper = "Your workspace is currently using its configured plan correctly.";
       disabled = true;
     }
   } else if (!selectedIsPaidPlan) {
@@ -592,88 +578,90 @@ function resolvePrimaryBillingAction(params: {
   return { label, helper, disabled };
 }
 
-function UpgradeSummaryPanel({
-  workspaceId,
-  settings,
+function UpgradePressureBanner({
+  configuredPlanName,
+  effectivePlanName,
   usage,
-  billingFoundation,
-  planCatalog,
-  configuredPlanItem,
+  governance,
+  planMismatch,
+}: {
+  configuredPlanName: string;
+  effectivePlanName: string;
+  usage: WorkspaceUsageSummary | null;
+  governance: WorkspaceUsageSummary["governance"] | undefined;
+  planMismatch: boolean;
+}) {
+  const claimsUsed = usage?.usage?.claims?.used ?? 0;
+  const claimsLimit = usage?.usage?.claims?.limit ?? 0;
+  const claimsRatio = getUsageRatio(claimsUsed, claimsLimit);
+
+  let message =
+    "You are currently using 2.4% of your plan capacity. Upgrade when you need higher throughput, team scaling, or external verification load.";
+
+  if (claimsRatio !== null) {
+    if (claimsRatio >= 1) {
+      message =
+        "Capacity limit approaching or reached. Claim creation and verification workflows may be blocked. Upgrade required.";
+    } else if (claimsRatio >= 0.8) {
+      message =
+        "You are approaching your plan limits. Upgrade to avoid workflow interruptions.";
+    } else {
+      message = `You are currently using ${formatPercent(claimsRatio)} of your plan capacity. Upgrade when you need higher throughput, team scaling, or external verification load.`;
+    }
+  }
+
+  if (planMismatch) {
+    message = `This workspace is configured as ${configuredPlanName}, but active commercial enforcement may still fall back to ${effectivePlanName} until billing is activated.`;
+  }
+
+  if (governance?.billing_activation_recommended) {
+    message = `This workspace already targets ${configuredPlanName}, but billing is not fully active yet. Activate billing to enforce the intended commercial posture.`;
+  }
+
+  if (governance?.upgrade_required_now) {
+    message =
+      "This workspace has reached or exceeded configured plan capacity in one or more governed dimensions. Some workflows may now be blocked.";
+  } else if (governance?.upgrade_recommended_soon && !governance?.billing_activation_recommended) {
+    message =
+      "This workspace is approaching one or more configured plan ceilings. Upgrading now protects workflow continuity.";
+  }
+
+  return (
+    <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+      {message}
+    </div>
+  );
+}
+
+function UpgradeSummaryPanel({
+  usage,
+  configuredPlanName,
+  configuredPlanCode,
   selectedPlanCode,
   selectedBillingCycle,
   canSeeUpgrade,
   onStartCheckout,
-  onReturnToClaims,
   checkoutLoading,
+  governance,
+  primaryAction,
 }: {
-  workspaceId: number;
-  settings: WorkspaceSettings | null;
   usage: WorkspaceUsageSummary | null;
-  billingFoundation: WorkspaceBillingFoundation | null;
-  planCatalog: PlanCatalogItem[];
-  configuredPlanItem: PlanCatalogItem | null;
+  configuredPlanName: string;
+  configuredPlanCode: string;
   selectedPlanCode: string;
   selectedBillingCycle: string;
   canSeeUpgrade: boolean;
   onStartCheckout: () => void;
-  onReturnToClaims: () => void;
   checkoutLoading: boolean;
+  governance: WorkspaceUsageSummary["governance"] | undefined;
+  primaryAction: { label: string; helper: string | null; disabled: boolean };
 }) {
   const claimUsed = usage?.usage?.claims?.used ?? 0;
+  const claimLimit = usage?.usage?.claims?.limit ?? 0;
   const tradeUsed = usage?.usage?.trades?.used ?? 0;
+  const tradeLimit = usage?.usage?.trades?.limit ?? 0;
   const memberUsed = usage?.usage?.members?.used ?? 0;
-
-  const configuredPlanCode = settings?.plan_code || "starter";
-  const effectivePlanCode =
-    usage?.effective_plan_code || settings?.effective_plan_code || "starter";
-
-  const configuredPlanName =
-    configuredPlanItem?.name ||
-    settings?.plan_detail?.name ||
-    formatPlanCodeLabel(configuredPlanCode);
-
-  const effectivePlanName =
-    usage?.effective_plan_detail?.name ||
-    settings?.effective_plan_detail?.name ||
-    formatPlanCodeLabel(effectivePlanCode);
-
-  const configuredClaimLimit =
-    configuredPlanItem?.limits.claim_limit ?? usage?.usage?.claims?.limit ?? 0;
-  const configuredTradeLimit =
-    configuredPlanItem?.limits.trade_limit ?? usage?.usage?.trades?.limit ?? 0;
-  const configuredMemberLimit =
-    configuredPlanItem?.limits.member_limit ?? usage?.usage?.members?.limit ?? 0;
-
-  const claimBlocked = isAtOrOverLimit(claimUsed, configuredClaimLimit);
-  const planMismatch =
-    Boolean(billingFoundation?.plan_mismatch) ||
-    normalizeText(configuredPlanCode) !== normalizeText(effectivePlanCode);
-
-  const upgradeRecommendation = usage?.upgrade_recommendation;
-  const governance = usage?.governance;
-  const recommendedPlanName =
-    upgradeRecommendation?.recommended_plan_name ||
-    formatPlanCodeLabel(upgradeRecommendation?.recommended_plan_code);
-
-  const checkoutIntent =
-    normalizeText(
-      normalizeText(selectedPlanCode) === normalizeText(configuredPlanCode) &&
-        !billingFoundation?.billing_status_is_paid &&
-        normalizeText(configuredPlanCode) !== "starter"
-        ? "billing_activation"
-        : normalizeText(selectedPlanCode) === normalizeText(configuredPlanCode)
-          ? "no_op"
-          : "plan_change"
-    );
-
-  const primaryAction = resolvePrimaryBillingAction({
-    configuredPlanCode,
-    selectedPlanCode,
-    billingStatus: settings?.billing_status,
-    billingStatusIsPaid: billingFoundation?.billing_status_is_paid,
-    canSeeUpgrade,
-    checkoutLoading,
-  });
+  const memberLimit = usage?.usage?.members?.limit ?? 0;
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -681,7 +669,7 @@ function UpgradeSummaryPanel({
         <div>
           <h2 className="text-2xl font-semibold">Upgrade Summary</h2>
           <p className="mt-1 text-sm text-slate-500">
-            This should be the clearest next step for users arriving from blocked claim actions.
+            The next step should be obvious for users arriving from blocked claim actions.
           </p>
         </div>
 
@@ -689,16 +677,18 @@ function UpgradeSummaryPanel({
           className={`rounded-full border px-3 py-1 text-xs font-semibold ${
             governance?.billing_activation_recommended
               ? "border-blue-200 bg-blue-50 text-blue-800"
-              : claimBlocked
+              : governance?.upgrade_required_now
                 ? "border-amber-200 bg-amber-50 text-amber-800"
                 : "border-green-200 bg-green-50 text-green-800"
           }`}
         >
           {governance?.billing_activation_recommended
             ? "billing activation needed"
-            : claimBlocked
-              ? "claim capacity blocked"
-              : "capacity available"}
+            : governance?.upgrade_required_now
+              ? "upgrade required"
+              : governance?.upgrade_recommended_soon
+                ? "upgrade recommended"
+                : "capacity available"}
         </span>
       </div>
 
@@ -707,83 +697,27 @@ function UpgradeSummaryPanel({
           <div className="text-xs uppercase tracking-wide text-slate-500">Configured plan</div>
           <div className="mt-1 text-xl font-semibold text-slate-900">{configuredPlanName}</div>
           <div className="mt-2 text-sm text-slate-600">
-            Claims: {claimUsed} / {configuredClaimLimit}
+            Claims: {claimUsed} / {claimLimit}
           </div>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">
-            Selected billing target
-          </div>
+          <div className="text-xs uppercase tracking-wide text-slate-500">Selected billing target</div>
           <div className="mt-1 text-xl font-semibold text-slate-900">
             {formatPlanCodeLabel(selectedPlanCode)}
           </div>
           <div className="mt-2 text-sm text-slate-600">
-            Billing cycle: {selectedPlanCode === "sandbox" ? "No billing required" : formatPlanCodeLabel(selectedBillingCycle)}
+            Billing cycle:{" "}
+            {selectedPlanCode === "sandbox" ? "No billing required" : formatPlanCodeLabel(selectedBillingCycle)}
           </div>
-          {selectedPlanCode === "sandbox" ? (
-            <div className="mt-2 text-xs text-slate-500">
-              Sandbox is a controlled evaluation tier and does not initiate Paddle checkout.
-            </div>
-          ) : null}
         </div>
       </div>
-
-      {planMismatch ? (
-        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <div className="font-medium">Billing not active yet</div>
-          <div className="mt-2">
-            This workspace is configured as <span className="font-semibold">{configuredPlanName}</span>,
-            but billing is still inactive. Enforcement may currently fall back to{" "}
-            <span className="font-semibold">{effectivePlanName}</span> until billing activates.
-          </div>
-        </div>
-      ) : null}
-
-      {selectedPlanCode === "sandbox" && normalizeText(configuredPlanCode) !== "sandbox" ? (
-        <div className="mt-4 rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-900">
-          <div className="font-medium">Sandbox activation path</div>
-          <div className="mt-2">
-            This will move the workspace into the controlled evaluation tier. No billing checkout is required,
-            and the workspace will operate under Sandbox limits until you later move to a paid plan.
-          </div>
-        </div>
-      ) : governance?.billing_activation_recommended ? (
-        <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-          <div className="font-medium">Activate billing first</div>
-          <div className="mt-2">
-            The configured plan already provides the intended commercial posture. The next step is to
-            activate billing so the workspace can enforce{" "}
-            <span className="font-semibold">{configuredPlanName}</span>.
-          </div>
-        </div>
-      ) : null}
-
-      {governance?.upgrade_required_now || governance?.upgrade_recommended_soon ? (
-        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <div className="font-medium">
-            {governance?.upgrade_required_now ? "Upgrade required now" : "Upgrade recommended soon"}
-          </div>
-          <div className="mt-2">
-            {governance?.upgrade_required_now
-              ? "This workspace has reached or exceeded configured plan capacity in one or more governed dimensions. Some workflows may now be blocked."
-              : "This workspace is approaching configured plan capacity limits. Upgrading early protects workflow continuity."}
-          </div>
-          {upgradeRecommendation?.recommended_plan_is_distinct && recommendedPlanName ? (
-            <div className="mt-2">
-              Recommended next plan: <span className="font-semibold">{recommendedPlanName}</span>
-            </div>
-          ) : upgradeRecommendation?.already_at_highest_tier ? (
-            <div className="mt-2">This workspace is already on the highest commercial tier.</div>
-          ) : null}
-        </div>
-      ) : null}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="text-xs uppercase tracking-wide text-slate-500">Claims</div>
           <div className="mt-1 text-lg font-semibold text-slate-900">
-            {claimUsed} / {configuredClaimLimit}
+            {claimUsed} / {claimLimit}
           </div>
           <div className="mt-1 text-xs text-slate-500">
             Public trust-surface and governed claim-capacity envelope
@@ -793,7 +727,7 @@ function UpgradeSummaryPanel({
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="text-xs uppercase tracking-wide text-slate-500">Trades</div>
           <div className="mt-1 text-lg font-semibold text-slate-900">
-            {tradeUsed} / {configuredTradeLimit}
+            {tradeUsed} / {tradeLimit}
           </div>
           <div className="mt-1 text-xs text-slate-500">Evidence ingestion capacity</div>
         </div>
@@ -801,7 +735,7 @@ function UpgradeSummaryPanel({
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="text-xs uppercase tracking-wide text-slate-500">Members</div>
           <div className="mt-1 text-lg font-semibold text-slate-900">
-            {memberUsed} / {configuredMemberLimit}
+            {memberUsed} / {memberLimit}
           </div>
           <div className="mt-1 text-xs text-slate-500">Workspace collaborator capacity</div>
         </div>
@@ -809,10 +743,9 @@ function UpgradeSummaryPanel({
 
       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
         <div className="font-medium text-slate-900">What happens after activation</div>
-
         <ul className="mt-2 space-y-1">
           <li>• Claim creation and versioning restrictions are lifted</li>
-          <li>• Lifecycle actions (verify, publish, lock) become fully available</li>
+          <li>• Lifecycle actions become fully available</li>
           <li>• Workspace capacity expands based on selected plan</li>
           <li>• Public trust surfaces operate without interruption</li>
         </ul>
@@ -821,9 +754,6 @@ function UpgradeSummaryPanel({
       {primaryAction.helper ? (
         <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
           {primaryAction.helper}
-          <span className="block mt-1 text-xs text-blue-700">
-            Checkout intent: {checkoutIntent}
-          </span>
         </div>
       ) : null}
 
@@ -846,14 +776,6 @@ function UpgradeSummaryPanel({
           className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
         >
           Compare Plans
-        </button>
-
-        <button
-          type="button"
-          onClick={onReturnToClaims}
-          className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
-        >
-          Back to Claims
         </button>
       </div>
 
@@ -1013,10 +935,9 @@ export default function WorkspaceSettingsPage() {
       next.delete("portal");
 
       const nextQuery = next.toString();
-      router.replace(
-        `/workspace/${workspaceId}/settings${nextQuery ? `?${nextQuery}` : ""}`,
-        { scroll: false }
-      );
+      router.replace(`/workspace/${workspaceId}/settings${nextQuery ? `?${nextQuery}` : ""}`, {
+        scroll: false,
+      });
     })();
   }, [workspaceId, loading, checkoutStatus, checkoutSessionId, portalStatus, router, searchParams]);
 
@@ -1081,29 +1002,9 @@ export default function WorkspaceSettingsPage() {
           }. Phone: ${manualDetails.phone_number || "—"}.`
         : "";
 
-      const diagnosticMessage =
-        response.diagnostics && response.mode === "placeholder_until_checkout"
-          ? ` Paddle enabled=${formatBooleanLabel(
-              response.diagnostics.paddle_enabled
-            )}, Stripe package=${formatBooleanLabel(
-              response.diagnostics.stripe_package_installed
-            )}, Stripe billing enabled=${formatBooleanLabel(
-              response.diagnostics.stripe_billing_enabled
-            )}, Manual billing enabled=${formatBooleanLabel(
-              response.diagnostics.manual_billing_enabled
-            )}.`
-          : "";
-
-      const intentMessage = response.checkout_intent
-        ? ` Checkout intent: ${response.checkout_intent}.`
-        : "";
-
       setBillingMessage(
         (response.message ||
-          `Checkout foundation is ready, but no redirect URL was returned for ${selectedPlanCode} (${selectedBillingCycle}).`) +
-          intentMessage +
-          manualMessage +
-          diagnosticMessage
+          `Checkout foundation is ready, but no redirect URL was returned for ${selectedPlanCode} (${selectedBillingCycle}).`) + manualMessage
       );
 
       const refreshedBillingFoundation = await api.getWorkspaceBillingFoundation(workspaceId);
@@ -1151,16 +1052,14 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
-  const planCatalog = usage?.plan_catalog ?? [];
+    const planCatalog = usage?.plan_catalog ?? [];
   const configuredPlanCode = settings?.plan_code || "starter";
   const effectivePlanCode =
     usage?.effective_plan_code || settings?.effective_plan_code || "starter";
 
   const configuredPlanItem = getPlanFromCatalog(planCatalog, configuredPlanCode);
   const configuredPlanName =
-    configuredPlanItem?.name ||
-    settings?.plan_detail?.name ||
-    formatPlanCodeLabel(configuredPlanCode);
+    configuredPlanItem?.name || settings?.plan_detail?.name || formatPlanCodeLabel(configuredPlanCode);
 
   const effectivePlanName =
     usage?.effective_plan_detail?.name ||
@@ -1178,18 +1077,10 @@ export default function WorkspaceSettingsPage() {
   const membersRatio = getUsageRatio(usage?.usage.members.used, configuredMemberLimit);
   const storageRatio = getUsageRatio(usage?.usage.storage_mb.used, configuredStorageLimit);
 
-  const membersOverLimit = isOverLimit(usage?.usage.members.used, configuredMemberLimit);
-  const tradesOverLimit = isOverLimit(usage?.usage.trades.used, configuredTradeLimit);
-  const claimsOverLimit = isOverLimit(usage?.usage.claims.used, configuredClaimLimit);
-  const storageOverLimit = isOverLimit(usage?.usage.storage_mb.used, configuredStorageLimit);
-
   const membersAtOrOverLimit = isAtOrOverLimit(usage?.usage.members.used, configuredMemberLimit);
   const tradesAtOrOverLimit = isAtOrOverLimit(usage?.usage.trades.used, configuredTradeLimit);
   const claimsAtOrOverLimit = isAtOrOverLimit(usage?.usage.claims.used, configuredClaimLimit);
   const storageAtOrOverLimit = isAtOrOverLimit(usage?.usage.storage_mb.used, configuredStorageLimit);
-
-  const hasAnyOverLimit =
-    membersOverLimit || tradesOverLimit || claimsOverLimit || storageOverLimit;
 
   const planMismatch =
     Boolean(billingFoundation?.plan_mismatch) ||
@@ -1197,12 +1088,7 @@ export default function WorkspaceSettingsPage() {
 
   const upgradeRecommendation = usage?.upgrade_recommendation;
   const governance = usage?.governance;
-
-  const recommendedPlanName =
-    upgradeRecommendation?.recommended_plan_name ||
-    formatPlanCodeLabel(upgradeRecommendation?.recommended_plan_code);
-
-    const currentPlanBilling = configuredPlanItem?.billing || settings?.plan_detail?.billing;
+  const currentPlanBilling = configuredPlanItem?.billing || settings?.plan_detail?.billing;
 
   const billingProviderLabel = formatBillingProviderLabel(billingFoundation);
   const providerCustomerId =
@@ -1211,18 +1097,17 @@ export default function WorkspaceSettingsPage() {
       ? billingFoundation?.paddle_customer_id
       : billingFoundation?.stripe_customer_id) ||
     null;
+
   const providerSubscriptionId =
     billingFoundation?.provider_subscription_id ||
     (normalizeText(billingFoundation?.active_billing_provider) === "paddle"
       ? billingFoundation?.paddle_subscription_id
       : billingFoundation?.stripe_subscription_id) ||
     null;
-  const providerEnvironment = formatProviderEnvironmentLabel(
-    billingFoundation?.provider_environment ||
-      billingFoundation?.paddle_ready?.environment ||
-      "live"
-  );
 
+  const providerEnvironment = formatProviderEnvironmentLabel(
+    billingFoundation?.provider_environment || billingFoundation?.paddle_ready?.environment || "live"
+  );
 
   const primaryAction = resolvePrimaryBillingAction({
     configuredPlanCode,
@@ -1242,9 +1127,7 @@ export default function WorkspaceSettingsPage() {
       <div className="min-h-screen bg-slate-50 text-slate-900">
         <Navbar workspaceId={workspaceId} />
         <main className="mx-auto max-w-[1400px] px-6 py-10">
-          <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            Loading workspace settings...
-          </div>
+          <div className="rounded-2xl border bg-white p-6 shadow-sm">Loading workspace settings...</div>
         </main>
       </div>
     );
@@ -1270,12 +1153,8 @@ export default function WorkspaceSettingsPage() {
       <main className="mx-auto max-w-[1400px] px-6 py-10">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="text-sm text-slate-500">
-              Trading Truth Layer · Workspace Settings & Billing
-            </div>
-            <h1 className="mt-2 text-4xl font-bold tracking-tight">
-              Workspace Billing & Governance
-            </h1>
+            <div className="text-sm text-slate-500">Trading Truth Layer · Workspace Settings & Billing</div>
+            <h1 className="mt-2 text-4xl font-bold tracking-tight">Workspace Billing & Governance</h1>
             <p className="mt-3 max-w-3xl text-slate-600">
               Billing, plan posture, and governed capacity control surface for workspace growth,
               blocked workflow recovery, and commercial activation.
@@ -1293,45 +1172,6 @@ export default function WorkspaceSettingsPage() {
           </div>
         </div>
 
-        {activeTab === "billing" ? (
-          <div className="mb-6 rounded-3xl border border-blue-200 bg-blue-50 p-6 text-blue-900 shadow-sm">
-            <h2 className="text-xl font-semibold">Action Required</h2>
-
-            <p className="mt-2 text-sm">
-              This workspace has encountered a governed workflow restriction that requires billing
-              activation or plan upgrade before proceeding.
-            </p>
-
-            <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
-              {governance?.billing_activation_recommended ? (
-                <span className="rounded-full border border-blue-300 bg-white px-3 py-1 text-blue-800">
-                  billing activation required
-                </span>
-              ) : null}
-
-              {governance?.upgrade_required_now ? (
-                <span className="rounded-full border border-amber-300 bg-white px-3 py-1 text-amber-800">
-                  upgrade required
-                </span>
-              ) : null}
-
-              {governance?.upgrade_recommended_soon ? (
-                <span className="rounded-full border border-amber-200 bg-white px-3 py-1 text-amber-700">
-                  upgrade recommended
-                </span>
-              ) : null}
-
-              {!governance?.billing_activation_recommended &&
-              !governance?.upgrade_required_now &&
-              !governance?.upgrade_recommended_soon ? (
-                <span className="rounded-full border border-slate-300 bg-white px-3 py-1 text-slate-700">
-                  billing review
-                </span>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-
         {refreshingBillingState ? (
           <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
             Refreshing billing state...
@@ -1339,13 +1179,9 @@ export default function WorkspaceSettingsPage() {
         ) : null}
 
         {loading ? (
-          <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            Loading workspace settings...
-          </div>
+          <div className="rounded-2xl border bg-white p-6 shadow-sm">Loading workspace settings...</div>
         ) : error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700">
-            {error}
-          </div>
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700">{error}</div>
         ) : (
           <>
             <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -1361,7 +1197,7 @@ export default function WorkspaceSettingsPage() {
                     ? "sandbox (no billing)"
                     : normalizeText(settings?.billing_status) === "active"
                       ? "active"
-                      : "inactive (action required)"
+                      : "inactive"
                 }
                 hint="Subscription state"
               />
@@ -1398,709 +1234,522 @@ export default function WorkspaceSettingsPage() {
               </div>
             )}
 
-            {(governance?.upgrade_required_now ||
-              governance?.upgrade_recommended_soon ||
-              governance?.billing_activation_recommended ||
-              planMismatch) && (
-              <div className="mb-6 rounded-3xl border border-amber-200 bg-amber-50 p-6 text-amber-900 shadow-sm">
-                <h2 className="text-xl font-semibold">
-                  {governance?.billing_activation_recommended
-                    ? "Billing Activation Needed"
-                    : governance?.upgrade_required_now
-                      ? "Upgrade Required"
-                      : governance?.upgrade_recommended_soon
-                        ? "Upgrade Recommendation"
-                        : "Billing Not Active Yet"}
-                </h2>
+            <UpgradePressureBanner
+              configuredPlanName={configuredPlanName}
+              effectivePlanName={effectivePlanName}
+              usage={usage}
+              governance={governance}
+              planMismatch={planMismatch}
+            />
 
-                <p className="mt-2 text-sm">
-                  {governance?.billing_activation_recommended
-                    ? `This workspace is configured as ${configuredPlanName}, but billing is not active yet. Until activation is completed, governed enforcement may still operate under ${effectivePlanName}.`
-                    : governance?.upgrade_required_now
-                      ? "This workspace is now constrained by configured plan limits. Some workflows may be blocked until the plan is upgraded."
-                      : governance?.upgrade_recommended_soon
-                        ? "This workspace is approaching one or more configured plan ceilings. Upgrading now will protect workflow continuity."
-                        : `This workspace is configured as ${configuredPlanName}, but billing is still inactive, so active enforcement may temporarily fall back to ${effectivePlanName}.`}
-                </p>
+            <div className="mt-6 space-y-6">
+              <UpgradeSummaryPanel
+                usage={usage}
+                configuredPlanName={configuredPlanName}
+                configuredPlanCode={configuredPlanCode}
+                selectedPlanCode={selectedPlanCode}
+                selectedBillingCycle={selectedBillingCycle}
+                canSeeUpgrade={canSeeUpgrade}
+                onStartCheckout={() => void handleStartCheckout()}
+                checkoutLoading={checkoutLoading}
+                governance={governance}
+                primaryAction={primaryAction}
+              />
 
-                {upgradeRecommendation?.recommended_plan_is_distinct && recommendedPlanName ? (
-                  <div className="mt-3 text-sm">
-                    Recommended next plan: <span className="font-semibold">{recommendedPlanName}</span>
-                  </div>
-                ) : upgradeRecommendation?.already_at_highest_tier ? (
-                  <div className="mt-3 text-sm">
-                    This workspace is already on the highest commercial tier.
-                  </div>
-                ) : null}
-
-                {upgradeRecommendation?.breached_dimensions?.length ? (
-                  <div className="mt-4">
-                    <div className="text-sm font-medium">Exceeded dimensions</div>
-                    <div className="mt-2 flex flex-wrap gap-2 text-sm">
-                      {upgradeRecommendation.breached_dimensions.map((item) => (
-                        <span
-                          key={`breach-${item}`}
-                          className="rounded-full border border-amber-300 bg-white px-3 py-1 font-medium"
-                        >
-                          {formatDimensionLabel(item)}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {upgradeRecommendation?.near_limit_dimensions?.length ? (
-                  <div className="mt-4">
-                    <div className="text-sm font-medium">Near-limit dimensions</div>
-                    <div className="mt-2 flex flex-wrap gap-2 text-sm">
-                      {upgradeRecommendation.near_limit_dimensions.map((item) => (
-                        <span
-                          key={`near-${item}`}
-                          className="rounded-full border border-amber-300 bg-white px-3 py-1 font-medium"
-                        >
-                          {formatDimensionLabel(item)}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            )}
-
-            <div className="grid gap-6 lg:grid-cols-[1.2fr_0.95fr]">
-              <div className="space-y-6">
-                <UpgradeSummaryPanel
-                  workspaceId={workspaceId}
-                  settings={settings}
-                  usage={usage}
-                  billingFoundation={billingFoundation}
-                  planCatalog={planCatalog}
-                  configuredPlanItem={configuredPlanItem}
-                  selectedPlanCode={selectedPlanCode}
-                  selectedBillingCycle={selectedBillingCycle}
-                  canSeeUpgrade={canSeeUpgrade}
-                  onStartCheckout={() => void handleStartCheckout()}
-                  onReturnToClaims={() => router.push(`/workspace/${workspaceId}/claims`)}
-                  checkoutLoading={checkoutLoading}
-                />
-
-                <div className="rounded-3xl border bg-white p-6 shadow-sm">
-                  <div className="mb-4 flex items-center justify-between gap-4">
+              {planCatalog.length > 0 ? (
+                <div id="plan-ladder" className="rounded-3xl border bg-white p-6 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                      <h2 className="text-2xl font-semibold">Workspace Profile</h2>
+                      <h2 className="text-2xl font-semibold">Plan Ladder</h2>
                       <p className="mt-1 text-sm text-slate-500">
-                        Maintain workspace identity and billing contact metadata.
+                        Workspace monetization tiers, pricing, and operational capacity ranges.
                       </p>
                     </div>
 
-                    {!canEdit ? (
-                      <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-medium text-amber-700">
-                        Read only
-                      </span>
+                    {upgradeRecommendation?.recommended_plan_is_distinct &&
+                    upgradeRecommendation?.recommended_plan_name ? (
+                      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                        Recommended next plan:{" "}
+                        <span className="font-semibold">
+                          {upgradeRecommendation.recommended_plan_name}
+                        </span>
+                      </div>
                     ) : null}
                   </div>
 
-                  <form onSubmit={handleSave} className="space-y-4">
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">
-                        Workspace Name
-                      </label>
-                      {canEdit ? (
-                        <input
-                          type="text"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          disabled={saving}
-                          className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500 disabled:bg-slate-100"
-                        />
-                      ) : (
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800">
-                          {name || "—"}
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">
-                        Description
-                      </label>
-                      {canEdit ? (
-                        <textarea
-                          value={description}
-                          onChange={(e) => setDescription(e.target.value)}
-                          disabled={saving}
-                          rows={5}
-                          className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500 disabled:bg-slate-100"
-                        />
-                      ) : (
-                        <div className="min-h-[132px] rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 whitespace-pre-wrap">
-                          {description || "—"}
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">
-                        Billing Email
-                      </label>
-                      {canEdit ? (
-                        <input
-                          type="email"
-                          value={billingEmail}
-                          onChange={(e) => setBillingEmail(e.target.value)}
-                          disabled={saving}
-                          className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500 disabled:bg-slate-100"
-                        />
-                      ) : (
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800">
-                          {billingEmail || "—"}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex flex-wrap gap-3">
-                      {canEdit ? (
-                        <button
-                          type="submit"
-                          disabled={saving}
-                          className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                        >
-                          {saving ? "Saving..." : "Save Settings"}
-                        </button>
-                      ) : null}
-
-                      <Link
-                        href={`/workspace/${workspaceId}/dashboard`}
-                        className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
-                      >
-                        Back to Dashboard
-                      </Link>
-                    </div>
-                  </form>
-                </div>
-
-                <div className="rounded-3xl border bg-white p-6 shadow-sm">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-2xl font-semibold">Billing Foundation</h2>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Active billing provider, checkout readiness, subscription linkage, and commercial plan posture.
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <PlanBadge plan={settings?.plan_code} />
-                      <BillingBadge status={settings?.billing_status} />
-                    </div>
-                  </div>
-
-                  <div className="mt-6 grid gap-4 md:grid-cols-2">
-                    <PriceCard
-                      label="Configured Monthly Price"
-                      value={formatUsd(currentPlanBilling?.monthly_price_usd)}
-                      hint="Commercial tier monthly price"
-                    />
-                    <PriceCard
-                      label="Configured Annual Price"
-                      value={formatUsd(currentPlanBilling?.annual_price_usd)}
-                      hint="Commercial tier annual price"
-                    />
-                  </div>
-
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                    <div>
-                      <span className="font-medium text-slate-900">Configured plan:</span>{" "}
-                      {configuredPlanName}
-                    </div>
-                    <div className="mt-2">
-                      <span className="font-medium text-slate-900">Effective active plan:</span>{" "}
-                      {effectivePlanName}
-                    </div>
-                    <div className="mt-2">
-                      <span className="font-medium text-slate-900">Entitlement state:</span>{" "}
-                      {planMismatch
-                        ? "Billing inactive, enforcement may temporarily fall back to the effective active plan"
-                        : "Configured plan and active entitlements aligned"}
-                    </div>
-                  </div>
-
-                  <div className="mt-6 grid gap-4 md:grid-cols-[1fr_220px]">
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">
-                        Selected Upgrade Plan
-                      </label>
-                      <select
-                        value={selectedPlanCode}
-                        onChange={(e) => {
-                          setSelectedPlanCode(e.target.value);
+                  <div className="mt-5 grid gap-4 xl:grid-cols-2">
+                    {planCatalog.map((plan) => (
+                      <PlanCard
+                        key={plan.code}
+                        plan={plan}
+                        configuredPlanCode={settings?.plan_code}
+                        effectivePlanCode={effectivePlanCode}
+                        selectedPlanCode={selectedPlanCode}
+                        onSelect={(planCode) => {
+                          setSelectedPlanCode(planCode);
                           setBillingMessage(null);
                         }}
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                      >
-                        {planCatalog.map((plan) => (
-                          <option key={plan.code} value={plan.code}>
-                            {formatPlanCodeLabel(plan.code)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">
-                        Billing Cycle
-                      </label>
-                      <select
-                        value={selectedBillingCycle}
-                        onChange={(e) => {
-                          setSelectedBillingCycle(e.target.value);
-                          setBillingMessage(null);
-                        }}
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                      >
-                        <option value="monthly">Monthly</option>
-                        <option value="annual">Annual</option>
-                      </select>
-                    </div>
+                      />
+                    ))}
                   </div>
-
-                  {primaryAction.helper ? (
-                    <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                      {primaryAction.helper}
-                    </div>
-                  ) : null}
-
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <div className="rounded-xl bg-slate-50 p-4">
-                      <div className="text-sm text-slate-500">{billingProviderLabel} Customer</div>
-                      <div className="mt-1 break-all font-mono text-xs text-slate-700">
-                        {providerCustomerId || "Not connected"}
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl bg-slate-50 p-4">
-                      <div className="text-sm text-slate-500">{billingProviderLabel} Subscription</div>
-                      <div className="mt-1 break-all font-mono text-xs text-slate-700">
-                        {providerSubscriptionId || "Not connected"}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                    <div>
-                      Active Billing Provider:{" "}
-                      <span className="font-medium">{billingProviderLabel}</span>
-                    </div>
-                    <div className="mt-2">
-                      Provider Environment:{" "}
-                      <span className="font-medium">{providerEnvironment}</span>
-                    </div>
-                    <div className="mt-2">
-                      Subscription Period End:{" "}
-                      <span className="font-medium">
-                        {formatDateTime(settings?.subscription_current_period_end)}
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      Checkout Mode:{" "}
-                      <span className="font-medium">
-                        {formatCheckoutModeLabel(billingFoundation?.checkout_state.mode)}
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      Billing Status Is Paid:{" "}
-                      <span className="font-medium">
-                        {formatBooleanLabel(billingFoundation?.billing_status_is_paid)}
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      Plan Mismatch:{" "}
-                      <span className="font-medium">
-                        {formatBooleanLabel(billingFoundation?.plan_mismatch)}
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      Paddle Enabled:{" "}
-                      <span className="font-medium">
-                        {formatBooleanLabel(billingFoundation?.paddle_ready?.enabled)}
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      Paddle API Key Configured:{" "}
-                      <span className="font-medium">
-                        {formatBooleanLabel(billingFoundation?.paddle_ready?.api_key_configured)}
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      Paddle Webhook Secret Configured:{" "}
-                      <span className="font-medium">
-                        {formatBooleanLabel(billingFoundation?.paddle_ready?.webhook_secret_configured)}
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      Provider Customer Connected:{" "}
-                      <span className="font-medium">
-                        {providerCustomerId ? "yes" : "no"}
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      Provider Subscription Connected:{" "}
-                      <span className="font-medium">
-                        {providerSubscriptionId ? "yes" : "no"}
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      Portal Available:{" "}
-                      <span className="font-medium">
-                        {billingFoundation?.checkout_state.portal_available ? "yes" : "no"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() => void handleStartCheckout()}
-                      disabled={primaryAction.disabled}
-                      className="rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-md hover:bg-slate-800"
-                    >
-                      {checkoutLoading ? "Preparing Billing..." : primaryAction.label}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => void handleOpenBillingPortal()}
-                      disabled={!canSeeUpgrade || portalLoading}
-                      className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
-                    >
-                      {portalLoading ? "Opening Portal..." : "Open Billing Portal"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (workspaceId) {
-                          void refreshBillingState(workspaceId);
-                        }
-                      }}
-                      disabled={refreshingBillingState}
-                      className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
-                    >
-                      {refreshingBillingState ? "Refreshing..." : "Refresh Billing State"}
-                    </button>
-                  </div>
-
-                  {!canSeeUpgrade ? (
-                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                      Only workspace owners can start checkout or manage billing.
-                    </div>
-                  ) : null}
                 </div>
+              ) : null}
 
-                <ManualPaymentCard
-                  billingFoundation={billingFoundation}
-                  selectedPlanCode={selectedPlanCode}
-                  selectedBillingCycle={selectedBillingCycle}
-                />
-
-                {planCatalog.length > 0 ? (
-                  <div id="plan-ladder" className="rounded-3xl border bg-white p-6 shadow-sm">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div>
-                        <h2 className="text-2xl font-semibold">Plan Ladder</h2>
-                        <p className="mt-1 text-sm text-slate-500">
-                          Workspace monetization tiers, pricing placeholders, and operational capacity ranges.
-                        </p>
-                      </div>
-
-                      {upgradeRecommendation?.recommended_plan_is_distinct && recommendedPlanName ? (
-                        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                          Recommended next plan: <span className="font-semibold">{recommendedPlanName}</span>
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="mt-5 grid gap-4 xl:grid-cols-2">
-                      {planCatalog.map((plan) => (
-                        <PlanCard
-                          key={plan.code}
-                          plan={plan}
-                          configuredPlanCode={settings?.plan_code}
-                          effectivePlanCode={effectivePlanCode}
-                          selectedPlanCode={selectedPlanCode}
-                          onSelect={(planCode) => {
-                            setSelectedPlanCode(planCode);
-                            setBillingMessage(null);
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div className="flex items-start justify-between gap-4">
+              <div className="rounded-3xl border bg-white p-6 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <h2 className="text-2xl font-semibold">Platform Readiness</h2>
+                    <h2 className="text-2xl font-semibold">Billing Status</h2>
                     <p className="mt-1 text-sm text-slate-500">
-                      External verification, API exposure, broker-ingestion posture, and webhook readiness layer.
+                      Commercial billing state without internal debug leakage.
                     </p>
                   </div>
 
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold">
-                    {platformReadiness?.verification_exposure_level || "internal_only"}
-                  </span>
-                </div>
-
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-
-                  <div className="rounded-xl border bg-slate-50 p-4">
-                    <div className="text-sm text-slate-500">External Verification</div>
-                    <div className="mt-1 font-semibold">
-                      {formatCapabilityStatus({
-                        enabled: platformReadiness?.capabilities.external_verification_enabled,
-                        fallbackWhenDisabled: "internal only",
-                      })}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      Public verification exposure and external trust-surface posture.
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border bg-slate-50 p-4">
-                    <div className="text-sm text-slate-500">API Access</div>
-                    <div className="mt-1 font-semibold">
-                      {formatCapabilityStatus({
-                        enabled: platformReadiness?.capabilities.api_access_enabled,
-                        fallbackWhenDisabled: "foundation ready",
-                        foundationLabel: "foundation ready",
-                      })}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      API layer posture for external systems and automated ingestion flows.
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border bg-slate-50 p-4">
-                    <div className="text-sm text-slate-500">Broker Integration</div>
-                    <div className="mt-1 font-semibold">
-                      {formatCapabilityStatus({
-                        enabled: platformReadiness?.capabilities.broker_import_enabled,
-                        fallbackWhenDisabled: "active foundation",
-                        foundationLabel: "active foundation",
-                      })}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      CSV, MT5, and IBKR ingestion are available on the shared broker-neutral pipeline.
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border bg-slate-50 p-4">
-                    <div className="text-sm text-slate-500">Webhook Ingestion</div>
-                    <div className="mt-1 font-semibold">
-                      {formatCapabilityStatus({
-                        enabled: platformReadiness?.capabilities.webhook_ingestion_enabled,
-                        fallbackWhenDisabled: "foundation active",
-                        foundationLabel: "foundation active",
-                      })}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      Webhook and stream-event ingestion surfaces are available in backend.
-                    </div>
+                  <div className="flex flex-wrap gap-2">
+                    <PlanBadge plan={settings?.plan_code} />
+                    <BillingBadge status={settings?.billing_status} />
                   </div>
                 </div>
 
-                {platformReadiness?.integration_sources?.length ? (
-                  <div className="mt-5">
-                    <div className="text-sm font-medium text-slate-900">Connected Sources</div>
+                <div className="mt-6 grid gap-4 md:grid-cols-2">
+                  <PriceCard
+                    label="Configured Monthly Price"
+                    value={formatUsd(currentPlanBilling?.monthly_price_usd)}
+                    hint="Commercial tier monthly price"
+                  />
+                  <PriceCard
+                    label="Configured Annual Price"
+                    value={formatUsd(currentPlanBilling?.annual_price_usd)}
+                    hint="Commercial tier annual price"
+                  />
+                </div>
 
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {platformReadiness.integration_sources.map((src, idx) => (
-                        <span
-                          key={`src-${idx}`}
-                          className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs"
-                        >
-                          {formatReadinessSourceLabel(src.provider)}
-                        </span>
+                <div className="mt-4 grid gap-4 md:grid-cols-[1fr_220px]">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Selected Upgrade Plan
+                    </label>
+                    <select
+                      value={selectedPlanCode}
+                      onChange={(e) => {
+                        setSelectedPlanCode(e.target.value);
+                        setBillingMessage(null);
+                      }}
+                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
+                    >
+                      {planCatalog.map((plan) => (
+                        <option key={plan.code} value={plan.code}>
+                          {formatPlanCodeLabel(plan.code)}
+                        </option>
                       ))}
-                    </div>
+                    </select>
                   </div>
-                ) : (
-                  <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-                    No explicit external connection metadata has been registered yet, but this workspace
-                    already has active broker-import and webhook-ingestion foundations available through
-                    the shared ingestion surface.
-                  </div>
-                )}
 
-                {platformReadiness?.recommended_next_step ? (
-                  <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-                    Recommended next step: {platformReadiness.recommended_next_step}
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
+                      Billing Cycle
+                    </label>
+                    <select
+                      value={selectedBillingCycle}
+                      onChange={(e) => {
+                        setSelectedBillingCycle(e.target.value);
+                        setBillingMessage(null);
+                      }}
+                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
+                    >
+                      <option value="monthly">Monthly</option>
+                      <option value="annual">Annual</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                  <div>
+                    <span className="font-medium text-slate-900">Billing provider:</span>{" "}
+                    {billingProviderLabel}
+                  </div>
+                  <div className="mt-2">
+                    <span className="font-medium text-slate-900">Subscription:</span>{" "}
+                    {settings?.billing_status || "inactive"}
+                  </div>
+                  <div className="mt-2">
+                    <span className="font-medium text-slate-900">Renewal date:</span>{" "}
+                    {formatDateTime(settings?.subscription_current_period_end)}
+                  </div>
+                  <div className="mt-2">
+                    <span className="font-medium text-slate-900">Billing cycle:</span>{" "}
+                    {formatPlanCodeLabel(selectedBillingCycle)}
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                  <div>
+                    <span className="font-medium text-slate-900">Checkout:</span>{" "}
+                    {formatCheckoutModeLabel(billingFoundation?.checkout_state?.mode)}
+                  </div>
+                  <div className="mt-2">
+                    <span className="font-medium text-slate-900">Customer portal:</span>{" "}
+                    {billingFoundation?.checkout_state?.portal_available ? "available" : "unavailable"}
+                  </div>
+                  <div className="mt-2">
+                    <span className="font-medium text-slate-900">Provider environment:</span>{" "}
+                    {providerEnvironment}
+                  </div>
+                  <div className="mt-2">
+                    <span className="font-medium text-slate-900">Customer linked:</span>{" "}
+                    {providerCustomerId ? "yes" : "no"}
+                  </div>
+                  <div className="mt-2">
+                    <span className="font-medium text-slate-900">Subscription linked:</span>{" "}
+                    {providerSubscriptionId ? "yes" : "no"}
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void handleStartCheckout()}
+                    disabled={primaryAction.disabled}
+                    className="rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-md hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                  >
+                    {checkoutLoading ? "Preparing Billing..." : primaryAction.label}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleOpenBillingPortal()}
+                    disabled={!canSeeUpgrade || portalLoading}
+                    className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
+                  >
+                    {portalLoading ? "Opening Portal..." : "Open Billing Portal"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (workspaceId) {
+                        void refreshBillingState(workspaceId);
+                      }
+                    }}
+                    disabled={refreshingBillingState}
+                    className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
+                  >
+                    {refreshingBillingState ? "Refreshing..." : "Refresh Billing State"}
+                  </button>
+                </div>
+
+                {!canSeeUpgrade ? (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    Only workspace owners can start checkout or manage billing.
                   </div>
                 ) : null}
-                <div className="mt-6 space-y-4">
-                  <div className="rounded-xl border border-slate-200 bg-white p-4">
-                    <div className="text-sm font-semibold text-slate-900">
-                      Broker Import Surface
-                    </div>
-                    <div className="mt-1 text-sm text-slate-600">
-                      Broker-neutral ingestion is active. CSV upload, MT5 adapter ingestion, and IBKR
-                      adapter ingestion already route through the canonical trade pipeline.
-                    </div>
-                    <div className="mt-3 inline-flex rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800">
-                      Active in import console
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-slate-200 bg-white p-4">
-                    <div className="text-sm font-semibold text-slate-900">
-                      API Access Layer
-                    </div>
-                    <div className="mt-1 text-sm text-slate-600">
-                      API exposure is moving toward external ingestion and verification workflows. This
-                      workspace is currently in foundation-ready posture for broader API activation.
-                    </div>
-                    <div className="mt-3 inline-flex rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-800">
-                      Foundation ready
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-slate-200 bg-white p-4">
-                    <div className="text-sm font-semibold text-slate-900">
-                      Webhook Ingestion Surface
-                    </div>
-                    <div className="mt-1 text-sm text-slate-600">
-                      Webhook and stream-event ingestion are available in backend and can receive external
-                      trade payloads through the runtime persistence layer.
-                    </div>
-                    <div className="mt-3 inline-flex rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800">
-                      Active foundation
-                    </div>
-                  </div>
-                </div>
               </div>
 
-              <div className="space-y-6">
-                <div className="rounded-3xl border bg-white p-6 shadow-sm">
-                  <h2 className="text-2xl font-semibold">Plan Limits</h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Current usage position against configured workspace plan limits.
-                  </p>
+              <ManualPaymentCard
+                billingFoundation={billingFoundation}
+                selectedPlanCode={selectedPlanCode}
+                selectedBillingCycle={selectedBillingCycle}
+              />
 
-                  {planMismatch ? (
-                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                      These cards show the configured commercial plan limits for{" "}
-                      <span className="font-semibold">{configuredPlanName}</span>. Billing is still inactive,
-                      so backend enforcement may temporarily apply the effective active plan{" "}
-                      <span className="font-semibold">{effectivePlanName}</span>.
+              <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+                <div className="space-y-6">
+                  <div className="rounded-3xl border bg-white p-6 shadow-sm">
+                    <h2 className="text-2xl font-semibold">Plan Limits</h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Current usage position against configured workspace plan limits.
+                    </p>
+
+                    <div className="mt-4 space-y-4">
+                      <UsageCard
+                        label="Claims"
+                        used={usage?.usage.claims.used}
+                        limit={configuredClaimLimit}
+                        ratio={claimsRatio}
+                        atOrOver={claimsAtOrOverLimit}
+                        hint="Governed public-claim and lifecycle exposure capacity"
+                      />
+                      <UsageCard
+                        label="Members"
+                        used={usage?.usage.members.used}
+                        limit={configuredMemberLimit}
+                        ratio={membersRatio}
+                        atOrOver={membersAtOrOverLimit}
+                        hint="Workspace collaborator capacity"
+                      />
+                      <UsageCard
+                        label="Trades"
+                        used={usage?.usage.trades.used}
+                        limit={configuredTradeLimit}
+                        ratio={tradesRatio}
+                        atOrOver={tradesAtOrOverLimit}
+                        hint="Evidence ingestion and operational throughput"
+                      />
+                      <UsageCard
+                        label="Storage (MB)"
+                        used={usage?.usage.storage_mb.used}
+                        limit={configuredStorageLimit}
+                        ratio={storageRatio}
+                        atOrOver={storageAtOrOverLimit}
+                        hint="Artifact and workspace storage budget"
+                      />
                     </div>
-                  ) : normalizeText(configuredPlanCode) === "sandbox" ? (
-                    <div className="mt-4 rounded-xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-900">
-                      These cards show the controlled evaluation limits for Sandbox. This workspace can be used
-                      for product proof and internal testing without initiating commercial billing.
-                    </div>
-                  ) : null}
-
-                  <div className="mt-4 space-y-4">
-
-                    <UsageCard
-                      label="Claims"
-                      used={usage?.usage.claims.used}
-                      limit={configuredClaimLimit}
-                      ratio={claimsRatio}
-                      atOrOver={claimsAtOrOverLimit}
-                      hint="Governed public-claim and lifecycle exposure capacity"
-                    />
-
-                    <UsageCard
-                      label="Members"
-                      used={usage?.usage.members.used}
-                      limit={configuredMemberLimit}
-                      ratio={membersRatio}
-                      atOrOver={membersAtOrOverLimit}
-                      hint="Workspace collaborator capacity"
-                    />
-
-                    <UsageCard
-                      label="Trades"
-                      used={usage?.usage.trades.used}
-                      limit={configuredTradeLimit}
-                      ratio={tradesRatio}
-                      atOrOver={tradesAtOrOverLimit}
-                      hint="Evidence ingestion and operational throughput"
-                    />
-          
-                    <UsageCard
-                      label="Storage (MB)"
-                      used={usage?.usage.storage_mb.used}
-                      limit={configuredStorageLimit}
-                      ratio={storageRatio}
-                      atOrOver={storageAtOrOverLimit}
-                      hint="Artifact and workspace storage budget"
-                    />
                   </div>
-                </div>
 
-                <div className="rounded-3xl border bg-white p-6 shadow-sm">
-                  <h2 className="text-2xl font-semibold">Claim Governance Unlocks</h2>
-                  <div className="mt-4 space-y-4 text-sm text-slate-700">
-                    <div className="rounded-xl bg-slate-50 p-4">
-                      <div className="font-medium">Governed version capacity</div>
-                      <div className="mt-1 text-slate-600">
-                        Higher plans increase available claim capacity so users can continue versioning
-                        instead of hitting blocked lineage actions.
+                  <div className="rounded-3xl border bg-white p-6 shadow-sm">
+                    <h2 className="text-2xl font-semibold">Claim Governance Unlocks</h2>
+                    <div className="mt-4 space-y-4 text-sm text-slate-700">
+                      <div className="rounded-xl bg-slate-50 p-4">
+                        <div className="font-medium">Governed version capacity</div>
+                        <div className="mt-1 text-slate-600">
+                          Higher plans increase available claim capacity so users can continue versioning
+                          instead of hitting blocked lineage actions.
+                        </div>
                       </div>
-                    </div>
-
-                    <div className="rounded-xl bg-slate-50 p-4">
-                      <div className="font-medium">Workflow continuity</div>
-                      <div className="mt-1 text-slate-600">
-                        Upgrading before limits are reached prevents interruption of claim creation,
-                        verification preparation, and governance review workflows.
+                      <div className="rounded-xl bg-slate-50 p-4">
+                        <div className="font-medium">Workflow continuity</div>
+                        <div className="mt-1 text-slate-600">
+                          Upgrading before limits are reached prevents interruption of claim creation,
+                          verification preparation, and governance review workflows.
+                        </div>
                       </div>
-                    </div>
-
-                    <div className="rounded-xl bg-slate-50 p-4">
-                      <div className="font-medium">Operational headroom</div>
-                      <div className="mt-1 text-slate-600">
-                        Claims, trades, members, and storage all contribute to how much governed trust
-                        infrastructure the workspace can support.
+                      <div className="rounded-xl bg-slate-50 p-4">
+                        <div className="font-medium">Operational headroom</div>
+                        <div className="mt-1 text-slate-600">
+                          Claims, trades, members, and storage all contribute to how much governed trust
+                          infrastructure the workspace can support.
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="rounded-3xl border bg-white p-6 shadow-sm">
-                  <h2 className="text-2xl font-semibold">Workspace Record</h2>
-                  <div className="mt-4 space-y-3 text-sm text-slate-600">
-                    <div>
-                      <span className="font-medium text-slate-900">Workspace ID:</span>{" "}
-                      {settings?.workspace_id || workspaceId}
-                    </div>
-                    <div>
-                      <span className="font-medium text-slate-900">Created:</span>{" "}
-                      {formatDateTime(settings?.created_at)}
-                    </div>
-                    <div>
-                      <span className="font-medium text-slate-900">Updated:</span>{" "}
-                      {formatDateTime(settings?.updated_at)}
-                    </div>
-                    {settings?.plan_detail?.description ? (
+                  <div className="rounded-3xl border bg-white p-6 shadow-sm">
+                    <div className="mb-4 flex items-center justify-between gap-4">
                       <div>
-                        <span className="font-medium text-slate-900">Plan Description:</span>{" "}
-                        {settings.plan_detail.description}
+                        <h2 className="text-2xl font-semibold">Workspace Profile</h2>
+                        <p className="mt-1 text-sm text-slate-500">
+                          Maintain workspace identity and billing contact metadata.
+                        </p>
+                      </div>
+
+                      {!canEdit ? (
+                        <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-medium text-amber-700">
+                          Read only
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <form onSubmit={handleSave} className="space-y-4">
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-slate-700">
+                          Workspace Name
+                        </label>
+                        {canEdit ? (
+                          <input
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            disabled={saving}
+                            className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500 disabled:bg-slate-100"
+                          />
+                        ) : (
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800">
+                            {name || "—"}
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-slate-700">
+                          Description
+                        </label>
+                        {canEdit ? (
+                          <textarea
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            disabled={saving}
+                            rows={5}
+                            className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500 disabled:bg-slate-100"
+                          />
+                        ) : (
+                          <div className="min-h-[132px] rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 whitespace-pre-wrap">
+                            {description || "—"}
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-slate-700">
+                          Billing Email
+                        </label>
+                        {canEdit ? (
+                          <input
+                            type="email"
+                            value={billingEmail}
+                            onChange={(e) => setBillingEmail(e.target.value)}
+                            disabled={saving}
+                            className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500 disabled:bg-slate-100"
+                          />
+                        ) : (
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800">
+                            {billingEmail || "—"}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-3">
+                        {canEdit ? (
+                          <button
+                            type="submit"
+                            disabled={saving}
+                            className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                          >
+                            {saving ? "Saving..." : "Save Settings"}
+                          </button>
+                        ) : null}
+
+                        <Link
+                          href={`/workspace/${workspaceId}/dashboard`}
+                          className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
+                        >
+                          Back to Dashboard
+                        </Link>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h2 className="text-2xl font-semibold">Platform Readiness</h2>
+                        <p className="mt-1 text-sm text-slate-500">
+                          External verification, API exposure, broker-ingestion posture, and webhook readiness.
+                        </p>
+                      </div>
+
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold">
+                        {platformReadiness?.verification_exposure_level || "internal_only"}
+                      </span>
+                    </div>
+
+                    <div className="mt-5 grid gap-4 md:grid-cols-2">
+                      <div className="rounded-xl border bg-slate-50 p-4">
+                        <div className="text-sm text-slate-500">External Verification</div>
+                        <div className="mt-1 font-semibold">
+                          {formatCapabilityStatus({
+                            enabled: platformReadiness?.capabilities.external_verification_enabled,
+                            fallbackWhenDisabled: "internal only",
+                          })}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          Public verification exposure and external trust-surface posture.
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border bg-slate-50 p-4">
+                        <div className="text-sm text-slate-500">API Access</div>
+                        <div className="mt-1 font-semibold">
+                          {formatCapabilityStatus({
+                            enabled: platformReadiness?.capabilities.api_access_enabled,
+                            fallbackWhenDisabled: "foundation ready",
+                            foundationLabel: "foundation ready",
+                          })}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          API layer posture for external systems and automated ingestion flows.
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border bg-slate-50 p-4">
+                        <div className="text-sm text-slate-500">Broker Integration</div>
+                        <div className="mt-1 font-semibold">
+                          {formatCapabilityStatus({
+                            enabled: platformReadiness?.capabilities.broker_import_enabled,
+                            fallbackWhenDisabled: "active foundation",
+                            foundationLabel: "active foundation",
+                          })}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          CSV, MT5, and IBKR ingestion are available on the shared broker-neutral pipeline.
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border bg-slate-50 p-4">
+                        <div className="text-sm text-slate-500">Webhook Ingestion</div>
+                        <div className="mt-1 font-semibold">
+                          {formatCapabilityStatus({
+                            enabled: platformReadiness?.capabilities.webhook_ingestion_enabled,
+                            fallbackWhenDisabled: "foundation active",
+                            foundationLabel: "foundation active",
+                          })}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          Webhook and stream-event ingestion surfaces are available in backend.
+                        </div>
+                      </div>
+                    </div>
+
+                    {platformReadiness?.integration_sources?.length ? (
+                      <div className="mt-5">
+                        <div className="text-sm font-medium text-slate-900">Connected Sources</div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {platformReadiness.integration_sources.map((src, idx) => (
+                            <span
+                              key={`src-${idx}`}
+                              className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs"
+                            >
+                              {formatReadinessSourceLabel(src.provider)}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                        No explicit external connection metadata has been registered yet, but this workspace
+                        already has active broker-import and webhook-ingestion foundations available through
+                        the shared ingestion surface.
+                      </div>
+                    )}
+
+                    {platformReadiness?.recommended_next_step ? (
+                      <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                        Recommended next step: {platformReadiness.recommended_next_step}
                       </div>
                     ) : null}
                   </div>
-                </div>
 
-                {!canEdit ? (
-                  <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-amber-800 shadow-sm">
-                    Your current role is <span className="font-semibold">{workspaceRole}</span>.
-                    Only workspace owners can update settings, billing contact details, and upgrade
-                    workspace plans.
+                  <div className="rounded-3xl border bg-white p-6 shadow-sm">
+                    <h2 className="text-2xl font-semibold">Workspace Record</h2>
+                    <div className="mt-4 space-y-3 text-sm text-slate-600">
+                      <div>
+                        <span className="font-medium text-slate-900">Workspace ID:</span>{" "}
+                        {settings?.workspace_id || workspaceId}
+                      </div>
+                      <div>
+                        <span className="font-medium text-slate-900">Created:</span>{" "}
+                        {formatDateTime(settings?.created_at)}
+                      </div>
+                      <div>
+                        <span className="font-medium text-slate-900">Updated:</span>{" "}
+                        {formatDateTime(settings?.updated_at)}
+                      </div>
+                      {settings?.plan_detail?.description ? (
+                        <div>
+                          <span className="font-medium text-slate-900">Plan Description:</span>{" "}
+                          {settings.plan_detail.description}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
-                ) : null}
+
+                  {!canEdit ? (
+                    <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-amber-800 shadow-sm">
+                      Your current role is <span className="font-semibold">{workspaceRole}</span>.
+                      Only workspace owners can update settings, billing contact details, and upgrade
+                      workspace plans.
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
           </>
