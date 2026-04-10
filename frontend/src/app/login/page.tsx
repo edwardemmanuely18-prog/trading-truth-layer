@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "../../lib/api";
 import { useAuth } from "../../components/AuthProvider";
 
+const ACTIVE_WORKSPACE_KEY = "ttl_active_workspace_id";
+
 function LoginPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -42,6 +44,13 @@ function LoginPageInner() {
 
     const firstWorkspace = workspaces?.[0];
     if (firstWorkspace) {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          ACTIVE_WORKSPACE_KEY,
+          String(firstWorkspace.workspace_id)
+        );
+      }
+
       router.replace(`/workspace/${firstWorkspace.workspace_id}/dashboard`);
       return;
     }
@@ -70,13 +79,29 @@ function LoginPageInner() {
       }
 
       const firstWorkspace = result.workspaces?.[0];
+
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
+
+        if (firstWorkspace) {
+          window.localStorage.setItem(
+            ACTIVE_WORKSPACE_KEY,
+            String(firstWorkspace.workspace_id)
+          );
+        }
+      }
+
       if (firstWorkspace) {
         router.push(`/workspace/${firstWorkspace.workspace_id}/dashboard`);
       } else {
         router.push("/");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Login failed. Please check your details and try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -133,7 +158,7 @@ function LoginPageInner() {
           </div>
 
           {error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 break-words">
+            <div className="break-words rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
               {error}
             </div>
           ) : null}
