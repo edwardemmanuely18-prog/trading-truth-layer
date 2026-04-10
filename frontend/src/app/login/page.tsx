@@ -24,6 +24,8 @@ function LoginPageInner() {
 
   const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const inviteRedirect = useMemo(() => {
     if (!inviteToken) return null;
@@ -56,10 +58,6 @@ function LoginPageInner() {
     const query = params.toString();
     return query ? `/register?${query}` : "/register";
   }, [inviteToken, finalRedirect, email, prefilledEmail]);
-
-  
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (prefilledEmail) {
