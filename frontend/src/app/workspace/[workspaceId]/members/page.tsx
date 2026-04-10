@@ -212,6 +212,13 @@ function ReadOnlyAccessNotice({
         </Link>
 
         <Link
+          href={`/claims`}
+          className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
+        >
+          Explore Public Proof
+        </Link>
+
+        <Link
           href={`/workspace/${workspaceId}/ledger`}
           className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
         >
@@ -222,13 +229,45 @@ function ReadOnlyAccessNotice({
   );
 }
 
-function InviteVisibilityNotice({ canManage }: { canManage: boolean }) {
+function InviteVisibilityNotice({
+  canManage,
+  invites,
+}: {
+  canManage: boolean;
+  invites: WorkspaceInvite[];
+}) {
   if (canManage) return null;
 
+  const pending = invites.filter((i) => i.status === "pending");
+
   return (
-    <div className="mb-8 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600 shadow-sm">
-      Invite records are currently visible to workspace owners only. Your access level can view the
-      member directory, but not the invite ledger yet.
+    <div className="mb-8 space-y-4">
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600 shadow-sm">
+        Invite records are currently restricted to workspace owners. You can view the member
+        directory, but invite issuance and management are controlled centrally.
+      </div>
+
+      {pending.length > 0 ? (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 text-blue-900 shadow-sm">
+          <h3 className="text-sm font-semibold">Pending invitations</h3>
+          <p className="mt-2 text-sm">
+            You have pending workspace invitations that require acceptance before access is fully
+            activated.
+          </p>
+
+          <div className="mt-3 space-y-2">
+            {pending.map((invite) => (
+              <Link
+                key={invite.id}
+                href={`/invite/${invite.token}`}
+                className="block rounded-xl border border-blue-300 bg-white px-4 py-2 text-sm font-medium hover:bg-blue-100"
+              >
+                Accept invite → {invite.email}
+              </Link>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -348,13 +387,25 @@ export default function WorkspaceMembersPage() {
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="text-sm text-slate-500">Trading Truth Layer · Workspace Access Control</div>
-            <h1 className="mt-2 text-4xl font-bold">Workspace Members & Invites</h1>
+            <h1 className="mt-2 text-4xl font-bold">
+              Workspace Access & Identity Control
+            </h1>
             <p className="mt-3 max-w-3xl text-slate-600">
-              Membership directory and invitation control surface for workspace {workspaceId}.
+              Govern membership, identity access, invitation lifecycle, and capacity enforcement
+              for workspace {workspaceId}.
             </p>
           </div>
 
           <div className="rounded-2xl border bg-white px-5 py-4 shadow-sm">
+
+            {canManageMembers ? (
+              <Link
+                href={`/workspace/${workspaceId}/members#invite`}
+                className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                Invite Member
+              </Link>
+            ) : null}
             <div className="text-sm text-slate-500">Workspace Role</div>
             <div className="mt-2 text-xl font-semibold">{workspaceRole || "unknown"}</div>
           </div>
@@ -373,6 +424,38 @@ export default function WorkspaceMembersPage() {
                 <ReadOnlyAccessNotice workspaceId={workspaceId} workspaceRole={workspaceRole} />
               </div>
             ) : null}
+
+            <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h2 className="text-lg font-semibold">Invitation Lifecycle</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                Workspace membership is governed through a controlled invitation system.
+                Invitations define identity onboarding into the workspace and enforce role,
+                capacity, and verification boundaries.
+              </p>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-3 text-sm">
+                <div className="rounded-xl border bg-slate-50 p-4">
+                  <div className="font-semibold">Issued</div>
+                  <div className="mt-1 text-slate-600">
+                    Invitation is created and sent to a target identity.
+                  </div>
+                </div>
+
+                <div className="rounded-xl border bg-slate-50 p-4">
+                  <div className="font-semibold">Pending</div>
+                  <div className="mt-1 text-slate-600">
+                    Awaiting acceptance via secure invite token.
+                  </div>
+                </div>
+
+                <div className="rounded-xl border bg-slate-50 p-4">
+                  <div className="font-semibold">Accepted</div>
+                  <div className="mt-1 text-slate-600">
+                    Identity is bound to workspace with enforced role permissions.
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
               <SummaryCard
@@ -483,7 +566,7 @@ export default function WorkspaceMembersPage() {
             ) : null}
 
             {canManageMembers ? (
-              <div className="mb-8">
+              <div id="invite">
                 <WorkspaceInviteForm
                   workspaceId={workspaceId}
                   workspaceRole={workspaceRole}
@@ -506,7 +589,7 @@ export default function WorkspaceMembersPage() {
               />
             </div>
 
-            <InviteVisibilityNotice canManage={canManageMembers} />
+            <InviteVisibilityNotice canManage={canManageMembers} invites={invites} />
 
             <WorkspaceInvitesTable
               workspaceId={workspaceId}
