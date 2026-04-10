@@ -3,6 +3,7 @@ const API_BASE = "/api";
 export const API_BASE_URL = API_BASE;
 const DEV_USER_ID: number | null = null;
 const TOKEN_STORAGE_KEY = "ttl_access_token";
+const ACTIVE_WORKSPACE_STORAGE_KEY = "ttl_active_workspace_id";
 
 export function getStoredAccessToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -17,6 +18,31 @@ export function setStoredAccessToken(token: string) {
 export function clearStoredAccessToken() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+}
+
+export function getStoredActiveWorkspaceId(): number | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY);
+  if (!raw) return null;
+
+  const parsed = Number(raw);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+export function setStoredActiveWorkspaceId(workspaceId: number | null) {
+  if (typeof window === "undefined") return;
+
+  if (workspaceId === null || workspaceId === undefined) {
+    window.localStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, String(workspaceId));
+}
+
+export function clearStoredActiveWorkspaceId() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(ACTIVE_WORKSPACE_STORAGE_KEY);
 }
 
 export type AuthUser = {
@@ -1800,7 +1826,10 @@ function normalizeVerifyPayload(
 }
 
 export const api = {
-  register: async (payload: RegisterPayload): Promise<AuthResponse> => {
+    register: async (payload: RegisterPayload): Promise<AuthResponse> => {
+    clearStoredAccessToken();
+    clearStoredActiveWorkspaceId();
+
     const result = await apiFetch<AuthResponse>(`/auth/register`, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -1810,10 +1839,18 @@ export const api = {
       setStoredAccessToken(result.access_token);
     }
 
+    const firstWorkspace = Array.isArray(result.workspaces) ? result.workspaces[0] : null;
+    if (firstWorkspace?.workspace_id) {
+      setStoredActiveWorkspaceId(firstWorkspace.workspace_id);
+    }
+
     return result;
   },
 
-  login: async (payload: LoginPayload): Promise<AuthResponse> => {
+    login: async (payload: LoginPayload): Promise<AuthResponse> => {
+    clearStoredAccessToken();
+    clearStoredActiveWorkspaceId();
+
     const result = await apiFetch<AuthResponse>(`/auth/login`, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -1823,17 +1860,31 @@ export const api = {
       setStoredAccessToken(result.access_token);
     }
 
+    const firstWorkspace = Array.isArray(result.workspaces) ? result.workspaces[0] : null;
+    if (firstWorkspace?.workspace_id) {
+      setStoredActiveWorkspaceId(firstWorkspace.workspace_id);
+    }
+
     return result;
   },
 
   logout: () => {
     clearStoredAccessToken();
+    clearStoredActiveWorkspaceId();
   },
 
   getMe: async (): Promise<MeResponse> => {
-    return apiFetch<MeResponse>(withDevUser(`/auth/me`), {
-      cache: "no-store",
-    });
+    try {
+      return await apiFetch<MeResponse>(withDevUser(`/auth/me`), {
+        cache: "no-store",
+      });
+    } catch (error) {
+      if (isApiError(error) && error.status === 401) {
+        clearStoredAccessToken();
+        clearStoredActiveWorkspaceId();
+      }
+      throw error;
+    }
   },
 
   getMyWorkspaces: async (): Promise<AuthWorkspace[]> => {
@@ -2074,16 +2125,22 @@ export const api = {
       body: formData,
     });
 
-    if (!res.ok) {
-      const rawText = await res.text();
-      const payload = parseApiErrorPayload(rawText);
-      const message =
-        payload?.message ||
-        payload?.detail ||
-        rawText ||
-        `CSV import failed with status ${res.status}`;
-      throw new ApiError(message, res.status, payload, rawText);
+  if (!res.ok) {
+    const rawText = await res.text();
+    const payload = parseApiErrorPayload(rawText);
+    const message =
+      payload?.message ||
+      payload?.detail ||
+      rawText ||
+      `API request failed with status ${res.status}`;
+
+    if (res.status === 401) {
+      clearStoredAccessToken();
+      clearStoredActiveWorkspaceId();
     }
+
+    throw new ApiError(message, res.status, payload, rawText);
+  }
 
     return res.json() as Promise<ImportCsvResult>;
   },
