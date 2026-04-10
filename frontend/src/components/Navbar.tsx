@@ -104,8 +104,13 @@ export default function Navbar({ workspaceId }: Props) {
 
   const homeHref = "/";
   const howItWorksHref = "/how-it-works";
-  const publicClaimsHref = "/claims";
-  const leaderboardHref = "/leaderboard";
+  const publicClaimsHref = resolvedWorkspaceId
+    ? `/workspace/${resolvedWorkspaceId}/claims`
+    : "/claims";
+
+  const leaderboardHref = resolvedWorkspaceId
+    ? `/workspace/${resolvedWorkspaceId}/leaderboard`
+    : "/leaderboard";
   const publicProfileHref = resolvedWorkspaceId ? `/profile/${resolvedWorkspaceId}` : "/profile";
 
   const base = resolvedWorkspaceId ? `/workspace/${resolvedWorkspaceId}` : "";
@@ -329,13 +334,13 @@ export default function Navbar({ workspaceId }: Props) {
                 How It Works
               </Link>
               <Link
-                href="/leaderboard"
+                href={leaderboardHref}
                 className="rounded-md border border-blue-300 px-2 py-1 hover:bg-blue-100"
               >
                 Leaderboard
               </Link>
               <Link
-                href="/claims"
+                href={publicClaimsHref}
                 className="rounded-md border border-blue-300 px-2 py-1 hover:bg-blue-100"
               >
                 Public Records
