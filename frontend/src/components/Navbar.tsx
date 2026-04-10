@@ -25,7 +25,6 @@ function isPublicTrustPath(currentPath: string) {
   return (
     currentPath === "/claims" ||
     currentPath === "/leaderboard" ||
-    currentPath === "/schema" ||
     currentPath === "/how-it-works" ||
     startsWithPath(currentPath, "/claim") ||
     startsWithPath(currentPath, "/verify") ||
@@ -33,17 +32,38 @@ function isPublicTrustPath(currentPath: string) {
   );
 }
 
-export default function Navbar({ workspaceId = 1 }: Props) {
+export default function Navbar({ workspaceId }: Props) {
   const pathname = usePathname();
   const [latestClaimId, setLatestClaimId] = useState<number | null>(null);
-  const { user, logout, getWorkspaceRole, loading } = useAuth();
+  const { user, logout, getWorkspaceRole, loading, workspaces } = useAuth();
+
+  const resolvedWorkspaceId = useMemo(() => {
+    if (typeof workspaceId === "number" && !Number.isNaN(workspaceId)) {
+      return workspaceId;
+    }
+
+    if (Array.isArray(workspaces) && workspaces.length > 0) {
+      return workspaces[0].workspace_id;
+    }
+
+    return null;
+  }, [workspaceId, workspaces]);
+
+  const currentPath = normalizePath(pathname);
+  const publicTrustActive = isPublicTrustPath(currentPath);
 
   useEffect(() => {
+    if (resolvedWorkspaceId == null) {
+      setLatestClaimId(null);
+      return;
+    }
+
+    const workspaceIdForFetch = resolvedWorkspaceId;
     let active = true;
 
     async function loadLatestWorkspaceClaim() {
       try {
-        const rows = await api.getWorkspaceClaims(workspaceId);
+        const rows = await api.getWorkspaceClaims(workspaceIdForFetch);
         if (!active) return;
 
         const latest =
@@ -63,11 +83,16 @@ export default function Navbar({ workspaceId = 1 }: Props) {
     return () => {
       active = false;
     };
-  }, [workspaceId]);
+  }, [resolvedWorkspaceId]);
 
   const workspaceRole = useMemo(() => {
-    return getWorkspaceRole(workspaceId);
-  }, [getWorkspaceRole, workspaceId]);
+    if (resolvedWorkspaceId == null) return null;
+    return getWorkspaceRole(resolvedWorkspaceId);
+  }, [getWorkspaceRole, resolvedWorkspaceId]);
+
+  if (!publicTrustActive && !resolvedWorkspaceId) {
+    return null;
+  }
 
   const canSeeImport = workspaceRole === "owner" || workspaceRole === "operator";
   const canSeeSchema = workspaceRole === "owner" || workspaceRole === "operator";
@@ -77,52 +102,62 @@ export default function Navbar({ workspaceId = 1 }: Props) {
     workspaceRole === "auditor" ||
     workspaceRole === "member";
 
-  const currentPath = normalizePath(pathname);
-  const base = `/workspace/${workspaceId}`;
-
   const homeHref = "/";
   const howItWorksHref = "/how-it-works";
   const publicClaimsHref = "/claims";
   const leaderboardHref = "/leaderboard";
-  const claimBuilderHref = "/schema";
-  const publicProfileHref = `/profile/${workspaceId}`;
+  const publicProfileHref = resolvedWorkspaceId ? `/profile/${resolvedWorkspaceId}` : "/profile";
 
-  const dashboardHref = `${base}/dashboard`;
-  const importHref = `${base}/import`;
-  const ledgerHref = `${base}/ledger`;
-  const workspaceSchemaHref = `${base}/schema`;
-  const claimsHref = `${base}/claims`;
-  const latestClaimHref = latestClaimId ? `${base}/claim/${latestClaimId}` : null;
-  const evidenceHref = latestClaimId
-    ? `${base}/evidence?claimId=${latestClaimId}`
-    : `${base}/evidence`;
-  const membersHref = `${base}/members`;
-  const settingsHref = `${base}/settings`;
+  const base = resolvedWorkspaceId ? `/workspace/${resolvedWorkspaceId}` : "";
+  const claimBuilderHref = resolvedWorkspaceId ? `${base}/schema` : "/claims";
+
+  const dashboardHref = resolvedWorkspaceId ? `${base}/dashboard` : "/";
+  const importHref = resolvedWorkspaceId ? `${base}/import` : "/";
+  const ledgerHref = resolvedWorkspaceId ? `${base}/ledger` : "/";
+  const workspaceSchemaHref = resolvedWorkspaceId ? `${base}/schema` : "/";
+  const claimsHref = resolvedWorkspaceId ? `${base}/claims` : "/";
+  const latestClaimHref =
+    resolvedWorkspaceId && latestClaimId ? `${base}/claim/${latestClaimId}` : null;
+  const evidenceHref =
+    resolvedWorkspaceId && latestClaimId
+      ? `${base}/evidence?claimId=${latestClaimId}`
+      : resolvedWorkspaceId
+        ? `${base}/evidence`
+        : "/";
+  const membersHref = resolvedWorkspaceId ? `${base}/members` : "/";
+  const settingsHref = resolvedWorkspaceId ? `${base}/settings` : "/";
 
   const homeActive = currentPath === "/";
   const howItWorksActive = currentPath === "/how-it-works";
   const publicClaimsActive =
     currentPath === "/claims" || startsWithPath(currentPath, "/claim");
   const leaderboardActive = currentPath === "/leaderboard";
-  const schemaBuilderActive = currentPath === "/schema";
+  const schemaBuilderActive = resolvedWorkspaceId
+    ? startsWithPath(currentPath, claimBuilderHref)
+    : false;
   const publicProfileActive = startsWithPath(currentPath, "/profile");
-  const publicTrustActive = isPublicTrustPath(currentPath);
 
-  const dashboardActive = startsWithPath(currentPath, dashboardHref);
-  const importActive = startsWithPath(currentPath, importHref);
-  const ledgerActive = startsWithPath(currentPath, ledgerHref);
-  const workspaceSchemaActive = startsWithPath(currentPath, workspaceSchemaHref);
-  const claimsActive =
-    startsWithPath(currentPath, claimsHref) ||
-    startsWithPath(currentPath, `${base}/claim`);
+  const dashboardActive = resolvedWorkspaceId
+    ? startsWithPath(currentPath, dashboardHref)
+    : false;
+  const importActive = resolvedWorkspaceId ? startsWithPath(currentPath, importHref) : false;
+  const ledgerActive = resolvedWorkspaceId ? startsWithPath(currentPath, ledgerHref) : false;
+  const workspaceSchemaActive = resolvedWorkspaceId
+    ? startsWithPath(currentPath, workspaceSchemaHref)
+    : false;
+  const claimsActive = resolvedWorkspaceId
+    ? startsWithPath(currentPath, claimsHref) ||
+      startsWithPath(currentPath, `${base}/claim`)
+    : false;
   const latestClaimActive = latestClaimHref
     ? startsWithPath(currentPath, latestClaimHref)
     : false;
-  const evidenceActive =
-    startsWithPath(currentPath, `${base}/evidence`) ||
-    (startsWithPath(currentPath, `${base}/claim`) && currentPath.endsWith("/evidence"));
-  const membersActive = startsWithPath(currentPath, membersHref);
-  const settingsActive = startsWithPath(currentPath, settingsHref);
+  const evidenceActive = resolvedWorkspaceId
+    ? startsWithPath(currentPath, `${base}/evidence`) ||
+      (startsWithPath(currentPath, `${base}/claim`) && currentPath.endsWith("/evidence"))
+    : false;
+  const membersActive = resolvedWorkspaceId ? startsWithPath(currentPath, membersHref) : false;
+  const settingsActive = resolvedWorkspaceId ? startsWithPath(currentPath, settingsHref) : false;
 
   function navClass(active: boolean) {
     return active
@@ -157,7 +192,11 @@ export default function Navbar({ workspaceId = 1 }: Props) {
             <WorkspaceSwitcher />
 
             <div className="hidden rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600 md:block">
-              {publicTrustActive ? "Public Trust Layer" : `Workspace #${workspaceId}`}
+              {publicTrustActive
+                ? "Public Trust Layer"
+                : resolvedWorkspaceId
+                  ? `Workspace #${resolvedWorkspaceId}`
+                  : "Workspace"}
             </div>
           </div>
 
@@ -172,7 +211,11 @@ export default function Navbar({ workspaceId = 1 }: Props) {
                   </span>
                 ) : null}
 
-                <span className="text-[10px] text-slate-400">workspace:{workspaceId}</span>
+                {resolvedWorkspaceId ? (
+                  <span className="text-[10px] text-slate-400">
+                    workspace:{resolvedWorkspaceId}
+                  </span>
+                ) : null}
               </div>
 
               <div className="text-xs text-slate-500">{user?.email || "—"}</div>
@@ -214,55 +257,61 @@ export default function Navbar({ workspaceId = 1 }: Props) {
               Profile
             </Link>
 
-            <Link href={claimBuilderHref} className={navClass(schemaBuilderActive)}>
-              Claim Builder
-            </Link>
+            {resolvedWorkspaceId ? (
+              <Link href={claimBuilderHref} className={navClass(schemaBuilderActive)}>
+                Claim Builder
+              </Link>
+            ) : null}
 
             <div className="mx-1 hidden h-6 w-px bg-slate-200 md:block" />
 
-            <Link href={dashboardHref} className={navClass(dashboardActive)}>
-              Dashboard
-            </Link>
+            {resolvedWorkspaceId ? (
+              <>
+                <Link href={dashboardHref} className={navClass(dashboardActive)}>
+                  Dashboard
+                </Link>
 
-            {latestClaimHref ? (
-              <Link href={latestClaimHref} className={navClass(latestClaimActive)}>
-                Latest Record
-              </Link>
+                {latestClaimHref ? (
+                  <Link href={latestClaimHref} className={navClass(latestClaimActive)}>
+                    Latest Record
+                  </Link>
+                ) : null}
+
+                {canSeeImport ? (
+                  <Link href={importHref} className={navClass(importActive)}>
+                    Import
+                  </Link>
+                ) : null}
+
+                <Link href={ledgerHref} className={navClass(ledgerActive)}>
+                  Ledger
+                </Link>
+
+                {canSeeSchema ? (
+                  <Link href={workspaceSchemaHref} className={navClass(workspaceSchemaActive)}>
+                    Schema Registry
+                  </Link>
+                ) : null}
+
+                <Link href={claimsHref} className={navClass(claimsActive)}>
+                  Claim Library
+                </Link>
+
+                <Link href={evidenceHref} className={navClass(evidenceActive)}>
+                  Evidence Review
+                </Link>
+
+                {canSeeMembers ? (
+                  <Link href={membersHref} className={navClass(membersActive)}>
+                    Members
+                  </Link>
+                ) : null}
+
+                <Link href={settingsHref} className={navClass(settingsActive)}>
+                  Settings & Billing
+                </Link>
+              </>
             ) : null}
-
-            {canSeeImport ? (
-              <Link href={importHref} className={navClass(importActive)}>
-                Import
-              </Link>
-            ) : null}
-
-            <Link href={ledgerHref} className={navClass(ledgerActive)}>
-              Ledger
-            </Link>
-
-            {canSeeSchema ? (
-              <Link href={workspaceSchemaHref} className={navClass(workspaceSchemaActive)}>
-                Schema Registry
-              </Link>
-            ) : null}
-
-            <Link href={claimsHref} className={navClass(claimsActive)}>
-              Claim Library
-            </Link>
-
-            <Link href={evidenceHref} className={navClass(evidenceActive)}>
-              Evidence Review
-            </Link>
-
-            {canSeeMembers ? (
-              <Link href={membersHref} className={navClass(membersActive)}>
-                Members
-              </Link>
-            ) : null}
-
-            <Link href={settingsHref} className={navClass(settingsActive)}>
-              Settings & Billing
-            </Link>
           </nav>
         </div>
 
