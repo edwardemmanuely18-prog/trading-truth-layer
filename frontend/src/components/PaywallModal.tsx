@@ -280,8 +280,9 @@ export default function PaywallModal({
   const displayAction = actionLabel || "Workflow action";
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 px-4 py-6">
-      <div className="w-full max-w-3xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-200/60">
+    <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-900/60 px-4 py-6">
+      <div className="flex min-h-full items-start justify-center md:items-center">
+      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-[28px] border border-slate-200 bg-white shadow-2xl ring-1 ring-slate-200/60">
         <div className="border-b border-slate-200 px-6 py-5 sm:px-7">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -291,6 +292,7 @@ export default function PaywallModal({
               <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
                 {resolvedTitle}
               </h2>
+            </div>
             </div>
 
             <TonePill reason={reason} />
