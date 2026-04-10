@@ -633,7 +633,11 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
       visibility: next.visibility ?? visibility,
       minTrades: next.minTrades ?? String(minTrades),
     });
-    return `/leaderboard?${params.toString()}`;
+    const base = typeof window !== "undefined" && window.location.pathname.includes("/workspace/")
+      ? window.location.pathname.split("/leaderboard")[0] + "/leaderboard"
+      : "/leaderboard";
+
+    return `${base}?${params.toString()}`;
   };
 
   return (
@@ -658,7 +662,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
         ) : null}
 
         <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
-          <form action="/leaderboard" method="get" className="space-y-4">
+          <form method="get" className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-4">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">Search</label>
@@ -724,7 +728,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
               </button>
 
               <Link
-                href="/leaderboard?q=&sort=net_pnl_desc&visibility=all&minTrades=0"
+                href={qs({ q: "", sort: "net_pnl_desc", visibility: "all", minTrades: "0" })}
                 className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
               >
                 Reset
