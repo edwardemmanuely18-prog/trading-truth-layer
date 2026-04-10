@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 from urllib import error, request
 
 from fastapi import APIRouter, Depends, Header, Request
@@ -238,9 +239,11 @@ def get_frontend_base_url() -> str:
 
 def get_active_billing_provider(workspace: Workspace) -> str:
     provider = str(workspace.billing_provider or "").strip().lower()
-    if provider in {"paddle", "stripe", "manual"}:
+    if provider in {"paddle", "stripe", "flutterwave", "manual"}:
         return provider
 
+    if flutterwave_is_ready():
+        return "flutterwave"
     if paddle_is_ready():
         return "paddle"
     if stripe_is_ready():
@@ -252,6 +255,8 @@ def get_active_billing_provider(workspace: Workspace) -> str:
 
 def get_billing_provider_display_label(provider: str | None) -> str:
     normalized = str(provider or "").strip().lower()
+    if normalized == "flutterwave":
+        return "Flutterwave"
     if normalized == "paddle":
         return "Paddle"
     if normalized == "stripe":
@@ -277,7 +282,7 @@ def should_expose_manual_billing(workspace: Workspace) -> bool:
     active_provider = get_active_billing_provider(workspace)
 
     # Hide manual instructions when Paddle or Stripe automation is already active.
-    if active_provider in {"paddle", "stripe"}:
+    if active_provider in {"flutterwave", "paddle", "stripe"}:
         return False
 
     return True
@@ -285,6 +290,8 @@ def should_expose_manual_billing(workspace: Workspace) -> bool:
 
 def get_provider_customer_id(workspace: Workspace, provider: str | None) -> str | None:
     normalized = str(provider or "").strip().lower()
+    if normalized == "flutterwave":
+        return workspace.flutterwave_customer_id
     if normalized == "paddle":
         return workspace.paddle_customer_id
     if normalized == "stripe":
@@ -294,6 +301,8 @@ def get_provider_customer_id(workspace: Workspace, provider: str | None) -> str 
 
 def get_provider_subscription_id(workspace: Workspace, provider: str | None) -> str | None:
     normalized = str(provider or "").strip().lower()
+    if normalized == "flutterwave":
+        return workspace.flutterwave_subscription_id
     if normalized == "paddle":
         return workspace.paddle_subscription_id
     if normalized == "stripe":
@@ -405,6 +414,115 @@ def configure_stripe() -> tuple[bool, str | None]:
     return True, None
 
 
+def flutterwave_is_ready() -> bool:
+    return bool(
+        getattr(settings, "FLUTTERWAVE_BILLING_ENABLED", False)
+        and getattr(settings, "FLUTTERWAVE_SECRET_KEY", None)
+        and str(settings.FLUTTERWAVE_SECRET_KEY).strip()
+    )
+
+
+def flutterwave_api_base_url() -> str:
+    return str(
+        getattr(settings, "FLUTTERWAVE_API_BASE_URL", "https://api.flutterwave.com/v3")
+    ).rstrip("/")
+
+
+def get_flutterwave_environment() -> str:
+    base_url = flutterwave_api_base_url().lower()
+    secret_key = str(getattr(settings, "FLUTTERWAVE_SECRET_KEY", "") or "").strip().lower()
+
+    if "sandbox" in base_url or "test" in secret_key:
+        return "sandbox"
+    return "live"
+
+
+def get_flutterwave_currency() -> str:
+    return str(getattr(settings, "FLUTTERWAVE_CURRENCY", "USD") or "USD").strip().upper()
+
+
+def get_flutterwave_plan_catalog() -> dict[str, str]:
+    return {
+        "starter_monthly": str(getattr(settings, "FLW_PLAN_STARTER_MONTHLY_ID", "") or "").strip(),
+        "starter_annual": str(getattr(settings, "FLW_PLAN_STARTER_ANNUAL_ID", "") or "").strip(),
+        "pro_monthly": str(getattr(settings, "FLW_PLAN_PRO_MONTHLY_ID", "") or "").strip(),
+        "pro_annual": str(getattr(settings, "FLW_PLAN_PRO_ANNUAL_ID", "") or "").strip(),
+        "growth_monthly": str(getattr(settings, "FLW_PLAN_GROWTH_MONTHLY_ID", "") or "").strip(),
+        "growth_annual": str(getattr(settings, "FLW_PLAN_GROWTH_ANNUAL_ID", "") or "").strip(),
+        "business_monthly": str(getattr(settings, "FLW_PLAN_BUSINESS_MONTHLY_ID", "") or "").strip(),
+        "business_annual": str(getattr(settings, "FLW_PLAN_BUSINESS_ANNUAL_ID", "") or "").strip(),
+    }
+
+
+def get_flutterwave_plan_id(plan_code: str, billing_cycle: str) -> str | None:
+    key = f"{normalize_plan_code(plan_code)}_{normalize_billing_cycle(billing_cycle)}"
+    return get_flutterwave_plan_catalog().get(key) or None
+
+
+def get_flutterwave_amount(plan_code: str, billing_cycle: str) -> int:
+    plan = get_plan_definition(plan_code)
+    billing = plan.get("billing", {})
+    if normalize_billing_cycle(billing_cycle) == "annual":
+        return int(billing.get("annual_price_usd") or 0)
+    return int(billing.get("monthly_price_usd") or 0)
+
+
+def flutterwave_request(method: str, path: str, payload: dict | None = None) -> tuple[dict | None, str | None]:
+    secret_key = str(getattr(settings, "FLUTTERWAVE_SECRET_KEY", "") or "").strip()
+    if not secret_key:
+        return None, "FLUTTERWAVE_SECRET_KEY is not configured."
+
+    url = f"{flutterwave_api_base_url()}{path}"
+    body = None
+    headers = {
+        "Authorization": f"Bearer {secret_key}",
+        "Accept": "application/json",
+    }
+
+    if payload is not None:
+        body = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+
+    req = request.Request(
+        url=url,
+        data=body,
+        method=method.upper(),
+        headers=headers,
+    )
+
+    try:
+        with request.urlopen(req, timeout=45) as response:
+            raw = response.read().decode("utf-8")
+            if not raw:
+                return {}, None
+            return json.loads(raw), None
+    except error.HTTPError as exc:
+        try:
+            raw = exc.read().decode("utf-8")
+            parsed = json.loads(raw) if raw else {}
+        except Exception:
+            parsed = {}
+
+        detail = (
+            parsed.get("message")
+            or parsed.get("error")
+            or parsed.get("status")
+            or str(exc)
+        )
+        return None, f"Flutterwave API request failed: {detail}"
+    except Exception as exc:
+        return None, f"Flutterwave API request failed: {exc}"
+
+
+def flutterwave_verify_webhook_hash(signature_header: str | None) -> bool:
+    secret_hash = str(getattr(settings, "FLUTTERWAVE_SECRET_HASH", "") or "").strip()
+    if not secret_hash:
+        return True
+    if not signature_header:
+        return False
+    return hmac.compare_digest(signature_header.strip(), secret_hash)
+
+    
 def paddle_api_base_url() -> str:
     return str(getattr(settings, "PADDLE_API_BASE_URL", "https://api.paddle.com")).rstrip("/")
 
@@ -877,7 +995,9 @@ def get_workspace_billing_foundation(
     manual_visible = should_expose_manual_billing(workspace)
 
     checkout_mode = (
-        "paddle_checkout_ready"
+        "flutterwave_checkout_ready"
+        if flutterwave_is_ready()
+        else "paddle_checkout_ready"
         if paddle_is_ready()
         else "stripe_checkout_ready"
         if stripe_is_ready()
@@ -927,6 +1047,25 @@ def get_workspace_billing_foundation(
             "secret_key_configured": bool(settings.STRIPE_SECRET_KEY and settings.STRIPE_SECRET_KEY.strip()),
             "package_installed": stripe is not None,
         },
+        "flutterwave_ready": {
+            "enabled": bool(getattr(settings, "FLUTTERWAVE_BILLING_ENABLED", False)),
+            "secret_key_configured": bool(
+                getattr(settings, "FLUTTERWAVE_SECRET_KEY", None)
+                and str(settings.FLUTTERWAVE_SECRET_KEY).strip()
+            ),
+            "public_key_configured": bool(
+                getattr(settings, "FLUTTERWAVE_PUBLIC_KEY", None)
+                and str(settings.FLUTTERWAVE_PUBLIC_KEY).strip()
+            ),
+            "secret_hash_configured": bool(
+                getattr(settings, "FLUTTERWAVE_SECRET_HASH", None)
+                and str(settings.FLUTTERWAVE_SECRET_HASH).strip()
+            ),
+            "has_customer_id": bool(getattr(workspace, "flutterwave_customer_id", None)),
+            "has_subscription_id": bool(getattr(workspace, "flutterwave_subscription_id", None)),
+            "plan_catalog_count": len([v for v in get_flutterwave_plan_catalog().values() if v]),
+            "environment": get_flutterwave_environment(),
+        },
         "paddle_ready": {
             "enabled": bool(getattr(settings, "PADDLE_BILLING_ENABLED", False)),
             "api_key_configured": bool(
@@ -950,7 +1089,11 @@ def get_workspace_billing_foundation(
         "checkout_state": {
             "can_start_checkout": True,
             "mode": checkout_mode,
-            "portal_available": bool(workspace.paddle_subscription_id or workspace.stripe_customer_id),
+            "portal_available": bool(
+                getattr(workspace, "flutterwave_subscription_id", None)
+                or workspace.paddle_subscription_id
+                or workspace.stripe_customer_id
+            ),
         },
     }
 
@@ -1010,6 +1153,123 @@ def create_billing_checkout_session(
             "checkout_intent": checkout_intent,
             "message": "Selected plan already matches the active workspace plan posture.",
         }
+
+    if flutterwave_is_ready():
+        flutterwave_plan_id = get_flutterwave_plan_id(resolved_plan_code, billing_cycle)
+        if not flutterwave_plan_id:
+            return {
+                "mode": "flutterwave_plan_missing",
+                "checkout_url": None,
+                "url": None,
+                "workspace_id": workspace.id,
+                "current_plan_code": current_plan_code,
+                "target_plan_code": resolved_plan_code,
+                "billing_cycle": billing_cycle,
+                "checkout_intent": checkout_intent,
+                "message": f"No Flutterwave payment plan id is mapped for {resolved_plan_code} ({billing_cycle}).",
+            }
+
+        billing_email = (workspace.billing_email or current_user.email or "").strip()
+        if not billing_email:
+            return {
+                "mode": "flutterwave_customer_error",
+                "checkout_url": None,
+                "url": None,
+                "workspace_id": workspace.id,
+                "current_plan_code": current_plan_code,
+                "target_plan_code": resolved_plan_code,
+                "billing_cycle": billing_cycle,
+                "checkout_intent": checkout_intent,
+                "message": "A billing email or user email is required before starting Flutterwave checkout.",
+            }
+
+        tx_ref = f"ttl_ws_{workspace.id}_{uuid4().hex[:12]}"
+        amount = get_flutterwave_amount(resolved_plan_code, billing_cycle)
+        redirect_url = (
+            f"{get_checkout_return_url(workspace.id)}"
+            f"?checkout=success&provider=flutterwave&tx_ref={tx_ref}"
+        )
+
+        flutterwave_payload = {
+            "tx_ref": tx_ref,
+            "amount": amount,
+            "currency": get_flutterwave_currency(),
+            "redirect_url": redirect_url,
+            "payment_plan": flutterwave_plan_id,
+            "customer": {
+                "email": billing_email,
+                "name": current_user.name or workspace.name,
+            },
+            "meta": {
+                "workspace_id": str(workspace.id),
+                "workspace_name": workspace.name,
+                "owner_user_id": str(current_user.id),
+                "target_plan_code": resolved_plan_code,
+                "billing_cycle": billing_cycle,
+                "checkout_intent": checkout_intent,
+            },
+            "customizations": {
+                "title": "Trading Truth Layer",
+                "description": f"{resolved_plan_code.title()} plan ({billing_cycle})",
+            },
+        }
+
+        flutterwave_response, flutterwave_error = flutterwave_request(
+            "POST",
+            "/payments",
+            flutterwave_payload,
+        )
+
+        if flutterwave_error:
+            return {
+                "mode": "flutterwave_checkout_error",
+                "checkout_url": None,
+                "url": None,
+                "workspace_id": workspace.id,
+                "current_plan_code": current_plan_code,
+                "target_plan_code": resolved_plan_code,
+                "billing_cycle": billing_cycle,
+                "checkout_intent": checkout_intent,
+                "message": flutterwave_error,
+            }
+
+        data = (flutterwave_response or {}).get("data") or {}
+        checkout_url = data.get("link")
+
+        if not checkout_url:
+            return {
+                "mode": "flutterwave_checkout_error",
+                "checkout_url": None,
+                "url": None,
+                "workspace_id": workspace.id,
+                "current_plan_code": current_plan_code,
+                "target_plan_code": resolved_plan_code,
+                "billing_cycle": billing_cycle,
+                "checkout_intent": checkout_intent,
+                "message": "Flutterwave payment was initialized but no checkout URL was returned.",
+            }
+
+        workspace.billing_provider = "flutterwave"
+        workspace.billing_email = billing_email
+        workspace.flutterwave_tx_ref = tx_ref
+        workspace.flutterwave_plan_id = flutterwave_plan_id
+        workspace.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(workspace)
+
+        return {
+            "mode": "flutterwave_checkout",
+            "checkout_url": checkout_url,
+            "url": checkout_url,
+            "tx_ref": tx_ref,
+            "workspace_id": workspace.id,
+            "current_plan_code": current_plan_code,
+            "target_plan_code": resolved_plan_code,
+            "billing_cycle": billing_cycle,
+            "checkout_intent": checkout_intent,
+            "flutterwave_plan_id": flutterwave_plan_id,
+            "message": "Flutterwave checkout created successfully.",
+        }    
 
     if paddle_is_ready():
         paddle_price_id = get_paddle_price_id(resolved_plan_code, billing_cycle)
@@ -1292,6 +1552,20 @@ def create_billing_portal_session(
             "message": access_error or "Workspace access failed.",
         }
 
+
+    if flutterwave_is_ready():
+        return {
+            "mode": "flutterwave_portal_pending",
+            "portal_url": None,
+            "url": None,
+            "workspace_id": workspace.id,
+            "message": (
+                "Flutterwave checkout automation is active. A self-serve billing portal is not wired yet "
+                "in this build. Use support/admin workflow for subscription changes for now."
+            ),
+        }
+
+
     if paddle_is_ready():
         return {
             "mode": "paddle_portal_pending",
@@ -1426,6 +1700,87 @@ async def handle_paddle_webhook(
             "mode": "webhook_processing_failed",
             "event_type": event_type,
             "message": f"Paddle webhook processing failed: {exc}",
+        }
+
+    return {
+        "received": True,
+        "event_type": event_type,
+    }
+
+
+@router.post("/flutterwave/webhooks")
+async def handle_flutterwave_webhook(
+    request: Request,
+    verif_hash: str | None = Header(default=None, alias="verif-hash"),
+    db: Session = Depends(get_db),
+):
+    if not flutterwave_verify_webhook_hash(verif_hash):
+        return {
+            "received": False,
+            "mode": "signature_verification_failed",
+            "message": "Flutterwave webhook signature verification failed.",
+        }
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return {
+            "received": False,
+            "mode": "invalid_payload",
+            "message": "Invalid Flutterwave webhook payload.",
+        }
+
+    event_type = payload.get("event")
+    data = payload.get("data") or {}
+
+    try:
+        tx_ref = data.get("tx_ref")
+        workspace = None
+
+        if tx_ref:
+            workspace = (
+                db.query(Workspace)
+                .filter(Workspace.flutterwave_tx_ref == tx_ref)
+                .first()
+            )
+
+        if not workspace:
+            return {
+                "received": True,
+                "event_type": event_type,
+                "message": "No matching workspace found for Flutterwave event.",
+            }
+
+        if event_type == "charge.completed" and str(data.get("status", "")).lower() == "successful":
+            meta = data.get("meta") or {}
+            target_plan_code = normalize_plan_code(meta.get("target_plan_code") or workspace.plan_code)
+
+            customer = data.get("customer") or {}
+            workspace.billing_provider = "flutterwave"
+            workspace.billing_status = "active"
+            workspace.plan_code = target_plan_code
+            workspace.flutterwave_customer_id = str(customer.get("id") or workspace.flutterwave_customer_id or "")
+            workspace.flutterwave_subscription_id = str(data.get("id") or workspace.flutterwave_subscription_id or "")
+            workspace.subscription_current_period_end = fallback_period_end_for_cycle(
+                meta.get("billing_cycle") or "monthly"
+            )
+            workspace.updated_at = datetime.utcnow()
+            db.commit()
+            db.refresh(workspace)
+
+        elif event_type == "charge.completed" and str(data.get("status", "")).lower() != "successful":
+            workspace.billing_provider = "flutterwave"
+            workspace.billing_status = "past_due"
+            workspace.updated_at = datetime.utcnow()
+            db.commit()
+            db.refresh(workspace)
+
+    except Exception as exc:
+        return {
+            "received": False,
+            "mode": "webhook_processing_failed",
+            "event_type": event_type,
+            "message": f"Flutterwave webhook processing failed: {exc}",
         }
 
     return {
