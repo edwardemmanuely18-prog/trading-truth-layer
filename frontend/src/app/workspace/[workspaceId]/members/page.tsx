@@ -395,21 +395,23 @@ export default function WorkspaceMembersPage() {
               for workspace {workspaceId}.
             </p>
           </div>
-
-          <div className="rounded-2xl border bg-white px-5 py-4 shadow-sm">
-
-            {canManageMembers ? (
-              <Link
-                href={`/workspace/${workspaceId}/members#invite`}
-                className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
-              >
-                Invite Member
-              </Link>
-            ) : null}
-            <div className="text-sm text-slate-500">Workspace Role</div>
-            <div className="mt-2 text-xl font-semibold">{workspaceRole || "unknown"}</div>
-          </div>
         </div>
+
+            <div className="flex min-w-[180px] flex-col items-stretch gap-3">
+              {canManageMembers ? (
+                <Link
+                  href={`/workspace/${workspaceId}/members#invite`}
+                  className="rounded-xl bg-slate-900 px-5 py-3 text-center text-sm font-semibold text-white hover:bg-slate-800"
+                >
+                  Invite Member
+                </Link>
+              ) : null}
+
+              <div className="rounded-2xl border bg-white px-5 py-4 shadow-sm">
+                <div className="text-sm text-slate-500">Workspace Role</div>
+                <div className="mt-2 text-2xl font-bold capitalize">{workspaceRole}</div>
+              </div>
+            </div>
 
         {loading ? (
           <div className="rounded-2xl border bg-white p-6 shadow-sm">Loading members page...</div>
