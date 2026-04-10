@@ -195,21 +195,31 @@ export default function InviteAcceptPage() {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Link
-                href={`/login?redirect=/invite/${token}`}
+              <button
+                type="button"
+                onClick={() => {
+                  logout();
+                  router.push(`/login?redirect=/invite/${token}`);
+                }}
                 className="inline-flex rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800"
               >
-                Sign in with invited account
-              </Link>
+                Sign out and sign in with invited account
+              </button>
 
-              <Link
-                href={`/register?redirect=/invite/${token}${
-                  inviteEmail ? `&email=${encodeURIComponent(inviteEmail)}` : ""
-                }`}
+              <button
+                type="button"
+                onClick={() => {
+                  logout();
+                  router.push(
+                    `/register?redirect=/invite/${token}${
+                      inviteEmail ? `&email=${encodeURIComponent(inviteEmail)}` : ""
+                    }`
+                  );
+                }}
                 className="inline-flex rounded-xl border border-slate-300 px-5 py-2 text-sm font-medium hover:bg-slate-50"
               >
-                Create account with invited email
-              </Link>
+                Sign out and create account with invited email
+              </button>
 
               {user ? (
                 <button
