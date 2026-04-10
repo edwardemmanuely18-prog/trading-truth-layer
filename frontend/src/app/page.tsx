@@ -89,7 +89,7 @@ export default function HomePage() {
                   </Link>
                 )}
                 <button
-                  onClick={logout}
+                  onClick={() => logout()}
                   className="rounded-xl border px-4 py-2 text-sm"
                 >
                   Sign Out
