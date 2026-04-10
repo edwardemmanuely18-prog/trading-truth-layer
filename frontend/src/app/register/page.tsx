@@ -21,24 +21,52 @@ function RegisterPageInner() {
     [searchParams]
   );
 
+  const prefilledEmail = useMemo(
+    () => searchParams.get("email") || "",
+    [searchParams]
+  );
+
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const inviteRedirect = useMemo(() => {
+    if (!inviteToken) return null;
+    return `/invite/${encodeURIComponent(inviteToken)}`;
+  }, [inviteToken]);
+
+  const finalRedirect = useMemo(() => {
+    if (redirect) return redirect;
+    if (inviteRedirect) return inviteRedirect;
+    return null;
+  }, [redirect, inviteRedirect]);
+
+  const loginHref = useMemo(() => {
+    const params = new URLSearchParams();
+
+    if (inviteToken) params.set("token", inviteToken);
+    if (finalRedirect) params.set("redirect", finalRedirect);
+    if (email.trim()) params.set("email", email.trim());
+
+    const query = params.toString();
+    return query ? `/login?${query}` : "/login";
+  }, [inviteToken, finalRedirect, email]);
+
+  useEffect(() => {
+    if (prefilledEmail) {
+      setEmail(prefilledEmail);
+    }
+  }, [prefilledEmail]);
+
   useEffect(() => {
     if (authLoading) return;
     if (!isAuthenticated || !user) return;
 
-    if (inviteToken) {
-      router.replace(`/invites/accept?token=${encodeURIComponent(inviteToken)}`);
-      return;
-    }
-
-    if (redirect) {
-      router.replace(redirect);
+    if (finalRedirect) {
+      router.replace(finalRedirect);
       return;
     }
 
@@ -49,7 +77,7 @@ function RegisterPageInner() {
     }
 
     router.replace("/");
-  }, [authLoading, isAuthenticated, user, inviteToken, redirect, workspaces, router]);
+  }, [authLoading, isAuthenticated, user, finalRedirect, workspaces, router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -60,24 +88,20 @@ function RegisterPageInner() {
 
       const result = await api.register({
         name,
-        email,
+        email: email.trim(),
         password,
         workspace_name: inviteToken ? undefined : workspaceName || undefined,
       });
 
       await refresh();
 
-      if (inviteToken) {
-        router.push(`/invites/accept?token=${encodeURIComponent(inviteToken)}`);
-        return;
-      }
-
-      if (redirect) {
-        router.push(redirect);
+      if (finalRedirect) {
+        router.push(finalRedirect);
         return;
       }
 
       const firstWorkspace = result.workspaces?.[0];
+
       if (firstWorkspace) {
         router.push(`/workspace/${firstWorkspace.workspace_id}/dashboard`);
       } else {
@@ -107,13 +131,13 @@ function RegisterPageInner() {
           <div className="text-sm text-slate-500">Trading Truth Layer</div>
           <h1 className="mt-2 text-3xl font-bold">Create Account</h1>
           <p className="mt-2 text-sm text-slate-600">
-            Create a user account and optionally create your first workspace.
+            Create your account and continue into your workspace or invite flow.
           </p>
         </div>
 
         {inviteToken ? (
           <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-            Create your account first, then you will be redirected to accept your workspace invite.
+            Create your account using the invited email, then continue to accept your workspace invite.
           </div>
         ) : null}
 
@@ -122,7 +146,7 @@ function RegisterPageInner() {
             <label className="mb-2 block text-sm font-medium">Name</label>
             <input
               type="text"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 px-4 py-3"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
@@ -133,7 +157,7 @@ function RegisterPageInner() {
             <label className="mb-2 block text-sm font-medium">Email</label>
             <input
               type="email"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 px-4 py-3"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -144,7 +168,7 @@ function RegisterPageInner() {
             <label className="mb-2 block text-sm font-medium">Password</label>
             <input
               type="password"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
+              className="w-full rounded-xl border border-slate-300 px-4 py-3"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -156,24 +180,23 @@ function RegisterPageInner() {
               <label className="mb-2 block text-sm font-medium">Workspace Name</label>
               <input
                 type="text"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3"
                 value={workspaceName}
                 onChange={(e) => setWorkspaceName(e.target.value)}
-                placeholder="Optional first workspace"
               />
             </div>
           ) : null}
 
-          {error ? (
+          {error && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
               {error}
             </div>
-          ) : null}
+          )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+            className="w-full rounded-xl bg-slate-900 px-5 py-3 text-white"
           >
             {loading ? "Creating account..." : "Create Account"}
           </button>
@@ -181,10 +204,7 @@ function RegisterPageInner() {
 
         <div className="mt-6 border-t pt-4 text-sm text-slate-600">
           Already have an account?{" "}
-          <Link
-            href={inviteToken ? `/login?token=${encodeURIComponent(inviteToken)}` : "/login"}
-            className="font-medium text-slate-900 hover:underline"
-          >
+          <Link href={loginHref} className="font-medium text-slate-900">
             Sign in
           </Link>
         </div>
@@ -195,15 +215,7 @@ function RegisterPageInner() {
 
 export default function RegisterPage() {
   return (
-    <Suspense
-      fallback={
-        <main className="min-h-screen bg-slate-50 px-6 py-16 text-slate-900">
-          <div className="mx-auto max-w-md rounded-2xl border bg-white p-8 shadow-sm">
-            Loading registration page...
-          </div>
-        </main>
-      }
-    >
+    <Suspense fallback={<div>Loading...</div>}>
       <RegisterPageInner />
     </Suspense>
   );
