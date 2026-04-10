@@ -198,8 +198,7 @@ export default function InviteAcceptPage() {
               <button
                 type="button"
                 onClick={() => {
-                  logout();
-                  router.push(`/login?redirect=/invite/${token}`);
+                  logout(`/login?redirect=/invite/${encodeURIComponent(token)}`);
                 }}
                 className="inline-flex rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800"
               >
@@ -209,12 +208,11 @@ export default function InviteAcceptPage() {
               <button
                 type="button"
                 onClick={() => {
-                  logout();
-                  router.push(
-                    `/register?redirect=/invite/${token}${
-                      inviteEmail ? `&email=${encodeURIComponent(inviteEmail)}` : ""
-                    }`
-                  );
+                  const emailQuery = inviteEmail
+                    ? `&email=${encodeURIComponent(inviteEmail)}`
+                    : "";
+
+                  logout(`/register?redirect=/invite/${encodeURIComponent(token)}${emailQuery}`);
                 }}
                 className="inline-flex rounded-xl border border-slate-300 px-5 py-2 text-sm font-medium hover:bg-slate-50"
               >

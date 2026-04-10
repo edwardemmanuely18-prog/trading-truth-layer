@@ -16,7 +16,7 @@ type AuthContextValue = {
   loading: boolean;
   isAuthenticated: boolean;
   refresh: () => Promise<void>;
-  logout: () => void;
+  logout: (redirectTo?: string) => void;
   getWorkspaceRole: (workspaceId: number) => string | null;
   hasWorkspaceRole: (workspaceId: number, roles: string[]) => boolean;
 };
@@ -42,12 +42,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback((redirectTo?: string) => {
     api.logout();
     setUser(null);
     setWorkspaces([]);
+
     if (typeof window !== "undefined") {
-      window.location.href = "/login";
+      window.location.href = redirectTo || "/login";
     }
   }, []);
 
