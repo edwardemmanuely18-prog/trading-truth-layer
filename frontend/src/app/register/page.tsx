@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "../../lib/api";
 import { useAuth } from "../../components/AuthProvider";
 
+const ACTIVE_WORKSPACE_KEY = "ttl_active_workspace_id";
+
 function RegisterPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -72,6 +74,13 @@ function RegisterPageInner() {
 
     const firstWorkspace = workspaces?.[0];
     if (firstWorkspace) {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          ACTIVE_WORKSPACE_KEY,
+          String(firstWorkspace.workspace_id)
+        );
+      }
+
       router.replace(`/workspace/${firstWorkspace.workspace_id}/dashboard`);
       return;
     }
@@ -95,12 +104,23 @@ function RegisterPageInner() {
 
       await refresh();
 
+      const firstWorkspace = result.workspaces?.[0];
+
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
+
+        if (firstWorkspace) {
+          window.localStorage.setItem(
+            ACTIVE_WORKSPACE_KEY,
+            String(firstWorkspace.workspace_id)
+          );
+        }
+      }
+
       if (finalRedirect) {
         router.push(finalRedirect);
         return;
       }
-
-      const firstWorkspace = result.workspaces?.[0];
 
       if (firstWorkspace) {
         router.push(`/workspace/${firstWorkspace.workspace_id}/dashboard`);
@@ -108,7 +128,11 @@ function RegisterPageInner() {
         router.push("/");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Registration failed. Please check your details and try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -146,9 +170,10 @@ function RegisterPageInner() {
             <label className="mb-2 block text-sm font-medium">Name</label>
             <input
               type="text"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3"
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              autoComplete="name"
               required
             />
           </div>
@@ -157,9 +182,10 @@ function RegisterPageInner() {
             <label className="mb-2 block text-sm font-medium">Email</label>
             <input
               type="email"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3"
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
               required
             />
           </div>
@@ -168,9 +194,10 @@ function RegisterPageInner() {
             <label className="mb-2 block text-sm font-medium">Password</label>
             <input
               type="password"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3"
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
               required
             />
           </div>
@@ -180,23 +207,24 @@ function RegisterPageInner() {
               <label className="mb-2 block text-sm font-medium">Workspace Name</label>
               <input
                 type="text"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
                 value={workspaceName}
                 onChange={(e) => setWorkspaceName(e.target.value)}
+                placeholder="Optional for standard signup"
               />
             </div>
           ) : null}
 
-          {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error ? (
+            <div className="break-words rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
               {error}
             </div>
-          )}
+          ) : null}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-slate-900 px-5 py-3 text-white"
+            className="w-full rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
           >
             {loading ? "Creating account..." : "Create Account"}
           </button>
@@ -204,7 +232,7 @@ function RegisterPageInner() {
 
         <div className="mt-6 border-t pt-4 text-sm text-slate-600">
           Already have an account?{" "}
-          <Link href={loginHref} className="font-medium text-slate-900">
+          <Link href={loginHref} className="font-medium text-slate-900 hover:underline">
             Sign in
           </Link>
         </div>
@@ -215,7 +243,15 @@ function RegisterPageInner() {
 
 export default function RegisterPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-50 px-6 py-16 text-slate-900">
+          <div className="mx-auto max-w-md rounded-2xl border bg-white p-8 shadow-sm">
+            Loading registration page...
+          </div>
+        </main>
+      }
+    >
       <RegisterPageInner />
     </Suspense>
   );
