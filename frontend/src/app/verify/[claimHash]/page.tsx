@@ -592,6 +592,9 @@ export default function PublicVerifyClaimPage() {
   const hasDisputes = Boolean((verifiedResult as any)?.has_active_disputes);  
 
  const exposureLevel = resolveVerificationExposureLevel(verifiedResult);   
+ const canonicalCapability = true;
+ const portableCapability = true;
+ const apiAddressableCapability = true;
  const trustState = (() => {
   switch (trustLevel) {
     case "finalized":
@@ -731,33 +734,21 @@ export default function PublicVerifyClaimPage() {
               <div className="rounded-xl border bg-white p-4">
                 <div className="text-slate-500">Canonical</div>
                 <div className="mt-1 font-semibold text-slate-900">
-                  {String(
-                    v7Payload?.proof_summary?.canonical ??
-                    v7Payload?.portable_capabilities?.canonical ??
-                    true
-                  )}
+                  {String(canonicalCapability)}
                 </div>
               </div>
 
               <div className="rounded-xl border bg-white p-4">
                 <div className="text-slate-500">Portable</div>
                 <div className="mt-1 font-semibold text-slate-900">
-                  {String(
-                    v7Payload?.proof_summary?.portable ??
-                    v7Payload?.portable_capabilities?.portable ??
-                    true
-                  )}
+                  {String(portableCapability)}
                 </div>
               </div>
 
               <div className="rounded-xl border bg-white p-4">
                 <div className="text-slate-500">API Addressable</div>
                 <div className="mt-1 font-semibold text-slate-900">
-                  {String(
-                    v7Payload?.proof_summary?.api_addressable ??
-                    v7Payload?.portable_capabilities?.api_addressable ??
-                    true
-                  )}
+                  {String(apiAddressableCapability)}
                 </div>
               </div>
             </div>
