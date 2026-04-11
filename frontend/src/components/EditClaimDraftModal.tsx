@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type ClaimSchema, type ClaimSchemaUpdatePayload } from "../lib/api";
 import { useAuth } from "./AuthProvider";
 
@@ -141,6 +141,7 @@ function detectIssues(form: FormState) {
 
 export default function EditClaimDraftModal({ open, claim, onClose, onSaved }: Props) {
   const { getWorkspaceRole } = useAuth();
+  const bodyScrollRef = useRef<HTMLDivElement | null>(null);
 
   const [form, setForm] = useState<FormState>(() => buildInitialFormState(claim));
   const [saving, setSaving] = useState(false);
@@ -148,13 +149,17 @@ export default function EditClaimDraftModal({ open, claim, onClose, onSaved }: P
 
   const workspaceRole = getWorkspaceRole(claim.workspace_id);
 
-  useEffect(() => {
-    if (open) {
-      setForm(buildInitialFormState(claim));
-      setError(null);
-      setSaving(false);
-    }
-  }, [open, claim]);
+useEffect(() => {
+  if (open) {
+    setForm(buildInitialFormState(claim));
+    setError(null);
+    setSaving(false);
+
+    requestAnimationFrame(() => {
+      bodyScrollRef.current?.scrollTo({ top: 0 });
+    });
+  }
+}, [open, claim]);
 
   const canEdit = useMemo(() => {
     if (claim.status !== "draft") return false;
@@ -251,7 +256,7 @@ export default function EditClaimDraftModal({ open, claim, onClose, onSaved }: P
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-4">
       <div className="flex min-h-full items-center justify-center">
         <div className="flex w-full max-w-6xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-          <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-white px-6 py-5">
+          <div className="shrink-0 flex flex-wrap items-start justify-between gap-4 border-b bg-white px-6 py-5">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-white px-6 py-5">
           <div>
             <div className="text-sm text-slate-500">Draft Claim Editor</div>
@@ -279,7 +284,10 @@ export default function EditClaimDraftModal({ open, claim, onClose, onSaved }: P
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+        <div
+          ref={bodyScrollRef}
+          className="min-h-0 flex-1 overflow-y-auto px-6 py-6"
+        >
           {!canEdit && (
             <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
               This claim cannot be edited in your current access state. Draft editing is limited to workspace owners and operators while the claim is still in draft status.
