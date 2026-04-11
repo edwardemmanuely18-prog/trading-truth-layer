@@ -591,10 +591,23 @@ export default function PublicVerifyClaimPage() {
     : [];
   const hasDisputes = Boolean((verifiedResult as any)?.has_active_disputes);  
 
- const exposureLevel = resolveVerificationExposureLevel(verifiedResult);   
- const canonicalCapability = true;
- const portableCapability = true;
- const apiAddressableCapability = true;
+  const exposureLevel = resolveVerificationExposureLevel(verifiedResult);
+
+ const canonicalCapability =
+  v7Payload?.proof_summary?.canonical ??
+  v7Payload?.portable_capabilities?.canonical ??
+  (lifecycleStatus === "published" || lifecycleStatus === "locked");
+
+ const portableCapability =
+  v7Payload?.proof_summary?.portable ??
+  v7Payload?.portable_capabilities?.portable ??
+  Boolean(verificationUrl);
+
+ const apiAddressableCapability =
+  v7Payload?.proof_summary?.api_addressable ??
+  v7Payload?.portable_capabilities?.api_addressable ??
+  Boolean(claimHash);
+
  const trustState = (() => {
   switch (trustLevel) {
     case "finalized":
@@ -721,10 +734,12 @@ export default function PublicVerifyClaimPage() {
             tradeSetHash={verifiedResult.trade_set_hash}
             verifiedAt={lifecycle.verified_at}
             lockedAt={lifecycle.locked_at}
-            canonical={v7Payload?.proof_summary?.canonical}
-            portable={v7Payload?.proof_summary?.portable}
-            apiAddressable={v7Payload?.proof_summary?.api_addressable}
-          />
+            issuerName={issuerName}
+            exposureLevel={exposureLevel}
+            canonical={canonicalCapability}
+            portable={portableCapability}
+            apiAddressable={apiAddressableCapability}
+          /> 
         </div>
 
         <div className="mb-8 rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm">
@@ -735,22 +750,28 @@ export default function PublicVerifyClaimPage() {
           <div className="mt-4 grid gap-3 md:grid-cols-3 text-sm">
             <div className="rounded-xl border bg-white p-4">
               <div className="text-slate-500">Canonical</div>
-              <div className="mt-1 font-semibold text-slate-900">true</div>
+              <div className="mt-1 font-semibold text-slate-900">
+                {canonicalCapability ? "true" : "false"}
+              </div>
             </div>
 
             <div className="rounded-xl border bg-white p-4">
               <div className="text-slate-500">Portable</div>
-              <div className="mt-1 font-semibold text-slate-900">true</div>
+              <div className="mt-1 font-semibold text-slate-900">
+                {portableCapability ? "true" : "false"}
+              </div>
             </div>
 
             <div className="rounded-xl border bg-white p-4">
               <div className="text-slate-500">API Addressable</div>
-              <div className="mt-1 font-semibold text-slate-900">true</div>
+              <div className="mt-1 font-semibold text-slate-900">
+                {apiAddressableCapability ? "true" : "false"}
+              </div>
             </div>
           </div>
 
           <div className="mt-4 text-sm text-indigo-800">
-            This record is canonical, portable, and API-addressable by design.
+            Capability flags are resolved from payload when available, and otherwise inferred from lifecycle state, exposure, and route addressability.
           </div>
         </div>
 
