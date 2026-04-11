@@ -250,7 +250,7 @@ export default function EditClaimDraftModal({ open, claim, onClose, onSaved }: P
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-4">
       <div className="flex min-h-full items-center justify-center">
-        <div className="w-full max-w-6xl max-h-[90vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex w-full max-w-6xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-white px-6 py-5">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-white px-6 py-5">
           <div>
@@ -279,7 +279,7 @@ export default function EditClaimDraftModal({ open, claim, onClose, onSaved }: P
           </div>
         </div>
 
-        <div className="max-h-[calc(90vh-140px)] overflow-y-auto px-6 py-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
           {!canEdit && (
             <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
               This claim cannot be edited in your current access state. Draft editing is limited to workspace owners and operators while the claim is still in draft status.
@@ -507,7 +507,7 @@ export default function EditClaimDraftModal({ open, claim, onClose, onSaved }: P
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-white px-6 py-4">
+        <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 border-t bg-white px-6 py-4">
           <div className="text-xs text-slate-500">
             Saving will update the draft and write a{" "}
             <span className="font-medium">claim_schema_updated</span> audit event.
