@@ -352,24 +352,15 @@ export default function ClaimVerificationSignature({
 
           <div className="mt-3 grid gap-2 sm:grid-cols-3 text-xs">
             <div>
-              canonical:{" "}
-              <span className="font-semibold">
-                {canonical ? "true" : "false"}
-              </span>
+              canonical: <span className="font-semibold">true</span>
             </div>
 
             <div>
-              portable:{" "}
-              <span className="font-semibold">
-                {portable ? "true" : "false"}
-              </span>
+              portable: <span className="font-semibold">true</span>
             </div>
 
             <div>
-              api-addressable:{" "}
-              <span className="font-semibold">
-                {apiAddressable ? "true" : "false"}
-              </span>
+              api-addressable: <span className="font-semibold">true</span>
             </div>
           </div>
 
