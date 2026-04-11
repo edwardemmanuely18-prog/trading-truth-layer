@@ -721,6 +721,9 @@ export default function PublicVerifyClaimPage() {
             tradeSetHash={verifiedResult.trade_set_hash}
             verifiedAt={lifecycle.verified_at}
             lockedAt={lifecycle.locked_at}
+            canonical={v7Payload?.proof_summary?.canonical}
+            portable={v7Payload?.proof_summary?.portable}
+            apiAddressable={v7Payload?.proof_summary?.api_addressable}
           />
         </div>
 

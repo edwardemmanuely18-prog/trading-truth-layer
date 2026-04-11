@@ -141,9 +141,9 @@ export default function ClaimVerificationSignature({
   issuerName,
   issuerNetwork,
   exposureLevel,
-  portable = false,
-  canonical = false,
-  apiAddressable = false,
+  portable,
+  canonical,
+  apiAddressable,
   compact = false,
 }: Props) {
   const normalizedStatus = normalize(status);
@@ -352,15 +352,24 @@ export default function ClaimVerificationSignature({
 
           <div className="mt-3 grid gap-2 sm:grid-cols-3 text-xs">
             <div>
-              canonical: <span className="font-semibold">true</span>
+              canonical:{" "}
+              <span className="font-semibold">
+                {canonical === undefined ? "—" : canonical ? "true" : "false"}
+              </span>
             </div>
 
             <div>
-              portable: <span className="font-semibold">true</span>
+              portable:{" "}
+              <span className="font-semibold">
+                {portable === undefined ? "—" : portable ? "true" : "false"}
+              </span>
             </div>
 
             <div>
-              api-addressable: <span className="font-semibold">true</span>
+              api-addressable:{" "}
+              <span className="font-semibold">
+                {apiAddressable === undefined ? "—" : apiAddressable ? "true" : "false"}
+              </span>
             </div>
           </div>
 
