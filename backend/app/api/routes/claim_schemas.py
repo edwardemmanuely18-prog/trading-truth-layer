@@ -3608,6 +3608,8 @@ def publish_claim_schema(
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
     require_workspace_owner(schema.workspace_id, current_user, db)
+    workspace = get_workspace_or_404(schema.workspace_id, db)
+    effective_plan_code = resolve_effective_workspace_plan_code(workspace)
 
     if schema.status != "verified":
         raise HTTPException(status_code=400, detail="Only verified claims can be published")
