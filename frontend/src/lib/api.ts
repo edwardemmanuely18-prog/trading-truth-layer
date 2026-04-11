@@ -182,6 +182,12 @@ export type VerifyPayloadV7 = {
     api_addressable: boolean;
   };
 
+  portable_capabilities?: {
+    canonical?: boolean;
+    portable?: boolean;
+    api_addressable?: boolean;
+  };
+
   // keep legacy fields (important!)
   claim_id: number;
   workspace_id: number;

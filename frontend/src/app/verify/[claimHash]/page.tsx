@@ -727,6 +727,41 @@ export default function PublicVerifyClaimPage() {
               Portable verification metadata
             </div>
 
+            <div className="mt-4 grid gap-3 md:grid-cols-3 text-sm">
+              <div className="rounded-xl border bg-white p-4">
+                <div className="text-slate-500">Canonical</div>
+                <div className="mt-1 font-semibold text-slate-900">
+                  {String(
+                    v7Payload?.proof_summary?.canonical ??
+                    v7Payload?.portable_capabilities?.canonical ??
+                    true
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-xl border bg-white p-4">
+                <div className="text-slate-500">Portable</div>
+                <div className="mt-1 font-semibold text-slate-900">
+                  {String(
+                    v7Payload?.proof_summary?.portable ??
+                    v7Payload?.portable_capabilities?.portable ??
+                    true
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-xl border bg-white p-4">
+                <div className="text-slate-500">API Addressable</div>
+                <div className="mt-1 font-semibold text-slate-900">
+                  {String(
+                    v7Payload?.proof_summary?.api_addressable ??
+                    v7Payload?.portable_capabilities?.api_addressable ??
+                    true
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="mt-2 grid gap-3 md:grid-cols-2 xl:grid-cols-4 text-sm">
               <div className="rounded-xl border bg-white p-4">
                 <div className="text-slate-500">Issuer</div>
