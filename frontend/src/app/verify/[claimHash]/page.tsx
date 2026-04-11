@@ -724,62 +724,32 @@ export default function PublicVerifyClaimPage() {
           />
         </div>
 
-        {v7Payload ? (
-          <div className="mb-8 rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm">
-            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-700">
-              Portable verification metadata
+        <div className="mb-8 rounded-2xl border border-indigo-200 bg-indigo-50 p-5 shadow-sm">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-700">
+            Portable Verification Capabilities
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3 text-sm">
+            <div className="rounded-xl border bg-white p-4">
+              <div className="text-slate-500">Canonical</div>
+              <div className="mt-1 font-semibold text-slate-900">true</div>
             </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-3 text-sm">
-              <div className="rounded-xl border bg-white p-4">
-                <div className="text-slate-500">Canonical</div>
-                <div className="mt-1 font-semibold text-slate-900">
-                  {String(canonicalCapability)}
-                </div>
-              </div>
-
-              <div className="rounded-xl border bg-white p-4">
-                <div className="text-slate-500">Portable</div>
-                <div className="mt-1 font-semibold text-slate-900">
-                  {String(portableCapability)}
-                </div>
-              </div>
-
-              <div className="rounded-xl border bg-white p-4">
-                <div className="text-slate-500">API Addressable</div>
-                <div className="mt-1 font-semibold text-slate-900">
-                  {String(apiAddressableCapability)}
-                </div>
-              </div>
+            <div className="rounded-xl border bg-white p-4">
+              <div className="text-slate-500">Portable</div>
+              <div className="mt-1 font-semibold text-slate-900">true</div>
             </div>
 
-            <div className="mt-2 grid gap-3 md:grid-cols-2 xl:grid-cols-4 text-sm">
-              <div className="rounded-xl border bg-white p-4">
-                <div className="text-slate-500">Issuer</div>
-                <div className="mt-1 font-semibold text-slate-900">{v7Payload.issuer?.name || "—"}</div>
-              </div>
-
-              <div className="rounded-xl border bg-white p-4">
-                <div className="text-slate-500">Network State</div>
-                <div className="mt-1 font-semibold text-slate-900">{networkLabel}</div>
-              </div>
-
-              <div className="rounded-xl border bg-white p-4">
-                <div className="text-slate-500">Exposure Level</div>
-                <div className="mt-1 font-semibold text-slate-900">
-                  {v7Payload.network_identity?.exposure_level || "—"}
-                </div>
-              </div>
-
-              <div className="rounded-xl border bg-white p-4">
-                <div className="text-slate-500">Integrity Status</div>
-                <div className="mt-1 font-semibold text-slate-900">
-                  {v7Payload.integrity_record?.status || "—"}
-                </div>
-              </div>
+            <div className="rounded-xl border bg-white p-4">
+              <div className="text-slate-500">API Addressable</div>
+              <div className="mt-1 font-semibold text-slate-900">true</div>
             </div>
           </div>
-        ) : null}
+
+          <div className="mt-4 text-sm text-indigo-800">
+            This record is canonical, portable, and API-addressable by design.
+          </div>
+        </div>
 
         <div
           className={`mb-8 rounded-2xl border px-5 py-4 ${
