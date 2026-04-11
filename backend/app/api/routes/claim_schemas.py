@@ -4063,3 +4063,22 @@ def get_public_profile(
     workspace = get_workspace_or_404(workspace_id, db)
 
     return build_public_profile_response(workspace.id, db)
+
+@router.get("/workspaces/{workspace_id}/public-claims")
+def get_workspace_public_claims(workspace_id: int, db: Session = Depends(get_db)):
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    rows = (
+        db.query(ClaimSchema)
+        .filter(
+            ClaimSchema.workspace_id == workspace_id,
+            ClaimSchema.visibility.in_(["public", "unlisted"]),
+            ClaimSchema.status.in_(["published", "locked"]),
+        )
+        .order_by(ClaimSchema.id.desc())
+        .all()
+    )
+
+    return [build_claim_list_row(schema, db) for schema in rows]    
