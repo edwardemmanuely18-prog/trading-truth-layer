@@ -1052,6 +1052,16 @@ export default function WorkspaceClaimDetailPage() {
   const [claimTrades, setClaimTrades] = useState<ClaimTradeEvidence | null>(null);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
   const [disputes, setDisputes] = useState<ClaimDispute[]>([]);
+    const activeDisputes = useMemo(
+    () =>
+      disputes.filter((d) => {
+        const status = normalizeText(d.status);
+        return status === "open" || status === "under_review";
+      }),
+    [disputes],
+  );
+
+  const activeDisputesCount = activeDisputes.length;
 
   const [creatingDispute, setCreatingDispute] = useState(false);
   const [newDisputeSummary, setNewDisputeSummary] = useState("");
@@ -1553,12 +1563,12 @@ export default function WorkspaceClaimDetailPage() {
           integrity={integrity}
         />
 
-        {disputes.length > 0 ? (
+        {activeDisputesCount > 0 ? (
           <div className="rounded-2xl border border-red-300 bg-red-50 p-5 shadow-sm">
             <div className="text-sm font-semibold text-red-900">Governance Challenge Active</div>
 
             <div className="mt-2 text-sm text-red-800">
-              {disputes.length} dispute(s) detected. This claim is in a contested trust state.
+              {activeDisputesCount} active dispute(s) detected. This claim is in a contested trust state.
             </div>
 
             <div className="mt-2 text-xs text-red-700">
