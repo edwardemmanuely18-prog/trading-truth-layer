@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: str | None = None
 
     # =========================
-    # PADDLE (PRIMARY AUTOMATED BILLING)
+    # PADDLE (PRIMARY AUTOMATED BILLING - LEGACY / OPTIONAL)
     # =========================
     PADDLE_BILLING_ENABLED: bool = False
     PADDLE_API_KEY: str | None = None
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     MANUAL_PAYMENT_NOTES: str | None = None
 
     # =========================
-    # Pydantic Config
+    # PYDANTIC CONFIG
     # =========================
     model_config = SettingsConfigDict(
         env_file=".env",
