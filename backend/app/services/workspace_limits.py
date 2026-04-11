@@ -7,6 +7,10 @@ from app.models.claim_schema import ClaimSchema
 from app.models.trade import Trade
 from app.models.workspace import Workspace
 from app.models.workspace_membership import WorkspaceMembership
+from app.api.routes.billing import (
+    resolve_effective_workspace_plan_code,
+    get_workspace_plan_snapshot,
+)
 
 
 def workspace_limits_disabled() -> bool:
@@ -31,14 +35,18 @@ def get_workspace_limit_snapshot(db: Session, workspace_id: int) -> dict:
         .count()
     )
 
-    member_limit = workspace.member_limit or 0
-    trade_limit = workspace.trade_limit or 0
-    claim_limit = workspace.claim_limit or 0
-    storage_limit_mb = workspace.storage_limit_mb or 0
+    effective_plan_code = resolve_effective_workspace_plan_code(workspace)
+    plan_snapshot = get_workspace_plan_snapshot(effective_plan_code)
+
+    member_limit = int(plan_snapshot.get("member_limit") or 0)
+    trade_limit = int(plan_snapshot.get("trade_limit") or 0)
+    claim_limit = int(plan_snapshot.get("claim_limit") or 0)
+    storage_limit_mb = int(plan_snapshot.get("storage_limit_mb") or 0)
 
     return {
         "workspace_id": workspace_id,
         "limits_disabled": workspace_limits_disabled(),
+        "effective_plan_code": effective_plan_code,
         "usage": {
             "members": {
                 "used": member_used,
