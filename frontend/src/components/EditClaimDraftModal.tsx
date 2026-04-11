@@ -248,8 +248,10 @@ export default function EditClaimDraftModal({ open, claim, onClose, onSaved }: P
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
-      <div className="w-full max-w-7xl rounded-3xl border border-slate-200 bg-slate-50 shadow-2xl">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-4">
+      <div className="flex min-h-full items-center justify-center">
+        <div className="w-full max-w-6xl max-h-[90vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-white px-6 py-5">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b bg-white px-6 py-5">
           <div>
             <div className="text-sm text-slate-500">Draft Claim Editor</div>
@@ -277,7 +279,7 @@ export default function EditClaimDraftModal({ open, claim, onClose, onSaved }: P
           </div>
         </div>
 
-        <div className="max-h-[82vh] overflow-y-auto px-6 py-6">
+        <div className="max-h-[calc(90vh-140px)] overflow-y-auto px-6 py-6">
           {!canEdit && (
             <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
               This claim cannot be edited in your current access state. Draft editing is limited to workspace owners and operators while the claim is still in draft status.
@@ -532,6 +534,8 @@ export default function EditClaimDraftModal({ open, claim, onClose, onSaved }: P
           </div>
         </div>
       </div>
+     </div>
     </div>
+  </div>
   );
 }
