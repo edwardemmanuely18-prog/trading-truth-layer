@@ -28,7 +28,9 @@ function isPublicTrustPath(currentPath: string) {
     currentPath === "/how-it-works" ||
     startsWithPath(currentPath, "/claim") ||
     startsWithPath(currentPath, "/verify") ||
-    startsWithPath(currentPath, "/profile")
+    startsWithPath(currentPath, "/profile") ||
+    /^\/workspace\/\d+\/public-records(?:\/|$)/.test(currentPath) ||
+    /^\/workspace\/\d+\/leaderboard(?:\/|$)/.test(currentPath)
   );
 }
 
@@ -104,18 +106,21 @@ export default function Navbar({ workspaceId }: Props) {
 
   const homeHref = "/";
   const howItWorksHref = "/how-it-works";
+  const base = resolvedWorkspaceId ? `/workspace/${resolvedWorkspaceId}` : "";
+
   const publicClaimsHref = resolvedWorkspaceId
-    ? `/workspace/${resolvedWorkspaceId}/claims`
+    ? `${base}/public-records`
     : "/claims";
 
   const leaderboardHref = resolvedWorkspaceId
-    ? `/workspace/${resolvedWorkspaceId}/leaderboard`
+    ? `${base}/leaderboard`
     : "/leaderboard";
-  const publicProfileHref = resolvedWorkspaceId ? `/profile/${resolvedWorkspaceId}` : "/profile";
 
-  const base = resolvedWorkspaceId ? `/workspace/${resolvedWorkspaceId}` : "";
+  const publicProfileHref = resolvedWorkspaceId
+    ? `/profile/${resolvedWorkspaceId}`
+    : "/profile";
+
   const claimBuilderHref = resolvedWorkspaceId ? `${base}/schema` : "/claims";
-
   const dashboardHref = resolvedWorkspaceId ? `${base}/dashboard` : "/";
   const importHref = resolvedWorkspaceId ? `${base}/import` : "/";
   const ledgerHref = resolvedWorkspaceId ? `${base}/ledger` : "/";
@@ -134,12 +139,19 @@ export default function Navbar({ workspaceId }: Props) {
 
   const homeActive = currentPath === "/";
   const howItWorksActive = currentPath === "/how-it-works";
-  const publicClaimsActive =
-    currentPath === "/claims" || startsWithPath(currentPath, "/claim");
-  const leaderboardActive = currentPath === "/leaderboard";
+
+  const publicClaimsActive = resolvedWorkspaceId
+    ? startsWithPath(currentPath, publicClaimsHref) || startsWithPath(currentPath, "/claim")
+    : currentPath === "/claims" || startsWithPath(currentPath, "/claim");
+
+  const leaderboardActive = resolvedWorkspaceId
+    ? startsWithPath(currentPath, leaderboardHref)
+    : currentPath === "/leaderboard";
+
   const schemaBuilderActive = resolvedWorkspaceId
     ? startsWithPath(currentPath, claimBuilderHref)
     : false;
+
   const publicProfileActive = startsWithPath(currentPath, "/profile");
 
   const dashboardActive = resolvedWorkspaceId
