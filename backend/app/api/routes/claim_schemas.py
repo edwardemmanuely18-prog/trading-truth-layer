@@ -3697,7 +3697,7 @@ def lock_claim_schema(
 
     filtered_trades = resolve_schema_trades(schema, db)
 
-    # ✅ NEW: snapshot exact trade IDs
+    # 🔒 Freeze the exact trade IDs used at lock time
     locked_trade_ids = [t.id for t in filtered_trades]
 
     old_state = {

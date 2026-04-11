@@ -8,7 +8,10 @@ from app.api.routes.claim_schemas import (
     compute_trade_set_hash,
     resolve_schema_trade_scope,
     resolve_claim_integrity_status,
+    coerce_trade_opened_at,
 )
+from app.models.trade import Trade
+import json
 
 router = APIRouter(prefix="/verify", tags=["verify"])
 
@@ -31,14 +34,51 @@ def resolve_verification_exposure(claim: ClaimSchema) -> str:
     return "internal_only"
 
 
+def resolve_locked_verification_trades(claim: ClaimSchema, db: Session):
+    locked_trade_ids = json.loads(getattr(claim, "locked_trade_ids_json", "[]") or "[]")
+
+    if locked_trade_ids:
+        trades = (
+            db.query(Trade)
+            .filter(Trade.id.in_(locked_trade_ids))
+            .all()
+        )
+        trades = sorted(
+            trades,
+            key=lambda t: (
+                coerce_trade_opened_at(getattr(t, "opened_at", None)) or datetime.min,
+                t.id,
+            ),
+        )
+        return trades
+
+    scope = resolve_schema_trade_scope(claim, db)
+    return sorted(
+        scope["included"],
+        key=lambda t: (
+            coerce_trade_opened_at(getattr(t, "opened_at", None)) or datetime.min,
+            t.id,
+        ),
+    )
+
+
 def build_verify_payload(claim: ClaimSchema, db: Session):
     computed_hash = compute_claim_hash(claim)
-    scope = resolve_schema_trade_scope(claim, db)
+    live_scope = resolve_schema_trade_scope(claim, db)
+    verification_trades = resolve_locked_verification_trades(claim, db)
 
     stored_trade_set_hash = claim.locked_trade_set_hash
-    recomputed_trade_set_hash = compute_trade_set_hash(scope["included"])
-    integrity = resolve_claim_integrity_status(claim, scope["included"])
+    recomputed_trade_set_hash = compute_trade_set_hash(verification_trades) if verification_trades else None
     exposure_level = resolve_verification_exposure(claim)
+
+    if str(claim.status or "").lower() != "locked":
+        integrity = "unlocked"
+    elif not stored_trade_set_hash:
+        integrity = "compromised"
+    elif stored_trade_set_hash == recomputed_trade_set_hash:
+        integrity = "valid"
+    else:
+        integrity = "compromised"
 
     verify_path = f"/verify/{computed_hash}"
     public_view_path = f"/claim/{claim.id}/public"
@@ -53,7 +93,6 @@ def build_verify_payload(claim: ClaimSchema, db: Session):
     )
 
     return {
-        # legacy-compatible fields
         "claim_id": claim.id,
         "workspace_id": claim.workspace_id,
         "name": claim.name,
@@ -74,7 +113,6 @@ def build_verify_payload(claim: ClaimSchema, db: Session):
         "public_view_path": public_view_path,
         "verify_path": verify_path,
 
-        # Phase 7 network-grade verification envelope
         "payload_version": VERIFY_PAYLOAD_VERSION,
         "issuer": {
             "name": VERIFY_ISSUER,
@@ -100,13 +138,13 @@ def build_verify_payload(claim: ClaimSchema, db: Session):
         "scope": {
             "period_start": claim.period_start,
             "period_end": claim.period_end,
-            "included_trade_count": len(scope["included"]),
-            "excluded_trade_count": len(scope["excluded"]),
+            "included_trade_count": len(live_scope["included"]),
+            "excluded_trade_count": len(live_scope["excluded"]),
             "included_member_ids": sorted(
                 list(
                     {
                         trade.member_id
-                        for trade in scope["included"]
+                        for trade in live_scope["included"]
                         if getattr(trade, "member_id", None) is not None
                     }
                 )
@@ -115,7 +153,7 @@ def build_verify_payload(claim: ClaimSchema, db: Session):
                 list(
                     {
                         str(trade.symbol)
-                        for trade in scope["included"]
+                        for trade in live_scope["included"]
                         if getattr(trade, "symbol", None)
                     }
                 )
