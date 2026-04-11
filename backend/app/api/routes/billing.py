@@ -361,7 +361,7 @@ def stripe_is_ready() -> bool:
 
 def paddle_is_ready() -> bool:
     return bool(
-        getattr(settings, "PADDLE_BILLING_ENABLED", False)
+        getattr(settings, "PADDLE_BILLING_ENABLED", True)
         and getattr(settings, "PADDLE_API_KEY", None)
         and str(settings.PADDLE_API_KEY).strip()
         and get_paddle_price_catalog()
