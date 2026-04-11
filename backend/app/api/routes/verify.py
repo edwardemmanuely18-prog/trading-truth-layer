@@ -181,6 +181,11 @@ def build_verify_payload(claim: ClaimSchema, db: Session):
             "portable": True,
             "api_addressable": True,
         },
+        "portable_capabilities": {
+            "canonical": True,
+            "portable": True,
+            "api_addressable": True,
+        },
     }
 
 
