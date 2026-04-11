@@ -1207,9 +1207,9 @@ export default function WorkspaceSettingsPage() {
                 hint="Plan currently enforcing limits and entitlements"
               />
               <SummaryCard
-                label="Billing Mode"
-                value={formatCheckoutModeLabel(billingFoundation?.checkout_state?.mode)}
-                hint={`Active provider: ${billingProviderLabel}`}
+                label="Billing Provider"
+                value={billingProviderLabel}
+                hint={formatCheckoutModeLabel(billingFoundation?.checkout_state?.mode)}
               />
               <SummaryCard
                 label="Claims Used"
@@ -1300,13 +1300,26 @@ export default function WorkspaceSettingsPage() {
                   <div>
                     <h2 className="text-2xl font-semibold">Billing Status</h2>
                     <p className="mt-1 text-sm text-slate-500">
-                      Commercial billing state without internal debug leakage.
+                      Billing status, plan enforcement, and commercial activation for this workspace.
                     </p>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
                     <PlanBadge plan={settings?.plan_code} />
                     <BillingBadge status={settings?.billing_status} />
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                  <div>
+                    <span className="font-semibold">Configured plan:</span> {configuredPlanName}
+                  </div>
+                  <div className="mt-1">
+                    <span className="font-semibold">Effective plan:</span> {effectivePlanName}
+                  </div>
+                  <div className="mt-1">
+                    <span className="font-semibold">Meaning:</span> the configured plan is the selected commercial tier,
+                    while the effective plan is the tier currently enforcing limits based on billing status.
                   </div>
                 </div>
 
@@ -1383,11 +1396,11 @@ export default function WorkspaceSettingsPage() {
 
                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                   <div>
-                    <span className="font-medium text-slate-900">Checkout:</span>{" "}
+                    <span className="font-medium text-slate-900">Checkout status:</span>{" "}
                     {formatCheckoutModeLabel(billingFoundation?.checkout_state?.mode)}
                   </div>
                   <div className="mt-2">
-                    <span className="font-medium text-slate-900">Customer portal:</span>{" "}
+                    <span className="font-medium text-slate-900">Billing portal:</span>{" "}
                     {billingFoundation?.checkout_state?.portal_available ? "available" : "unavailable"}
                   </div>
                   <div className="mt-2">
@@ -1395,11 +1408,11 @@ export default function WorkspaceSettingsPage() {
                     {providerEnvironment}
                   </div>
                   <div className="mt-2">
-                    <span className="font-medium text-slate-900">Customer linked:</span>{" "}
+                    <span className="font-medium text-slate-900">Customer record linked:</span>{" "}
                     {providerCustomerId ? "yes" : "no"}
                   </div>
                   <div className="mt-2">
-                    <span className="font-medium text-slate-900">Subscription linked:</span>{" "}
+                    <span className="font-medium text-slate-900">Subscription record linked:</span>{" "}
                     {providerSubscriptionId ? "yes" : "no"}
                   </div>
                 </div>
@@ -1417,10 +1430,18 @@ export default function WorkspaceSettingsPage() {
                   <button
                     type="button"
                     onClick={() => void handleOpenBillingPortal()}
-                    disabled={!canSeeUpgrade || portalLoading}
-                    className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
+                    disabled={
+                      !canSeeUpgrade ||
+                      portalLoading ||
+                      normalizeText(billingFoundation?.active_billing_provider) === "paddle"
+                    }
+                    className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                   >
-                    {portalLoading ? "Opening Portal..." : "Open Billing Portal"}
+                    {portalLoading
+                      ? "Opening Portal..."
+                      : normalizeText(billingFoundation?.active_billing_provider) === "paddle"
+                        ? "Billing Portal Coming Soon"
+                        : "Open Billing Portal"}
                   </button>
 
                   <button
