@@ -173,6 +173,12 @@ def get_plan_catalog():
         {
             "code": "sandbox",
             "name": "Sandbox",
+            "limits": {
+                "member_limit": 3,
+                "trade_limit": 1000,
+                "claim_limit": 5,
+                "storage_limit_mb": 100,
+            },
             "billing": {
                 "monthly_price_usd": 0,
                 "annual_price_usd": 0,
@@ -183,6 +189,12 @@ def get_plan_catalog():
         {
             "code": "starter",
             "name": "Starter",
+            "limits": {
+                "member_limit": 3,
+                "trade_limit": 5000,
+                "claim_limit": 5,
+                "storage_limit_mb": 500,
+            },
             "billing": {
                 "monthly_price_usd": 19,
                 "annual_price_usd": 190,
@@ -193,6 +205,12 @@ def get_plan_catalog():
         {
             "code": "pro",
             "name": "Pro",
+            "limits": {
+                "member_limit": 25,
+                "trade_limit": 50000,
+                "claim_limit": 50,
+                "storage_limit_mb": 2048,
+            },
             "billing": {
                 "monthly_price_usd": 79,
                 "annual_price_usd": 790,
@@ -203,6 +221,12 @@ def get_plan_catalog():
         {
             "code": "growth",
             "name": "Growth",
+            "limits": {
+                "member_limit": 100,
+                "trade_limit": 250000,
+                "claim_limit": 200,
+                "storage_limit_mb": 10240,
+            },
             "billing": {
                 "monthly_price_usd": 249,
                 "annual_price_usd": 2490,
@@ -213,6 +237,12 @@ def get_plan_catalog():
         {
             "code": "business",
             "name": "Business",
+            "limits": {
+                "member_limit": 250,
+                "trade_limit": 1000000,
+                "claim_limit": 500,
+                "storage_limit_mb": 51200,
+            },
             "billing": {
                 "monthly_price_usd": 999,
                 "annual_price_usd": 9990,
@@ -229,6 +259,27 @@ def get_plan_definition(plan_code: str | None):
         if plan["code"] == normalized:
             return plan
     return get_plan_catalog()[0]
+
+
+def get_workspace_plan_snapshot(plan_code: str | None) -> dict:
+    plan = get_plan_definition(plan_code)
+    limits = plan.get("limits", {}) or {}
+    return {
+        "plan_code": plan["code"],
+        "plan_name": plan["name"],
+        "member_limit": int(limits.get("member_limit") or 0),
+        "trade_limit": int(limits.get("trade_limit") or 0),
+        "claim_limit": int(limits.get("claim_limit") or 0),
+        "storage_limit_mb": int(limits.get("storage_limit_mb") or 0),
+    }
+
+
+def apply_workspace_plan_limits(workspace: Workspace, plan_code: str | None) -> None:
+    snapshot = get_workspace_plan_snapshot(plan_code)
+    workspace.member_limit = snapshot["member_limit"]
+    workspace.trade_limit = snapshot["trade_limit"]
+    workspace.claim_limit = snapshot["claim_limit"]
+    workspace.storage_limit_mb = snapshot["storage_limit_mb"]
 
 
 def get_frontend_base_url() -> str:
@@ -589,6 +640,7 @@ def update_workspace_billing_from_subscription(
     if target_plan_code:
         workspace.plan_code = normalize_plan_code(target_plan_code)
 
+    apply_workspace_plan_limits(workspace, resolve_effective_plan_code(workspace))
     workspace.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(workspace)
@@ -616,6 +668,7 @@ def update_workspace_billing_from_checkout_session(
     if target_plan_code:
         workspace.plan_code = normalize_plan_code(target_plan_code)
 
+    apply_workspace_plan_limits(workspace, resolve_effective_plan_code(workspace))
     workspace.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(workspace)
@@ -690,6 +743,7 @@ def update_workspace_billing_from_paddle_event(
     elif interval:
         workspace.subscription_current_period_end = fallback_period_end_for_cycle(interval)
 
+    apply_workspace_plan_limits(workspace, resolve_effective_plan_code(workspace))
     workspace.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(workspace)
@@ -870,6 +924,9 @@ def get_workspace_billing_foundation(
     manual_payment_details = get_manual_payment_details()
     configured_plan_code = normalize_plan_code(workspace.plan_code)
     effective_plan_code = resolve_effective_plan_code(workspace)
+    apply_workspace_plan_limits(workspace, effective_plan_code)
+    db.commit()
+    db.refresh(workspace)
     billing_status = normalize_billing_status(workspace.billing_status)
 
     active_provider = get_active_billing_provider(workspace)
@@ -982,6 +1039,7 @@ def create_billing_checkout_session(
         workspace.billing_provider = None
         workspace.billing_status = "inactive"
         workspace.subscription_current_period_end = None
+        apply_workspace_plan_limits(workspace, "sandbox")
         workspace.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(workspace)
