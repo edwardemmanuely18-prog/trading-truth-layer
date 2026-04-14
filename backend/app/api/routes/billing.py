@@ -369,14 +369,14 @@ def get_paddle_price_catalog() -> dict[str, str]:
     return {
         "sandbox_monthly": "",
         "sandbox_annual": "",
-        "starter_monthly": "pri_01kmjj018j0ym1aw9ywhz3znw0",
-        "starter_annual": "pri_01kmjj3f7jdg0sef6p39e22jmq",
-        "pro_monthly": "pri_01kmjj708hzybp3a8gdv93mpg9",
-        "pro_annual": "pri_01kmjjc3jxev4anwd9g6qvx3vv",
-        "growth_monthly": "pri_01kmjjg86exjyknt52cgqf32cr",
-        "growth_annual": "pri_01kmjjkj562mf4pds0hemrgsap",
-        "business_monthly": "pri_01kmjjpqrntrszj434f5ka07md",
-        "business_annual": "pri_01kmjjsr2w8gmf57pw7d1wydc6",
+        "starter_monthly": "pri_01kmfd0qzs6qv96wqgtjj73xn7",
+        "starter_annual": "pri_01kmfddg7sej6n5rftg2nv55sm",
+        "pro_monthly": "pri_01kmfdh1nf9cpf4mvzt6r9eh2h",
+        "pro_annual": "pri_01kmfdqzqfpf6081acqmht1znw",
+        "growth_monthly": "pri_01kmfdyggmwmqngg5y0t6qrzsc",
+        "growth_annual": "pri_01kmfe1tjzf9pd7fswkcfycf2h",
+        "business_monthly": "pri_01kmfe56ft09081tf3127vkz8w",
+        "business_annual": "pri_01kmfe9k5hsdxcm6bj90ycjy0q",
     }
 
 
