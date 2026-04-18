@@ -28,6 +28,7 @@ from app.api.routes.invites import router as invites_router
 from app.api.routes.billing import router as billing_router
 from app.api.routes.platform import router as platform_router
 from app.api.routes.claim_disputes import router as claim_disputes_router
+from app.api.routes import workspace_members
 from app.core.security import hash_password
 
 
@@ -249,6 +250,11 @@ def root():
     return {"message": "Trading Truth Layer API is running"}
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(workspaces_router)
@@ -260,3 +266,4 @@ app.include_router(invites_router)
 app.include_router(billing_router)
 app.include_router(platform_router)
 app.include_router(claim_disputes_router)
+app.include_router(workspace_members.router, prefix="/api", tags=["workspace-members"])
