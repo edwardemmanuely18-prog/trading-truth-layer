@@ -21,7 +21,7 @@ except ImportError:
     stripe = None
 
 
-router = APIRouter()
+router = APIRouter(prefix="/billing", tags=["billing"])
 
 
 class BillingCheckoutPayload(BaseModel):
