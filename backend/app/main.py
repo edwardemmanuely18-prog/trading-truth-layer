@@ -31,6 +31,14 @@ from app.api.routes.claim_disputes import router as claim_disputes_router
 from app.api.routes import workspace_members
 from app.core.security import hash_password
 
+import traceback
+import sys
+
+try:
+    print("=== STARTING APPLICATION ===", flush=True)
+except Exception as e:
+    print("Startup print failed:", e, flush=True)
+
 
 def parse_cors_origins() -> list[str]:
     raw = os.getenv(
