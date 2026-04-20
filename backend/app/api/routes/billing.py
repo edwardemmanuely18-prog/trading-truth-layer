@@ -1124,6 +1124,11 @@ def create_billing_checkout_session(
                 "billing_cycle": billing_cycle,
                 "checkout_intent": checkout_intent,
             },
+            "checkout": {
+                "url": f"{get_frontend_base_url()}/workspace/{workspace.id}/settings",
+                "success_url": f"{get_frontend_base_url()}/workspace/{workspace.id}/settings?checkout=success",
+                "cancel_url": f"{get_frontend_base_url()}/workspace/{workspace.id}/settings?checkout=cancelled",
+            }
         }
 
         paddle_response, paddle_error = paddle_request("POST", "/transactions", payload_data)
