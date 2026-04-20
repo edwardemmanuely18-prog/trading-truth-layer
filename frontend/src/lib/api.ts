@@ -1121,15 +1121,8 @@ function parseApiErrorPayload(rawText: string): ApiErrorPayload | null {
 }
 
 function getApiBaseUrl() {
-  // Client → use relative
-  if (typeof window !== "undefined") return "";
-
-  // Server → MUST use absolute URL
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.FRONTEND_BASE_URL ||
-    "http://localhost:3000"
-  );
+  // ALWAYS use environment variable for API
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 }
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
