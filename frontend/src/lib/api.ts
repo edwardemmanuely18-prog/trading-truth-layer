@@ -1,4 +1,4 @@
-const API_BASE = "/api";
+const API_BASE = "";
 
 export const API_BASE_URL = API_BASE;
 const DEV_USER_ID: number | null = null;
