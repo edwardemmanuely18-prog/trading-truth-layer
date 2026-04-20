@@ -1035,7 +1035,7 @@ def get_workspace_billing_foundation(
     }
 
 
-@router.post("/workspaces/{workspace_id}/billing/checkout")
+@router.post("/workspaces/{workspace_id}/checkout")
 def create_billing_checkout_session(
     workspace_id: int,
     payload: BillingCheckoutPayload,
@@ -1358,7 +1358,7 @@ def create_billing_checkout_session(
     }
 
 
-@router.post("/workspaces/{workspace_id}/billing/portal")
+@router.post("/workspaces/{workspace_id}/portal")
 def create_billing_portal_session(
     workspace_id: int,
     payload: BillingPortalPayload | None = None,
