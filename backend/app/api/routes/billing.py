@@ -8,6 +8,13 @@ from fastapi import APIRouter, Depends, Header, Request
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
+from fastapi import Depends
+from sqlalchemy.orm import Session
+
+from app.core.db import get_db
+from app.models.workspace import Workspace
+
+
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.db import get_db
@@ -22,6 +29,22 @@ except ImportError:
 
 
 router = APIRouter(prefix="/billing", tags=["billing"])
+
+from fastapi import HTTPException
+
+@router.get("/workspace/{workspace_id}")
+def get_workspace_billing(workspace_id: int, db: Session = Depends(get_db)):
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    return {
+        "workspace_id": workspace.id,
+        "plan": getattr(workspace, "plan_code", "starter"),
+        "billing_status": getattr(workspace, "billing_status", "inactive"),
+        "claims_used": getattr(workspace, "claims_used", 0),
+    }
 
 
 class BillingCheckoutPayload(BaseModel):
@@ -1606,3 +1629,4 @@ async def handle_stripe_webhook(
         "received": True,
         "event_type": event_type,
     }
+
