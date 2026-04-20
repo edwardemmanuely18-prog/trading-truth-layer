@@ -1930,7 +1930,7 @@ export const api = {
     workspaceId: number
   ): Promise<WorkspaceBillingFoundation> => {
     const row = await apiFetch<WorkspaceBillingFoundation>(
-      withDevUser(`/workspaces/${workspaceId}/billing-foundation`),
+      withDevUser(`/billing/workspaces/${workspaceId}/billing-foundation`),
       {
         cache: "no-store",
       }
@@ -1943,7 +1943,7 @@ export const api = {
     workspaceId: number,
     payload: { plan_code: string; billing_cycle: string }
   ): Promise<BillingCheckoutResponse> => {
-    const row = await apiFetch<any>(withDevUser(`/workspaces/${workspaceId}/billing/checkout`), {
+    const row = await apiFetch<any>(withDevUser(`/billing/workspaces/${workspaceId}/checkout`), {
       method: "POST",
       body: JSON.stringify(payload),
     });
@@ -1958,7 +1958,7 @@ export const api = {
   },
 
   createBillingPortalSession: async (workspaceId: number): Promise<BillingPortalResponse> => {
-    const row = await apiFetch<any>(withDevUser(`/workspaces/${workspaceId}/billing/portal`), {
+    const row = await apiFetch<any>(withDevUser(`/billing/workspaces/${workspaceId}/portal`), {
       method: "POST",
       body: JSON.stringify({}),
     });
