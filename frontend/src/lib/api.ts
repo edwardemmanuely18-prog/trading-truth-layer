@@ -1950,19 +1950,15 @@ export const api = {
     return ensureWorkspaceSettings(row);
   },
 
-  getWorkspaceUsage: async (workspaceId: number) => {
-    const res = await fetch(
-      `${API_BASE_URL}/workspaces/${workspaceId}/usage`,
+  getWorkspaceUsage: async (workspaceId: number): Promise<WorkspaceUsageSummary> => {
+    const row = await apiFetch<WorkspaceUsageSummary>(
+      withDevUser(`/billing/workspaces/${workspaceId}/usage`),
       {
-        headers: {
-          ...getAuthHeaders(),
-        },
+        cache: "no-store",
       }
     );
 
-    if (!res.ok) throw new Error("Failed to fetch usage");
-
-    return res.json();
+    return ensureWorkspaceUsageSummary(row);
   },
 
   getWorkspaceBillingFoundation: async (
@@ -2010,18 +2006,15 @@ export const api = {
     };
   },
 
-  getTrades: async (workspaceId: number) => {
-    const res = await fetch(
-      `${API_BASE_URL}/workspaces/${workspaceId}/trades`,
-      {
-        headers: {
-          ...getAuthHeaders(),
-        },
-      }
-    );
+  async getTrades(workspaceId: number) {
+    const res = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/trades`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeaders(),
+      },
+    });
 
     if (!res.ok) throw new Error("Failed to fetch trades");
-
     return res.json();
   },
 
@@ -2130,9 +2123,9 @@ export const api = {
     });
   },
 
-    createTrade: async (workspaceId: number, payload: any) => {
+    createTrade: async (workspaceId: number, payload: any): Promise<Trade> => {
       const res = await fetch(
-        `${API_BASE_URL}/workspaces/${workspaceId}/trades`,
+        `${getApiBaseUrl()}/api/workspaces/${workspaceId}/trades`,
         {
           method: "POST",
           headers: {
@@ -2143,7 +2136,10 @@ export const api = {
         }
       );
 
-      if (!res.ok) throw new Error("Failed to create trade");
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to create trade: ${text}`);
+      }
 
       return res.json();
     },
@@ -2152,9 +2148,9 @@ export const api = {
     workspaceId: number,
     tradeId: number,
     payload: any
-  ) => {
+  ): Promise<Trade> => {
     const res = await fetch(
-      `${API_BASE_URL}/workspaces/${workspaceId}/trades/${tradeId}`,
+      `${getApiBaseUrl()}/api/workspaces/${workspaceId}/trades/${tradeId}`,
       {
         method: "PUT",
         headers: {
@@ -2165,14 +2161,20 @@ export const api = {
       }
     );
 
-    if (!res.ok) throw new Error("Failed to update trade");
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Failed to update trade: ${text}`);
+    }
 
     return res.json();
   },
 
-  deleteTrade: async (workspaceId: number, tradeId: number) => {
+  deleteTrade: async (
+    workspaceId: number,
+    tradeId: number
+  ): Promise<{ success: boolean }> => {
     const res = await fetch(
-      `${API_BASE_URL}/workspaces/${workspaceId}/trades/${tradeId}`,
+      `${getApiBaseUrl()}/api/workspaces/${workspaceId}/trades/${tradeId}`,
       {
         method: "DELETE",
         headers: {
@@ -2181,7 +2183,10 @@ export const api = {
       }
     );
 
-    if (!res.ok) throw new Error("Failed to delete trade");
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Failed to delete trade: ${text}`);
+    }
 
     return res.json();
   },
