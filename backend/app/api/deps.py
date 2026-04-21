@@ -43,10 +43,6 @@ def get_current_user(
                 detail="Invalid or expired access token",
             )
 
-    if debug_user_id is not None:
-        user = db.query(User).filter(User.id == debug_user_id).first()
-        if user:
-            return user
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

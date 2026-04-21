@@ -80,9 +80,21 @@ def require_workspace_member(workspace_id: int, current_user: User, db: Session)
 
 
 def require_workspace_owner(workspace_id: int, current_user: User, db: Session):
-    membership = require_workspace_member(workspace_id, current_user, db)
-    if not membership or membership.role != "owner":
-        return None
+    membership = (
+        db.query(WorkspaceMembership)
+        .filter(
+            WorkspaceMembership.workspace_id == workspace_id,
+            WorkspaceMembership.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not membership:
+        raise HTTPException(status_code=403, detail="Not a workspace member")
+
+    if membership.role != "owner":
+        raise HTTPException(status_code=403, detail="Owner role required")
+
     return membership
 
 

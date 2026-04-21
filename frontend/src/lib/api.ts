@@ -1840,13 +1840,18 @@ async function startCheckout(
   workspaceId: number,
   payload: { plan_code: string; billing_cycle: string }
 ) {
-  return apiFetch<{ checkout_url: string }>(
+  const res = await apiFetch<any>(
     `/billing/workspaces/${workspaceId}/checkout`,
     {
       method: "POST",
       body: JSON.stringify(payload),
     }
   );
+
+  return {
+    ...res,
+    checkout_url: res.checkout_url ?? res.url ?? null,
+  };
 }
 
 export const api = {
@@ -2145,11 +2150,16 @@ export const api = {
 
     const headers = getAuthHeaders();
 
-    const res = await fetch(`${API_BASE}${withDevUser(`/workspaces/${workspaceId}/trades/import-csv`)}`, {
-      method: "POST",
-      headers,
-      body: formData,
-    });
+    const baseUrl = getApiBaseUrl();
+
+    const res = await fetch(
+      `${baseUrl}${withDevUser(`/workspaces/${workspaceId}/trades/import-csv`)}`,
+      {
+        method: "POST",
+        headers,
+        body: formData,
+      }
+    );
 
   if (!res.ok) {
     const rawText = await res.text();
@@ -2187,8 +2197,10 @@ export const api = {
 
     const headers = getAuthHeaders();
 
+    const baseUrl = getApiBaseUrl();
+
     const res = await fetch(
-      `${API_BASE}${withDevUser(`/workspaces/${workspaceId}/imports/upload`)}`,
+      `${baseUrl}${withDevUser(`/workspaces/${workspaceId}/imports/upload`)}`,
       {
         method: "POST",
         headers,

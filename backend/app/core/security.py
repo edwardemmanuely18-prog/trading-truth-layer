@@ -34,4 +34,17 @@ def create_access_token(subject: str, extra: Optional[Dict[str, Any]] = None) ->
 
 
 def decode_access_token(token: str) -> Dict[str, Any]:
-    return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+        )
+
+        if "sub" not in payload:
+            raise JWTError("Missing subject")
+
+        return payload
+
+    except JWTError:
+        raise JWTError("Invalid or expired token")

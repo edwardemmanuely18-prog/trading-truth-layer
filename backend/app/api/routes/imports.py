@@ -4,6 +4,9 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user, require_workspace_member
+from app.models.user import User
+
 from app.core.db import get_db
 from app.models.import_batch import ImportBatch
 from app.services.trade_import import (
@@ -115,7 +118,12 @@ def create_batch_record(
 # LIST IMPORT BATCHES
 # -----------------------------
 @router.get("/workspaces/{workspace_id}/imports")
-def list_import_batches(workspace_id: int, db: Session = Depends(get_db)):
+def list_import_batches(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_workspace_member(workspace_id, current_user, db)
     rows = (
         db.query(ImportBatch)
         .filter(ImportBatch.workspace_id == workspace_id)
@@ -134,7 +142,9 @@ def create_import_batch(
     workspace_id: int,
     payload: dict,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    require_workspace_member(workspace_id, current_user, db)
     """
     Canonical ingestion entry point.
     All source types should eventually route through this import control layer.
@@ -228,6 +238,12 @@ def ingest_webhook_trades(
         **result,
         "message": "Webhook trades ingested",
     }
+
+    # VERY IMPORTANT
+    SECRET = os.getenv("WEBHOOK_SECRET")
+
+    if payload.get("secret") != SECRET:
+        raise HTTPException(status_code=403, detail="Unauthorized webhook")
 
 
 # -----------------------------

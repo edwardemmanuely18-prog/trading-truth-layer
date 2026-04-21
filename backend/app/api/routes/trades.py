@@ -296,6 +296,7 @@ def create_trade(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+
     require_workspace_operator_or_owner(workspace_id, current_user, db)
     enforce_trade_import_allowed(workspace_id, db, additional_trades=1)
 
