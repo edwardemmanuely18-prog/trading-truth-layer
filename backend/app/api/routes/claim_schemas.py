@@ -4124,3 +4124,11 @@ def get_workspace_public_claims(
     ]
 
     return result    
+
+@router.get("/workspaces/{workspace_id}/public-claims")
+def get_workspace_public_claims(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return build_public_profile_response(workspace_id, db)    
