@@ -1133,7 +1133,15 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 
   const baseUrl = getApiBaseUrl();
 
-  const finalPath = path;
+  const finalPath = withApiPrefix(path);
+
+  function withApiPrefix(path: string) {
+    // auth routes should NOT be prefixed
+    if (path.startsWith("/auth")) return path;
+
+    // everything else MUST go through /api
+    return path.startsWith("/api") ? path : `/api${path}`;
+  }
 
   const res = await fetch(`${baseUrl}${finalPath}`, {
     ...options,
