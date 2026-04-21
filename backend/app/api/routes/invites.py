@@ -242,6 +242,9 @@ def accept_invite_by_token(token: str, current_user: User, db: Session):
 
         raise HTTPException(status_code=400, detail="Invite has expired")
 
+    # 🔒 FINAL MEMBER LIMIT ENFORCEMENT (ON ACCEPT)
+    enforce_workspace_member_limit(matched_invite.workspace_id, db)    
+
     existing_membership = (
         db.query(WorkspaceMembership)
         .filter(
