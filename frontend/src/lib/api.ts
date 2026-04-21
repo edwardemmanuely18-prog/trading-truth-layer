@@ -1121,6 +1121,7 @@ function parseApiErrorPayload(rawText: string): ApiErrorPayload | null {
 }
 
 function getApiBaseUrl() {
+  // ALWAYS use environment variable for API
   return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 }
 
@@ -1133,9 +1134,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 
   const baseUrl = getApiBaseUrl();
 
-  const finalPath = path;
-
-  const res = await fetch(`${baseUrl}${finalPath}`, {
+  const res = await fetch(`${baseUrl}${API_BASE}${path}`, {
     ...options,
     headers,
   });
@@ -1144,6 +1143,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     const rawText = await res.text();
     const payload = parseApiErrorPayload(rawText);
 
+    // 🚀 MONETIZATION TRIGGER
     if ((payload as any)?.upgrade_required) {
       const workspaceId = (payload as any)?.workspace_id;
 
@@ -1836,6 +1836,19 @@ function normalizeVerifyPayload(
   return row as VerifyClaimResult;
 }
 
+async function startCheckout(
+  workspaceId: number,
+  payload: { plan_code: string; billing_cycle: string }
+) {
+  return apiFetch<{ checkout_url: string }>(
+    `/billing/workspaces/${workspaceId}/checkout`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
 export const api = {
     register: async (payload: RegisterPayload): Promise<AuthResponse> => {
     clearStoredAccessToken();
@@ -1898,6 +1911,8 @@ export const api = {
     }
   },
 
+  startCheckout,
+
   getMyWorkspaces: async (): Promise<AuthWorkspace[]> => {
     return apiFetch<AuthWorkspace[]>(withDevUser(`/workspaces`), {
       cache: "no-store",
@@ -1905,10 +1920,9 @@ export const api = {
   },
 
   getDashboard: async (workspaceId: number): Promise<DashboardResponse> => {
-    return await apiFetch<DashboardResponse>(
-      withDevUser(`/workspaces/${workspaceId}/dashboard`),
-      { cache: "no-store" }
-    );
+    return apiFetch<DashboardResponse>(withDevUser(`/workspaces/${workspaceId}/dashboard`), {
+      cache: "no-store",
+    });
   },
 
   getWorkspaceSettings: async (workspaceId: number): Promise<WorkspaceSettings> => {
@@ -1931,13 +1945,10 @@ export const api = {
     return ensureWorkspaceSettings(row);
   },
 
-  getWorkspaceUsage: async (
-    workspaceId: number
-  ): Promise<WorkspaceUsageSummary> => {
-    const row = await apiFetch<WorkspaceUsageSummary>(
-      withDevUser(`/workspaces/${workspaceId}/usage`),
-      { cache: "no-store" }
-    );
+  getWorkspaceUsage: async (workspaceId: number): Promise<WorkspaceUsageSummary> => {
+    const row = await apiFetch<WorkspaceUsageSummary>(withDevUser(`/workspaces/${workspaceId}/usage`), {
+      cache: "no-store",
+    });
 
     return ensureWorkspaceUsageSummary(row);
   },
@@ -1987,11 +1998,10 @@ export const api = {
     };
   },
 
-  async getTrades(workspaceId: number) {
-    return apiFetch<Trade[]>(
-      withDevUser(`/api/workspaces/${workspaceId}/trades`),
-      { cache: "no-store" }
-    );
+  getTrades: async (workspaceId: number): Promise<Trade[]> => {
+    return apiFetch<Trade[]>(withDevUser(`/workspaces/${workspaceId}/trades`), {
+      cache: "no-store",
+    });
   },
 
   getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
@@ -2099,36 +2109,30 @@ export const api = {
     });
   },
 
-    createTrade: async (workspaceId: number, payload: any): Promise<Trade> => {
-      return apiFetch<Trade>(
-        withDevUser(`/api/workspaces/${workspaceId}/trades`),
-        {
-          method: "POST",
-          body: JSON.stringify(payload),
-        }
-      );
-    },
+    createTrade: async (workspaceId: number, payload: unknown): Promise<Trade> => {
+    return apiFetch<Trade>(withDevUser(`/workspaces/${workspaceId}/trades`), {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
 
   updateTrade: async (
     workspaceId: number,
     tradeId: number,
-    payload: any
+    payload: unknown
   ): Promise<Trade> => {
-    return apiFetch<Trade>(
-      withDevUser(`/api/workspaces/${workspaceId}/trades/${tradeId}`),
-      {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      }
-    );
+    return apiFetch<Trade>(withDevUser(`/workspaces/${workspaceId}/trades/${tradeId}`), {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
   },
 
   deleteTrade: async (
     workspaceId: number,
     tradeId: number
-  ): Promise<{ success: boolean }> => {
-    return apiFetch<{ success: boolean }>(
-      withDevUser(`/api/workspaces/${workspaceId}/trades/${tradeId}`),
+  ): Promise<{ status: string; trade_id: number }> => {
+    return apiFetch<{ status: string; trade_id: number }>(
+      withDevUser(`/workspaces/${workspaceId}/trades/${tradeId}`),
       {
         method: "DELETE",
       }
@@ -2141,16 +2145,11 @@ export const api = {
 
     const headers = getAuthHeaders();
 
-    const baseUrl = getApiBaseUrl();
-
-    const res = await fetch(
-      `${baseUrl}${withDevUser(`/workspaces/${workspaceId}/trades/import-csv`)}`,
-      {
-        method: "POST",
-        headers,
-        body: formData,
-      }
-    );
+    const res = await fetch(`${API_BASE}${withDevUser(`/workspaces/${workspaceId}/trades/import-csv`)}`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
 
   if (!res.ok) {
     const rawText = await res.text();
@@ -2188,10 +2187,8 @@ export const api = {
 
     const headers = getAuthHeaders();
 
-    const baseUrl = getApiBaseUrl();
-
     const res = await fetch(
-      `${baseUrl}${withDevUser(`/workspaces/${workspaceId}/imports/upload`)}`,
+      `${API_BASE}${withDevUser(`/workspaces/${workspaceId}/imports/upload`)}`,
       {
         method: "POST",
         headers,
@@ -2549,21 +2546,15 @@ export const api = {
   },
 
   getAuditEventsForWorkspace: async (
-    workspaceId: number,
+    workspaceId: string | number,
     limit = 50
-  ) => {
-    const res = await fetch(
-      `${API_BASE_URL}/workspaces/${workspaceId}/audit-events?limit=${limit}`,
+  ): Promise<AuditEvent[]> => {
+    return apiFetch<AuditEvent[]>(
+      withDevUser(`/audit-events/workspace/${workspaceId}?limit=${limit}`),
       {
-        headers: {
-          ...getAuthHeaders(),
-        },
+        cache: "no-store",
       }
     );
-
-    if (!res.ok) throw new Error("Failed to fetch audit events");
-
-    return res.json();
   },
 };
 
