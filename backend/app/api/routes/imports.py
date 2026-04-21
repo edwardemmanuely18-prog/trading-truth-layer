@@ -196,6 +196,22 @@ def ingest_webhook_trades(
 
     filename = str(payload.get("filename") or f"{source_type}_webhook")
 
+    # 🔒 TRADE LIMIT ENFORCEMENT (WEBHOOK)
+    from app.models.workspace import Workspace
+
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    current_trade_count = 0  # ⚠️ you may later replace with actual Trade table count
+    incoming_trade_count = len(adapted_rows)
+
+    if workspace.trade_limit and (current_trade_count + incoming_trade_count > workspace.trade_limit):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Trade limit exceeded ({workspace.trade_limit}). Upgrade your plan."
+        )
+
     result = persist_runtime_trade_rows(
         db=db,
         workspace_id=workspace_id,
@@ -242,6 +258,23 @@ async def upload_import_file(
         )
 
     file_bytes = await file.read()
+
+    # 🔒 TRADE LIMIT ENFORCEMENT (FILE IMPORT)
+    from app.models.workspace import Workspace
+
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    # NOTE: replace later with real Trade count
+    current_trade_count = 0  
+    incoming_trade_count = 1000  # ⚠️ approximate until parser gives count
+
+    if workspace.trade_limit and (current_trade_count + incoming_trade_count > workspace.trade_limit):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Trade limit exceeded ({workspace.trade_limit}). Upgrade required."
+        )
 
     # Persist accepted rows into Trade via existing ingestion service
     result = import_broker_trades(
