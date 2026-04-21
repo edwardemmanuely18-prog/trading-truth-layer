@@ -3328,7 +3328,19 @@ def create_claim_schema(
 
     workspace = get_workspace_or_404(payload.workspace_id, db)
     effective_plan_code = resolve_effective_workspace_plan_code(workspace)
+    
+    # 🔒 PLAN ENFORCEMENT (CRITICAL)
+    current_claim_count = (
+        db.query(ClaimSchema)
+        .filter(ClaimSchema.workspace_id == workspace.id)
+        .count()
+    )
 
+    enforce_claim_creation_allowed(
+        workspace=workspace,
+        current_count=current_claim_count
+    )
+    
     if effective_plan_code == "sandbox" and visibility == "public":
         visibility = "unlisted"
 
