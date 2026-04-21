@@ -54,7 +54,7 @@ def get_audit_events_for_entity(entity_type: str, entity_id: str, db: Session = 
     return [serialize_audit_event(event) for event in events]
 
 
-@router.get("/audit-events/workspace/{workspace_id}")
+@router.get("/workspaces/{workspace_id}/audit-events")
 def get_audit_events_for_workspace(workspace_id: str, limit: int = 50, db: Session = Depends(get_db)):
     if limit < 1:
         limit = 1

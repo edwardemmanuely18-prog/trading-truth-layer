@@ -960,4 +960,42 @@ def get_workspace_dashboard(
         "member_count": workspace.member_limit,
         "trade_count": trade_count,
         "claim_count": getattr(workspace, "claim_limit", 0),
-    }    
+    } 
+
+@router.get("/workspaces/{workspace_id}/usage")
+def get_workspace_usage(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    return {
+        "workspace_id": workspace.id,
+        "trade_limit": workspace.trade_limit,
+        "trades_used": workspace.trades_consumed_count,
+        "claim_limit": workspace.claim_limit,
+    }
+
+
+@router.get("/workspaces/{workspace_id}/dashboard")
+def get_workspace_dashboard(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    trade_count = db.query(Trade).filter(Trade.workspace_id == workspace_id).count()
+
+    return {
+        "workspace_id": workspace.id,
+        "workspace_name": workspace.name,
+        "member_count": workspace.member_limit,
+        "trade_count": trade_count,
+        "claim_count": workspace.claim_limit,
+    }       
