@@ -1133,7 +1133,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 
   const baseUrl = getApiBaseUrl();
 
-  const finalPath = path.startsWith("/api") ? path : `/api${path}`;
+  const finalPath = path;
 
   const res = await fetch(`${baseUrl}${finalPath}`, {
     ...options,
