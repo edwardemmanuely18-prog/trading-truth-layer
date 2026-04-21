@@ -792,6 +792,28 @@ export default function WorkspaceSettingsPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  useEffect(() => {
+    const upgrade = searchParams.get("upgrade");
+
+    if (upgrade === "true") {
+      (async () => {
+        try {
+          const workspaceId = Number(params?.workspaceId);
+
+          const res = await api.startCheckout(workspaceId, {
+            plan_code: "pro",
+            billing_cycle: "monthly",
+          });
+
+          if (res.checkout_url) {
+            window.location.href = res.checkout_url;
+          }
+        } catch (err) {
+          console.error("Auto checkout failed:", err);
+        }
+      })();
+    }
+  }, []);
   const { user, workspaces, loading: authLoading, getWorkspaceRole } = useAuth();
 
   const workspaceId = useMemo(() => {

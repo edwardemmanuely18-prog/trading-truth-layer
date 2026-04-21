@@ -269,13 +269,15 @@ def enforce_limit_not_reached(
     if projected > limit:
         raise HTTPException(
             status_code=403,
-            detail=(
-                f"{resource_label.capitalize()} limit reached for workspace {workspace_id}. "
-                f"Current usage: {used}. "
-                f"Requested additional: {requested_additional}. "
-                f"Plan limit: {limit}. "
-                f"Upgrade workspace plan to continue."
-            ),
+            detail={
+                "code": "UPGRADE_REQUIRED",
+                "resource": resource_label,
+                "message": f"{resource_label} limit reached",
+                "workspace_id": workspace_id,
+                "used": used,
+                "limit": limit,
+                "upgrade_required": True,
+            },
         )
 
 

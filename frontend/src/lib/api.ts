@@ -1142,6 +1142,18 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   if (!res.ok) {
     const rawText = await res.text();
     const payload = parseApiErrorPayload(rawText);
+
+    // 🚀 MONETIZATION TRIGGER
+    if ((payload as any)?.upgrade_required) {
+      const workspaceId = (payload as any)?.workspace_id;
+
+      if (typeof window !== "undefined" && workspaceId) {
+        window.location.href = `/workspace/${workspaceId}/settings?upgrade=true`;
+      }
+
+      throw new ApiError("Upgrade required", res.status, payload, rawText);
+    }
+
     const message =
       payload?.message ||
       payload?.detail ||
@@ -1824,6 +1836,19 @@ function normalizeVerifyPayload(
   return row as VerifyClaimResult;
 }
 
+async function startCheckout(
+  workspaceId: number,
+  payload: { plan_code: string; billing_cycle: string }
+) {
+  return apiFetch<{ checkout_url: string }>(
+    `/billing/workspaces/${workspaceId}/checkout`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
 export const api = {
     register: async (payload: RegisterPayload): Promise<AuthResponse> => {
     clearStoredAccessToken();
@@ -1885,6 +1910,8 @@ export const api = {
       throw error;
     }
   },
+
+  startCheckout,
 
   getMyWorkspaces: async (): Promise<AuthWorkspace[]> => {
     return apiFetch<AuthWorkspace[]>(withDevUser(`/workspaces`), {
