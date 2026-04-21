@@ -147,7 +147,7 @@ function resolveApiBase() {
 
 async function fetchWorkspacePublicClaims(workspaceId: number): Promise<PublicClaimRow[]> {
   const base = resolveApiBase();
-  const response = await fetch(`${base}/workspaces/${workspaceId}/public-profile`, {
+  const response = await fetch(`${base}/workspaces/${workspaceId}/public-claims`, {
     method: "GET",
     cache: "no-store",
   });
