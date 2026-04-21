@@ -1,4 +1,4 @@
-const API_BASE = "";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export const API_BASE_URL = API_BASE;
 const DEV_USER_ID: number | null = null;
