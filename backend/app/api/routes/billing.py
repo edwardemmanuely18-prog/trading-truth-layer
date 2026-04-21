@@ -1125,9 +1125,8 @@ def create_billing_checkout_session(
                 "checkout_intent": checkout_intent,
             },
             "checkout": {
-                "url": f"{get_frontend_base_url()}/workspace/{workspace.id}/settings",
                 "success_url": f"{get_frontend_base_url()}/workspace/{workspace.id}/settings?checkout=success",
-                "cancel_url": f"{get_frontend_base_url()}/workspace/{workspace.id}/settings?checkout=cancelled",
+                "cancel_url": f"{get_frontend_base_url()}/workspace/{workspace.id}/settings?checkout=cancelled"
             }
         }
 
@@ -1154,7 +1153,7 @@ def create_billing_checkout_session(
 
         data = (paddle_response or {}).get("data") or {}
         checkout_data = data.get("checkout") or {}
-        checkout_url = checkout_data.get("url")
+        checkout_url = checkout_data.get("url") or data.get("checkout_url")
 
         if not checkout_url:
             return {
