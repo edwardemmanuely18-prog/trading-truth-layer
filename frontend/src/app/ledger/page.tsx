@@ -2,6 +2,7 @@ import Link from "next/link";
 import Navbar from "../../components/Navbar";
 import TradeTable from "../../components/TradeTable";
 import { api } from "../../lib/api";
+import type { AuditEvent } from "../../lib/api";
 
 function formatDateTime(value?: string | null) {
   if (!value) return "—";
@@ -35,8 +36,8 @@ function summarizeJson(value?: string | null) {
 export default async function LedgerPage() {
   const [trades, latestAuditEvents, workspaceAuditEvents] = await Promise.all([
     api.getTrades(1),
-    api.getLatestAuditEvents(20),
-    api.getAuditEventsForWorkspace(1, 50),
+    api.getLatestAuditEvents(20) as Promise<AuditEvent[]>,
+    api.getAuditEventsForWorkspace(1, 50) as Promise<AuditEvent[]>,
   ]);
 
   return (
@@ -94,7 +95,7 @@ export default async function LedgerPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {latestAuditEvents.map((event) => (
+                  {latestAuditEvents.map((event: AuditEvent) => (
                     <tr key={event.id} className="border-b last:border-0">
                       <td className="px-3 py-2 font-medium">{event.id}</td>
                       <td className="px-3 py-2">{event.event_type}</td>
@@ -139,7 +140,7 @@ export default async function LedgerPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {workspaceAuditEvents.map((event) => (
+                  {workspaceAuditEvents.map((event: AuditEvent) => (
                     <tr key={event.id} className="align-top border-b last:border-0">
                       <td className="px-3 py-2 font-medium">{event.id}</td>
                       <td className="px-3 py-2">{event.event_type}</td>

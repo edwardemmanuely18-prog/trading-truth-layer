@@ -28,16 +28,6 @@ except ImportError:
     stripe = None
 
 
-def verify_paddle_signature(body: bytes, signature: str, secret: str) -> bool:
-    computed = hmac.new(
-        key=secret.encode(),
-        msg=body,
-        digestmod=hashlib.sha256,
-    ).hexdigest()
-
-    return hmac.compare_digest(computed, signature)
-
-
 router = APIRouter(prefix="/billing", tags=["billing"])
 
 from fastapi import HTTPException
