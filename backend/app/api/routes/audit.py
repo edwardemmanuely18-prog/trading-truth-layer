@@ -79,3 +79,19 @@ def get_audit_event_by_id(audit_event_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Audit event not found")
 
     return serialize_audit_event(event)
+
+@router.get("/workspaces/{workspace_id}/audit-events")
+def get_workspace_audit_events_v2(
+    workspace_id: int,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    events = (
+        db.query(AuditEvent)
+        .filter(AuditEvent.workspace_id == str(workspace_id))
+        .order_by(AuditEvent.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return [serialize_audit_event(event) for event in events]    

@@ -161,15 +161,18 @@ def on_startup():
 app.include_router(verify.router)
 app.include_router(health_router)
 app.include_router(auth_router)
-app.include_router(workspaces_router)
+
+# ALL API ROUTES MUST HAVE /api PREFIX
+app.include_router(workspaces_router, prefix="/api")
 app.include_router(trades_router, prefix="/api")
-app.include_router(claim_schemas_router)
-app.include_router(imports_router)
-app.include_router(audit_router)
-app.include_router(invites_router)
-app.include_router(billing_router)
-app.include_router(platform_router)
-app.include_router(claim_disputes_router)
+app.include_router(claim_schemas_router, prefix="/api")
+app.include_router(imports_router, prefix="/api")
+app.include_router(audit_router, prefix="/api")
+app.include_router(invites_router, prefix="/api")
+app.include_router(billing_router, prefix="/api")
+app.include_router(platform_router, prefix="/api")
+app.include_router(claim_disputes_router, prefix="/api")
+app.include_router(workspace_members.router, prefix="/api")
 
 # IMPORTANT: prefix for API routes
 app.include_router(workspace_members.router, prefix="/api")

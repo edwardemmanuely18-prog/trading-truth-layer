@@ -1710,3 +1710,42 @@ async def paddle_webhook(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         print("Webhook error:", str(e))
         return {"status": "error"}
+
+
+@router.get("/workspaces/{workspace_id}/usage")
+def get_workspace_usage_adapter(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    return {
+        "workspace_id": workspace.id,
+        "trade_limit": getattr(workspace, "trade_limit", 0),
+        "trades_used": getattr(workspace, "trades_consumed_count", 0),
+        "claim_limit": getattr(workspace, "claim_limit", 0),
+    }   
+
+
+@router.get("/workspaces/{workspace_id}/dashboard")
+def get_workspace_dashboard(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    trade_count = db.query(Trade).filter(Trade.workspace_id == workspace_id).count()
+
+    return {
+        "workspace_id": workspace.id,
+        "workspace_name": workspace.name,
+        "member_count": workspace.member_limit,
+        "trade_count": trade_count,
+        "claim_count": getattr(workspace, "claim_limit", 0),
+    }
