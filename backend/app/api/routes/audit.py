@@ -94,4 +94,4 @@ def get_workspace_audit_events_v2(
         .all()
     )
 
-    return [serialize_audit_event(event) for event in events]    
+    return [serialize_audit_event(event) for event in events]  

@@ -158,11 +158,12 @@ def on_startup():
 # =========================
 # ROUTES
 # =========================
+
 app.include_router(verify.router)
 app.include_router(health_router)
 app.include_router(auth_router)
 
-# ALL API ROUTES MUST HAVE /api PREFIX
+# ALL WORKSPACE APIs MUST BE UNDER /api
 app.include_router(workspaces_router, prefix="/api")
 app.include_router(trades_router, prefix="/api")
 app.include_router(claim_schemas_router, prefix="/api")

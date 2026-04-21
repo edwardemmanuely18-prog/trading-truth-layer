@@ -941,3 +941,23 @@ def remove_workspace_member(
         "workspace_id": workspace_id,
         "user_id": user_id,
     }
+
+@router.get("/workspaces/{workspace_id}/dashboard")
+def get_workspace_dashboard(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    trade_count = db.query(Trade).filter(Trade.workspace_id == workspace_id).count()
+
+    return {
+        "workspace_id": workspace.id,
+        "workspace_name": workspace.name,
+        "member_count": workspace.member_limit,
+        "trade_count": trade_count,
+        "claim_count": getattr(workspace, "claim_limit", 0),
+    }    
