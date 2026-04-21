@@ -13,6 +13,10 @@ from app.models.workspace import Workspace
 from app.models.workspace_membership import WorkspaceMembership
 from app.services.audit_service import log_audit_event
 
+from app.models.trade import Trade
+from app.models.workspace import Workspace
+from fastapi import HTTPException
+
 router = APIRouter()
 
 
@@ -999,3 +1003,4 @@ def get_workspace_dashboard(
         "trade_count": trade_count,
         "claim_count": workspace.claim_limit,
     }       
+
