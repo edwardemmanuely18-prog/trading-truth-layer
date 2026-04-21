@@ -28,6 +28,16 @@ except ImportError:
     stripe = None
 
 
+def verify_paddle_signature(body: bytes, signature: str, secret: str) -> bool:
+    computed = hmac.new(
+        key=secret.encode(),
+        msg=body,
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+
+    return hmac.compare_digest(computed, signature)
+
+
 router = APIRouter(prefix="/billing", tags=["billing"])
 
 from fastapi import HTTPException
@@ -1471,20 +1481,22 @@ def create_billing_portal_session(
     }
 
 
-@router.post("/paddle/webhooks")
-async def handle_paddle_webhook(
-    request: Request,
-    paddle_signature: str | None = Header(default=None, alias="Paddle-Signature"),
-    db: Session = Depends(get_db),
-):
-    raw_body = await request.body()
+@router.post("/paddle/webhook")
+async def paddle_webhook(request: Request):
+    body = await request.body()
 
-    if not paddle_verify_signature(raw_body, paddle_signature):
-        return {
-            "received": False,
-            "mode": "signature_verification_failed",
-            "message": "Paddle webhook signature verification failed.",
-        }
+    secret = settings.PADDLE_WEBHOOK_SECRET
+    signature = request.headers.get("paddle-signature")
+
+    if not signature or not verify_paddle_signature(body, signature, secret):
+        return {"status": "invalid signature"}
+
+    data = await request.json()
+
+    # 👉 continue your existing logic here
+    # e.g. subscription activated, updated, etc.
+
+    return {"status": "ok"}
 
     try:
         payload = json.loads(raw_body.decode("utf-8"))
@@ -1646,3 +1658,65 @@ async def handle_stripe_webhook(
         "event_type": event_type,
     }
 
+from fastapi import Request
+import json
+
+
+@router.post("/webhook/paddle")
+async def paddle_webhook(request: Request, db: Session = Depends(get_db)):
+    try:
+        body = await request.body()
+        payload = json.loads(body)
+
+        event_type = payload.get("event_type")
+        data = payload.get("data", {})
+
+        # ----------------------------
+        # SUBSCRIPTION CREATED / PAID
+        # ----------------------------
+        if event_type in ["subscription.created", "subscription.updated"]:
+            customer_id = data.get("customer_id")
+            subscription_id = data.get("id")
+            status = data.get("status")
+            price_id = data.get("price_id")
+
+            workspace = (
+                db.query(Workspace)
+                .filter(Workspace.paddle_customer_id == customer_id)
+                .first()
+            )
+
+            if workspace:
+                workspace.paddle_subscription_id = subscription_id
+                workspace.paddle_price_id = price_id
+
+                if status in ["active", "trialing"]:
+                    workspace.billing_status = "active"
+                else:
+                    workspace.billing_status = "inactive"
+
+                db.commit()
+
+        # ----------------------------
+        # PAYMENT SUCCESS
+        # ----------------------------
+        if event_type == "transaction.completed":
+            customer_id = data.get("customer_id")
+            transaction_id = data.get("id")
+
+            workspace = (
+                db.query(Workspace)
+                .filter(Workspace.paddle_customer_id == customer_id)
+                .first()
+            )
+
+            if workspace:
+                workspace.paddle_transaction_id = transaction_id
+                workspace.billing_status = "active"
+                db.commit()
+
+        return {"status": "ok"}
+
+    except Exception as e:
+        print("Webhook error:", str(e))
+        return {"status": "error"}
