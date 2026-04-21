@@ -4132,3 +4132,4 @@ def get_workspace_public_claims(
     current_user: User = Depends(get_current_user),
 ):
     return build_public_profile_response(workspace_id, db)    
+    
