@@ -1905,8 +1905,8 @@ export const api = {
   },
 
   getDashboard: async (workspaceId: number): Promise<DashboardResponse> => {
-    return apiFetch<DashboardResponse>(
-      withDevUser(`/api/dashboard/${workspaceId}`),
+    return await apiFetch<DashboardResponse>(
+      withDevUser(`/workspaces/${workspaceId}/dashboard`),
       { cache: "no-store" }
     );
   },
@@ -1931,12 +1931,12 @@ export const api = {
     return ensureWorkspaceSettings(row);
   },
 
-  getWorkspaceUsage: async (workspaceId: number): Promise<WorkspaceUsageSummary> => {
+  getWorkspaceUsage: async (
+    workspaceId: number
+  ): Promise<WorkspaceUsageSummary> => {
     const row = await apiFetch<WorkspaceUsageSummary>(
-      withDevUser(`/billing/workspace/${workspaceId}`),
-      {
-        cache: "no-store",
-      }
+      withDevUser(`/workspaces/${workspaceId}/usage`),
+      { cache: "no-store" }
     );
 
     return ensureWorkspaceUsageSummary(row);
