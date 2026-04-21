@@ -147,7 +147,8 @@ function resolveApiBase() {
 
 async function fetchWorkspacePublicClaims(workspaceId: number): Promise<PublicClaimRow[]> {
   const base = resolveApiBase();
-  const response = await fetch(`${base}/workspaces/${workspaceId}/public-claims`, {
+
+  const response = await fetch(`${base}/api/workspaces/${workspaceId}/public-claims`, {
     method: "GET",
     cache: "no-store",
   });
@@ -157,9 +158,8 @@ async function fetchWorkspacePublicClaims(workspaceId: number): Promise<PublicCl
     throw new Error(raw || `Failed to load public records (${response.status})`);
   }
 
-  const rows = (await response.json()) as unknown;
   const data = await response.json();
-  return Array.isArray(data?.claims) ? data.claims : [];
+  return Array.isArray(data) ? data : [];
 }
 
 export default function WorkspacePublicRecordsPage() {
