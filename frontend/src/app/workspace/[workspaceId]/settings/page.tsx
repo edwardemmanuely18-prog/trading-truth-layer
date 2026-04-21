@@ -800,7 +800,7 @@ export default function WorkspaceSettingsPage() {
         try {
           const workspaceId = Number(params?.workspaceId);
 
-          const res = await api.startCheckout(workspaceId, {
+          const res = await api.createBillingCheckoutSession(workspaceId, {
             plan_code: "pro",
             billing_cycle: "monthly",
           });

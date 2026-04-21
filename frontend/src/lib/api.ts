@@ -1836,24 +1836,6 @@ function normalizeVerifyPayload(
   return row as VerifyClaimResult;
 }
 
-async function startCheckout(
-  workspaceId: number,
-  payload: { plan_code: string; billing_cycle: string }
-) {
-  const res = await apiFetch<any>(
-    `/billing/workspaces/${workspaceId}/checkout`,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }
-  );
-
-  return {
-    ...res,
-    checkout_url: res.checkout_url ?? res.url ?? null,
-  };
-}
-
 export const api = {
     register: async (payload: RegisterPayload): Promise<AuthResponse> => {
     clearStoredAccessToken();
@@ -1916,8 +1898,6 @@ export const api = {
     }
   },
 
-  startCheckout,
-
   getMyWorkspaces: async (): Promise<AuthWorkspace[]> => {
     return apiFetch<AuthWorkspace[]>(withDevUser(`/workspaces`), {
       cache: "no-store",
@@ -1925,9 +1905,10 @@ export const api = {
   },
 
   getDashboard: async (workspaceId: number): Promise<DashboardResponse> => {
-    return apiFetch<DashboardResponse>(withDevUser(`/workspaces/${workspaceId}/dashboard`), {
-      cache: "no-store",
-    });
+    return apiFetch<DashboardResponse>(
+      withDevUser(`/api/dashboard/${workspaceId}`),
+      { cache: "no-store" }
+    );
   },
 
   getWorkspaceSettings: async (workspaceId: number): Promise<WorkspaceSettings> => {
@@ -1952,7 +1933,7 @@ export const api = {
 
   getWorkspaceUsage: async (workspaceId: number): Promise<WorkspaceUsageSummary> => {
     const row = await apiFetch<WorkspaceUsageSummary>(
-      withDevUser(`/billing/workspaces/${workspaceId}/usage`),
+      withDevUser(`/billing/workspace/${workspaceId}`),
       {
         cache: "no-store",
       }
@@ -2007,15 +1988,10 @@ export const api = {
   },
 
   async getTrades(workspaceId: number) {
-    const res = await fetch(`${API_BASE_URL}/api/workspaces/${workspaceId}/trades`, {
-      headers: {
-        "Content-Type": "application/json",
-        ...getAuthHeaders(),
-      },
-    });
-
-    if (!res.ok) throw new Error("Failed to fetch trades");
-    return res.json();
+    return apiFetch<Trade[]>(
+      withDevUser(`/api/workspaces/${workspaceId}/trades`),
+      { cache: "no-store" }
+    );
   },
 
   getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
@@ -2124,24 +2100,13 @@ export const api = {
   },
 
     createTrade: async (workspaceId: number, payload: any): Promise<Trade> => {
-      const res = await fetch(
-        `${getApiBaseUrl()}/api/workspaces/${workspaceId}/trades`,
+      return apiFetch<Trade>(
+        withDevUser(`/api/workspaces/${workspaceId}/trades`),
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...getAuthHeaders(),
-          },
           body: JSON.stringify(payload),
         }
       );
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Failed to create trade: ${text}`);
-      }
-
-      return res.json();
     },
 
   updateTrade: async (
@@ -2149,46 +2114,25 @@ export const api = {
     tradeId: number,
     payload: any
   ): Promise<Trade> => {
-    const res = await fetch(
-      `${getApiBaseUrl()}/api/workspaces/${workspaceId}/trades/${tradeId}`,
+    return apiFetch<Trade>(
+      withDevUser(`/api/workspaces/${workspaceId}/trades/${tradeId}`),
       {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
         body: JSON.stringify(payload),
       }
     );
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Failed to update trade: ${text}`);
-    }
-
-    return res.json();
   },
 
   deleteTrade: async (
     workspaceId: number,
     tradeId: number
   ): Promise<{ success: boolean }> => {
-    const res = await fetch(
-      `${getApiBaseUrl()}/api/workspaces/${workspaceId}/trades/${tradeId}`,
+    return apiFetch<{ success: boolean }>(
+      withDevUser(`/api/workspaces/${workspaceId}/trades/${tradeId}`),
       {
         method: "DELETE",
-        headers: {
-          ...getAuthHeaders(),
-        },
       }
     );
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Failed to delete trade: ${text}`);
-    }
-
-    return res.json();
   },
 
   importTradesCsv: async (workspaceId: number, file: File): Promise<ImportCsvResult> => {
