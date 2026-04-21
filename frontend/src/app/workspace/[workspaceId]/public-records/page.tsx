@@ -147,7 +147,7 @@ function resolveApiBase() {
 
 async function fetchWorkspacePublicClaims(workspaceId: number): Promise<PublicClaimRow[]> {
   const base = resolveApiBase();
-  const response = await fetch(`${base}/workspaces/${workspaceId}/public-claims`, {
+  const response = await fetch(`${base}/workspaces/${workspaceId}/public-profile`, {
     method: "GET",
     cache: "no-store",
   });
@@ -158,7 +158,8 @@ async function fetchWorkspacePublicClaims(workspaceId: number): Promise<PublicCl
   }
 
   const rows = (await response.json()) as unknown;
-  return Array.isArray(rows) ? (rows as PublicClaimRow[]) : [];
+  const data = await response.json();
+  return Array.isArray(data?.claims) ? data.claims : [];
 }
 
 export default function WorkspacePublicRecordsPage() {
