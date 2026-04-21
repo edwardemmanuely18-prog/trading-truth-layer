@@ -170,7 +170,6 @@ app.include_router(invites_router)
 app.include_router(billing_router)
 app.include_router(platform_router)
 app.include_router(claim_disputes_router)
-app.include_router(billing.router, prefix="/billing", tags=["billing"])
 
 # IMPORTANT: prefix for API routes
 app.include_router(workspace_members.router, prefix="/api")
