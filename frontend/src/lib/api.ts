@@ -1950,12 +1950,19 @@ export const api = {
     return ensureWorkspaceSettings(row);
   },
 
-  getWorkspaceUsage: async (workspaceId: number): Promise<WorkspaceUsageSummary> => {
-    const row = await apiFetch<WorkspaceUsageSummary>(withDevUser(`/workspaces/${workspaceId}/usage`), {
-      cache: "no-store",
-    });
+  getWorkspaceUsage: async (workspaceId: number) => {
+    const res = await fetch(
+      `${API_BASE_URL}/workspaces/${workspaceId}/usage`,
+      {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      }
+    );
 
-    return ensureWorkspaceUsageSummary(row);
+    if (!res.ok) throw new Error("Failed to fetch usage");
+
+    return res.json();
   },
 
   getWorkspaceBillingFoundation: async (
@@ -2003,10 +2010,19 @@ export const api = {
     };
   },
 
-  getTrades: async (workspaceId: number): Promise<Trade[]> => {
-    return apiFetch<Trade[]>(withDevUser(`/workspaces/${workspaceId}/trades`), {
-      cache: "no-store",
-    });
+  getTrades: async (workspaceId: number) => {
+    const res = await fetch(
+      `${API_BASE_URL}/workspaces/${workspaceId}/trades`,
+      {
+        headers: {
+          ...getAuthHeaders(),
+        },
+      }
+    );
+
+    if (!res.ok) throw new Error("Failed to fetch trades");
+
+    return res.json();
   },
 
   getImports: async (workspaceId: number): Promise<ImportBatch[]> => {
@@ -2114,34 +2130,60 @@ export const api = {
     });
   },
 
-    createTrade: async (workspaceId: number, payload: unknown): Promise<Trade> => {
-    return apiFetch<Trade>(withDevUser(`/workspaces/${workspaceId}/trades`), {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-  },
+    createTrade: async (workspaceId: number, payload: any) => {
+      const res = await fetch(
+        `${API_BASE_URL}/workspaces/${workspaceId}/trades`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (!res.ok) throw new Error("Failed to create trade");
+
+      return res.json();
+    },
 
   updateTrade: async (
     workspaceId: number,
     tradeId: number,
-    payload: unknown
-  ): Promise<Trade> => {
-    return apiFetch<Trade>(withDevUser(`/workspaces/${workspaceId}/trades/${tradeId}`), {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
-  },
-
-  deleteTrade: async (
-    workspaceId: number,
-    tradeId: number
-  ): Promise<{ status: string; trade_id: number }> => {
-    return apiFetch<{ status: string; trade_id: number }>(
-      withDevUser(`/workspaces/${workspaceId}/trades/${tradeId}`),
+    payload: any
+  ) => {
+    const res = await fetch(
+      `${API_BASE_URL}/workspaces/${workspaceId}/trades/${tradeId}`,
       {
-        method: "DELETE",
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(payload),
       }
     );
+
+    if (!res.ok) throw new Error("Failed to update trade");
+
+    return res.json();
+  },
+
+  deleteTrade: async (workspaceId: number, tradeId: number) => {
+    const res = await fetch(
+      `${API_BASE_URL}/workspaces/${workspaceId}/trades/${tradeId}`,
+      {
+        method: "DELETE",
+        headers: {
+          ...getAuthHeaders(),
+        },
+      }
+    );
+
+    if (!res.ok) throw new Error("Failed to delete trade");
+
+    return res.json();
   },
 
   importTradesCsv: async (workspaceId: number, file: File): Promise<ImportCsvResult> => {
@@ -2558,15 +2600,21 @@ export const api = {
   },
 
   getAuditEventsForWorkspace: async (
-    workspaceId: string | number,
+    workspaceId: number,
     limit = 50
-  ): Promise<AuditEvent[]> => {
-    return apiFetch<AuditEvent[]>(
-      withDevUser(`/audit-events/workspace/${workspaceId}?limit=${limit}`),
+  ) => {
+    const res = await fetch(
+      `${API_BASE_URL}/workspaces/${workspaceId}/audit-events?limit=${limit}`,
       {
-        cache: "no-store",
+        headers: {
+          ...getAuthHeaders(),
+        },
       }
     );
+
+    if (!res.ok) throw new Error("Failed to fetch audit events");
+
+    return res.json();
   },
 };
 

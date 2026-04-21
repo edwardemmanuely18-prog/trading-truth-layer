@@ -248,7 +248,7 @@ export default function WorkspaceLedgerPage() {
         source_type: "manual",
       };
 
-      await api.updateTrade; // type guard for next api step
+      await api.updateTrade;
       await api.createTrade(workspaceId, payload);
       await reloadLedgerData(workspaceId);
 
