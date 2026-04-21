@@ -1121,7 +1121,6 @@ function parseApiErrorPayload(rawText: string): ApiErrorPayload | null {
 }
 
 function getApiBaseUrl() {
-  // ALWAYS use environment variable for API
   return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 }
 
@@ -1134,7 +1133,9 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 
   const baseUrl = getApiBaseUrl();
 
-  const res = await fetch(`${baseUrl}${API_BASE}${path}`, {
+  const finalPath = path.startsWith("/api") ? path : `/api${path}`;
+
+  const res = await fetch(`${baseUrl}${finalPath}`, {
     ...options,
     headers,
   });
@@ -1143,7 +1144,6 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     const rawText = await res.text();
     const payload = parseApiErrorPayload(rawText);
 
-    // 🚀 MONETIZATION TRIGGER
     if ((payload as any)?.upgrade_required) {
       const workspaceId = (payload as any)?.workspace_id;
 
