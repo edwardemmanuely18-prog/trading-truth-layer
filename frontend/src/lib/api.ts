@@ -1997,7 +1997,7 @@ export const api = {
 
   async getTrades(workspaceId: number) {
     return apiFetch<Trade[]>(
-      withDevUser(`/api/workspaces/${workspaceId}/trades`),
+      withDevUser(`/workspaces/${workspaceId}/trades`),
       { cache: "no-store" }
     );
   },
@@ -2109,7 +2109,7 @@ export const api = {
 
     createTrade: async (workspaceId: number, payload: any): Promise<Trade> => {
       return apiFetch<Trade>(
-        withDevUser(`/api/workspaces/${workspaceId}/trades`),
+        withDevUser(`/workspaces/${workspaceId}/trades`),
         {
           method: "POST",
           body: JSON.stringify(payload),
@@ -2123,7 +2123,7 @@ export const api = {
     payload: any
   ): Promise<Trade> => {
     return apiFetch<Trade>(
-      withDevUser(`/api/workspaces/${workspaceId}/trades/${tradeId}`),
+      withDevUser(`/workspaces/${workspaceId}/trades/${tradeId}`),
       {
         method: "PUT",
         body: JSON.stringify(payload),
@@ -2136,7 +2136,7 @@ export const api = {
     tradeId: number
   ): Promise<{ success: boolean }> => {
     return apiFetch<{ success: boolean }>(
-      withDevUser(`/api/workspaces/${workspaceId}/trades/${tradeId}`),
+      withDevUser(`/workspaces/${workspaceId}/trades/${tradeId}`),
       {
         method: "DELETE",
       }
@@ -2550,30 +2550,29 @@ export const api = {
   ): Promise<AuditEvent[]> => {
     return apiFetch<AuditEvent[]>(
       withDevUser(`/audit-events/entity/${entityType}/${entityId}`),
-      {
-        cache: "no-store",
-      }
+      { cache: "no-store" }
     );
   },
 
   getAuditEventsForWorkspace: async (
     workspaceId: number,
     limit = 50
-  ) => {
-    const res = await fetch(
-      `${API_BASE_URL}/workspaces/${workspaceId}/audit-events?limit=${limit}`,
-      {
-        headers: {
-          ...getAuthHeaders(),
-        },
-      }
+  ): Promise<AuditEvent[]> => {
+    return apiFetch<AuditEvent[]>(
+      withDevUser(`/workspaces/${workspaceId}/audit-events?limit=${limit}`),
+      { cache: "no-store" }
     );
-
-    if (!res.ok) throw new Error("Failed to fetch audit events");
-
-    return res.json();
   },
-};
+
+  getWorkspacePublicClaims: async (
+    workspaceId: number
+  ): Promise<any[]> => {
+    return apiFetch<any[]>(
+      withDevUser(`/workspaces/${workspaceId}/public-claims`),
+      { cache: "no-store" }
+    );
+  },
+  };
 
 export function computeTrustScore(claim: any): number {
   if (!claim) return 0;
