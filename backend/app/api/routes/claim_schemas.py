@@ -3340,7 +3340,7 @@ def create_claim_schema(
         workspace=workspace,
         current_count=current_claim_count
     )
-    
+
     if effective_plan_code == "sandbox" and visibility == "public":
         visibility = "unlisted"
 
@@ -4096,3 +4096,31 @@ def get_workspace_public_claims(workspace_id: int, db: Session = Depends(get_db)
     )
 
     return [build_claim_list_row(schema, db) for schema in rows]    
+
+
+@router.get("/workspaces/{workspace_id}/public-claims")
+def get_workspace_public_claims(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = get_workspace_or_404(workspace_id, db)
+
+    membership = require_workspace_member(workspace_id, current_user, db)
+
+    claims = (
+        db.query(ClaimSchema)
+        .filter(
+            ClaimSchema.workspace_id == workspace_id,
+            ClaimSchema.visibility.in_(["public", "unlisted"]),
+        )
+        .all()
+    )
+
+    result = [
+        build_claim_list_row(schema, db)
+        for schema in claims
+        if is_claim_publicly_accessible(schema)
+    ]
+
+    return result    
