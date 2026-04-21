@@ -206,11 +206,13 @@ def ingest_webhook_trades(
     current_trade_count = 0  # ⚠️ you may later replace with actual Trade table count
     incoming_trade_count = len(adapted_rows)
 
-    if workspace.trade_limit and (current_trade_count + incoming_trade_count > workspace.trade_limit):
-        raise HTTPException(
-            status_code=403,
-            detail=f"Trade limit exceeded ({workspace.trade_limit}). Upgrade your plan."
-        )
+    from app.services.entitlements import enforce_trade_import_allowed
+
+    enforce_trade_import_allowed(
+        workspace=workspace,
+        incoming_count=incoming_trade_count,
+        current_count=current_trade_count
+    )
 
     result = persist_runtime_trade_rows(
         db=db,
@@ -270,11 +272,13 @@ async def upload_import_file(
     current_trade_count = 0  
     incoming_trade_count = 1000  # ⚠️ approximate until parser gives count
 
-    if workspace.trade_limit and (current_trade_count + incoming_trade_count > workspace.trade_limit):
-        raise HTTPException(
-            status_code=403,
-            detail=f"Trade limit exceeded ({workspace.trade_limit}). Upgrade required."
-        )
+    from app.services.entitlements import enforce_trade_import_allowed
+
+    enforce_trade_import_allowed(
+        workspace=workspace,
+        incoming_count=incoming_trade_count,
+        current_count=current_trade_count
+    )
 
     # Persist accepted rows into Trade via existing ingestion service
     result = import_broker_trades(
