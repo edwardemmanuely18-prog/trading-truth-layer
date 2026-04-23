@@ -43,7 +43,10 @@ def get_global_public_claims(
 ):
     claims = (
         db.query(ClaimSchema)
-        .filter(ClaimSchema.visibility == "public")
+        .filter(
+            ClaimSchema.visibility == "public",
+            ClaimSchema.status == "locked"
+        )
         .all()
     )
 
@@ -59,11 +62,52 @@ def get_global_public_claims(
             continue
 
         enriched.append({
-            "id": c.id,
-            "workspace_id": c.workspace_id,
+            "claim_schema_id": c.id,
+            "claim_hash": c.claim_hash,
+
+            # 👇 REQUIRED FOR WORKSPACE FILTER
+            "issuer": {
+                "id": c.workspace_id,
+            },
+
+            "profile": {
+                "workspace_id": c.workspace_id,
+            },
+
+            # 👇 REQUIRED FOR VISIBILITY FILTER
+            "scope": {
+                "visibility": c.visibility,
+                "period_start": None,
+                "period_end": None,
+                "included_members": [],
+                "included_symbols": [],
+                "methodology_notes": "",
+            },
+
+            # 👇 REQUIRED FOR LOCK FILTER
+            "lifecycle": {
+                "status": "locked" if getattr(c, "status", "") == "locked" else "unlocked",
+                "locked_at": getattr(c, "locked_at", None),
+                "verified_at": getattr(c, "verified_at", None),
+                "published_at": None,
+                "locked_trade_set_hash": None,
+            },
+
+            # 👇 CORE DATA
+            "name": getattr(c, "name", f"Claim {c.id}"),
+            "verification_status": getattr(c, "status", "unknown"),
+
             "net_pnl": metrics.get("net_pnl", 0),
             "trade_count": metrics.get("trade_count", 0),
+
+            # 👇 ADD THESE (your UI expects them)
+            "profit_factor": metrics.get("profit_factor", 0),
+            "win_rate": metrics.get("win_rate", 0),
+
             "trust_score": trust,
+
+            # 👇 REQUIRED FOR MEMBER TABLE (safe empty)
+            "leaderboard": [],
         })
 
     # SORTING ENGINE
