@@ -17,6 +17,7 @@ from app.models.workspace import Workspace
 from app.models.workspace_membership import WorkspaceMembership
 from app.services.entitlements import enforce_trade_import_allowed
 from app.services.ingestion_service import import_csv_trades
+from app.services.entitlements import enforce_claim_creation_allowed
 
 router = APIRouter()
 
@@ -298,9 +299,10 @@ def create_trade(
 ):
 
     require_workspace_operator_or_owner(workspace_id, current_user, db)
+    workspace = get_workspace_or_404(workspace_id, db)
+    
     enforce_trade_import_allowed(workspace_id, db, additional_trades=1)
 
-    workspace = get_workspace_or_404(workspace_id, db)
     normalized_symbol = payload.symbol.strip().upper()
     normalized_side = payload.side.strip().upper()
     normalized_currency = payload.currency.strip().upper()

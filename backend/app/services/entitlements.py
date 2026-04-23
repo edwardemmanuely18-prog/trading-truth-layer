@@ -363,3 +363,29 @@ def enforce_readonly_access_allowed(
     db: Session,
 ) -> Workspace:
     return get_workspace_or_404(workspace_id, db)
+
+def enforce_storage_limit(
+    workspace_id: int,
+    db: Session,
+    *,
+    additional_mb: int = 1,
+) -> Workspace:
+    workspace = enforce_workspace_billing_access(
+        workspace_id,
+        db,
+        allow_past_due=True,
+        action_label="upload more evidence",
+    )
+
+    usage = get_workspace_usage_counts(workspace_id, db)
+    limits = get_workspace_plan_limits(workspace)
+
+    enforce_limit_not_reached(
+        used=usage["storage_mb"],
+        limit=limits["storage_mb"],
+        resource_label="storage",
+        workspace_id=workspace_id,
+        requested_additional=max(int(additional_mb), 1),
+    )
+
+    return workspace    

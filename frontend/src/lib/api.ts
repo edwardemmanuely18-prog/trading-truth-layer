@@ -2303,7 +2303,10 @@ export const api = {
   },
 
   createClaimSchema: async (payload: ClaimSchemaCreatePayload): Promise<ClaimSchema> => {
-    const usage = await api.getWorkspaceUsage(payload.workspace_id);
+    const usage = await apiFetch<WorkspaceUsageSummary>(
+      withDevUser(`/workspaces/${payload.workspace_id}/usage`),
+      { cache: "no-store" }
+    );
 
     if (usage.usage.claims.status === "at_limit" || usage.usage.claims.status === "over_limit") {
       throw new Error("Claim limit reached. Upgrade required.");
@@ -2616,6 +2619,16 @@ export const api = {
   ): Promise<any[]> => {
     return apiFetch<any[]>(
       withDevUser(`/workspaces/${workspaceId}/public-claims`),
+      { cache: "no-store" }
+    );
+  },
+
+  getGlobalPublicClaims: async (
+    minTrust = 0,
+    minTrades = 0
+  ): Promise<any[]> => {
+    return apiFetch<any[]>(
+      `/public/claims?min_trust=${minTrust}&min_trades=${minTrades}`,
       { cache: "no-store" }
     );
   },
