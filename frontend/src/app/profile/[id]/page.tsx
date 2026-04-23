@@ -1,5 +1,3 @@
-// frontend/src/app/profile/[id]/page.tsx
-
 import Link from "next/link";
 import Navbar from "../../../components/Navbar";
 import {
