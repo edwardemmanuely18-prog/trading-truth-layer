@@ -106,3 +106,62 @@ def get_global_public_claims(
 
     # ✅ apply limit safely
     return ranked[:limit]
+
+
+@router.get("/public/profile/{workspace_id}")
+def get_public_profile(
+    workspace_id: int,
+    db: Session = Depends(get_db)
+):
+    claims = (
+        db.query(ClaimSchema)
+        .filter(
+            ClaimSchema.workspace_id == workspace_id,
+            ClaimSchema.visibility == "public",
+        )
+        .all()
+    )
+
+    enriched = []
+
+    total_trust = 0
+    total_pnl = 0
+    total_trades = 0
+
+    for c in claims:
+        trust = compute_trust_score(c)
+
+        enriched.append({
+            "id": c.id,
+            "net_pnl": c.net_pnl or 0,
+            "trade_count": c.trade_count or 0,
+            "trust_score": trust,
+        })
+
+        total_trust += trust
+        total_pnl += c.net_pnl or 0
+        total_trades += c.trade_count or 0
+
+    ranked = sorted(
+        enriched,
+        key=lambda x: (x["trust_score"], x["net_pnl"]),
+        reverse=True
+    )
+
+    for i, row in enumerate(ranked):
+        row["rank"] = i + 1
+
+    claim_count = len(ranked)
+
+    avg_trust = total_trust / claim_count if claim_count else 0
+
+    return {
+        "workspace_id": workspace_id,
+        "claims": ranked,
+        "stats": {
+            "claim_count": claim_count,
+            "avg_trust": round(avg_trust, 2),
+            "total_pnl": total_pnl,
+            "total_trades": total_trades,
+        },
+    }
