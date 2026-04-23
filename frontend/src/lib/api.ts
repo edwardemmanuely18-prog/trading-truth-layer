@@ -2625,10 +2625,11 @@ export const api = {
 
   getGlobalPublicClaims: async (
     minTrust = 0,
-    minTrades = 0
+    minTrades = 0,
+    sortBy: "trust" | "pnl" | "trades" = "trust"
   ): Promise<any[]> => {
     return apiFetch<any[]>(
-      `/public/claims?min_trust=${minTrust}&min_trades=${minTrades}`,
+      `/public/claims?min_trust=${minTrust}&min_trades=${minTrades}&sort_by=${sortBy}`,
       { cache: "no-store" }
     );
   },
