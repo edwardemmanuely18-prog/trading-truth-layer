@@ -157,12 +157,13 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
   });
 }
 
-export default async function PublicProfilePage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const workspaceId = Number(params.id);
+  export default async function Page({
+    params,
+  }: {
+    params: Promise<{ id: string }>;
+  }) {
+    const { id } = await params;
+    const workspaceId = Number(id);
 
   if (!workspaceId || isNaN(workspaceId)) {
     return <div>Invalid profile id</div>;
@@ -294,9 +295,14 @@ export default async function PublicProfilePage({
 
               <div className="mt-4 overflow-x-auto rounded-lg bg-slate-900 p-4 font-mono text-xs text-green-400">
                 <iframe
-                  src={`https://trading-truth-layer.vercel.app/embed/profile/${workspaceId}`}
-                  width="100%"
-                  height="600"
+                  src={`/embed/profile/${workspaceId}`}
+                  style={{
+                    width: "100%",
+                    height: "600px",
+                    border: "none",
+                    borderRadius: "12px",
+                    background: "#fff"
+                  }}
                 />
               </div>
               </div>

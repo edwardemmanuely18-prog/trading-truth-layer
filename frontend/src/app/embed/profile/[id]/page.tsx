@@ -1,6 +1,12 @@
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
-  "https://trading-truth-layer.vercel.app"; 
+  "https://trading-truth-layer.onrender.com"; // ✅ FIXED backend URL
+  
+type PublicClaim = {
+  id: string | number;
+  trust_score: number;
+  net_pnl: number;
+};
 
 async function getPublicProfile(id: number) {
   const res = await fetch(`${API_BASE}/api/public/profile/${id}`, {
@@ -15,21 +21,17 @@ async function getPublicProfile(id: number) {
 }
 
 type PageProps = {
-  params: {
-    id: string;
-  };
+  params: Promise<{ id: string }>;
 };
 
 export default async function EmbedProfilePage({ params }: PageProps) {
-  const workspaceId = Number(params.id);
+  const { id } = await params;
 
-  // ✅ Guard against invalid IDs
+  const workspaceId = Number(id);
+
+  // ✅ HARD VALIDATION (prevents false invalid states)
   if (!Number.isFinite(workspaceId) || workspaceId <= 0) {
-    return (
-      <div style={styles.center}>
-        Invalid profile id
-      </div>
-    );
+    return <div style={styles.center}>Invalid profile id</div>;
   }
 
   let data: any = null;
@@ -42,43 +44,52 @@ export default async function EmbedProfilePage({ params }: PageProps) {
   }
 
   if (error) {
-    return (
-      <div style={styles.center}>
-        {error}
-      </div>
-    );
+    return <div style={styles.center}>{error}</div>;
   }
 
-  const profile = data?.profile;
+  // ✅ SAFE NORMALIZATION LAYER
+  const profile = {
+    id: data?.workspace_id ?? workspaceId,
+    name: data?.name ?? `Workspace #${workspaceId}`,
+    trust_score: Number(data?.stats?.avg_trust ?? 0),
+    network_score: 0, // future-proof
+    locked_claims: Number(data?.stats?.claim_count ?? 0),
+    net_pnl: Number(data?.stats?.total_pnl ?? 0),
+  };
+
+  // ✅ SAFE CLAIMS NORMALIZATION
+  const claims: PublicClaim[] = Array.isArray(data?.claims)
+    ? data.claims.map((c: any, i: number) => ({
+        id: c.id ?? i,
+        trust_score: Number(c.trust_score ?? 0),
+        net_pnl: Number(c.net_pnl ?? 0),
+        }))
+    : [];
 
   return (
     <div style={styles.container}>
       
       {/* HEADER */}
       <div style={styles.header}>
-        <div style={styles.title}>
-          {profile?.name || `Workspace #${workspaceId}`}
-        </div>
-        <div style={styles.subtitle}>
-          Public Trust Profile
-        </div>
+        <div style={styles.title}>{profile.name}</div>
+        <div style={styles.subtitle}>Public Trust Profile</div>
       </div>
 
       {/* METRICS */}
       <div style={styles.metrics}>
-        <Metric label="Trust" value={profile?.trust_score ?? 0} />
-        <Metric label="Network" value={profile?.network_score ?? 0} />
-        <Metric label="Locked Claims" value={profile?.locked_claims ?? 0} />
-        <Metric label="PnL" value={profile?.net_pnl ?? 0} />
+        <Metric label="Trust" value={profile.trust_score} />
+        <Metric label="Network" value={profile.network_score} />
+        <Metric label="Locked Claims" value={profile.locked_claims} />
+        <Metric label="PnL" value={profile.net_pnl} />
       </div>
 
       {/* CLAIMS */}
       <div style={styles.section}>
         <div style={styles.sectionTitle}>Claims</div>
 
-        {data?.claims?.length ? (
-          data.claims.map((c: any) => (
-            <div key={c.claim_hash} style={styles.claim}>
+        {claims.length > 0 ? (
+          claims.map((c: PublicClaim) => (
+            <div key={c.id} style={styles.claim}>
               <div style={styles.claimRow}>
                 <span>Trust:</span> {c.trust_score}
               </div>
@@ -88,12 +99,9 @@ export default async function EmbedProfilePage({ params }: PageProps) {
             </div>
           ))
         ) : (
-          <div style={styles.empty}>
-            No public claims
-          </div>
+          <div style={styles.empty}>No public claims</div>
         )}
       </div>
-
     </div>
   );
 }
@@ -101,10 +109,18 @@ export default async function EmbedProfilePage({ params }: PageProps) {
 function Metric({ label, value }: { label: string; value: number }) {
   return (
     <div style={styles.metric}>
-      <div style={styles.metricValue}>{value}</div>
+      <div style={styles.metricValue}>{formatNumber(value)}</div>
       <div style={styles.metricLabel}>{label}</div>
     </div>
   );
+}
+
+// ✅ ADDED: formatting helper (prevents ugly NaN / undefined)
+function formatNumber(value: number) {
+  if (!Number.isFinite(value)) return "0";
+  return value.toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  });
 }
 
 const styles: any = {
