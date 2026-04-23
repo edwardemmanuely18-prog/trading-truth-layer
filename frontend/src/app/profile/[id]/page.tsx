@@ -162,10 +162,9 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
 export default async function PublicProfilePage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
-  const resolvedParams = await params;
-  const workspaceId = Number(resolvedParams.id);
+  const workspaceId = Number(params.id);
 
   if (!workspaceId || isNaN(workspaceId)) {
     return <div>Invalid profile id</div>;
@@ -238,7 +237,7 @@ export default async function PublicProfilePage({
         <div className="mb-8">
           <div className="text-sm text-slate-500">Trading Truth Layer · Public Trust Profile</div>
           <h1 className="mt-2 text-4xl font-bold">
-            {profile?.name || `Profile #${resolvedParams.id}`}
+            {profile?.name || `Workspace #${workspaceId}`}
           </h1>
           <p className="mt-3 max-w-4xl text-slate-600">
             Public issuer-level trust surface aggregating locked claim quality,
