@@ -4139,3 +4139,87 @@ def get_workspace_public_claims(
     current_user: User = Depends(get_current_user),
 ):
     return build_public_profile_response(workspace_id, db)    
+
+
+@router.post("/api/claims/create")
+def create_claim(
+    payload: ClaimSchemaCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = get_workspace_or_404(payload.workspace_id, db)
+
+    require_workspace_member(payload.workspace_id, current_user, db)
+
+    schema = ClaimSchema(
+        workspace_id=payload.workspace_id,
+        name=payload.name,
+        period_start=payload.period_start,
+        period_end=payload.period_end,
+        included_member_ids_json=json.dumps(payload.included_member_ids_json),
+        included_symbols_json=json.dumps(payload.included_symbols_json),
+        excluded_trade_ids_json=json.dumps(payload.excluded_trade_ids_json),
+        methodology_notes=payload.methodology_notes,
+        visibility=normalize_visibility(payload.visibility),
+        status="draft",
+    )
+
+    db.add(schema)
+    db.commit()
+    db.refresh(schema)
+
+    return {
+        "id": schema.id,
+        "status": "created",
+    }    
+
+
+@router.post("/api/claims/{claim_id}/lock")
+def lock_claim(
+    claim_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_id).first()
+
+    if not schema:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    require_workspace_operator_or_owner(schema.workspace_id, current_user, db)
+
+    trades = resolve_schema_trades(schema, db)
+
+    trade_hash = compute_trade_set_hash(trades)
+
+    schema.locked_trade_set_hash = trade_hash
+    schema.status = "locked"
+    schema.locked_at = datetime.utcnow()
+
+    db.commit()
+
+    return {
+        "status": "locked",
+        "claim_id": claim_id,
+        "hash": trade_hash,
+    }
+
+
+@router.post("/api/claims/{claim_id}/publish")
+def publish_claim(
+    claim_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_id).first()
+
+    if not schema:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    require_workspace_operator_or_owner(schema.workspace_id, current_user, db)
+
+    schema.visibility = "public"
+    schema.status = "locked"  # enforce final state
+
+    db.commit()
+
+    return {"status": "published"}        
