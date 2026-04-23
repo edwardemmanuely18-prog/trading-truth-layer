@@ -1032,13 +1032,21 @@ export class ApiError extends Error {
   status: number;
   payload: ApiErrorPayload | null;
   rawBody: string;
+  redirectTo?: string;
 
-  constructor(message: string, status: number, payload: ApiErrorPayload | null, rawBody: string) {
+  constructor(
+    message: string,
+    status: number,
+    payload: ApiErrorPayload | null,
+    rawBody: string,
+    options?: { redirectTo?: string }
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.payload = payload;
     this.rawBody = rawBody;
+    this.redirectTo = options?.redirectTo;
   }
 }
 
@@ -1163,7 +1171,17 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
       const workspaceId = payload?.workspace_id;
 
       if (typeof window !== "undefined" && workspaceId) {
-        window.location.href = `/workspace/${workspaceId}/settings?upgrade=true`;
+        throw new ApiError(
+          payload?.message || "Workspace limit reached",
+          res.status,
+          payload,
+          rawText,
+          {
+            redirectTo: workspaceId
+              ? `/workspace/${workspaceId}/settings?upgrade=true`
+              : undefined,
+          }
+        );
       }
 
       throw new ApiError(
@@ -1183,7 +1201,18 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     throw new ApiError(message, res.status, payload, rawText);
   }
 
-  return res.json() as Promise<T>;
+  const text = await res.text();
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new ApiError(
+      "Invalid JSON response from server",
+      res.status,
+      null,
+      text
+    );
+  }
 }
 
 function withDevUser(path: string) {
