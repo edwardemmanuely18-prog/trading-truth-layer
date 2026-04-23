@@ -165,6 +165,7 @@ export default async function PublicProfilePage({
   params: { id: string };
 }) {
   const workspaceId = Number(params.id);
+  console.log("PROFILE PARAM ID:", params.id);
 
   if (!workspaceId || isNaN(workspaceId)) {
     return <div>Invalid profile id</div>;
