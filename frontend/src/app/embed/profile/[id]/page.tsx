@@ -1,6 +1,6 @@
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
-  "https://trading-truth-layer.vercel.app"; // Render / Vercel backend
+  "https://trading-truth-layer.vercel.app"; 
 
 async function getPublicProfile(id: number) {
   const res = await fetch(`${API_BASE}/api/public/profile/${id}`, {
@@ -15,13 +15,15 @@ async function getPublicProfile(id: number) {
 }
 
 type PageProps = {
-  params: Promise<{ id: string }>;
+  params: {
+    id: string;
+  };
 };
 
 export default async function EmbedProfilePage({ params }: PageProps) {
-  const { id } = await params;
-  const workspaceId = Number(id);
+  const workspaceId = Number(params.id);
 
+  // ✅ Guard against invalid IDs
   if (!Number.isFinite(workspaceId) || workspaceId <= 0) {
     return (
       <div style={styles.center}>
@@ -96,7 +98,7 @@ export default async function EmbedProfilePage({ params }: PageProps) {
   );
 }
 
-function Metric({ label, value }: any) {
+function Metric({ label, value }: { label: string; value: number }) {
   return (
     <div style={styles.metric}>
       <div style={styles.metricValue}>{value}</div>
