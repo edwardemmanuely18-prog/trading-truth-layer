@@ -205,10 +205,12 @@ def verify_claim_by_hash(claim_hash: str, db: Session = Depends(get_db)):
 
     trust = compute_trust_score(claim)
 
+    workspace = db.query(Workspace).filter(Workspace.id == claim.workspace_id).first()
+
     return {
         "claim_hash": claim.claim_hash,
         "workspace_id": claim.workspace_id,
-        "name": f"Workspace {claim.workspace_id}",
+        "name": workspace.name if workspace else f"Workspace {claim.workspace_id}",
         "net_pnl": claim.net_pnl,
         "trade_count": claim.trade_count,
         "integrity_status": claim.integrity_status,
