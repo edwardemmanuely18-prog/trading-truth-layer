@@ -10,6 +10,7 @@ type PublicClaim = {
 
 async function getPublicProfile(id: number) {
   const res = await fetch(`${API_BASE}/api/public/profile/${id}`, {
+     next: { revalidate: 60 }, 
     cache: "no-store",
   });
 
