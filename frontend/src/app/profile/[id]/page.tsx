@@ -9,10 +9,39 @@ import {
   type PublicTrustProfile,
 } from "../../../lib/api";
 
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL || "https://trading-truth-layer.vercel.app";
+
+export const revalidate = 60;
+
+type ExtendedProfile = PublicProfileResponse & {
+  contested_claims_count?: number;
+};
+
 type PageProps = {
   params: Promise<{
     id: string;
   }>;
+};
+
+function getDisputeLabel(profile: any): string {
+  if (!profile) return "No data";
+
+  const count = Number(profile.contested_claims_count || 0);
+
+  if (count === 0) return "No active contested claims";
+  if (count < 3) return `${count} contested (low)`;
+  if (count < 10) return `${count} contested (moderate)`;
+
+  return `${count} contested (high)`;
+}
+
+type ExtendedClaim = PublicClaimDirectoryItem & {
+  trust_score?: number;
+  network_score?: number;
+  trust_band?: string;
+  has_active_dispute?: boolean;
+  disputes_count?: number;
 };
 
 function formatNumber(value?: number | null, digits = 2) {
@@ -134,7 +163,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
   const resolvedParams = await params;
   const workspaceId = Number(resolvedParams.id);
 
-  let data: PublicProfileResponse | null = null;
+  let data: any = null;
   let loadError: string | null = null;
 
   if (!Number.isFinite(workspaceId) || workspaceId <= 0) {
@@ -150,8 +179,47 @@ export default async function PublicProfilePage({ params }: PageProps) {
     }
   }
 
-  const profile = data?.profile ?? null;
-  const claims = sortClaims(data?.claims ?? []);
+  const profile = data
+    ? {
+        workspace_id: data.workspace_id,
+        name: `Workspace #${data.workspace_id}`,
+        type: "workspace",
+        network: "internal",
+        profile_id: `workspace:${data.workspace_id}`,
+
+        trust_profile_band: "developing",
+
+        claims_count: data.stats?.claim_count ?? 0,
+        locked_claims_count: data.stats?.claim_count ?? 0,
+        contested_claims_count: 0,
+
+        average_trust_score: data.stats?.avg_trust ?? 0,
+        average_network_score: 0,
+        total_net_pnl: data.stats?.total_pnl ?? 0,
+      }
+    : null;
+
+  const claims = sortClaims(
+    (data?.claims ?? []).map((c: any) => ({
+      claim_schema_id: c.id,
+      claim_hash: `claim-${c.id}`,
+      name: `Claim #${c.id}`,
+      verification_status: "locked",
+
+      trade_count: c.trade_count,
+      net_pnl: c.net_pnl,
+
+      trust_score: c.trust_score,
+      network_score: 0,
+
+      disputes_count: 0,
+      has_active_dispute: false,
+
+      lifecycle: {
+        locked_at: null,
+      },
+    }))
+  );
   const profileBand = resolveProfileTrustBand(profile);
 
   return (
@@ -220,7 +288,11 @@ export default async function PublicProfilePage({ params }: PageProps) {
               </div>
 
               <div className="mt-4 overflow-x-auto rounded-lg bg-slate-900 p-4 font-mono text-xs text-green-400">
-                  {`<iframe src="/profile/${profile.workspace_id}" width="100%" height="600"></iframe>`}
+                <iframe
+                  src={`${APP_URL}/profile/${profile.workspace_id}`}
+                  width="100%"
+                  height="600"
+                />
               </div>
               </div>
 
@@ -260,7 +332,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
                   </div>
                   <div className="mt-2">
                       <span className="font-medium text-slate-900">Claims surfaced:</span>{" "}
-                      {data?.claims_count ?? 0}
+                      {profile.claims_count ?? 0}
                   </div>
                   <div className="mt-2">
                       <Link
@@ -327,9 +399,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
                 <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
                   <div className="font-semibold text-slate-900">Dispute Concentration</div>
                   <div className="mt-2">
-                    {profile.contested_claims_count > 0
-                      ? `${profile.contested_claims_count} contested`
-                      : "No active contested claims"}
+                    {getDisputeLabel(profile)}
                   </div>
                 </div>
               </div>
@@ -362,10 +432,10 @@ export default async function PublicProfilePage({ params }: PageProps) {
                     <tbody>
                       {claims.map((claim) => {
                         const trustBand = resolveClaimTrustBand(claim);
-                        const hasActiveDispute = Boolean((claim as any)?.has_active_dispute ?? false);
-                        const trustScore = Number((claim as any)?.trust_score ?? 0);
-                        const networkScore = Number((claim as any)?.network_score ?? 0);
-                        const disputesCount = Number((claim as any)?.disputes_count ?? 0);
+                        const hasActiveDispute = Boolean((claim as ExtendedClaim)?.has_active_dispute ?? false);
+                        const trustScore = Number((claim as ExtendedClaim)?.trust_score ?? 0);
+                        const networkScore = Number((claim as ExtendedClaim)?.network_score ?? 0);
+                        const disputesCount = Number((claim as ExtendedClaim)?.disputes_count ?? 0);
 
                         return (
                           <tr

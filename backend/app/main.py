@@ -42,6 +42,10 @@ from app.core.security import hash_password
 # =========================
 app = FastAPI(title="Trading Truth Layer API")
 
+from app.api.routes import public
+
+app.include_router(public.router, prefix="/api")
+
 # =========================
 # CORS
 # =========================

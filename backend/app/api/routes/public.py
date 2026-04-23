@@ -191,3 +191,32 @@ def get_public_claim(claim_id: int, db: Session = Depends(get_db)):
         "verification_status": claim.verification_status,
         "integrity_status": claim.integrity_status,
     }    
+
+
+@router.get("/verify/{claim_hash}")
+def verify_claim_by_hash(claim_hash: str, db: Session = Depends(get_db)):
+    claim = (
+        db.query(ClaimSchema)
+        .filter(ClaimSchema.claim_hash == claim_hash)
+        .first()
+    )
+
+    if not claim:
+        return {"error": "Claim not found"}
+
+    if claim.visibility != "public":
+        return {"error": "Claim not public"}
+
+    trust = compute_trust_score(claim)
+
+    return {
+        "claim_hash": claim.claim_hash,
+        "workspace_id": claim.workspace_id,
+        "net_pnl": claim.net_pnl,
+        "trade_count": claim.trade_count,
+        "integrity_status": claim.integrity_status,
+        "verification_status": claim.verification_status,
+        "trust_score": trust,
+        "verified_at": claim.verified_at,
+        "created_at": claim.created_at,
+    }

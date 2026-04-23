@@ -425,7 +425,7 @@ export default function PublicVerifyClaimPage() {
   const params = useParams();
 
   const claimHash = useMemo(() => {
-    const raw = Array.isArray(params?.claimHash) ? params.claimHash[0] : params?.claimHash;
+    const raw = Array.isArray(params?.hash) ? params.hash[0] : params?.hash;
     return String(raw || "").trim();
   }, [params]);
 
