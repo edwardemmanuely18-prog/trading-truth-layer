@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -68,44 +69,33 @@ def get_global_public_claims(
             "trust_score": trust,
         })
 
-    # ✅ SINGLE SOURCE OF TRUTH (ranking)
+    # SORTING ENGINE
     if sort_by == "pnl":
-        ranked = sorted(
-            enriched,
-            key=lambda x: x["net_pnl"] or 0,
-            reverse=True
-        )
+        ranked = sorted(enriched, key=lambda x: x["net_pnl"], reverse=True)
     elif sort_by == "trades":
-        ranked = sorted(
-            enriched,
-            key=lambda x: x["trade_count"] or 0,
-            reverse=True
-        )
+        ranked = sorted(enriched, key=lambda x: x["trade_count"], reverse=True)
     else:
-        # default: trust
         ranked = sorted(
             enriched,
-            key=lambda x: (x["trust_score"], x["net_pnl"] or 0),
+            key=lambda x: (x["trust_score"], x["net_pnl"]),
             reverse=True
         )
 
-    # ✅ assign rank AFTER sorting
+    # ASSIGN RANK + TIER
     for i, row in enumerate(ranked):
         row["rank"] = i + 1
 
-    score = row["trust_score"]
+        score = row["trust_score"]
+        if score >= 80:
+            row["tier"] = "gold"
+        elif score >= 60:
+            row["tier"] = "silver"
+        elif score >= 40:
+            row["tier"] = "bronze"
+        else:
+            row["tier"] = "unranked"
 
-    if score >= 80:
-        row["tier"] = "gold"
-    elif score >= 60:
-        row["tier"] = "silver"
-    elif score >= 40:
-        row["tier"] = "bronze"
-    else:
-        row["tier"] = "unranked"    
-
-    # ✅ apply limit safely
-    return ranked[:limit]
+    return ranked
 
 
 @router.get("/public/profile/{workspace_id}")
@@ -212,6 +202,7 @@ def verify_claim_by_hash(claim_hash: str, db: Session = Depends(get_db)):
     return {
         "claim_hash": claim.claim_hash,
         "workspace_id": claim.workspace_id,
+        "name": f"Workspace {claim.workspace_id}",
         "net_pnl": claim.net_pnl,
         "trade_count": claim.trade_count,
         "integrity_status": claim.integrity_status,

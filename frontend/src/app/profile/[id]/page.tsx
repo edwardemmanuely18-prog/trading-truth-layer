@@ -19,9 +19,9 @@ type ExtendedProfile = PublicProfileResponse & {
 };
 
 type PageProps = {
-  params: Promise<{
+  params: {
     id: string;
-  }>;
+  };
 };
 
 function getDisputeLabel(profile: any): string {
@@ -159,9 +159,17 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
   });
 }
 
-export default async function PublicProfilePage({ params }: PageProps) {
-  const resolvedParams = await params;
-  const workspaceId = Number(resolvedParams.id);
+export default async function PublicProfilePage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const workspaceId = Number(params.id);
+
+  if (!workspaceId || isNaN(workspaceId)) {
+    return <div>Invalid profile id</div>;
+  }
+
 
   let data: any = null;
   let loadError: string | null = null;
@@ -230,7 +238,7 @@ export default async function PublicProfilePage({ params }: PageProps) {
         <div className="mb-8">
           <div className="text-sm text-slate-500">Trading Truth Layer · Public Trust Profile</div>
           <h1 className="mt-2 text-4xl font-bold">
-            {profile?.name || `Profile #${resolvedParams.id}`}
+            {profile?.name || `Profile #${params.id}`}
           </h1>
           <p className="mt-3 max-w-4xl text-slate-600">
             Public issuer-level trust surface aggregating locked claim quality,
