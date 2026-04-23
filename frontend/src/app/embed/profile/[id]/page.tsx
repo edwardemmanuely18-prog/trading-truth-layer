@@ -49,14 +49,20 @@ export default async function EmbedProfilePage({ params }: PageProps) {
   }
 
   // ✅ SAFE NORMALIZATION LAYER
-  const profile = {
-    id: data?.workspace_id ?? workspaceId,
-    name: data?.name ?? `Workspace #${workspaceId}`,
+  const resolvedWorkspaceId =
+    Number(data?.workspace_id) || workspaceId;
+
+    const profile = {
+    id: resolvedWorkspaceId,
+    name:
+        typeof data?.name === "string" && data.name.trim().length > 0
+        ? data.name
+        : `Workspace #${resolvedWorkspaceId}`,
     trust_score: Number(data?.stats?.avg_trust ?? 0),
-    network_score: 0, // future-proof
+    network_score: 0,
     locked_claims: Number(data?.stats?.claim_count ?? 0),
     net_pnl: Number(data?.stats?.total_pnl ?? 0),
-  };
+    };
 
   // ✅ SAFE CLAIMS NORMALIZATION
   const claims: PublicClaim[] = Array.isArray(data?.claims)
@@ -72,7 +78,9 @@ export default async function EmbedProfilePage({ params }: PageProps) {
       
       {/* HEADER */}
       <div style={styles.header}>
-        <div style={styles.title}>{profile.name}</div>
+        <div style={styles.title}>
+          {profile.name || `Workspace #${resolvedWorkspaceId}`}
+        </div>
         <div style={styles.subtitle}>Public Trust Profile</div>
       </div>
 
