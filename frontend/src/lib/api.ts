@@ -1025,6 +1025,7 @@ export type ApiErrorPayload = {
   limit?: number;
   recommended_action?: string;
   upgrade_hint?: string;
+  upgrade_required?: boolean;
 };
 
 export class ApiError extends Error {
@@ -1152,14 +1153,25 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     const rawText = await res.text();
     const payload = parseApiErrorPayload(rawText);
 
-    if ((payload as any)?.upgrade_required) {
-      const workspaceId = (payload as any)?.workspace_id;
+    const isLimitError =
+      payload?.code === "LIMIT_EXCEEDED" ||
+      payload?.code === "PLAN_LIMIT_REACHED" ||
+      payload?.upgrade_required === true ||
+      payload?.recommended_action === "upgrade";
+
+    if (isLimitError) {
+      const workspaceId = payload?.workspace_id;
 
       if (typeof window !== "undefined" && workspaceId) {
         window.location.href = `/workspace/${workspaceId}/settings?upgrade=true`;
       }
 
-      throw new ApiError("Upgrade required", res.status, payload, rawText);
+      throw new ApiError(
+        payload?.message || "Workspace limit reached",
+        res.status,
+        payload,
+        rawText
+      );
     }
 
     const message =
@@ -2262,6 +2274,12 @@ export const api = {
   },
 
   createClaimSchema: async (payload: ClaimSchemaCreatePayload): Promise<ClaimSchema> => {
+    const usage = await api.getWorkspaceUsage(payload.workspace_id);
+
+    if (usage.usage.claims.status === "at_limit" || usage.usage.claims.status === "over_limit") {
+      throw new Error("Claim limit reached. Upgrade required.");
+    }
+
     return apiFetch<ClaimSchema>(withDevUser(`/claim-schemas`), {
       method: "POST",
       body: JSON.stringify(payload),

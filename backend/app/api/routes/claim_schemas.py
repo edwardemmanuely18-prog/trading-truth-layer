@@ -3322,24 +3322,14 @@ def create_claim_schema(
     current_user: User = Depends(get_current_user),
 ):
     require_workspace_operator_or_owner(payload.workspace_id, current_user, db)
-    enforce_claim_creation_allowed(payload.workspace_id, db)
+
+    if not workspace_limits_disabled():
+        enforce_claim_creation_allowed(payload.workspace_id, db)
 
     visibility = normalize_visibility(payload.visibility)
 
     workspace = get_workspace_or_404(payload.workspace_id, db)
     effective_plan_code = resolve_effective_workspace_plan_code(workspace)
-    
-    # 🔒 PLAN ENFORCEMENT (CRITICAL)
-    current_claim_count = (
-        db.query(ClaimSchema)
-        .filter(ClaimSchema.workspace_id == workspace.id)
-        .count()
-    )
-
-    enforce_claim_creation_allowed(
-        workspace=workspace,
-        current_count=current_claim_count
-    )
 
     if effective_plan_code == "sandbox" and visibility == "public":
         visibility = "unlisted"
@@ -3407,6 +3397,8 @@ def update_claim_schema(
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
     require_workspace_operator_or_owner(schema.workspace_id, current_user, db)
+    if not workspace_limits_disabled():
+        enforce_claim_creation_allowed(source.workspace_id, db)
 
     if schema.status != "draft":
         raise HTTPException(status_code=400, detail="Only draft claims can be edited")
@@ -3461,7 +3453,8 @@ def clone_claim_schema(
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
     require_workspace_operator_or_owner(source.workspace_id, current_user, db)
-    enforce_claim_creation_allowed(source.workspace_id, db)
+    if not workspace_limits_disabled():
+        enforce_claim_creation_allowed(source.workspace_id, db)
 
     root_id = source.root_claim_id or source.id
     new_name = build_next_version_name(db, source.workspace_id, source.name)
@@ -3572,6 +3565,8 @@ def verify_claim_schema(
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
     require_workspace_operator_or_owner(schema.workspace_id, current_user, db)
+    if not workspace_limits_disabled():
+        enforce_claim_creation_allowed(schema.workspace_id, db)
 
     if schema.status != "draft":
         raise HTTPException(status_code=400, detail="Only draft claims can be verified")
@@ -3620,6 +3615,8 @@ def publish_claim_schema(
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
     require_workspace_owner(schema.workspace_id, current_user, db)
+    if not workspace_limits_disabled():
+        enforce_claim_creation_allowed(schema.workspace_id, db)
     workspace = get_workspace_or_404(schema.workspace_id, db)
     effective_plan_code = resolve_effective_workspace_plan_code(workspace)
 
@@ -3702,6 +3699,8 @@ def lock_claim_schema(
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
     require_workspace_owner(schema.workspace_id, current_user, db)
+    if not workspace_limits_disabled():
+        enforce_claim_creation_allowed(schema.workspace_id, db)
 
     if schema.status == "locked":
         return serialize_schema(schema)
