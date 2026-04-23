@@ -1,6 +1,16 @@
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://trading-truth-layer.vercel.app.com"; 
+
 async function getPublicProfile(id: number) {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/public/profile/${id}`);
-  if (!res.ok) throw new Error("Failed to fetch");
+  const res = await fetch(`${API_BASE}/public/profile/${id}`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`API error: ${res.status}`);
+  }
+
   return res.json();
 }
 
