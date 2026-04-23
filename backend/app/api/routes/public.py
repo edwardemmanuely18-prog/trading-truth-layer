@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.models.claim_schema import ClaimSchema
+from app.models.workspace import Workspace
 
 router = APIRouter()
 
@@ -211,3 +212,34 @@ def verify_claim_by_hash(claim_hash: str, db: Session = Depends(get_db)):
         "verified_at": claim.verified_at,
         "created_at": claim.created_at,
     }
+
+
+@router.get("/public/profile/{workspace_id}")
+def get_public_profile(workspace_id: int, db: Session = Depends(get_db)):
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+
+    if not workspace:
+        return {"error": "Workspace not found"}
+
+    claims = (
+        db.query(Claim)
+        .filter(
+            Claim.workspace_id == workspace_id,
+            Claim.visibility == "public",
+        )
+        .all()
+    )
+
+    return {
+        "workspace_id": workspace.id,
+        "name": workspace.name or f"Workspace {workspace.id}",  # ✅ critical
+        "claims": [
+            {
+                "id": c.id,
+                "net_pnl": c.net_pnl,
+                "trade_count": c.trade_count,
+                "trust_score": compute_trust_score(c),
+            }
+            for c in claims
+        ],
+    }    
