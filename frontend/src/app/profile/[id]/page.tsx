@@ -297,7 +297,7 @@ export default async function PublicProfilePage({
 
               <div className="mt-4 overflow-x-auto rounded-lg bg-slate-900 p-4 font-mono text-xs text-green-400">
                 <iframe
-                  src={`https://trading-truth-layer.vercel.app/profile/${workspaceId}`}
+                  src={`https://trading-truth-layer.vercel.app/embed/profile/${workspaceId}`}
                   width="100%"
                   height="600"
                 />
