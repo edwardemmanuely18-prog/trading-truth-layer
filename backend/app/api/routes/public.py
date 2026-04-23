@@ -165,3 +165,29 @@ def get_public_profile(
             "total_trades": total_trades,
         },
     }
+
+
+@router.get("/public/claim/{claim_id}")
+def get_public_claim(claim_id: int, db: Session = Depends(get_db)):
+    claim = (
+        db.query(ClaimSchema)
+        .filter(
+            ClaimSchema.id == claim_id,
+            ClaimSchema.visibility == "public"
+        )
+        .first()
+    )
+
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    return {
+        "id": claim.id,
+        "workspace_id": claim.workspace_id,
+        "net_pnl": claim.net_pnl,
+        "trade_count": claim.trade_count,
+        "trust_score": compute_trust_score(claim),
+        "created_at": claim.created_at,
+        "verification_status": claim.verification_status,
+        "integrity_status": claim.integrity_status,
+    }    
