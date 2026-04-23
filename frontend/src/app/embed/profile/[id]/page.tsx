@@ -1,9 +1,9 @@
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
-   "https://your-backend-production-url.up.railway.app"; 
+  "https://trading-truth-layer.vercel.app"; // Render / Vercel backend
 
 async function getPublicProfile(id: number) {
-  const res = await fetch(`${API_BASE}/public/profile/${id}`, {
+  const res = await fetch(`${API_BASE}/api/public/profile/${id}`, {
     cache: "no-store",
   });
 
