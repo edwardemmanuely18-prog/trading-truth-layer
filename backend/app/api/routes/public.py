@@ -104,6 +104,11 @@ def get_public_profile(
     workspace_id: int,
     db: Session = Depends(get_db)
 ):
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+
+    if not workspace:
+        return {"error": "Workspace not found"}
+
     claims = (
         db.query(ClaimSchema)
         .filter(
@@ -143,11 +148,11 @@ def get_public_profile(
         row["rank"] = i + 1
 
     claim_count = len(ranked)
-
     avg_trust = total_trust / claim_count if claim_count else 0
 
     return {
-        "workspace_id": workspace_id,
+        "workspace_id": workspace.id,
+        "name": workspace.name or f"Workspace {workspace.id}",  # ✅ FIX
         "claims": ranked,
         "stats": {
             "claim_count": claim_count,
@@ -212,34 +217,3 @@ def verify_claim_by_hash(claim_hash: str, db: Session = Depends(get_db)):
         "verified_at": claim.verified_at,
         "created_at": claim.created_at,
     }
-
-
-@router.get("/public/profile/{workspace_id}")
-def get_public_profile(workspace_id: int, db: Session = Depends(get_db)):
-    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
-
-    if not workspace:
-        return {"error": "Workspace not found"}
-
-    claims = (
-        db.query(Claim)
-        .filter(
-            Claim.workspace_id == workspace_id,
-            Claim.visibility == "public",
-        )
-        .all()
-    )
-
-    return {
-        "workspace_id": workspace.id,
-        "name": workspace.name or f"Workspace {workspace.id}",  # ✅ critical
-        "claims": [
-            {
-                "id": c.id,
-                "net_pnl": c.net_pnl,
-                "trade_count": c.trade_count,
-                "trust_score": compute_trust_score(c),
-            }
-            for c in claims
-        ],
-    }    
