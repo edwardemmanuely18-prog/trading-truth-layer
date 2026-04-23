@@ -1,43 +1,39 @@
-from fastapi import APIRouter, Depends
-from fastapi import HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.models.claim_schema import ClaimSchema
 from app.models.workspace import Workspace
 
+# ✅ IMPORT REAL TRUST ENGINE
+from app.api.routes.claim_schemas import (
+    compute_backend_trust_score,
+    resolve_schema_trades,
+    compute_trade_metrics,
+    resolve_claim_dispute_context,
+    resolve_claim_integrity_status,
+)
+
 router = APIRouter()
 
 
-def compute_trust_score(claim):
-    score = 0
+# =========================
+# 🧠 TRUST COMPUTATION CORE
+# =========================
+def compute_full_trust(claim, db: Session):
+    trades = resolve_schema_trades(claim, db)
+    metrics = compute_trade_metrics(trades)
+    dispute_ctx = resolve_claim_dispute_context(claim, db)
+    integrity = resolve_claim_integrity_status(claim, trades)
 
-    if claim.integrity_status == "valid":
-        score += 40
+    trust = compute_backend_trust_score(claim, metrics, integrity, dispute_ctx)
 
-    if claim.verification_status == "locked":
-        score += 20
-
-    trades = getattr(claim, "trade_count", 0) or 0
-
-    if trades >= 50:
-        score += 20
-    elif trades >= 20:
-        score += 15
-    elif trades >= 10:
-        score += 10
-    elif trades > 0:
-        score += 5
-
-    if getattr(claim, "verified_at", None):
-        score += 10
-
-    if getattr(claim, "visibility", "") == "public":
-        score += 10
-
-    return min(score, 100)
+    return trust, metrics
 
 
+# =========================
+# 🌍 GLOBAL CLAIM DIRECTORY
+# =========================
 @router.get("/public/claims")
 def get_global_public_claims(
     min_trust: int = 0,
@@ -54,19 +50,19 @@ def get_global_public_claims(
     enriched = []
 
     for c in claims:
-        trust = compute_trust_score(c)
+        trust, metrics = compute_full_trust(c, db)
 
         if trust < min_trust:
             continue
 
-        if (c.trade_count or 0) < min_trades:
+        if (metrics.get("trade_count", 0)) < min_trades:
             continue
 
         enriched.append({
             "id": c.id,
             "workspace_id": c.workspace_id,
-            "net_pnl": c.net_pnl or 0,
-            "trade_count": c.trade_count or 0,
+            "net_pnl": metrics.get("net_pnl", 0),
+            "trade_count": metrics.get("trade_count", 0),
             "trust_score": trust,
         })
 
@@ -99,6 +95,44 @@ def get_global_public_claims(
     return ranked
 
 
+# =========================
+# 🏆 GLOBAL LEADERBOARD
+# =========================
+@router.get("/public/leaderboard")
+def get_leaderboard(db: Session = Depends(get_db)):
+    claims = (
+        db.query(ClaimSchema)
+        .filter(ClaimSchema.visibility == "public")
+        .all()
+    )
+
+    rows = []
+
+    for c in claims:
+        trust, metrics = compute_full_trust(c, db)
+
+        rows.append({
+            "claim_id": c.id,
+            "workspace_id": c.workspace_id,
+            "trust_score": trust,
+            "net_pnl": metrics.get("net_pnl", 0),
+        })
+
+    ranked = sorted(
+        rows,
+        key=lambda x: (x["trust_score"], x["net_pnl"]),
+        reverse=True
+    )
+
+    for i, r in enumerate(ranked):
+        r["rank"] = i + 1
+
+    return ranked
+
+
+# =========================
+# 👤 PUBLIC PROFILE
+# =========================
 @router.get("/public/profile/{workspace_id}")
 def get_public_profile(
     workspace_id: int,
@@ -125,18 +159,18 @@ def get_public_profile(
     total_trades = 0
 
     for c in claims:
-        trust = compute_trust_score(c)
+        trust, metrics = compute_full_trust(c, db)
 
         enriched.append({
             "id": c.id,
-            "net_pnl": c.net_pnl or 0,
-            "trade_count": c.trade_count or 0,
+            "net_pnl": metrics.get("net_pnl", 0),
+            "trade_count": metrics.get("trade_count", 0),
             "trust_score": trust,
         })
 
         total_trust += trust
-        total_pnl += c.net_pnl or 0
-        total_trades += c.trade_count or 0
+        total_pnl += metrics.get("net_pnl", 0)
+        total_trades += metrics.get("trade_count", 0)
 
     ranked = sorted(
         enriched,
@@ -150,9 +184,18 @@ def get_public_profile(
     claim_count = len(ranked)
     avg_trust = total_trust / claim_count if claim_count else 0
 
+    # 🏆 GET RANK FROM GLOBAL LEADERBOARD
+    leaderboard = get_leaderboard(db)
+
+    workspace_rank = next(
+        (r["rank"] for r in leaderboard if r["workspace_id"] == workspace_id),
+        None
+    )
+
     return {
         "workspace_id": workspace.id,
-        "name": workspace.name or f"Workspace {workspace.id}",  # ✅ FIX
+        "name": workspace.name or f"Workspace {workspace.id}",
+        "rank": workspace_rank,  # ✅ NEW
         "claims": ranked,
         "stats": {
             "claim_count": claim_count,
@@ -163,6 +206,9 @@ def get_public_profile(
     }
 
 
+# =========================
+# 📄 SINGLE CLAIM
+# =========================
 @router.get("/public/claim/{claim_id}")
 def get_public_claim(claim_id: int, db: Session = Depends(get_db)):
     claim = (
@@ -177,18 +223,23 @@ def get_public_claim(claim_id: int, db: Session = Depends(get_db)):
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
 
+    trust, metrics = compute_full_trust(claim, db)
+
     return {
         "id": claim.id,
         "workspace_id": claim.workspace_id,
-        "net_pnl": claim.net_pnl,
-        "trade_count": claim.trade_count,
-        "trust_score": compute_trust_score(claim),
+        "net_pnl": metrics.get("net_pnl", 0),
+        "trade_count": metrics.get("trade_count", 0),
+        "trust_score": trust,
         "created_at": claim.created_at,
         "verification_status": claim.verification_status,
         "integrity_status": claim.integrity_status,
-    }    
+    }
 
 
+# =========================
+# 🔍 VERIFY CLAIM BY HASH
+# =========================
 @router.get("/verify/{claim_hash}")
 def verify_claim_by_hash(claim_hash: str, db: Session = Depends(get_db)):
     claim = (
@@ -203,7 +254,7 @@ def verify_claim_by_hash(claim_hash: str, db: Session = Depends(get_db)):
     if claim.visibility != "public":
         return {"error": "Claim not public"}
 
-    trust = compute_trust_score(claim)
+    trust, metrics = compute_full_trust(claim, db)
 
     workspace = db.query(Workspace).filter(Workspace.id == claim.workspace_id).first()
 
@@ -211,8 +262,8 @@ def verify_claim_by_hash(claim_hash: str, db: Session = Depends(get_db)):
         "claim_hash": claim.claim_hash,
         "workspace_id": claim.workspace_id,
         "name": workspace.name if workspace else f"Workspace {claim.workspace_id}",
-        "net_pnl": claim.net_pnl,
-        "trade_count": claim.trade_count,
+        "net_pnl": metrics.get("net_pnl", 0),
+        "trade_count": metrics.get("trade_count", 0),
         "integrity_status": claim.integrity_status,
         "verification_status": claim.verification_status,
         "trust_score": trust,
