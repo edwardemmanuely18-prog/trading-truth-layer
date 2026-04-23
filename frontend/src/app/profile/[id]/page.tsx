@@ -185,47 +185,65 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
     }
   }
 
-  const profile = data
-    ? {
-        workspace_id: data.workspace_id,
-        name: `Workspace #${data.workspace_id}`,
-        type: "workspace",
-        network: "internal",
-        profile_id: `workspace:${data.workspace_id}`,
+  const resolvedWorkspaceId =
+  Number(data?.workspace_id) || workspaceId;
 
-        trust_profile_band: "developing",
+const profile = data
+  ? {
+      workspace_id: resolvedWorkspaceId,
 
-        claims_count: data.stats?.claim_count ?? 0,
-        locked_claims_count: data.stats?.claim_count ?? 0,
-        contested_claims_count: 0,
+      name:
+        typeof data?.name === "string" && data.name.trim().length > 0
+          ? data.name
+          : `Workspace #${resolvedWorkspaceId}`,
 
-        average_trust_score: data.stats?.avg_trust ?? 0,
-        average_network_score: 0,
-        total_net_pnl: data.stats?.total_pnl ?? 0,
-      }
-    : null;
+      type: "workspace",
+      network: "internal",
+      profile_id: `workspace:${resolvedWorkspaceId}`,
+
+      trust_profile_band: "developing",
+
+      claims_count: Number(data?.stats?.claim_count ?? 0),
+      locked_claims_count: Number(data?.stats?.claim_count ?? 0),
+      contested_claims_count: 0,
+
+      average_trust_score: Number(data?.stats?.avg_trust ?? 0),
+      average_network_score: 0,
+      total_net_pnl: Number(data?.stats?.total_pnl ?? 0),
+    }
+  : null;
 
   const claims = sortClaims(
-    (data?.claims ?? []).map((c: any) => ({
-      claim_schema_id: c.id,
-      claim_hash: `claim-${c.id}`,
-      name: `Claim #${c.id}`,
+    (Array.isArray(data?.claims) ? data.claims : []).map((c: any, i: number) => ({
+      claim_schema_id: c.id ?? i,
+      claim_hash: c.claim_hash ?? `claim-${c.id ?? i}`,
+      name: c.name ?? `Claim #${c.id ?? i}`,
       verification_status: "locked",
 
-      trade_count: c.trade_count,
-      net_pnl: c.net_pnl,
+      trade_count: Number(c.trade_count ?? 0),
+      net_pnl: Number(c.net_pnl ?? 0),
 
-      trust_score: c.trust_score,
-      network_score: 0,
+      trust_score: Number(c.trust_score ?? 0),
+      network_score: Number(c.network_score ?? 0),
 
-      disputes_count: 0,
-      has_active_dispute: false,
+      disputes_count: Number(c.disputes_count ?? 0),
+      has_active_dispute: Boolean(c.has_active_dispute ?? false),
 
       lifecycle: {
-        locked_at: null,
+        locked_at: c?.lifecycle?.locked_at ?? null,
       },
     }))
   );
+
+  const derived = {
+    claim_count: claims.length,
+    avg_trust:
+      claims.length > 0
+        ? claims.reduce((sum, c) => sum + Number((c as any).trust_score ?? 0), 0) /
+          claims.length
+        : 0,
+  };
+
   const profileBand = resolveProfileTrustBand(profile);
 
   return (
@@ -360,7 +378,7 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
             <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
               <SummaryCard
                 label="Average Trust"
-                value={formatNumber(profile.average_trust_score)}
+                value={formatNumber(profile.average_trust_score || derived.avg_trust)}
                 hint="Average backend-authoritative trust score across locked public claims"
               />
               <SummaryCard
@@ -370,7 +388,7 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
               />
               <SummaryCard
                 label="Locked Claims"
-                value={profile.locked_claims_count}
+                value={profile.locked_claims_count || derived.claim_count}
                 hint="Claims contributing to public trust posture"
               />
               <SummaryCard
@@ -422,7 +440,7 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
                 Locked public claims ranked here by trust first, then net pnl.
               </div>
 
-              {claims.length === 0 ? (
+              {!Array.isArray(claims) || claims.length === 0 ? (
                 <div className="mt-4 text-slate-600">No public claims available for this profile.</div>
               ) : (
                 <div className="mt-4 overflow-x-auto">
