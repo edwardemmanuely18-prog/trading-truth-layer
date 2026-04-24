@@ -285,12 +285,13 @@ def enforce_claim_creation_allowed(
     workspace_id: int,
     db: Session,
 ) -> Workspace:
-    workspace = enforce_workspace_billing_access(
-        workspace_id,
-        db,
-        allow_past_due=True,
-        action_label="create additional claims",
-    )
+    """
+    Draft claim creation:
+    - Allowed in sandbox (no billing)
+    - Enforces ONLY capacity limits
+    """
+
+    workspace = get_workspace_or_404(workspace_id, db)
 
     usage = get_workspace_usage_counts(workspace_id, db)
     limits = get_workspace_plan_limits(workspace)
