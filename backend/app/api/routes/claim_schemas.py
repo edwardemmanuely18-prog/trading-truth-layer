@@ -3666,8 +3666,13 @@ def publish_claim_schema(
 
     # Public/unlisted exposure should be governed by the effective entitlement tier,
     # not merely the configured commercial target.
-    if schema.visibility in {"public", "unlisted"}:
-        allowed = can_create_public_claim(schema.workspace_id, effective_plan_code, db)
+    # Only restrict TRUE public exposure (not unlisted)
+    if schema.visibility == "public":
+        allowed = can_create_public_claim(
+            schema.workspace_id,
+            effective_plan_code,
+            db
+        )
         if not allowed:
             raise HTTPException(
                 status_code=403,
