@@ -213,8 +213,10 @@ def ingest_webhook_trades(
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    current_trade_count = 0  # ⚠️ you may later replace with actual Trade table count
-    incoming_trade_count = len(adapted_rows)
+    from app.services.usage_service import get_workspace_usage
+
+    usage = get_workspace_usage(db, workspace_id)
+    current_trade_count = usage["trades"]
 
     from app.services.entitlements import enforce_trade_import_allowed
 
@@ -284,9 +286,13 @@ async def upload_import_file(
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    # NOTE: replace later with real Trade count
-    current_trade_count = 0  
-    incoming_trade_count = 1000  # ⚠️ approximate until parser gives count
+    from app.services.usage_service import get_workspace_usage
+
+    usage = get_workspace_usage(db, workspace_id)
+    current_trade_count = usage["trades"]
+
+    # ⚠️ keep temporary estimate OR improve later
+    incoming_trade_count = 1000
 
     from app.services.entitlements import enforce_trade_import_allowed
 
@@ -418,6 +424,25 @@ def ingest_stream_event(
         workspace_id=workspace_id,
         source_type=source_type,
         trade=adapted_trade,
+    )
+
+    from app.services.usage_service import get_workspace_usage
+    from app.services.entitlements import enforce_trade_import_allowed
+    from app.models.workspace import Workspace
+
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    usage = get_workspace_usage(db, workspace_id)
+    current_trade_count = usage["trades"]
+
+    incoming_trade_count = 1  # single event
+
+    enforce_trade_import_allowed(
+        workspace=workspace,
+        incoming_count=incoming_trade_count,
+        current_count=current_trade_count
     )
 
     result = persist_runtime_trade_rows(
