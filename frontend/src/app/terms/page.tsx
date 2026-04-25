@@ -58,7 +58,7 @@ export default function TermsPage() {
 
       <h2>9. Contact</h2>
       <p>
-        Email: support@tradingtruthlayer.com
+        Email: tradingtruthlayer@gmail.com
       </p>
     </div>
   );

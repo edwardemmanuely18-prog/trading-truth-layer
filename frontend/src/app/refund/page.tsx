@@ -30,7 +30,7 @@ export default function RefundPage() {
       </p>
 
       <h2>Contact</h2>
-      <p>Email: support@tradingtruthlayer.com</p>
+      <p>Email: tradingtruthlayer@gmail.com</p>
     </div>
   );
 }
