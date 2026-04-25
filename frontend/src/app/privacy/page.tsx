@@ -1,39 +1,44 @@
 export default function PrivacyPage() {
   return (
-    <div style={{ padding: "40px", maxWidth: 800, margin: "auto" }}>
+    <div style={{ padding: "40px", maxWidth: 900, margin: "auto" }}>
       <h1>Privacy Policy</h1>
 
       <p>
-        We respect your privacy and are committed to protecting your data.
+        This service is operated by <b>Aurum Hybrid</b> (Tanzania). We are
+        committed to protecting your data.
       </p>
 
       <h2>Data We Collect</h2>
       <ul>
         <li>Email address</li>
         <li>Name</li>
-        <li>Workspace data</li>
-        <li>Usage activity</li>
+        <li>Workspace and usage data</li>
+        <li>Technical logs and activity</li>
       </ul>
 
       <h2>How We Use Data</h2>
       <p>
-        Data is used to operate the platform, manage accounts, and improve
-        services.
+        Data is used to operate the platform, manage accounts, process payments,
+        and improve services.
       </p>
 
       <h2>Third Parties</h2>
       <p>
-        We use trusted providers such as Paddle (billing) and hosting providers
-        like Render and Vercel.
+        We use trusted providers including:
+        <ul>
+          <li>Paddle (billing & payments)</li>
+          <li>Vercel (hosting)</li>
+          <li>Render (backend infrastructure)</li>
+        </ul>
       </p>
 
       <h2>Security</h2>
       <p>
-        We implement industry-standard measures to protect your information.
+        We apply industry-standard measures to protect your data.
       </p>
 
       <h2>Contact</h2>
-      <p>For questions, contact support@tradingtruthlayer.com</p>
+      <p>Email: support@tradingtruthlayer.com</p>
     </div>
   );
 }

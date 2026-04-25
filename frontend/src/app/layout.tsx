@@ -22,3 +22,15 @@ export default function RootLayout({
     </html>
   );
 }
+
+<footer style={{
+  borderTop: "1px solid #e5e7eb",
+  padding: "20px",
+  marginTop: "40px",
+  textAlign: "center",
+  fontSize: "14px"
+}}>
+  <a href="/terms" style={{ marginRight: 12 }}>Terms</a>
+  <a href="/privacy" style={{ marginRight: 12 }}>Privacy</a>
+  <a href="/refund">Refund</a>
+</footer>
