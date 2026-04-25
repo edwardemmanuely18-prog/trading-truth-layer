@@ -23,14 +23,14 @@ export default function PrivacyPage() {
       </p>
 
       <h2>Third Parties</h2>
-      <p>
-        We use trusted providers including:
-        <ul>
-          <li>Paddle (billing & payments)</li>
-          <li>Vercel (hosting)</li>
-          <li>Render (backend infrastructure)</li>
-        </ul>
-      </p>
+
+      <p>We use trusted providers including:</p>
+
+      <ul>
+        <li>Paddle (billing & payments)</li>
+        <li>Vercel (hosting)</li>
+        <li>Render (backend infrastructure)</li>
+      </ul>
 
       <h2>Security</h2>
       <p>
