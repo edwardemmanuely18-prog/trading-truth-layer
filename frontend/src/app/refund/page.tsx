@@ -14,6 +14,11 @@ export default function RefundPage() {
         purchase, without providing any reason.
       </p>
 
+      {/* ✅ REQUIRED PADDLE ALIGNMENT LINE */}
+      <p>
+        Refunds are processed in accordance with Paddle’s Buyer Terms.
+      </p>
+
       <h2>Refund Processing</h2>
       <p>
         Refunds will be processed via the original payment method through Paddle.
