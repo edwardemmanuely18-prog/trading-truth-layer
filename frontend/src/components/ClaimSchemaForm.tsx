@@ -160,10 +160,6 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
     };
   }, [workspaceId]);
 
-  const claimUsage = usage?.usage?.claims;
-  const claimLimitReached =
-    (claimUsage?.limit ?? 0) > 0 && (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
-
   const configuredPlanName = getPlanName(
     usage,
     usage?.governance?.configured_plan_code || usage?.plan_code,
@@ -450,21 +446,6 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
             Use today
           </button>
         </div>
-
-        {claimLimitReached ? (
-          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-base text-amber-800">
-            <div className="font-semibold">
-              Current claim usage: {claimUsage?.used ?? 0} / {claimUsage?.limit ?? 0}
-            </div>
-            <div className="mt-2">
-              {billingActivationRecommended
-                ? `This workspace is already configured on ${configuredPlanName}, but billing is not active yet. Effective enforcement still follows ${effectivePlanName}. Activate billing to continue governed claim creation.`
-                : `Claim creation is blocked under the current enforced capacity posture. Review billing and ${
-                    recommendedPlanName || configuredPlanName
-                  } to continue governed draft creation.`}
-            </div>
-          </div>
-        ) : null}
 
         <form onSubmit={handleSubmit} className="mt-6">
           <div className="grid gap-6 xl:grid-cols-[1.55fr_1fr]">
@@ -765,15 +746,7 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
         message={paywallState.message}
         currentPlanName={configuredPlanName}
         currentPlanCode={usage?.plan_code || null}
-        usageLabel={
-          claimUsage
-            ? `${claimUsage?.used ?? 0} / ${claimUsage?.limit ?? "—"}${
-                claimUsage?.ratio !== null && claimUsage?.ratio !== undefined
-                  ? ` · ${formatPercent(claimUsage?.ratio)}`
-                  : ""
-              }`
-            : `Effective plan: ${effectivePlanName}`
-        }
+        usageLabel={`Plan: ${effectivePlanName}`}
         recommendedPlanName={billingActivationRecommended ? configuredPlanName : recommendedPlanName}
         onUpgrade={() => {
           router.push(`/workspace/${workspaceId}/settings?tab=billing`);
