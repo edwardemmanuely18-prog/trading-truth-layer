@@ -3678,6 +3678,16 @@ def publish_claim_schema(
                 status_code=403,
                 detail="Public claim limit reached for the current effective workspace tier."
             )
+        if not can_create_public_claim(
+            workspace_id=schema.workspace_id,
+            effective_plan_code=resolve_effective_workspace_plan_code(workspace),
+            db=db,
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Public claim limit reached for your plan"
+            )
+
 
     db.commit()
     db.refresh(schema)
