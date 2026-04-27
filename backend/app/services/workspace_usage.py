@@ -1,38 +1,30 @@
 from sqlalchemy.orm import Session
 
 from app.models.claim_schema import ClaimSchema
-
-
-PLAN_LIMITS = {
-    "sandbox": {
-        "max_public_claims": 3,
-    },
-    "starter": {
-        "max_public_claims": 3,
-    },
-    "pro": {
-        "max_public_claims": 50,
-    },
-    "growth": {
-        "max_public_claims": 200,
-    },
-    "business": {
-        "max_public_claims": 1000,
-    },
-}
+from app.models.workspace import Workspace
 
 
 def normalize_plan_code(value: str | None) -> str:
-    normalized = str(value or "").strip().lower()
-    return normalized if normalized in PLAN_LIMITS else "starter"
-
-
-def get_workspace_limits(plan_code: str):
-    normalized = normalize_plan_code(plan_code)
-    return PLAN_LIMITS.get(normalized, PLAN_LIMITS["starter"])
+    return str(value or "sandbox").strip().lower()
 
 
 def get_workspace_usage(workspace_id: int, db: Session):
+    """
+    Usage is now informational only.
+    NO HARD LIMIT ENFORCEMENT HERE.
+    """
+
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+
+    if not workspace:
+        return {
+            "public_claims": 0,
+            "locked_claims": 0,
+            "plan": "sandbox",
+            "billing_active": False,
+            "limit": 1,
+        }
+
     public_claims = (
         db.query(ClaimSchema)
         .filter(
@@ -52,14 +44,33 @@ def get_workspace_usage(workspace_id: int, db: Session):
         .count()
     )
 
+    plan = normalize_plan_code(workspace.plan_code)
+    billing_active = workspace.billing_status == "active"
+
+    # STRICT FREE TIER LOGIC
+    if plan == "sandbox":
+        limit = 1  # allow ONLY 1 claim ever
+    elif plan == "starter":
+        limit = 5
+    elif plan == "pro":
+        limit = 50
+    elif plan == "growth":
+        limit = 200
+    else:
+        limit = 1000
+
     return {
         "public_claims": public_claims,
         "locked_claims": locked_claims,
+        "plan": plan,
+        "billing_active": billing_active,
+        "limit": limit,
     }
 
 
 def can_create_public_claim(workspace_id: int, effective_plan_code: str, db: Session):
-    limits = get_workspace_limits(effective_plan_code)
-    usage = get_workspace_usage(workspace_id, db)
-
-    return usage["public_claims"] < limits["max_public_claims"]
+    """
+    DISABLED — kept only for backward compatibility.
+    DO NOT USE THIS FOR ENFORCEMENT.
+    """
+    return True
