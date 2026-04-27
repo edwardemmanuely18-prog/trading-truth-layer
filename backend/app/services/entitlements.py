@@ -179,7 +179,10 @@ def get_workspace_usage_counts(workspace_id: int, db: Session) -> dict[str, int]
 
     claim_count = (
         db.query(ClaimSchema)
-        .filter(ClaimSchema.workspace_id == workspace_id)
+        .filter(
+            ClaimSchema.workspace_id == workspace_id,
+            ClaimSchema.status.in_(["published", "locked"]),
+        )
         .count()
     )
 
@@ -270,13 +273,14 @@ def enforce_limit_not_reached(
         raise HTTPException(
             status_code=403,
             detail={
-                "code": "UPGRADE_REQUIRED",
+                "code": "claim_limit_reached",
                 "resource": resource_label,
-                "message": f"{resource_label} limit reached",
+                "message": f"Claim limit reached for your current plan",
                 "workspace_id": workspace_id,
                 "used": used,
                 "limit": limit,
                 "upgrade_required": True,
+                "type": "PLAN_LIMIT",
             },
         )
 

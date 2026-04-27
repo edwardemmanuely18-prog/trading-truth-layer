@@ -370,7 +370,7 @@ export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
             message:
               err.payload?.message ||
               err.payload?.upgrade_hint ||
-              "This workspace has reached its governed claim capacity. Review billing and plan posture to continue creating draft claims.",
+              "This workspace has reached its total claim limit for the current plan. Upgrade your plan to create more claims.",
           });
           return;
         }
