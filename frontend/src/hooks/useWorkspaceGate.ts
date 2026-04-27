@@ -241,7 +241,12 @@ export function useWorkspaceGate() {
         return { allowed: true };
       }
 
-      if (!isBillingActive(usage)) {
+      const planCode = normalizeText(usage?.plan_code);
+
+      // Allow sandbox to operate without billing
+      const isSandbox = planCode === "sandbox";
+
+      if (!isSandbox && !isBillingActive(usage)) {
         return {
           allowed: false,
           reason: "claim_limit_reached",
@@ -251,10 +256,12 @@ export function useWorkspaceGate() {
         };
       }
 
-      const claimUsage = usage.usage?.claims;
-      const claimLimitReached =
-        (claimUsage?.limit ?? 0) > 0 &&
-        (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
+      const claimUsage = usage?.usage?.claims;
+
+      const used = Number(claimUsage?.used ?? 0);
+      const limit = Number(claimUsage?.limit ?? 0);
+
+      const claimLimitReached = limit > 0 && used >= limit;
 
       if (claimLimitReached) {
         return {
