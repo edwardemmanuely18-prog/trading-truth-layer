@@ -57,16 +57,24 @@ def parse_cors_origins():
     return [o.strip() for o in raw.split(",") if o.strip()]
 
 
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://trading-truth-layer.vercel.app",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://trading-truth-layer.vercel.app",
-    ],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+@app.options("/{rest_of_path:path}")
+async def preflight_handler():
+    return {}
 
 # =========================
 # SAFE STARTUP (CRITICAL)
