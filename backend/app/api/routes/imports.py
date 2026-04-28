@@ -224,7 +224,6 @@ def ingest_webhook_trades(
 
     enforce_trade_import_allowed(
         workspace=workspace,
-        incoming_trade_count = len(adapted_rows),
         incoming_count=incoming_trade_count,
         current_count=current_trade_count,
     )

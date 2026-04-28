@@ -47,6 +47,7 @@ from fastapi.middleware.cors import CORSMiddleware
 origins = [
     "https://trading-truth-layer.vercel.app",
     "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 
 app.add_middleware(
@@ -55,6 +56,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 from app.api.routes import public
@@ -86,10 +88,6 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
-
-@app.options("/{rest_of_path:path}")
-async def preflight_handler():
-    return {}
 
 # =========================
 # SAFE STARTUP (CRITICAL)
