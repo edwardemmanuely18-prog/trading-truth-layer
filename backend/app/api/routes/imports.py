@@ -52,49 +52,64 @@ def _adapt_webhook_trade(raw_trade: dict, source_type: str) -> dict:
 
 
 def normalize_broker_row(row: dict, source_type: str) -> dict:
-    """
-    Normalize broker-specific fields into canonical schema
-    WITHOUT removing validation safety.
-    """
 
-    # --- SYMBOL ---
-    symbol = (
-        row.get("symbol")
-        or row.get("Item")
-        or row.get("instrument")
-    )
+    def get(*keys):
+        for k in keys:
+            if k in row and row[k] not in (None, ""):
+                return row[k]
+        return None
 
-    # --- SIDE ---
-    side = (
-        row.get("side")
-        or row.get("Type")
-        or row.get("action")
-    )
+    # SYMBOL
+    symbol = get("symbol", "Symbol", "Item", "instrument")
+
+    # SIDE
+    side = get("side", "Type", "action")
 
     if isinstance(side, str):
         side = side.upper()
+        if side == "BUY":
+            side = "BUY"
+        elif side == "SELL":
+            side = "SELL"
 
-    # --- QUANTITY ---
-    quantity = (
-        row.get("quantity")
-        or row.get("volume")
-        or row.get("Size")
-    )
+    # IBKR fallback (no side)
+    if side is None:
+        qty = get("quantity", "Quantity", "Size")
+        try:
+            qty = float(qty)
+            side = "BUY" if qty > 0 else "SELL"
+        except:
+            side = None
 
+    # QUANTITY
+    quantity = get("quantity", "Quantity", "Size", "volume")
     try:
         quantity = float(quantity) if quantity is not None else None
-    except Exception:
+    except:
         quantity = None
+
+    # TIME PARSING FIX (CRITICAL)
+    opened_at = get("opened_at", "open_time", "Open Time", "OpenTime")
+    closed_at = get("closed_at", "close_time", "Close Time", "CloseTime")
+
+    # Normalize MT5 datetime format
+    def parse_dt(val):
+        if not val:
+            return None
+        try:
+            return val.replace(".", "-")
+        except:
+            return val
 
     return {
         "symbol": symbol,
         "side": side,
         "quantity": quantity,
-        "entry_price": row.get("entry_price") or row.get("open_price") or row.get("Price"),
-        "exit_price": row.get("exit_price") or row.get("close_price") or row.get("ClosePrice"),
-        "net_pnl": row.get("net_pnl") or row.get("profit") or row.get("RealizedPnL"),
-        "opened_at": row.get("opened_at") or row.get("open_time") or row.get("OpenTime"),
-        "closed_at": row.get("closed_at") or row.get("close_time") or row.get("CloseTime"),
+        "entry_price": get("entry_price", "open_price", "Price", "OpenPrice"),
+        "exit_price": get("exit_price", "close_price", "ClosePrice"),
+        "net_pnl": get("net_pnl", "profit", "RealizedPnL"),
+        "opened_at": parse_dt(opened_at),
+        "closed_at": parse_dt(closed_at),
     }
 
 
