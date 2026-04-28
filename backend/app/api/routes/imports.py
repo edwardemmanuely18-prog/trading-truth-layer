@@ -60,7 +60,14 @@ def normalize_broker_row(row: dict, source_type: str) -> dict:
         return None
 
     # SYMBOL
-    symbol = get("symbol", "Symbol", "Item", "instrument")
+    symbol = get(
+        "symbol",
+        "Symbol",
+        "Item",
+        "item",
+        "Instrument",
+        "instrument"
+    )
 
     # SIDE
     side = get("side", "Type", "action")
@@ -74,7 +81,7 @@ def normalize_broker_row(row: dict, source_type: str) -> dict:
 
     # IBKR fallback (no side)
     if side is None:
-        qty = get("quantity", "Quantity", "Size")
+        qty = get("quantity", "Quantity", "Size", "qty", "Qty")
         try:
             qty = float(qty)
             side = "BUY" if qty > 0 else "SELL"
@@ -89,8 +96,25 @@ def normalize_broker_row(row: dict, source_type: str) -> dict:
         quantity = None
 
     # TIME PARSING FIX (CRITICAL)
-    opened_at = get("opened_at", "open_time", "Open Time", "OpenTime")
-    closed_at = get("closed_at", "close_time", "Close Time", "CloseTime")
+    opened_at = get(
+        "opened_at",
+        "open_time",
+        "Open Time",
+        "OpenTime",
+        "openTime",
+        "OpenDateTime",
+        "open_datetime"
+    )
+
+    closed_at = get(
+        "closed_at",
+        "close_time",
+        "Close Time",
+        "CloseTime",
+        "closeTime",
+        "CloseDateTime",
+        "close_datetime"
+    )
 
     # Normalize MT5 datetime format
     def parse_dt(val):
