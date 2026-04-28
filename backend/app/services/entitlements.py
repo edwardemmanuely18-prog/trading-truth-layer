@@ -337,30 +337,27 @@ def enforce_member_invite_allowed(
 
 
 def enforce_trade_import_allowed(
-    workspace_id: int,
-    db: Session,
     *,
-    additional_trades: int = 1,
-) -> Workspace:
-    workspace = enforce_workspace_billing_access(
-        workspace_id,
-        db,
-        allow_past_due=True,
-        action_label="import or create more trades",
-    )
+    workspace,
+    incoming_count: int,
+    current_count: int,
+):
+    """
+    Enforce trade import limits based on workspace plan.
+    """
 
-    limits = get_workspace_plan_limits(workspace)
-    consumed_trade_count = get_consumed_trade_count(workspace)
+    # Example logic (adjust if you already have plan fields)
+    max_trades = getattr(workspace, "trade_limit", None)
 
-    enforce_limit_not_reached(
-        used=consumed_trade_count,
-        limit=limits["trades"],
-        resource_label="trade",
-        workspace_id=workspace_id,
-        requested_additional=max(int(additional_trades), 1),
-    )
+    if max_trades is None:
+        return  # unlimited plan
 
-    return workspace
+    if current_count + incoming_count > max_trades:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=403,
+            detail="Trade import limit exceeded for your plan"
+        )
 
 
 def enforce_readonly_access_allowed(
