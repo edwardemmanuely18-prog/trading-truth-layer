@@ -35,7 +35,6 @@ from app.models.claim_dispute import ClaimDispute
 from app.models.trade import Trade
 from app.models.user import User
 from app.models.workspace import Workspace
-from app.services.workspace_usage import can_create_public_claim 
 from app.services.audit_service import log_audit_event
 from app.services.claim_service import compute_claim_hash
 from app.services.entitlements import enforce_claim_creation_allowed
@@ -269,13 +268,19 @@ def serialize_audit_event(event: AuditEvent):
 def parse_period_start(date_str: str | None):
     if not date_str:
         return None
-    return datetime.fromisoformat(date_str)
+    try:
+        return datetime.fromisoformat(date_str)
+    except Exception:
+        return None
 
 
 def parse_period_end(date_str: str | None):
     if not date_str:
         return None
-    return datetime.fromisoformat(date_str) + timedelta(days=1)
+    try:
+        return datetime.fromisoformat(date_str)
+    except Exception:
+        return None
 
 
 def coerce_trade_opened_at(value):
@@ -3321,6 +3326,8 @@ def create_claim_schema(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    print("CREATE CLAIM PAYLOAD:", payload.dict(), flush=True)
+
     # ✅ imports INSIDE function (optional but valid)
     from app.services.usage_service import get_workspace_usage
     from app.services.entitlements import enforce_claim_creation_allowed
@@ -3353,8 +3360,8 @@ def create_claim_schema(
     schema = ClaimSchema(
         workspace_id=payload.workspace_id,
         name=payload.name.strip(),
-        period_start=payload.period_start.strip(),
-        period_end=payload.period_end.strip(),
+        period_start=(payload.period_start or "").strip(),
+        period_end=(payload.period_end or "").strip(),
         included_member_ids_json=json.dumps(normalize_int_list(payload.included_member_ids_json)),
         included_symbols_json=json.dumps(normalize_symbol_list(payload.included_symbols_json)),
         excluded_trade_ids_json=json.dumps(normalize_int_list(payload.excluded_trade_ids_json)),
