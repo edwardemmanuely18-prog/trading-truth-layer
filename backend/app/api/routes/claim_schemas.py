@@ -3329,21 +3329,12 @@ def create_claim_schema(
     print("CREATE CLAIM PAYLOAD:", payload.dict(), flush=True)
 
     # ✅ imports INSIDE function (optional but valid)
-    from app.services.usage_service import get_workspace_usage
     from app.services.entitlements import enforce_claim_creation_allowed
 
     # ✅ workspace
     workspace = get_workspace_or_404(payload.workspace_id, db)
 
-    # ✅ usage
-    usage = get_workspace_usage(db, workspace.id)
-
-    # ✅ enforcement
-    enforce_claim_creation_allowed(
-        workspace=workspace,
-        current_count=usage["claims"]
-    )
-
+    # ✅ permissions
     require_workspace_operator_or_owner(payload.workspace_id, current_user, db)
 
     if not workspace_limits_disabled():
