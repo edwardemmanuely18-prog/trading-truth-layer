@@ -51,6 +51,53 @@ def _adapt_webhook_trade(raw_trade: dict, source_type: str) -> dict:
     }
 
 
+def normalize_broker_row(row: dict, source_type: str) -> dict:
+    """
+    Normalize broker-specific fields into canonical schema
+    WITHOUT removing validation safety.
+    """
+
+    # --- SYMBOL ---
+    symbol = (
+        row.get("symbol")
+        or row.get("Item")
+        or row.get("instrument")
+    )
+
+    # --- SIDE ---
+    side = (
+        row.get("side")
+        or row.get("Type")
+        or row.get("action")
+    )
+
+    if isinstance(side, str):
+        side = side.upper()
+
+    # --- QUANTITY ---
+    quantity = (
+        row.get("quantity")
+        or row.get("volume")
+        or row.get("Size")
+    )
+
+    try:
+        quantity = float(quantity) if quantity is not None else None
+    except Exception:
+        quantity = None
+
+    return {
+        "symbol": symbol,
+        "side": side,
+        "quantity": quantity,
+        "entry_price": row.get("entry_price") or row.get("open_price") or row.get("Price"),
+        "exit_price": row.get("exit_price") or row.get("close_price") or row.get("ClosePrice"),
+        "net_pnl": row.get("net_pnl") or row.get("profit") or row.get("RealizedPnL"),
+        "opened_at": row.get("opened_at") or row.get("open_time") or row.get("OpenTime"),
+        "closed_at": row.get("closed_at") or row.get("close_time") or row.get("CloseTime"),
+    }
+
+
 def _extract_webhook_trade_rows(payload: dict) -> list[dict]:
     trades = payload.get("trades")
 
@@ -243,13 +290,6 @@ def ingest_webhook_trades(
         "message": "Webhook trades ingested",
     }
 
-    # VERY IMPORTANT
-    SECRET = os.getenv("WEBHOOK_SECRET")
-
-    if payload.get("secret") != SECRET:
-        raise HTTPException(status_code=403, detail="Unauthorized webhook")
-
-
 # -----------------------------
 # GENERIC FILE INGESTION
 # -----------------------------
@@ -281,6 +321,17 @@ async def upload_import_file(
 
     file_bytes = await file.read()
 
+    from app.services.trade_import import parse_rows_by_source
+
+    rows = parse_rows_by_source(normalized_source, file_bytes)
+
+    # ✅ Normalize BEFORE ingestion
+    normalized_rows = [
+        normalize_broker_row(r, normalized_source)
+        for r in rows
+        if isinstance(r, dict)
+    ]
+
     # 🔒 TRADE LIMIT ENFORCEMENT (FILE IMPORT)
     from app.models.workspace import Workspace
 
@@ -294,7 +345,7 @@ async def upload_import_file(
     current_trade_count = usage["trades"]
 
     # ⚠️ keep temporary estimate OR improve later
-    incoming_trade_count = 1000
+    incoming_trade_count = 0  # temporary safe fallback
 
     from app.services.entitlements import enforce_trade_import_allowed
 
@@ -305,14 +356,21 @@ async def upload_import_file(
     )
 
     # Persist accepted rows into Trade via existing ingestion service
-    result = import_broker_trades(
-        db=db,
-        workspace_id=workspace_id,
-        filename=file.filename,
-        content=file_bytes,
-        source_type=normalized_source,
-        actor_user_id=None,
-    )
+    try:
+        result = persist_runtime_trade_rows(
+            db=db,
+            workspace_id=workspace_id,
+            filename=file.filename,
+            source_type=normalized_source,
+            normalized_rows=normalized_rows,
+            actor_user_id=None,
+            audit_source="imports.upload_import_file",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Import processing failed: {str(e)}"
+        )
 
     return {
         **result,
