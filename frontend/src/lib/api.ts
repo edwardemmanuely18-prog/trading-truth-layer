@@ -1,5 +1,5 @@
 const API_BASE =
-  (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000") + "/api";
+  (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000") + "/api";
 
 export const API_BASE_URL = API_BASE;
 const DEV_USER_ID: number | null = null;
@@ -1131,7 +1131,7 @@ function parseApiErrorPayload(rawText: string): ApiErrorPayload | null {
 }
 
 function getApiBaseUrl() {
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  return process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 }
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -2194,7 +2194,7 @@ export const api = {
     const baseUrl = getApiBaseUrl();
 
     const res = await fetch(
-      `${baseUrl}${withDevUser(`/workspaces/${workspaceId}/trades/import-csv`)}`,
+      `${getApiBaseUrl()}/api${withDevUser(`/workspaces/${workspaceId}/trades/import-csv`)}`,
       {
         method: "POST",
         headers,
@@ -2238,10 +2238,8 @@ export const api = {
 
     const headers = getAuthHeaders();
 
-    const baseUrl = getApiBaseUrl();
-
     const res = await fetch(
-      `${baseUrl}${withDevUser(`/workspaces/${workspaceId}/imports/upload`)}`,
+      `${getApiBaseUrl()}/api${withDevUser(`/workspaces/${workspaceId}/imports/upload`)}`,
       {
         method: "POST",
         headers,
