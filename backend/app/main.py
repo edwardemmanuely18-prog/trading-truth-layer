@@ -42,6 +42,21 @@ from app.core.security import hash_password
 # =========================
 app = FastAPI(title="Trading Truth Layer API")
 
+from fastapi.middleware.cors import CORSMiddleware
+
+origins = [
+    "https://trading-truth-layer.vercel.app",
+    "http://localhost:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 from app.api.routes import public
 
 app.include_router(public.router, prefix="/api")
