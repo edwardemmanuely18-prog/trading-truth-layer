@@ -676,7 +676,9 @@ def get_workspace_usage(
         .count()
     )
     active_trade_count = db.query(Trade).filter(Trade.workspace_id == workspace_id).count()
-    consumed_trade_count = int(getattr(workspace, "trades_consumed_count", 0) or 0)
+    consumed_trade_count = db.query(Trade).filter(
+        Trade.workspace_id == workspace_id
+    ).count()
     claim_count = db.query(ClaimSchema).filter(ClaimSchema.workspace_id == workspace_id).count()
 
     storage_used_mb = 0
