@@ -653,6 +653,8 @@ def update_workspace_settings(
     return serialize_workspace_settings(workspace)
 
 
+from app.services.metrics_service import get_workspace_trade_metrics
+
 @router.get("/workspaces/{workspace_id}/usage")
 def get_workspace_usage(
     workspace_id: int,
