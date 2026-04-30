@@ -667,6 +667,8 @@ def get_workspace_usage(
 
     require_workspace_member(workspace_id, current_user, db)
 
+    metrics = get_workspace_trade_metrics(db, workspace_id)
+
     limits = workspace_limit_snapshot(workspace)
     governance_state = build_plan_governance_state(workspace)
 
@@ -676,9 +678,11 @@ def get_workspace_usage(
         .count()
     )
     active_trade_count = db.query(Trade).filter(Trade.workspace_id == workspace_id).count()
-    consumed_trade_count = db.query(Trade).filter(
-        Trade.workspace_id == workspace_id
-    ).count()
+
+    metrics = get_workspace_trade_metrics(db, workspace_id)
+
+    consumed_trade_count = metrics["used"]
+    
     claim_count = db.query(ClaimSchema).filter(ClaimSchema.workspace_id == workspace_id).count()
 
     storage_used_mb = 0
@@ -748,6 +752,7 @@ def get_workspace_usage(
         "billing_status": normalize_billing_status(workspace.billing_status),
         "effective_plan_code": governance_state["effective_plan_code"],
         "usage": usage,
+        "metrics": metrics,
         "stripe_ready": {
             "has_customer_id": bool(workspace.stripe_customer_id),
             "has_subscription_id": bool(workspace.stripe_subscription_id),
