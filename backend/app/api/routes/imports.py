@@ -55,22 +55,18 @@ def normalize_broker_row(row: dict, source_type: str) -> dict:
 
     def get(*keys):
         for k in keys:
-            if k in row and row[k] not in (None, ""):
-                return row[k]
+            for actual_key in row.keys():
+                if actual_key.lower().strip().replace(" ", "_") == k.lower():
+                    val = row[actual_key]
+                    if val not in (None, ""):
+                        return val
         return None
 
     # SYMBOL
-    symbol = get(
-        "symbol",
-        "Symbol",
-        "Item",
-        "item",
-        "Instrument",
-        "instrument"
-    )
+    symbol = get("symbol", "item", "instrument")
 
     # SIDE
-    side = get("side", "Type", "action")
+    side = get("side", "type", "action")
 
     if isinstance(side, str):
         side = side.upper()
@@ -89,32 +85,15 @@ def normalize_broker_row(row: dict, source_type: str) -> dict:
             side = None
 
     # QUANTITY
-    quantity = get("quantity", "Quantity", "Size", "volume")
+    quantity = get("quantity", "size", "volume")
     try:
         quantity = float(quantity) if quantity is not None else None
     except:
         quantity = None
 
     # TIME PARSING FIX (CRITICAL)
-    opened_at = get(
-        "opened_at",
-        "open_time",
-        "Open Time",
-        "OpenTime",
-        "openTime",
-        "OpenDateTime",
-        "open_datetime"
-    )
-
-    closed_at = get(
-        "closed_at",
-        "close_time",
-        "Close Time",
-        "CloseTime",
-        "closeTime",
-        "CloseDateTime",
-        "close_datetime"
-    )
+    opened_at = get("open_time", "opened_at", "opentime")
+    closed_at = get("close_time", "closed_at", "closetime")
 
     # Normalize MT5 datetime format
     def parse_dt(val):
@@ -364,12 +343,16 @@ async def upload_import_file(
 
     rows = parse_rows_by_source(normalized_source, file_bytes)
 
+    print("DEBUG RAW ROW:", rows[0])
+
     # ✅ Normalize BEFORE ingestion
     normalized_rows = [
         normalize_broker_row(r, normalized_source)
         for r in rows
         if isinstance(r, dict)
     ]
+
+    print("DEBUG NORMALIZED ROW:", normalized_rows[0])
 
     # 🔒 TRADE LIMIT ENFORCEMENT (FILE IMPORT)
     from app.models.workspace import Workspace
