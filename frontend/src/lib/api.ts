@@ -2185,9 +2185,9 @@ export const api = {
   deleteTrade: async (
     workspaceId: number,
     tradeId: number
-  ): Promise<{ success: boolean }> => {
-    return apiFetch<{ success: boolean }>(
-      `/workspaces/${workspaceId}/trades/${tradeId}`,
+  ): Promise<{ status: string; trade_id: number }> => {
+    return apiFetch<{ status: string; trade_id: number }>(
+      withDevUser(`/workspaces/${workspaceId}/trades/${tradeId}`), // ✅ FIXED
       {
         method: "DELETE",
       }
