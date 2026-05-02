@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from app.models.trade import Trade
+from app.models.workspace import Workspace
 
 
 def get_workspace_trade_metrics(db: Session, workspace_id: int) -> dict:
