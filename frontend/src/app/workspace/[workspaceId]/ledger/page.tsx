@@ -139,8 +139,11 @@ export default function WorkspaceLedgerPage() {
   const [search, setSearch] = useState("");
   const [symbolFilter, setSymbolFilter] = useState("");
   const [sideFilter, setSideFilter] = useState("");
-
   const tradeUsage = usage?.usage?.trades;
+
+  const tradeUsed = tradeUsage?.used ?? 0;        // consumed (billing)
+  const tradeLimit = tradeUsage?.limit ?? 0;
+  const ledgerCount = metrics?.ledger_count ?? 0; // actual trades
   // 🔥 Filtered trades
   const filteredTrades = useMemo(() => {
     return trades.filter((t) => {
