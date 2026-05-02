@@ -532,18 +532,20 @@ def delete_trade(
 
     _, trade_id_to_claim = build_locked_trade_protection_maps(db, workspace_id)
     protected_claim = find_locked_claim_protecting_trade_id(trade_id_to_claim, trade.id)
+
     if protected_claim:
         raise HTTPException(
             status_code=400,
-            detail=(
-                f"Trade {trade.id} is protected by locked claim {protected_claim.id} "
-                "and cannot be deleted."
-            ),
+            detail=f"Trade {trade.id} is protected by locked claim {protected_claim.id} and cannot be deleted.",
         )
 
     db.delete(trade)
     db.commit()
-    return {"status": "deleted", "trade_id": trade_id}
+
+    return {
+        "status": "deleted",
+        "trade_id": trade_id
+    }
 
 
 @router.post("/workspaces/{workspace_id}/trades/import-csv")
@@ -611,86 +613,3 @@ async def import_trades_csv(
             "errors": [str(e)],
         }
 
-
-@router.put("/workspaces/{workspace_id}/trades/{trade_id}")
-def update_trade(
-    workspace_id: int,
-    trade_id: int,
-    payload: TradeUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    require_workspace_operator_or_owner(workspace_id, current_user, db)
-
-    trade = db.query(Trade).filter(
-        Trade.id == trade_id,
-        Trade.workspace_id == workspace_id
-    ).first()
-
-    if not trade:
-        raise HTTPException(status_code=404, detail="Trade not found")
-
-    # update fields
-    trade.member_id = payload.member_id
-    trade.symbol = payload.symbol
-    trade.side = payload.side
-    trade.opened_at = payload.opened_at
-    trade.closed_at = payload.closed_at
-    trade.entry_price = payload.entry_price
-    trade.exit_price = payload.exit_price
-    trade.quantity = payload.quantity
-    trade.currency = payload.currency
-    trade.net_pnl = payload.net_pnl
-    trade.strategy_tag = payload.strategy_tag
-    trade.source_system = payload.source_system
-
-    db.commit()
-    db.refresh(trade)
-
-    return serialize_trade(trade)
-
-
-@router.delete("/workspaces/{workspace_id}/trades/{trade_id}")
-def delete_trade(
-    workspace_id: int,
-    trade_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    require_workspace_operator_or_owner(workspace_id, current_user, db)
-
-    trade = db.query(Trade).filter(
-        Trade.id == trade_id,
-        Trade.workspace_id == workspace_id
-    ).first()
-
-    if not trade:
-        raise HTTPException(status_code=404, detail="Trade not found")
-
-    db.delete(trade)
-    db.commit()
-
-    return {"success": True}    
-
-
-@router.delete("/workspaces/{workspace_id}/trades/{trade_id}")
-def delete_trade(
-    workspace_id: int,
-    trade_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    require_workspace_operator_or_owner(workspace_id, current_user, db)
-
-    trade = db.query(Trade).filter(
-        Trade.workspace_id == workspace_id,
-        Trade.id == trade_id
-    ).first()
-
-    if not trade:
-        raise HTTPException(status_code=404, detail="Trade not found")
-
-    db.delete(trade)
-    db.commit()
-
-    return {"success": True}    
