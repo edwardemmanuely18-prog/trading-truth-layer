@@ -529,6 +529,10 @@ def build_upgrade_recommendation(
         "already_at_highest_tier": already_at_highest_tier,
         "breached_dimensions": breached_dimensions,
         "near_limit_dimensions": near_limit_dimensions,
+
+        "billing_activation_recommended": (
+            configured_normalized not in {"sandbox", "starter"}
+        ),
     }
 
 
@@ -661,88 +665,116 @@ def get_workspace_usage(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+    try:
+        workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+        if not workspace:
+            raise HTTPException(status_code=404, detail="Workspace not found")
 
-    require_workspace_member(workspace_id, current_user, db)
+        require_workspace_member(workspace_id, current_user, db)
 
-    metrics = get_workspace_trade_metrics(db, workspace_id)
+        metrics = get_workspace_trade_metrics(db, workspace_id)
 
-    limits = workspace_limit_snapshot(workspace)
-    governance_state = build_plan_governance_state(workspace)
+        limits = workspace_limit_snapshot(workspace)
+        governance_state = build_plan_governance_state(workspace)
 
-    member_count = (
-        db.query(WorkspaceMembership)
-        .filter(WorkspaceMembership.workspace_id == workspace_id)
-        .count()
-    )
-    active_trade_count = db.query(Trade).filter(Trade.workspace_id == workspace_id).count()
+        member_count = (
+            db.query(WorkspaceMembership)
+            .filter(WorkspaceMembership.workspace_id == workspace_id)
+            .count()
+        )
 
-    metrics = get_workspace_trade_metrics(db, workspace_id)
+        active_trade_count = db.query(Trade).filter(
+            Trade.workspace_id == workspace_id
+        ).count()
 
-    consumed_trade_count = metrics["used"]
-    
-    claim_count = db.query(ClaimSchema).filter(ClaimSchema.workspace_id == workspace_id).count()
+        consumed_trade_count = metrics["used"]
+        claim_count = db.query(ClaimSchema).filter(
+            ClaimSchema.workspace_id == workspace_id
+        ).count()
 
-    storage_used_mb = 0
+        storage_used_mb = 0
 
-    def ratio(used: int, limit: int):
-        if not limit or limit <= 0:
-            return None
-        return round(used / limit, 4)
+        def ratio(used, limit):
+            return round(used / limit, 4) if limit else None
 
-    def status(used: int, limit: int):
-        if not limit or limit <= 0:
-            return "unlimited"
-        if used > limit:
-            return "over_limit"
-        if used == limit:
-            return "at_limit"
-        utilization = used / limit
-        if utilization >= 0.8:
-            return "near_limit"
-        return "ok"
+        def status(used, limit):
+            if not limit:
+                return "unlimited"
+            if used > limit:
+                return "over_limit"
+            if used == limit:
+                return "at_limit"
+            if used / limit >= 0.8:
+                return "near_limit"
+            return "ok"
 
-    usage = {
-        "members": {
-            "used": member_count,
-            "limit": limits["member_limit"],
-            "ratio": ratio(member_count, limits["member_limit"]),
-            "status": status(member_count, limits["member_limit"]),
-        },
-        "trades": {
-            "used": consumed_trade_count,
-            "limit": limits["trade_limit"],
-            "ratio": ratio(consumed_trade_count, limits["trade_limit"]),
-            "status": status(consumed_trade_count, limits["trade_limit"]),
-        },
-        "active_trades": {
-            "used": active_trade_count,
-            "limit": limits["trade_limit"],
-            "ratio": ratio(active_trade_count, limits["trade_limit"]),
-            "status": status(active_trade_count, limits["trade_limit"]),
-        },
-        "claims": {
-            "used": claim_count,
-            "limit": limits["claim_limit"],
-            "ratio": ratio(claim_count, limits["claim_limit"]),
-            "status": status(claim_count, limits["claim_limit"]),
-        },
-        "storage_mb": {
-            "used": storage_used_mb,
-            "limit": limits["storage_limit_mb"],
-            "ratio": ratio(storage_used_mb, limits["storage_limit_mb"]),
-            "status": status(storage_used_mb, limits["storage_limit_mb"]),
-        },
-    }
+        usage = {
+            "members": {
+                "used": member_count,
+                "limit": limits["member_limit"],
+                "ratio": ratio(member_count, limits["member_limit"]),
+                "status": status(member_count, limits["member_limit"]),
+            },
+            "trades": {
+                "used": consumed_trade_count,
+                "limit": limits["trade_limit"],
+                "ratio": ratio(consumed_trade_count, limits["trade_limit"]),
+                "status": status(consumed_trade_count, limits["trade_limit"]),
+            },
+            "active_trades": {
+                "used": active_trade_count,
+                "limit": limits["trade_limit"],
+                "ratio": ratio(active_trade_count, limits["trade_limit"]),
+                "status": status(active_trade_count, limits["trade_limit"]),
+            },
+            "claims": {
+                "used": claim_count,
+                "limit": limits["claim_limit"],
+                "ratio": ratio(claim_count, limits["claim_limit"]),
+                "status": status(claim_count, limits["claim_limit"]),
+            },
+            "storage_mb": {
+                "used": storage_used_mb,
+                "limit": limits["storage_limit_mb"],
+                "ratio": ratio(storage_used_mb, limits["storage_limit_mb"]),
+                "status": status(storage_used_mb, limits["storage_limit_mb"]),
+            },
+        }
 
-    upgrade = build_upgrade_recommendation(
-        governance_state["configured_plan_code"],
-        governance_state["effective_plan_code"],
-        usage,
-        plan_mismatch=governance_state["plan_mismatch"],
-    )
+        upgrade = build_upgrade_recommendation(
+            governance_state["configured_plan_code"],
+            governance_state["effective_plan_code"],
+            usage,
+            plan_mismatch=governance_state["plan_mismatch"],
+        )
+
+        return {
+            "workspace_id": workspace.id,
+            "plan_code": normalize_plan_code(workspace.plan_code),
+            "billing_status": normalize_billing_status(workspace.billing_status),
+            "effective_plan_code": governance_state["effective_plan_code"],
+            "usage": usage,
+            "metrics": metrics,
+            "upgrade_recommendation": upgrade,
+        }
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+
+        return {
+            "workspace_id": workspace_id,
+            "plan_code": "starter",
+            "billing_status": "inactive",
+            "effective_plan_code": "starter",
+            "usage": {
+                "members": {"used": 0, "limit": 3},
+                "trades": {"used": 0, "limit": 1000},
+                "claims": {"used": 0, "limit": 5},
+                "storage_mb": {"used": 0, "limit": 500},
+            },
+            "error": "fallback_usage_response"
+        }
     effective_plan_definition = resolve_effective_plan_definition(workspace)
     configured_plan_definition = get_plan_definition(workspace.plan_code)
 
