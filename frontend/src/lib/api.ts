@@ -1225,6 +1225,49 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   }
 }
 
+async function apiDownload(
+  path: string,
+  filename: string
+): Promise<void> {
+  const headers = getAuthHeaders();
+
+  const baseUrl = getApiBaseUrl();
+
+  function withApiPrefix(path: string) {
+    if (path.startsWith("/auth")) return path;
+    return path.startsWith("/api") ? path : `/api${path}`;
+  }
+
+  const finalPath = withApiPrefix(path);
+
+  const res = await fetch(`${baseUrl}${finalPath}`, {
+    method: "GET",
+    headers,
+  });
+
+  if (!res.ok) {
+    const rawText = await res.text();
+    const payload = parseApiErrorPayload(rawText);
+
+    throw new ApiError(
+      payload?.message || "Download failed",
+      res.status,
+      payload,
+      rawText
+    );
+  }
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+
+  window.URL.revokeObjectURL(url);
+}
+
 function withDevUser(path: string) {
   const token = typeof window !== "undefined" ? getStoredAccessToken() : null;
   if (token) return path;
@@ -2403,6 +2446,24 @@ export const api = {
     return apiFetch<EvidenceBundle>(withDevUser(`/claim-schemas/${claimSchemaId}/evidence-bundle`), {
       cache: "no-store",
     });
+  },
+
+  // =========================================
+  // DOWNLOADS (FIXED AUTH)
+  // =========================================
+
+  downloadEvidenceBundle: async (claimSchemaId: number): Promise<void> => {
+    return apiDownload(
+      `/claim-schemas/${claimSchemaId}/evidence-bundle/download`,
+      `evidence_bundle_${claimSchemaId}.zip`
+    );
+  },
+
+  downloadClaimReport: async (claimSchemaId: number): Promise<void> => {
+    return apiDownload(
+      `/claim-schemas/${claimSchemaId}/report/download`,
+      `claim_report_${claimSchemaId}.pdf`
+    );
   },
 
   getPublicProfile: async (workspaceId: number): Promise<PublicProfileResponse> => {
