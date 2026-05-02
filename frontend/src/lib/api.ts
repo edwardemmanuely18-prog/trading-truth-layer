@@ -1,5 +1,6 @@
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  "https://trading-truth-layer.onrender.com/api";
 
 export const API_BASE_URL = API_BASE;
 const DEV_USER_ID: number | null = null;
@@ -1136,7 +1137,10 @@ function parseApiErrorPayload(rawText: string): ApiErrorPayload | null {
 }
 
 function getApiBaseUrl() {
-  return process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+  return (
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    "https://trading-truth-layer.onrender.com"
+  );
 }
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
@@ -1225,20 +1229,11 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   }
 }
 
-async function apiDownload(
-  path: string,
-  filename: string
-): Promise<void> {
+async function apiDownload(path: string, filename: string): Promise<void> {
   const headers = getAuthHeaders();
-
   const baseUrl = getApiBaseUrl();
 
-  function withApiPrefix(path: string) {
-    if (path.startsWith("/auth")) return path;
-    return path.startsWith("/api") ? path : `/api${path}`;
-  }
-
-  const finalPath = withApiPrefix(path);
+  const finalPath = path.startsWith("/api") ? path : `/api${path}`;
 
   const res = await fetch(`${baseUrl}${finalPath}`, {
     method: "GET",
@@ -1263,7 +1258,9 @@ async function apiDownload(
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  document.body.appendChild(a);
   a.click();
+  a.remove();
 
   window.URL.revokeObjectURL(url);
 }
