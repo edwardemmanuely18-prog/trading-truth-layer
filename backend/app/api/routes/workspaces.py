@@ -655,6 +655,7 @@ def update_workspace_settings(
     db.refresh(workspace)
 
     return serialize_workspace_settings(workspace)
+    
 
 
 from app.services.metrics_service import get_workspace_trade_metrics
@@ -673,23 +674,17 @@ def get_workspace_usage(
         require_workspace_member(workspace_id, current_user, db)
 
         metrics = get_workspace_trade_metrics(db, workspace_id)
-
         limits = workspace_limit_snapshot(workspace)
         governance_state = build_plan_governance_state(workspace)
 
-        member_count = (
-            db.query(WorkspaceMembership)
-            .filter(WorkspaceMembership.workspace_id == workspace_id)
-            .count()
-        )
+        member_count = db.query(WorkspaceMembership).filter(
+            WorkspaceMembership.workspace_id == workspace_id
+        ).count()
 
-        active_trade_count = db.query(Trade).filter(
+        trade_count = db.query(Trade).filter(
             Trade.workspace_id == workspace_id
         ).count()
 
-        consumed_trade_count = db.query(Trade).filter(
-            Trade.workspace_id == workspace_id
-        ).count()
         claim_count = db.query(ClaimSchema).filter(
             ClaimSchema.workspace_id == workspace_id
         ).count()
@@ -718,16 +713,10 @@ def get_workspace_usage(
                 "status": status(member_count, limits["member_limit"]),
             },
             "trades": {
-                "used": consumed_trade_count,
+                "used": trade_count,
                 "limit": limits["trade_limit"],
-                "ratio": ratio(consumed_trade_count, limits["trade_limit"]),
-                "status": status(consumed_trade_count, limits["trade_limit"]),
-            },
-            "active_trades": {
-                "used": active_trade_count,
-                "limit": limits["trade_limit"],
-                "ratio": ratio(active_trade_count, limits["trade_limit"]),
-                "status": status(active_trade_count, limits["trade_limit"]),
+                "ratio": ratio(trade_count, limits["trade_limit"]),
+                "status": status(trade_count, limits["trade_limit"]),
             },
             "claims": {
                 "used": claim_count,
@@ -750,14 +739,37 @@ def get_workspace_usage(
             plan_mismatch=governance_state["plan_mismatch"],
         )
 
+        # ✅ MOVE THESE INSIDE TRY
+        effective_plan_definition = resolve_effective_plan_definition(workspace)
+        configured_plan_definition = get_plan_definition(workspace.plan_code)
+
         return {
             "workspace_id": workspace.id,
             "plan_code": normalize_plan_code(workspace.plan_code),
             "billing_status": normalize_billing_status(workspace.billing_status),
             "effective_plan_code": governance_state["effective_plan_code"],
+
             "usage": usage,
             "metrics": metrics,
             "upgrade_recommendation": upgrade,
+
+            # ✅ REQUIRED FOR UI
+            "plan_catalog": get_plan_catalog(),
+
+            "configured_plan_detail": {
+                "code": configured_plan_definition["code"],
+                "name": configured_plan_definition["name"],
+                "description": configured_plan_definition["description"],
+                "recommended_for": configured_plan_definition["recommended_for"],
+                "billing": configured_plan_definition["billing"],
+            },
+            "effective_plan_detail": {
+                "code": effective_plan_definition["code"],
+                "name": effective_plan_definition["name"],
+                "description": effective_plan_definition["description"],
+                "recommended_for": effective_plan_definition["recommended_for"],
+                "billing": effective_plan_definition["billing"],
+            },
         }
 
     except Exception as e:
