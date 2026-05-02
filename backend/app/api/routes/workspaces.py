@@ -687,7 +687,9 @@ def get_workspace_usage(
             Trade.workspace_id == workspace_id
         ).count()
 
-        consumed_trade_count = metrics["used"]
+        consumed_trade_count = db.query(Trade).filter(
+            Trade.workspace_id == workspace_id
+        ).count()
         claim_count = db.query(ClaimSchema).filter(
             ClaimSchema.workspace_id == workspace_id
         ).count()
