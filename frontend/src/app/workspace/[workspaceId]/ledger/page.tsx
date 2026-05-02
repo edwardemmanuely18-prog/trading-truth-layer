@@ -114,6 +114,7 @@ export default function WorkspaceLedgerPage() {
   const canWriteTrades = workspaceRole === "owner" || workspaceRole === "operator";
 
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [metrics, setMetrics] = useState<any>(null);
   const [latestAuditEvents, setLatestAuditEvents] = useState<AuditEvent[]>([]);
   const [workspaceAuditEvents, setWorkspaceAuditEvents] = useState<AuditEvent[]>([]);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
@@ -243,12 +244,8 @@ export default function WorkspaceLedgerPage() {
       setManualTradeError(null);
       setManualTradeSuccess(null);
 
-      const payload = {
-        ...buildTradePayload(manualTradeForm),
-        source_type: "manual",
-      };
+      const payload = buildTradePayload(manualTradeForm);
 
-      await api.updateTrade;
       await api.createTrade(workspaceId, payload);
       await reloadLedgerData(workspaceId);
 
@@ -578,7 +575,8 @@ export default function WorkspaceLedgerPage() {
 
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
             <div className="text-sm text-slate-500">Trades in Ledger</div>
-            <div className="mt-2 text-2xl font-semibold">{trades.length}</div>
+            <div className="mt-2 text-2xl font-semibold">{tradeUsage?.used ?? 0}</div>
+            <div>{trades.length}</div>
           </div>
 
           <div className="rounded-2xl border bg-white p-5 shadow-sm">

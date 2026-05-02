@@ -101,7 +101,9 @@ export default async function LedgerPage() {
 
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
             <div className="text-sm text-slate-500">Trades in Ledger</div>
-            <div className="mt-2 text-2xl font-semibold">{trades.length}</div>
+            <div className="mt-2 text-2xl font-semibold">
+              {trades?.length ?? 0}
+            </div>
           </div>
 
           <div className="rounded-2xl border bg-white p-5 shadow-sm">

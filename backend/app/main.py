@@ -44,15 +44,9 @@ app = FastAPI(title="Trading Truth Layer API")
 
 from fastapi.middleware.cors import CORSMiddleware
 
-origins = [
-    "https://trading-truth-layer.vercel.app",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],  # 🔥 TEMP FIX
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -71,22 +65,7 @@ def parse_cors_origins():
         "http://localhost:3000,http://127.0.0.1:3000",
     )
     return [o.strip() for o in raw.split(",") if o.strip()]
-
-
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://trading-truth-layer.vercel.app",
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-)
+    
 
 # =========================
 # SAFE STARTUP (CRITICAL)

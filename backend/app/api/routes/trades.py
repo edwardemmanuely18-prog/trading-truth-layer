@@ -18,13 +18,15 @@ from app.models.workspace_membership import WorkspaceMembership
 from app.services.entitlements import enforce_trade_import_allowed
 from app.services.ingestion_service import import_csv_trades
 from app.services.entitlements import enforce_claim_creation_allowed
+from typing import Optional
+
 
 router = APIRouter()
 
 
 class TradeCreate(BaseModel):
     member_id: int
-    source_type: str = "manual"
+    source_type: str | None = None
     symbol: str
     side: str
     opened_at: datetime
@@ -295,17 +297,28 @@ def create_trade(
     workspace_id: int,
     payload: TradeCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
+    current_user: User = Depends(get_current_user)
+    ):
 
-    require_workspace_operator_or_owner(workspace_id, current_user, db)
+    print("USER:", current_user)
+    print("PAYLOAD:", payload.dict())
+
+    if payload.closed_at and payload.closed_at < payload.opened_at:
+        raise HTTPException(
+            status_code=400,
+            detail="closed_at cannot be before opened_at"
+        )
+
+    try:
+        require_workspace_operator_or_owner(workspace_id, current_user, db)
+    except HTTPException as e:
+        print("❌ MEMBERSHIP ERROR:", e.detail)
+        raise e
     workspace = get_workspace_or_404(workspace_id, db)
-    
-    enforce_trade_import_allowed(workspace_id, db, additional_trades=1)
 
     normalized_symbol = payload.symbol.strip().upper()
     normalized_side = payload.side.strip().upper()
-    normalized_currency = payload.currency.strip().upper()
+    normalized_currency = (payload.currency or "USD").strip().upper()
     normalized_strategy_tag = normalize_optional_text(payload.strategy_tag)
     normalized_source_system = normalize_optional_text(payload.source_system) or "MANUAL"
 
@@ -370,11 +383,21 @@ def create_trade(
         trade_fingerprint=fingerprint,
     )
 
-    db.add(trade)
-    increment_workspace_trades_consumed(workspace, db, 1)
-    db.commit()
-    db.refresh(trade)
-    db.refresh(workspace)
+    print("CREATING TRADE:", {
+        "workspace_id": workspace_id,
+        "member_id": payload.member_id,
+        "symbol": normalized_symbol
+    })
+
+    try:
+        db.add(trade)
+        increment_workspace_trades_consumed(workspace, db, 1)
+        db.commit()
+        db.refresh(trade)
+        db.refresh(workspace)
+    except Exception as e:
+        print("❌ DB ERROR:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
     result = serialize_trade(trade)
     result["duplicate_skipped"] = False

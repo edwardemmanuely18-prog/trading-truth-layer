@@ -1,5 +1,5 @@
 const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000") + "/api";
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
 export const API_BASE_URL = API_BASE;
 const DEV_USER_ID: number | null = null;
@@ -1091,7 +1091,12 @@ function getAuthHeaders(headers?: HeadersInit) {
   const merged = new Headers(headers || {});
   const token = getStoredAccessToken();
 
-  if (token && !merged.has("Authorization")) {
+  // ✅ FORCE TOKEN PRESENCE CHECK
+  if (token) {
+    merged.set("Authorization", `Bearer ${token}`);
+  }
+
+  if (token) {
     merged.set("Authorization", `Bearer ${token}`);
   }
 
@@ -1137,13 +1142,17 @@ function getApiBaseUrl() {
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = getAuthHeaders(options?.headers);
 
+  const baseUrl = getApiBaseUrl();
+  const finalPath = withApiPrefix(path);
+
+  console.log("API CALL:", `${baseUrl}${finalPath}`, {
+    token: getStoredAccessToken(),
+  });
+
   if (!(options?.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
-  const baseUrl = getApiBaseUrl();
-
-  const finalPath = withApiPrefix(path);
 
   function withApiPrefix(path: string) {
     // auth routes should NOT be prefixed
@@ -2178,7 +2187,7 @@ export const api = {
     tradeId: number
   ): Promise<{ success: boolean }> => {
     return apiFetch<{ success: boolean }>(
-      withDevUser(`/workspaces/${workspaceId}/trades/${tradeId}`),
+      `/workspaces/${workspaceId}/trades/${tradeId}`,
       {
         method: "DELETE",
       }
