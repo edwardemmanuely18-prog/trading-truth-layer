@@ -2176,7 +2176,7 @@ export const api = {
     return apiFetch<Trade>(
       withDevUser(`/workspaces/${workspaceId}/trades/${tradeId}`),
       {
-        method: "PUT",
+        method: "PATCH",   // ✅ CORRECT
         body: JSON.stringify(payload),
       }
     );
