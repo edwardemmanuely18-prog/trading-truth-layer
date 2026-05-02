@@ -2750,3 +2750,17 @@ export function resolveVerificationExposureLevel(claim: any): VerificationExposu
 
   return "internal_only";
 }
+
+export async function downloadEvidenceZip(claimId: number) {
+  return apiDownload(
+    `/claim-schemas/${claimId}/evidence-bundle/download`,
+    `evidence_bundle_${claimId}.zip`
+  );
+}
+
+export async function downloadClaimReportPdf(claimId: number) {
+  return apiDownload(
+    `/claim-schemas/${claimId}/claim-report/download`,
+    `claim_report_${claimId}.pdf`
+  );
+}
