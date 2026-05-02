@@ -35,18 +35,16 @@ def get_workspace_trade_metrics(db: Session, workspace_id: int) -> dict:
     win_rate = (wins / total * 100) if total > 0 else 0
     utilization = (used / limit * 100) if limit > 0 else 0
 
+    used = getattr(workspace, "trades_consumed_count", 0) or 0
+
     return {
-    "used": used,  # 🔒 FIX: must be lifetime consumption
-
-    "consumed": used,  # optional alias (same thing)
-
-    "limit": limit,
-    "utilization": round(utilization, 2),
-
-    "ledger_count": total,  # 📊 real trades in DB
-
-    "win_rate": round(win_rate, 2),
-    "total_pnl": round(total_pnl, 2),
-    "wins": wins,
-    "losses": losses,
-}
+        "used": used,                 # ✅ billing enforcement
+        "consumed": used,             # optional alias
+        "ledger_count": total,        # ✅ real trades in DB
+        "limit": limit,
+        "utilization": round((used / limit * 100), 2) if limit > 0 else 0,
+        "win_rate": round(win_rate, 2),
+        "total_pnl": round(total_pnl, 2),
+        "wins": wins,
+        "losses": losses,
+    }
