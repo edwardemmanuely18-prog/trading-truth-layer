@@ -38,6 +38,8 @@ from app.models.workspace import Workspace
 from app.services.audit_service import log_audit_event
 from app.services.claim_service import compute_claim_hash
 from app.services.entitlements import enforce_claim_creation_allowed
+from app.services.evidence_pack_service import build_evidence_zip
+from app.services.report_service import build_claim_pdf
 
 router = APIRouter()
 
@@ -4251,4 +4253,40 @@ def publish_claim(
 
     db.commit()
 
-    return {"status": "published"}        
+    return {"status": "published"}    
+
+
+@router.get("/claim-schemas/{claim_id}/evidence-bundle/download")
+def download_evidence_zip(claim_id: int, db: Session = Depends(get_db)):
+    schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_id).first()
+
+    trades = db.query(Trade).filter(Trade.workspace_id == schema.workspace_id).all()
+    audit_events = db.query(AuditEvent).filter(AuditEvent.workspace_id == schema.workspace_id).all()
+
+    buffer = build_evidence_zip(schema, trades, audit_events)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename=claim_{claim_id}.zip"},
+    )
+
+
+@router.get("/claim-schemas/{claim_id}/report/download")
+def download_claim_pdf(claim_id: int, db: Session = Depends(get_db)):
+    schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_id).first()
+
+    trades = db.query(Trade).filter(Trade.workspace_id == schema.workspace_id).all()
+
+    metrics = {
+        "trade_count": len(trades),
+        "net_pnl": sum([t.net_pnl or 0 for t in trades]),
+    }
+
+    buffer = build_claim_pdf(schema, metrics)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=claim_{claim_id}.pdf"},
+    )            
