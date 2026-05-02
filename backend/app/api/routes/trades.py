@@ -396,8 +396,13 @@ def create_trade(
         db.refresh(trade)
         db.refresh(workspace)
     except Exception as e:
-        print("❌ DB ERROR:", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        traceback.print_exc()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Database error while creating trade"
+        )
 
     result = serialize_trade(trade)
     result["duplicate_skipped"] = False
