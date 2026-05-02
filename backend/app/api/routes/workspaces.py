@@ -245,8 +245,12 @@ def resolve_effective_plan_code(workspace: Workspace) -> str:
     configured_plan = normalize_plan_code(workspace.plan_code)
     billing_status = normalize_billing_status(workspace.billing_status)
 
-    if configured_plan in {"sandbox", "starter"}:
-        return configured_plan
+    # 🔒 HARD OVERRIDE
+    if configured_plan == "sandbox":
+        return "sandbox"
+
+    if configured_plan == "starter":
+        return "starter"
 
     if is_paid_billing_status(billing_status):
         return configured_plan
@@ -775,6 +779,11 @@ def get_workspace_usage(
     except Exception as e:
         import traceback
         traceback.print_exc()
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"USAGE_ENDPOINT_ERROR: {str(e)}"
+        )
 
         return {
             "workspace_id": workspace_id,

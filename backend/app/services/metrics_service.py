@@ -14,7 +14,7 @@ def get_workspace_trade_metrics(db: Session, workspace_id: int) -> dict:
     ).first()
 
     # ✅ USE TRUE CONSUMPTION (NOT CURRENT COUNT)
-    used = getattr(workspace, "trades_consumed_count", 0) or 0
+    used = total
 
     limit = workspace.trade_limit if workspace else 200
 
@@ -35,12 +35,13 @@ def get_workspace_trade_metrics(db: Session, workspace_id: int) -> dict:
     utilization = (used / limit * 100) if limit > 0 else 0
 
     return {
-        "used": used,                # ✅ FIXED
+        "used": total,
+        "consumed": getattr(workspace, "trades_consumed_count", 0),
         "limit": limit,
         "utilization": round(utilization, 2),
         "win_rate": round(win_rate, 2),
         "total_pnl": round(total_pnl, 2),
         "wins": wins,
         "losses": losses,
-        "ledger_count": total,       # ✅ ADD THIS (IMPORTANT)
+        "ledger_count": total,
     }
