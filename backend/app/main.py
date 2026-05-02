@@ -42,17 +42,18 @@ from app.core.security import hash_password
 # =========================
 app = FastAPI(title="Trading Truth Layer API")
 
-from fastapi.middleware.cors import CORSMiddleware
+# =========================
+# CORS (FINAL CLEAN VERSION)
+# =========================
 
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://trading-truth-layer.vercel.app",
-]
+origins = os.getenv(
+    "CORS_ALLOW_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000,https://trading-truth-layer.vercel.app"
+).split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,   # DO NOT use "*"
+    allow_origins=[origin.strip() for origin in origins],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,17 +62,6 @@ app.add_middleware(
 from app.api.routes import public
 
 app.include_router(public.router, prefix="/api")
-
-# =========================
-# CORS
-# =========================
-def parse_cors_origins():
-    raw = os.getenv(
-        "CORS_ALLOW_ORIGINS",
-        "http://localhost:3000,http://127.0.0.1:3000",
-    )
-    return [o.strip() for o in raw.split(",") if o.strip()]
-    
 
 # =========================
 # SAFE STARTUP (CRITICAL)
