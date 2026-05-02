@@ -671,3 +671,26 @@ def delete_trade(
     db.commit()
 
     return {"success": True}    
+
+
+@router.delete("/workspaces/{workspace_id}/trades/{trade_id}")
+def delete_trade(
+    workspace_id: int,
+    trade_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_workspace_operator_or_owner(workspace_id, current_user, db)
+
+    trade = db.query(Trade).filter(
+        Trade.workspace_id == workspace_id,
+        Trade.id == trade_id
+    ).first()
+
+    if not trade:
+        raise HTTPException(status_code=404, detail="Trade not found")
+
+    db.delete(trade)
+    db.commit()
+
+    return {"success": True}    

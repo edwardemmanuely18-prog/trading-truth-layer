@@ -670,6 +670,8 @@ def get_workspace_usage(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from app.models.workspace import Workspace
+
     try:
         workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
         if not workspace:
@@ -785,21 +787,6 @@ def get_workspace_usage(
             detail=f"USAGE_ENDPOINT_ERROR: {str(e)}"
         )
 
-        return {
-            "workspace_id": workspace_id,
-            "plan_code": "starter",
-            "billing_status": "inactive",
-            "effective_plan_code": "starter",
-            "usage": {
-                "members": {"used": 0, "limit": 3},
-                "trades": {"used": 0, "limit": 1000},
-                "claims": {"used": 0, "limit": 5},
-                "storage_mb": {"used": 0, "limit": 500},
-            },
-            "error": "fallback_usage_response"
-        }
-    effective_plan_definition = resolve_effective_plan_definition(workspace)
-    configured_plan_definition = get_plan_definition(workspace.plan_code)
 
     return {
         "workspace_id": workspace.id,
