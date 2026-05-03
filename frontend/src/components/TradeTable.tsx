@@ -73,11 +73,11 @@ export default function TradeTable({
                 <td className="px-4 py-3">{formatNumber(trade.quantity)}</td>
                 <td className="px-4 py-3">{formatNumber(trade.net_pnl)}</td>
                 <td className="px-4 py-3">{trade.currency || "—"}</td>
-                <td className="px-4 py-3">{trade.strategy_tag || "—"}</td>
+                <td className="px-4 py-3">{trade.tags?.join(", ") || "" || "—"}</td>
                 <td className="px-3 py-2">
-                  {trade.strategy_tag ? (
+                  {trade.tags?.join(", ") || "" ? (
                     <span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded-lg">
-                      {trade.strategy_tag}
+                      {trade.tags?.join(", ") || ""}
                     </span>
                   ) : "—"}
                 </td>

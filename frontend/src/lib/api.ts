@@ -98,6 +98,7 @@ export type Trade = {
   net_pnl?: number | null;
   currency: string;
   tags?: string[];
+  strategy_tag?: string | null;
   source_system?: string | null;
 };
 
