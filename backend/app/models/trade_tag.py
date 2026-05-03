@@ -8,3 +8,9 @@ class TradeTag(Base):
     id = Column(Integer, primary_key=True, index=True)
     workspace_id = Column(Integer, nullable=False, index=True)
     name = Column(String, nullable=False, index=True)
+
+    from sqlalchemy import UniqueConstraint
+
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "name", name="uq_workspace_tag"),
+    )

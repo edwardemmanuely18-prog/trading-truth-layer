@@ -387,6 +387,16 @@ export default function WorkspaceLedgerPage() {
         if (!active) return;
 
         setTrades(Array.isArray(tradesRes) ? tradesRes : []);
+        // ✅ BUILD TAG LIST FROM TRADES
+        const uniqueTags = new Set<string>();
+
+        (tradesRes || []).forEach((t: Trade) => {
+          (t.tags || []).forEach(tag => {
+            if (tag) uniqueTags.add(tag);
+          });
+        });
+
+        setTags(Array.from(uniqueTags).sort());
         setLatestAuditEvents(Array.isArray(latestAuditRes) ? latestAuditRes : []);
         setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
         setStrategyStats(Array.isArray(strategyRes) ? strategyRes : []);

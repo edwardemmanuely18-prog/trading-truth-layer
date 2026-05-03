@@ -302,7 +302,7 @@ def list_trades(
 
     if tag and tag != "All":
         query = query.join(TradeTagMap).join(TradeTag).filter(
-            TradeTag.name == tag.lower()
+            TradeTag.name == tag.strip().lower()
         )
 
     trades = (
