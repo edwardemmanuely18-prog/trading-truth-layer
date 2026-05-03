@@ -294,21 +294,15 @@ def list_trades(
 
     query = db.query(Trade).filter(Trade.workspace_id == workspace_id)
 
-    # 🔥 SYMBOL FILTER
-    if symbol:
-        query = query.filter(Trade.symbol.ilike(symbol.upper()))
+    if symbol and symbol != "All":
+        query = query.filter(Trade.symbol == symbol)
 
-    # 🔥 SIDE FILTER
-    if side:
-        query = query.filter(Trade.side == side.upper())
+    if side and side != "All":
+        query = query.filter(Trade.side == side)
 
-    # 🔥 TAG FILTER (JOIN)
-    if tag:
-        query = (
-            query.join(TradeTagMap, Trade.id == TradeTagMap.trade_id)
-            .join(TradeTag, TradeTag.id == TradeTagMap.tag_id)
-            .filter(TradeTag.name == tag.lower())
-            .distinct()
+    if tag and tag != "All":
+        query = query.join(TradeTagMap).join(TradeTag).filter(
+            TradeTag.name == tag.lower()
         )
 
     trades = (

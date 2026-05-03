@@ -131,17 +131,6 @@ export default function WorkspaceLedgerPage() {
   const [selectedTag, setSelectedTag] = useState("");
   const tradeUsage = usage?.usage?.trades;
 
-  const displayTrades = useMemo(() => {
-    if (!search) return trades;
-
-    const s = search.toLowerCase();
-
-    return trades.filter(t =>
-      String(t.member_id).includes(s) ||
-      (t.symbol || "").toLowerCase().includes(s)
-    );
-  }, [trades, search]);
-
   const [usageLoading, setUsageLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [strategyStats, setStrategyStats] = useState<any[]>([]);
@@ -345,6 +334,19 @@ export default function WorkspaceLedgerPage() {
       setDeletingTradeId(null);
     }
   }
+
+  const displayTrades = useMemo(() => {
+    if (!Array.isArray(trades)) return [];
+
+    if (!search) return trades;
+
+    const s = search.toLowerCase();
+
+    return trades.filter((t) =>
+      String(t.member_id).includes(s) ||
+      t.symbol?.toLowerCase().includes(s)
+    );
+  }, [trades, search]);
 
   useEffect(() => {
     if (!workspaceId || !workspaceMembership) {
