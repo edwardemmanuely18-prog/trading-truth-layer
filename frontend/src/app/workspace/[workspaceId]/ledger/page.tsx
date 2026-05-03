@@ -656,9 +656,13 @@ export default function WorkspaceLedgerPage() {
                   <div className="flex gap-6 text-sm">
                     <span>{s.trade_count} trades</span>
                     <span className={s.net_pnl >= 0 ? "text-green-600" : "text-red-600"}>
-                      {s.net_pnl.toFixed(2)}
+                      {typeof s.net_pnl === "number"
+                        ? s.net_pnl.toFixed(2)
+                        : "0.00"}
                     </span>
-                    <span>{(s.win_rate * 100).toFixed(1)}%</span>
+                    <span>{typeof s.win_rate === "number"
+                            ? (s.win_rate * 100).toFixed(1)
+                            : "0.0"}%</span>
                   </div>
                 </div>
               ))}
