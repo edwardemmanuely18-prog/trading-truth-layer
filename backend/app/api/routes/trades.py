@@ -294,7 +294,7 @@ def list_trades(
 
     # 🔥 SYMBOL FILTER
     if symbol:
-        query = query.filter(Trade.symbol == symbol.upper())
+        query = query.filter(Trade.symbol.ilike(symbol.upper()))
 
     # 🔥 SIDE FILTER
     if side:
@@ -306,13 +306,14 @@ def list_trades(
             query.join(TradeTagMap, Trade.id == TradeTagMap.trade_id)
             .join(TradeTag, TradeTag.id == TradeTagMap.tag_id)
             .filter(TradeTag.name == tag.lower())
+            .distinct()
         )
 
     trades = query.order_by(Trade.id.asc()).all()
 
     trade_ids = [t.id for t in trades]
 
-    tag_map = {}
+    tag_map: dict[int, list[str]] = {}
 
     if trade_ids:
         rows = (
@@ -711,3 +712,65 @@ async def import_trades_csv(
             "errors": [str(e)],
         }
 
+
+@router.get("/workspaces/{workspace_id}/strategy-performance")
+def strategy_performance(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_workspace_member(workspace_id, current_user, db)
+
+    trades = db.query(Trade).filter(
+        Trade.workspace_id == workspace_id
+    ).all()
+
+    if not trades:
+        return []
+
+    # 🔥 GROUP BY TAG
+    performance = {}
+
+    rows = (
+        db.query(TradeTagMap.trade_id, TradeTag.name)
+        .join(TradeTag, TradeTag.id == TradeTagMap.tag_id)
+        .all()
+    )
+
+    tag_map = {}
+    for trade_id, name in rows:
+        tag_map.setdefault(trade_id, []).append(name)
+
+    for trade in trades:
+        tags = tag_map.get(trade.id, ["unclassified"])
+
+        for tag in tags:
+            bucket = performance.setdefault(tag, {
+                "wins": 0,
+                "losses": 0,
+                "pnl": 0.0
+            })
+
+            pnl = trade.net_pnl or 0
+
+            if pnl >= 0:
+                bucket["wins"] += 1
+            else:
+                bucket["losses"] += 1
+
+            bucket["pnl"] += pnl
+
+    result = []
+
+    for tag, data in performance.items():
+        total = data["wins"] + data["losses"]
+        winrate = (data["wins"] / total * 100) if total else 0
+
+        result.append({
+            "tag": tag,
+            "winrate": round(winrate, 2),
+            "pnl": round(data["pnl"], 2),
+            "trades": total
+        })
+
+    return result
