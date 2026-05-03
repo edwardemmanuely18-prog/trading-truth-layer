@@ -121,6 +121,7 @@ export default function WorkspaceLedgerPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 50;
+  const [selectedStrategy, setSelectedStrategy] = useState<string>("")
 
   // 🔥 Ledger filters
   const [search, setSearch] = useState("");
@@ -169,7 +170,10 @@ export default function WorkspaceLedgerPage() {
       api.getLatestAuditEvents(20),
       api.getAuditEventsForWorkspace(resolvedWorkspaceId, 50),
       api.getWorkspaceUsage(resolvedWorkspaceId),
-      api.getStrategyPerformance(resolvedWorkspaceId),
+      api.getStrategyPerformance(
+        resolvedWorkspaceId,
+        selectedStrategy || undefined
+      ),
     ]);
 
     setStrategyStats(Array.isArray(strategyRes) ? strategyRes : []);
@@ -381,7 +385,10 @@ export default function WorkspaceLedgerPage() {
           api.getLatestAuditEvents(20),
           api.getAuditEventsForWorkspace(resolvedWorkspaceId, 50),
           api.getWorkspaceUsage(resolvedWorkspaceId), // ✅ ADD THIS
-          api.getStrategyPerformance(resolvedWorkspaceId),
+          api.getStrategyPerformance(
+            resolvedWorkspaceId,
+            selectedStrategy || undefined
+          ),
         ]);
 
         if (!active) return;
@@ -419,7 +426,15 @@ export default function WorkspaceLedgerPage() {
       active = false;
     };
 
-  }, [workspaceId, workspaceMembership, selectedTag, symbolFilter, sideFilter, page]);
+  }, [
+    workspaceId,
+    workspaceMembership,
+    selectedTag,
+    selectedStrategy,
+    symbolFilter,
+    sideFilter,
+    page
+  ]);
 
   if (!workspaceId) {
     return <div className="p-6 text-red-600">Invalid workspace id.</div>;
@@ -710,22 +725,24 @@ export default function WorkspaceLedgerPage() {
             </select>
 
             <select
-              value={selectedTag}
-              onChange={(e) => setSelectedTag(e.target.value)}
+              value={selectedStrategy}
+              onChange={(e) => {
+                const value = e.target.value
+
+                setSelectedStrategy(value)
+                setSelectedTag(value) // 🔥 keeps both in sync
+              }}
               className="rounded-xl border px-3 py-2 text-sm"
             >
               <option value="">All Tags</option>
-              {[
-                ...new Set(
-                  trades
-                    .flatMap(t => t.tags || [])
-                    .filter((tag: string) => tag.length > 0)
-                )
-              ].map((tag) => (
+
+              {tags.map((tag) => (
                 <option key={tag} value={tag}>
                   {tag}
                 </option>
               ))}
+
+              <option value="unclassified">Unclassified</option>
             </select>
 
             <button
@@ -733,7 +750,8 @@ export default function WorkspaceLedgerPage() {
                 setSearch("");
                 setSymbolFilter("");
                 setSideFilter("");
-                setSelectedTag(""); 
+                setSelectedTag("");
+                setSelectedStrategy("");
               }}
               className="rounded-xl border px-3 py-2 text-sm"
             >

@@ -22,6 +22,7 @@ from app.services.entitlements import enforce_claim_creation_allowed
 from app.models.trade_tag import TradeTag
 from app.models.trade_tag_map import TradeTagMap
 from typing import Optional
+from fastapi import Query
 
 
 router = APIRouter()
@@ -284,6 +285,7 @@ def serialize_trade(trade: Trade, tags: list[str]):
 def list_trades(
     workspace_id: int,
     tag: Optional[str] = None,
+    strategy: Optional[str] = None,
     symbol: Optional[str] = None,
     side: Optional[str] = None,
     limit: int = 50,
@@ -305,6 +307,15 @@ def list_trades(
         query = query.join(TradeTagMap).join(TradeTag).filter(
             TradeTag.name == tag.strip().lower()
         )
+
+    # ✅ STRATEGY FILTER (NEW)
+    if strategy and strategy != "All":
+        if strategy == "unclassified":
+            query = query.filter(
+                (Trade.strategy_tag == None) | (Trade.strategy_tag == "")
+            )
+        else:
+            query = query.filter(Trade.strategy_tag == strategy)
 
     trades = (
         query
@@ -738,13 +749,15 @@ def debug_trades(
 @router.get("/workspaces/{workspace_id}/strategy-performance")
 def strategy_performance(
     workspace_id: int,
+     strategy: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     require_workspace_member(workspace_id, current_user, db)
 
-    data = get_strategy_performance(db, workspace_id)
+    data = get_strategy_performance(db, workspace_id, strategy)
 
     print("✅ STRATEGY API:", data)
 
     return data    
+

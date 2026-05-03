@@ -1144,10 +1144,22 @@ function getApiBaseUrl() {
   );
 }
 
-export async function getStrategyPerformance(workspaceId: number) {
-  return apiFetch(`/workspaces/${workspaceId}/strategy-performance`, {
-    cache: "no-store",
-  });
+export const getStrategyPerformance = async (
+  workspaceId: number,
+  strategy?: string
+) => {
+  const params = new URLSearchParams()
+
+  if (strategy) params.append("strategy", strategy)
+
+  return apiFetch<any>(
+    withDevUser(
+      `/workspaces/${workspaceId}/strategy-performance${
+        params.toString() ? `?${params.toString()}` : ""
+      }`
+    ),
+    { cache: "no-store" }
+  )
 }
 
 function withApiPrefix(path: string) {

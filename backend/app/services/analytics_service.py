@@ -6,20 +6,26 @@ from app.models.trade_tag import TradeTag
 from app.models.trade_tag_map import TradeTagMap
 
 
-def get_strategy_performance(db: Session, workspace_id: int):
+def get_strategy_performance(
+    db: Session,
+    workspace_id: int,
+    strategy: str | None = None
+):
     """
     Institutional-grade strategy analytics (RELATIONAL TAG SYSTEM)
 
-    Fixes:
-    - Uses TradeTag + TradeTagMap (NOT string column)
+    - Fully normalized (TradeTag + TradeTagMap)
     - Supports multiple strategies per trade
-    - Correct avg_win / avg_loss
+    - Correct win/loss separation
     - Accurate expectancy
     """
 
-    rows = (
+    # -------------------------
+    # BASE QUERY (RELATIONAL)
+    # -------------------------
+    query = (
         db.query(
-            TradeTag.name.label("tag"),
+            func.coalesce(TradeTag.name, "unclassified").label("tag"),
 
             # core metrics
             func.count(Trade.id).label("trade_count"),
@@ -32,21 +38,31 @@ def get_strategy_performance(db: Session, workspace_id: int):
 
             # pnl split
             func.coalesce(
-                func.sum(case((Trade.net_pnl > 0, Trade.net_pnl), else_=0)),
-                0
+                func.sum(case((Trade.net_pnl > 0, Trade.net_pnl), else_=0)), 0
             ).label("win_pnl"),
 
             func.coalesce(
-                func.sum(case((Trade.net_pnl < 0, Trade.net_pnl), else_=0)),
-                0
+                func.sum(case((Trade.net_pnl < 0, Trade.net_pnl), else_=0)), 0
             ).label("loss_pnl"),
         )
-        .join(TradeTagMap, TradeTag.id == TradeTagMap.tag_id)
-        .join(Trade, Trade.id == TradeTagMap.trade_id)
+        .outerjoin(TradeTagMap, Trade.id == TradeTagMap.trade_id)
+        .outerjoin(TradeTag, TradeTag.id == TradeTagMap.tag_id)
         .filter(Trade.workspace_id == workspace_id)
-        .group_by(TradeTag.name)
-        .all()
     )
+
+    # -------------------------
+    # STRATEGY FILTER
+    # -------------------------
+    if strategy and strategy != "All":
+        if strategy == "unclassified":
+            query = query.filter(TradeTag.id.is_(None))
+        else:
+            query = query.filter(TradeTag.name == strategy)
+
+    # -------------------------
+    # EXECUTE
+    # -------------------------
+    rows = query.group_by(TradeTag.name).all()
 
     result = []
 
@@ -66,14 +82,14 @@ def get_strategy_performance(db: Session, workspace_id: int):
         avg_win = (win_pnl / wins) if wins > 0 else 0.0
         avg_loss = (loss_pnl / losses) if losses > 0 else 0.0  # negative
 
-        # expectancy
+        # expectancy (trading-grade formula)
         expectancy = (
             (win_rate * avg_win) - ((1 - win_rate) * abs(avg_loss))
             if total > 0 else 0.0
         )
 
         result.append({
-            "tag": r.tag,
+            "tag": r.tag or "unclassified",
             "trade_count": total,
             "net_pnl": net_pnl,
             "avg_pnl": float(r.avg_pnl or 0),
