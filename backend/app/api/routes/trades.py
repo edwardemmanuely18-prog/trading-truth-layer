@@ -58,6 +58,7 @@ class TradeUpdate(BaseModel):
     net_pnl: float | None = None
     strategy_tag: str | None = None
     source_system: str | None = None
+    tags: list[str] = []   
 
 
 def require_workspace_operator_or_owner(workspace_id: int, current_user: User, db: Session):
@@ -555,30 +556,29 @@ def update_trade(
     trade.trade_fingerprint = new_fingerprint
 
     # ✅ HANDLE TAGS UPDATE
-    incoming_tags = getattr(payload, "tags", None)
+    incoming_tags = payload.tags or []
 
-    if incoming_tags is not None:
-        # remove old mappings
-        db.query(TradeTagMap).filter(
-            TradeTagMap.trade_id == trade.id
-        ).delete()
+    # 🔥 ALWAYS RESET TAGS (IMPORTANT)
+    db.query(TradeTagMap).filter(
+        TradeTagMap.trade_id == trade.id
+    ).delete()
 
-        for tag_name in incoming_tags:
-            clean = tag_name.strip().lower()
-            if not clean:
-                continue
+    for tag_name in incoming_tags:
+        clean = tag_name.strip().lower()
+        if not clean:
+            continue
 
-            tag = db.query(TradeTag).filter_by(
-                workspace_id=workspace_id,
-                name=clean
-            ).first()
+        tag = db.query(TradeTag).filter_by(
+            workspace_id=workspace_id,
+            name=clean
+        ).first()
 
-            if not tag:
-                tag = TradeTag(workspace_id=workspace_id, name=clean)
-                db.add(tag)
-                db.flush()
+        if not tag:
+            tag = TradeTag(workspace_id=workspace_id, name=clean)
+            db.add(tag)
+            db.flush()
 
-            db.add(TradeTagMap(trade_id=trade.id, tag_id=tag.id))
+        db.add(TradeTagMap(trade_id=trade.id, tag_id=tag.id))
 
     db.commit()
     db.refresh(trade)
