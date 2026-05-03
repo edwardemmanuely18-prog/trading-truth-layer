@@ -354,15 +354,15 @@ export default function WorkspaceLedgerPage() {
         setLoading(true);
         setError(null);
 
-        const tradesRes = await api.getTrades(resolvedWorkspaceId, {
-          tag: selectedTag || undefined,
-          symbol: symbolFilter || undefined,
-          side: sideFilter || undefined,
-        });
-
-        const [latestAuditRes, workspaceAuditRes] = await Promise.all([
+        const [tradesRes, latestAuditRes, workspaceAuditRes, strategyRes] = await Promise.all([
+          api.getTrades(resolvedWorkspaceId, {
+            tag: selectedTag || undefined,
+            symbol: symbolFilter || undefined,
+            side: sideFilter || undefined,
+          }),
           api.getLatestAuditEvents(20),
           api.getAuditEventsForWorkspace(resolvedWorkspaceId, 50),
+          api.getStrategyPerformance(resolvedWorkspaceId),
         ]);
 
         if (!active) return;
@@ -370,6 +370,7 @@ export default function WorkspaceLedgerPage() {
         setTrades(Array.isArray(tradesRes) ? tradesRes : []);
         setLatestAuditEvents(Array.isArray(latestAuditRes) ? latestAuditRes : []);
         setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
+        setStrategyStats(Array.isArray(strategyRes) ? strategyRes : []);
 
       } catch (err) {
         if (!active) return;

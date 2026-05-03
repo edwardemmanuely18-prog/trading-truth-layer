@@ -734,6 +734,8 @@ def strategy_performance(
     rows = (
         db.query(TradeTagMap.trade_id, TradeTag.name)
         .join(TradeTag, TradeTag.id == TradeTagMap.tag_id)
+        .join(Trade, Trade.id == TradeTagMap.trade_id)
+        .filter(Trade.workspace_id == workspace_id)
         .all()
     )
 
