@@ -119,6 +119,27 @@ export default function WorkspaceLedgerPage() {
   const [workspaceAuditEvents, setWorkspaceAuditEvents] = useState<AuditEvent[]>([]);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // 🔥 Ledger filters
+  const [search, setSearch] = useState("");
+  const [symbolFilter, setSymbolFilter] = useState("");
+  const [sideFilter, setSideFilter] = useState("");
+  // 🔥 NEW — Tag system
+  const [tags, setTags] = useState<string[]>([]);
+  const [selectedTag, setSelectedTag] = useState("");
+  const tradeUsage = usage?.usage?.trades;
+
+  const displayTrades = useMemo(() => {
+    if (!search) return trades;
+
+    const s = search.toLowerCase();
+
+    return trades.filter(t =>
+      String(t.member_id).includes(s) ||
+      (t.symbol || "").toLowerCase().includes(s)
+    );
+  }, [trades, search]);
+
   const [usageLoading, setUsageLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [strategyStats, setStrategyStats] = useState<any[]>([]);
@@ -136,14 +157,6 @@ export default function WorkspaceLedgerPage() {
   const [editTradeSuccess, setEditTradeSuccess] = useState<string | null>(null);
 
   const [deletingTradeId, setDeletingTradeId] = useState<number | null>(null);
-  // 🔥 Ledger filters
-  const [search, setSearch] = useState("");
-  const [symbolFilter, setSymbolFilter] = useState("");
-  const [sideFilter, setSideFilter] = useState("");
-  // 🔥 NEW — Tag system
-  const [tags, setTags] = useState<string[]>([]);
-  const [selectedTag, setSelectedTag] = useState("");
-  const tradeUsage = usage?.usage?.trades;
 
   const tradeUsed = tradeUsage?.used ?? 0;        // consumed (billing)
   const tradeLimit = tradeUsage?.limit ?? 0;
@@ -329,7 +342,9 @@ export default function WorkspaceLedgerPage() {
   }
 
   useEffect(() => {
-    if (!workspaceId || !workspaceMembership) return;
+    if (!workspaceId || !workspaceMembership) {
+      return;
+    }
 
     let active = true;
     const resolvedWorkspaceId = workspaceId;
@@ -439,17 +454,6 @@ export default function WorkspaceLedgerPage() {
       </div>
     );
   }
-
-  const displayTrades = useMemo(() => {
-    if (!search) return trades;
-
-    const s = search.toLowerCase();
-
-    return trades.filter(t =>
-      String(t.member_id).includes(s) ||
-      (t.symbol || "").toLowerCase().includes(s)
-    );
-  }, [trades, search]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
