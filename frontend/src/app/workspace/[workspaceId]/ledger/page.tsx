@@ -139,6 +139,9 @@ export default function WorkspaceLedgerPage() {
   const [search, setSearch] = useState("");
   const [symbolFilter, setSymbolFilter] = useState("");
   const [sideFilter, setSideFilter] = useState("");
+  // 🔥 NEW — Tag system
+  const [tags, setTags] = useState<string[]>([]);
+  const [selectedTag, setSelectedTag] = useState("");
   const tradeUsage = usage?.usage?.trades;
 
   const tradeUsed = tradeUsage?.used ?? 0;        // consumed (billing)
@@ -147,19 +150,23 @@ export default function WorkspaceLedgerPage() {
   // 🔥 Filtered trades
   const filteredTrades = useMemo(() => {
     return trades.filter((t) => {
-      const matchesSearch =
-        search === "" ||
-        t.symbol?.toLowerCase().includes(search.toLowerCase()) ||
-        String(t.member_id).includes(search);
+    const matchesSearch =
+      search === "" ||
+      t.symbol?.toLowerCase().includes(search.toLowerCase()) ||
+      String(t.member_id).includes(search);
 
-      const matchesSymbol =
-        symbolFilter === "" || t.symbol === symbolFilter;
+    const matchesSymbol =
+      symbolFilter === "" || t.symbol === symbolFilter;
 
-      const matchesSide =
-        sideFilter === "" || t.side === sideFilter;
+    const matchesSide =
+      sideFilter === "" || t.side === sideFilter;
 
-      return matchesSearch && matchesSymbol && matchesSide;
-    });
+    const matchesTag =
+      selectedTag === "" ||
+      t.strategy_tag === selectedTag;
+
+    return matchesSearch && matchesSymbol && matchesSide && matchesTag;
+  });
   }, [trades, search, symbolFilter, sideFilter]);
   const tradeLimitReached =
     (tradeUsage?.limit ?? 0) > 0 && (tradeUsage?.used ?? 0) >= (tradeUsage?.limit ?? 0);
@@ -596,6 +603,38 @@ export default function WorkspaceLedgerPage() {
           </div>
         </div>
 
+        {/* 🔥 Strategy Performance */}
+        <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
+          <h2 className="text-xl font-semibold mb-4">Strategy Performance</h2>
+
+          {(() => {
+            const grouped: Record<string, any[]> = {};
+
+            trades.forEach((t) => {
+              const key = t.strategy_tag || "unclassified";
+              if (!grouped[key]) grouped[key] = [];
+              grouped[key].push(t);
+            });
+
+            return Object.entries(grouped).map(([strategy, trades]) => {
+              const total = trades.length;
+              const wins = trades.filter(t => (t.net_pnl || 0) > 0).length;
+              const pnl = trades.reduce((sum, t) => sum + (t.net_pnl || 0), 0);
+
+              const winRate = total ? ((wins / total) * 100).toFixed(1) : "0";
+
+              return (
+                <div key={strategy} className="flex justify-between border-b py-2 text-sm">
+                  <span className="font-medium">{strategy}</span>
+                  <span>
+                    {winRate}% WR • ${pnl.toFixed(2)}
+                  </span>
+                </div>
+              );
+            });
+          })()}
+        </div>
+
         <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
 
         {/* 🔥 Ledger Controls */}
@@ -627,11 +666,31 @@ export default function WorkspaceLedgerPage() {
               <option value="SELL">SELL</option>
             </select>
 
+            <select
+              value={selectedTag}
+              onChange={(e) => setSelectedTag(e.target.value)}
+              className="rounded-xl border px-3 py-2 text-sm"
+            >
+              <option value="">All Tags</option>
+              {[
+                ...new Set(
+                  trades
+                    .map(t => t.strategy_tag)
+                    .filter((tag): tag is string => typeof tag === "string" && tag.length > 0)
+                )
+              ].map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
+              ))}
+            </select>
+
             <button
               onClick={() => {
                 setSearch("");
                 setSymbolFilter("");
                 setSideFilter("");
+                setSelectedTag(""); 
               }}
               className="rounded-xl border px-3 py-2 text-sm"
             >
