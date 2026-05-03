@@ -447,13 +447,16 @@ def create_trade(
             detail="Database error while creating trade"
         )
 
+    # ✅ SAVE TAG MAPPINGS BEFORE RETURN
+    for tag_id in tag_ids:
+        db.add(TradeTagMap(trade_id=trade.id, tag_id=tag_id))
+
+    db.commit()
+
     result = serialize_trade(trade, tags)
     result["duplicate_skipped"] = False
     result["trades_consumed_count"] = workspace.trades_consumed_count
     return result
-
-    for tag_id in tag_ids:
-      db.add(TradeTagMap(trade_id=trade.id, tag_id=tag_id))
 
 
 @router.patch("/workspaces/{workspace_id}/trades/{trade_id}")
@@ -551,10 +554,43 @@ def update_trade(
     trade.source_system = normalized_source_system
     trade.trade_fingerprint = new_fingerprint
 
+    # ✅ HANDLE TAGS UPDATE
+    incoming_tags = getattr(payload, "tags", None)
+
+    if incoming_tags is not None:
+        # remove old mappings
+        db.query(TradeTagMap).filter(
+            TradeTagMap.trade_id == trade.id
+        ).delete()
+
+        for tag_name in incoming_tags:
+            clean = tag_name.strip().lower()
+            if not clean:
+                continue
+
+            tag = db.query(TradeTag).filter_by(
+                workspace_id=workspace_id,
+                name=clean
+            ).first()
+
+            if not tag:
+                tag = TradeTag(workspace_id=workspace_id, name=clean)
+                db.add(tag)
+                db.flush()
+
+            db.add(TradeTagMap(trade_id=trade.id, tag_id=tag.id))
+
     db.commit()
     db.refresh(trade)
 
-    result = serialize_trade(trade)
+    tags = [
+        t.name for t in db.query(TradeTag)
+        .join(TradeTagMap, TradeTag.id == TradeTagMap.tag_id)
+        .filter(TradeTagMap.trade_id == trade.id)
+        .all()
+    ]
+
+    result = serialize_trade(trade, tags)
     result["duplicate_skipped"] = False
     return result
 

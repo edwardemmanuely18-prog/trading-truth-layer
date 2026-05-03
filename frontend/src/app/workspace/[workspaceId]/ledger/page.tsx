@@ -167,7 +167,7 @@ export default function WorkspaceLedgerPage() {
 
     return matchesSearch && matchesSymbol && matchesSide && matchesTag;
   });
-  }, [trades, search, symbolFilter, sideFilter]);
+  }, [trades, search, symbolFilter, sideFilter, selectedTag]);
   const tradeLimitReached =
     (tradeUsage?.limit ?? 0) > 0 && (tradeUsage?.used ?? 0) >= (tradeUsage?.limit ?? 0);
 
@@ -211,7 +211,9 @@ export default function WorkspaceLedgerPage() {
       quantity: Number(form.quantity),
       currency: form.currency.trim().toUpperCase(),
       net_pnl: form.net_pnl.trim() === "" ? null : Number(form.net_pnl),
-      strategy_tag: form.strategy_tag.trim() || null,
+      tags: form.strategy_tag
+        ? form.strategy_tag.split(",").map(t => t.trim()).filter(Boolean)
+        : [],
       source_system: form.source_system.trim() || "MANUAL",
     };
 
