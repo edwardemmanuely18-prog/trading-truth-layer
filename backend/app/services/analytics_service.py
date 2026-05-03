@@ -2,21 +2,24 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, case
 
 from app.models.trade import Trade
+from app.models.trade_tag import TradeTag
+from app.models.trade_tag_map import TradeTagMap
 
 
 def get_strategy_performance(db: Session, workspace_id: int):
     """
-    Institutional-grade strategy analytics.
+    Institutional-grade strategy analytics (RELATIONAL TAG SYSTEM)
 
     Fixes:
-    - Correct avg_win / avg_loss (separates win/loss pnl)
-    - Accurate expectancy calculation
-    - Safe null + zero handling
+    - Uses TradeTag + TradeTagMap (NOT string column)
+    - Supports multiple strategies per trade
+    - Correct avg_win / avg_loss
+    - Accurate expectancy
     """
 
     rows = (
         db.query(
-            func.coalesce(Trade.strategy_tag, "unclassified").label("tag"),
+            TradeTag.name.label("tag"),
 
             # core metrics
             func.count(Trade.id).label("trade_count"),
@@ -27,7 +30,7 @@ def get_strategy_performance(db: Session, workspace_id: int):
             func.sum(case((Trade.net_pnl > 0, 1), else_=0)).label("wins"),
             func.sum(case((Trade.net_pnl <= 0, 1), else_=0)).label("losses"),
 
-            # 🔥 CRITICAL: separate pnl streams
+            # pnl split
             func.coalesce(
                 func.sum(case((Trade.net_pnl > 0, Trade.net_pnl), else_=0)),
                 0
@@ -38,8 +41,10 @@ def get_strategy_performance(db: Session, workspace_id: int):
                 0
             ).label("loss_pnl"),
         )
+        .join(TradeTagMap, TradeTag.id == TradeTagMap.tag_id)
+        .join(Trade, Trade.id == TradeTagMap.trade_id)
         .filter(Trade.workspace_id == workspace_id)
-        .group_by(Trade.strategy_tag)
+        .group_by(TradeTag.name)
         .all()
     )
 
@@ -54,21 +59,21 @@ def get_strategy_performance(db: Session, workspace_id: int):
         win_pnl = float(r.win_pnl or 0)
         loss_pnl = float(r.loss_pnl or 0)
 
-        # --- core ratios ---
+        # ratios
         win_rate = (wins / total) if total > 0 else 0.0
 
-        # --- CORRECT averages ---
+        # correct averages
         avg_win = (win_pnl / wins) if wins > 0 else 0.0
-        avg_loss = (loss_pnl / losses) if losses > 0 else 0.0  # negative value
+        avg_loss = (loss_pnl / losses) if losses > 0 else 0.0  # negative
 
-        # --- EXPECTANCY (proper trading formula) ---
+        # expectancy
         expectancy = (
             (win_rate * avg_win) - ((1 - win_rate) * abs(avg_loss))
             if total > 0 else 0.0
         )
 
         result.append({
-            "tag": r.tag or "unclassified",
+            "tag": r.tag,
             "trade_count": total,
             "net_pnl": net_pnl,
             "avg_pnl": float(r.avg_pnl or 0),
@@ -81,8 +86,6 @@ def get_strategy_performance(db: Session, workspace_id: int):
             "expectancy": float(expectancy),
         })
 
-    # Debug logs (safe to keep during dev)
-    print("STRATEGY RAW ROWS:", rows)
-    print("STRATEGY FINAL:", result)
+    print("STRATEGY RELATIONAL FINAL:", result)
 
     return result
