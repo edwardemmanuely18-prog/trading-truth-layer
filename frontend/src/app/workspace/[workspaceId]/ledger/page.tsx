@@ -90,7 +90,7 @@ function tradeToFormState(trade: Trade): TradeFormState {
     quantity: trade.quantity === null || trade.quantity === undefined ? "" : String(trade.quantity),
     currency: trade.currency ?? "USD",
     net_pnl: trade.net_pnl === null || trade.net_pnl === undefined ? "" : String(trade.net_pnl),
-    strategy_tag: trade.strategy_tag ?? "",
+    strategy_tag: trade.tags?.join(", ") || "",
     source_system: trade.source_system ?? "MANUAL",
   };
 }
@@ -163,7 +163,7 @@ export default function WorkspaceLedgerPage() {
 
     const matchesTag =
       selectedTag === "" ||
-      t.strategy_tag === selectedTag;
+      t.tags?.includes(selectedTag)
 
     return matchesSearch && matchesSymbol && matchesSide && matchesTag;
   });
@@ -611,7 +611,10 @@ export default function WorkspaceLedgerPage() {
             const grouped: Record<string, any[]> = {};
 
             trades.forEach((t) => {
-              const key = t.strategy_tag || "unclassified";
+              const key =
+                selectedTag && t.tags?.includes(selectedTag)
+                  ? selectedTag
+                  : t.tags?.[0] || "unclassified";
               if (!grouped[key]) grouped[key] = [];
               grouped[key].push(t);
             });
@@ -675,8 +678,8 @@ export default function WorkspaceLedgerPage() {
               {[
                 ...new Set(
                   trades
-                    .map(t => t.strategy_tag)
-                    .filter((tag): tag is string => typeof tag === "string" && tag.length > 0)
+                    .flatMap(t => t.tags || [])
+                    .filter((tag: string) => tag.length > 0)
                 )
               ].map((tag) => (
                 <option key={tag} value={tag}>

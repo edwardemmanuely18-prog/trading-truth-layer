@@ -18,6 +18,8 @@ from app.models.workspace_membership import WorkspaceMembership
 from app.services.entitlements import enforce_trade_import_allowed
 from app.services.ingestion_service import import_csv_trades
 from app.services.entitlements import enforce_claim_creation_allowed
+from app.models.trade_tag import TradeTag
+from app.models.trade_tag_map import TradeTagMap
 from typing import Optional
 
 
@@ -270,7 +272,11 @@ def serialize_trade(trade: Trade):
         "quantity": trade.quantity,
         "net_pnl": trade.net_pnl,
         "currency": trade.currency,
-        "strategy_tag": trade.strategy_tag,
+        "tags": [
+            t.name for t in db.query(TradeTag)
+            .join(TradeTagMap, TradeTag.id == TradeTagMap.tag_id)
+            .filter(TradeTagMap.trade_id == trade.id)
+        ],
         "source_system": trade.source_system,
     }
 
@@ -365,6 +371,26 @@ def create_trade(
         result = serialize_trade(existing)
         result["duplicate_skipped"] = True
         return result
+    
+    tags = payload.tags or []
+    tag_ids = []
+
+    for tag_name in tags:
+        clean = tag_name.strip().lower()
+        if not clean:
+            continue
+
+        tag = db.query(TradeTag).filter_by(
+            workspace_id=workspace_id,
+            name=clean
+        ).first()
+
+        if not tag:
+            tag = TradeTag(workspace_id=workspace_id, name=clean)
+            db.add(tag)
+            db.flush()  # ⚠️ REQUIRED
+
+        tag_ids.append(tag.id)
 
     trade = Trade(
         workspace_id=workspace_id,
@@ -378,7 +404,6 @@ def create_trade(
         quantity=payload.quantity,
         net_pnl=computed_net_pnl,
         currency=normalized_currency,
-        strategy_tag=normalized_strategy_tag,
         source_system=normalized_source_system,
         trade_fingerprint=fingerprint,
     )
@@ -395,6 +420,13 @@ def create_trade(
         db.commit()
         db.refresh(trade)
         db.refresh(workspace)
+
+        # ✅ ADD TAG MAPPING HERE (INSIDE try)
+        for tag_id in tag_ids:
+            db.add(TradeTagMap(trade_id=trade.id, tag_id=tag_id))
+
+        db.commit()
+
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -408,6 +440,9 @@ def create_trade(
     result["duplicate_skipped"] = False
     result["trades_consumed_count"] = workspace.trades_consumed_count
     return result
+
+    for tag_id in tag_ids:
+      db.add(TradeTagMap(trade_id=trade.id, tag_id=tag_id))
 
 
 @router.patch("/workspaces/{workspace_id}/trades/{trade_id}")
