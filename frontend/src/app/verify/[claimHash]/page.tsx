@@ -388,7 +388,7 @@ function PublicTradeEvidenceTable({
                       </div>
                     </td>
                   ) : null}
-                  <td className="px-3 py-2">{row.strategy_tag || "—"}</td>
+                  <td className="px-3 py-2">{row.tags?.join(", ") || "-"}</td>
                   <td className="px-3 py-2">{row.source_system || "—"}</td>
                 </tr>
               ))}
