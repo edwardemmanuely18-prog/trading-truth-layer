@@ -1144,6 +1144,10 @@ function getApiBaseUrl() {
   );
 }
 
+async function getStrategyPerformance(workspaceId: number) {
+  return apiFetch(`/workspaces/${workspaceId}/strategy-performance`);
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = getAuthHeaders(options?.headers);
 
@@ -1983,6 +1987,8 @@ export const api = {
     clearStoredAccessToken();
     clearStoredActiveWorkspaceId();
   },
+
+  getStrategyPerformance,
 
   getMe: async (): Promise<MeResponse> => {
     try {

@@ -121,6 +121,7 @@ export default function WorkspaceLedgerPage() {
   const [loading, setLoading] = useState(true);
   const [usageLoading, setUsageLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [strategyStats, setStrategyStats] = useState<any[]>([]);
 
   const [showManualTradeForm, setShowManualTradeForm] = useState(false);
   const [manualTradeSubmitting, setManualTradeSubmitting] = useState(false);
@@ -144,47 +145,15 @@ export default function WorkspaceLedgerPage() {
   const [selectedTag, setSelectedTag] = useState("");
   const tradeUsage = usage?.usage?.trades;
 
-  const filteredTrades = useMemo(() => {
-    if (!Array.isArray(trades)) return [];
-
-    return trades.filter((t) => {
-      // 🔍 search
-      if (search && typeof search === "string") {
-        const s = search.toLowerCase();
-
-        const member = String(t.member_id || "");
-        const symbol = (t.symbol || "").toLowerCase();
-
-        const matches = member.includes(s) || symbol.includes(s);
-
-        if (!matches) return false;
-      }
-
-      // 📊 symbol
-      if (symbolFilter && t.symbol !== symbolFilter) return false;
-
-      // 📊 side
-      if (sideFilter && t.side !== sideFilter) return false;
-
-      // 🏷️ tags
-      if (selectedTag) {
-        const tags = Array.isArray(t.tags) ? t.tags : [];
-        if (!tags.includes(selectedTag)) return false;
-      }
-
-      return true;
-    });
-  }, [trades, search, symbolFilter, sideFilter, selectedTag]);
-
   const tradeUsed = tradeUsage?.used ?? 0;        // consumed (billing)
   const tradeLimit = tradeUsage?.limit ?? 0;
   const ledgerCount = metrics?.ledger_count ?? 0; // actual trades
   
   const tradeLimitReached =
     (tradeUsage?.limit ?? 0) > 0 && (tradeUsage?.used ?? 0) >= (tradeUsage?.limit ?? 0);
-
+  
   async function reloadLedgerData(resolvedWorkspaceId: number) {
-    const [tradesRes, latestAuditRes, workspaceAuditRes, usageRes] = await Promise.all([
+    const [tradesRes, latestAuditRes, workspaceAuditRes, usageRes, strategyRes] = await Promise.all([
       api.getTrades(resolvedWorkspaceId, {
         tag: selectedTag || undefined,
         symbol: symbolFilter || undefined,
@@ -193,8 +162,10 @@ export default function WorkspaceLedgerPage() {
       api.getLatestAuditEvents(20),
       api.getAuditEventsForWorkspace(resolvedWorkspaceId, 50),
       api.getWorkspaceUsage(resolvedWorkspaceId),
+      api.getStrategyPerformance(resolvedWorkspaceId),
     ]);
 
+    setStrategyStats(Array.isArray(strategyRes) ? strategyRes : []);
     setTrades(Array.isArray(tradesRes) ? tradesRes : []);
     setLatestAuditEvents(Array.isArray(latestAuditRes) ? latestAuditRes : []);
     setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
@@ -368,8 +339,13 @@ export default function WorkspaceLedgerPage() {
         setLoading(true);
         setError(null);
 
-        const [tradesRes, latestAuditRes, workspaceAuditRes] = await Promise.all([
-          api.getTrades(resolvedWorkspaceId),
+        const tradesRes = await api.getTrades(resolvedWorkspaceId, {
+          tag: selectedTag || undefined,
+          symbol: symbolFilter || undefined,
+          side: sideFilter || undefined,
+        });
+
+        const [latestAuditRes, workspaceAuditRes] = await Promise.all([
           api.getLatestAuditEvents(20),
           api.getAuditEventsForWorkspace(resolvedWorkspaceId, 50),
         ]);
@@ -379,6 +355,7 @@ export default function WorkspaceLedgerPage() {
         setTrades(Array.isArray(tradesRes) ? tradesRes : []);
         setLatestAuditEvents(Array.isArray(latestAuditRes) ? latestAuditRes : []);
         setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
+
       } catch (err) {
         if (!active) return;
         setError(err instanceof Error ? err.message : "Failed to load ledger");
@@ -388,12 +365,13 @@ export default function WorkspaceLedgerPage() {
       }
     }
 
-    void load();
+    load();
 
     return () => {
       active = false;
     };
-  }, [workspaceId, workspaceMembership]);
+
+  }, [workspaceId, workspaceMembership, selectedTag, symbolFilter, sideFilter]);
 
   useEffect(() => {
     if (!workspaceId || !workspaceMembership) {
@@ -462,7 +440,16 @@ export default function WorkspaceLedgerPage() {
     );
   }
 
-  
+  const displayTrades = useMemo(() => {
+    if (!search) return trades;
+
+    const s = search.toLowerCase();
+
+    return trades.filter(t =>
+      String(t.member_id).includes(s) ||
+      (t.symbol || "").toLowerCase().includes(s)
+    );
+  }, [trades, search]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -627,35 +614,18 @@ export default function WorkspaceLedgerPage() {
         <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
           <h2 className="text-xl font-semibold mb-4">Strategy Performance</h2>
 
-          {(() => {
-            const grouped: Record<string, any[]> = {};
-
-            trades.forEach((t) => {
-              const key =
-                selectedTag && t.tags?.includes(selectedTag)
-                  ? selectedTag
-                  : t.tags?.[0] || "unclassified";
-              if (!grouped[key]) grouped[key] = [];
-              grouped[key].push(t);
-            });
-
-            return Object.entries(grouped).map(([strategy, trades]) => {
-              const total = trades.length;
-              const wins = trades.filter(t => (t.net_pnl || 0) > 0).length;
-              const pnl = trades.reduce((sum, t) => sum + (t.net_pnl || 0), 0);
-
-              const winRate = total ? ((wins / total) * 100).toFixed(1) : "0";
-
-              return (
-                <div key={strategy} className="flex justify-between border-b py-2 text-sm">
-                  <span className="font-medium">{strategy}</span>
-                  <span>
-                    {winRate}% WR • ${pnl.toFixed(2)}
-                  </span>
-                </div>
-              );
-            });
-          })()}
+          {strategyStats.length === 0 ? (
+            <div className="text-sm text-slate-500">No strategy data.</div>
+          ) : (
+            strategyStats.map((s) => (
+              <div key={s.tag} className="flex justify-between border-b py-2 text-sm">
+                <span className="font-medium">{s.tag}</span>
+                <span>
+                  {s.winrate}% WR • ${Number(s.pnl).toFixed(2)}
+                </span>
+              </div>
+            ))
+          )}
         </div>
 
         <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
@@ -1086,7 +1056,7 @@ export default function WorkspaceLedgerPage() {
           ) : null}
 
           <TradeTable
-            trades={filteredTrades}
+            trades={displayTrades}
             canWriteTrades={canWriteTrades}
             onEditTrade={handleEditTrade}
             onDeleteTrade={handleDeleteTrade}
