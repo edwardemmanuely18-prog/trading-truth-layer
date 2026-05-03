@@ -129,7 +129,7 @@ export default function WorkspaceLedgerPage() {
   // 🔥 NEW — Tag system
   const [tags, setTags] = useState<string[]>([]);
   const [selectedTag, setSelectedTag] = useState("");
-  const tradeUsage = usage?.usage?.trades;
+  const tradeUsage = usage?.usage?.trades ?? null;
 
   const [usageLoading, setUsageLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -368,6 +368,7 @@ export default function WorkspaceLedgerPage() {
           tradesRes,
           latestAuditRes,
           workspaceAuditRes,
+          usageRes,
           strategyRes
         ] = await Promise.all([
           api.getTrades(resolvedWorkspaceId, {
@@ -379,6 +380,7 @@ export default function WorkspaceLedgerPage() {
           }),
           api.getLatestAuditEvents(20),
           api.getAuditEventsForWorkspace(resolvedWorkspaceId, 50),
+          api.getWorkspaceUsage(resolvedWorkspaceId), // ✅ ADD THIS
           api.getStrategyPerformance(resolvedWorkspaceId),
         ]);
 
@@ -388,10 +390,13 @@ export default function WorkspaceLedgerPage() {
         setLatestAuditEvents(Array.isArray(latestAuditRes) ? latestAuditRes : []);
         setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
         setStrategyStats(Array.isArray(strategyRes) ? strategyRes : []);
+        setUsage(usageRes);
+        setUsageLoading(false); // ✅ THIS FIXES YOUR STUCK UI
 
       } catch (err) {
         if (!active) return;
         setError(err instanceof Error ? err.message : "Failed to load ledger");
+        setUsageLoading(false);
       } finally {
         if (!active) return;
         setLoading(false);
@@ -497,15 +502,19 @@ export default function WorkspaceLedgerPage() {
         ) : null}
 
         {usageLoading ? (
-          <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
-            Loading workspace usage...
-          </div>
-        ) : tradeUsage ? (
-          <div
-            className={`mb-8 rounded-2xl border p-5 shadow-sm ${
-              tradeLimitReached ? "border-amber-200 bg-amber-50" : "bg-white"
-            }`}
-          >
+            <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
+              Loading workspace usage...
+            </div>
+          ) : !tradeUsage ? (
+            <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm text-sm text-slate-500">
+              No usage data available.
+            </div>
+          ) : (
+            <div
+              className={`mb-8 rounded-2xl border p-5 shadow-sm ${
+                tradeLimitReached ? "border-amber-200 bg-amber-50" : "bg-white"
+              }`}
+            >
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold">Trade Capacity</h2>
@@ -565,14 +574,14 @@ export default function WorkspaceLedgerPage() {
               </div>
             </div>
 
-            {tradeLimitReached ? (
-              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-100 px-4 py-3 text-sm text-amber-900">
+            {tradeLimitReached && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-100 px-4 py-3 text-sm text-amber-800">
                 Trade limit reached. Additional trade intake should be blocked until the workspace
                 is upgraded or usage is reduced.
               </div>
-            ) : null}
-          </div>
-        ) : null}
+            )}
+            </div>
+            )}
 
         <div className="mb-8 grid gap-4 md:grid-cols-4">
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
