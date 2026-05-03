@@ -30,17 +30,21 @@ function resolveDevUserId(): string | null {
 
 function buildAuthenticatedUrl(path: string) {
   const token = getStoredAccessToken();
+
+  // ✅ FORCE API PREFIX
+  const normalizedPath = path.startsWith("/api") ? path : `/api${path}`;
+
   if (token) {
-    return `${API_BASE_URL}${path}`;
+    return `${API_BASE_URL}${normalizedPath}`;
   }
 
   const userId = resolveDevUserId();
   if (!userId) {
-    return `${API_BASE_URL}${path}`;
+    return `${API_BASE_URL}${normalizedPath}`;
   }
 
-  const separator = path.includes("?") ? "&" : "?";
-  return `${API_BASE_URL}${path}${separator}user_id=${encodeURIComponent(userId)}`;
+  const separator = normalizedPath.includes("?") ? "&" : "?";
+  return `${API_BASE_URL}${normalizedPath}${separator}user_id=${encodeURIComponent(userId)}`;
 }
 
 function buildHeaders() {
@@ -198,7 +202,7 @@ export default function DownloadEvidenceButton({ claimSchemaId, claimHash, paylo
   async function handleDownloadZip() {
     await runDownload("zip", async () => {
       const response = await fetch(
-        buildAuthenticatedUrl(`/claim-schemas/${claimSchemaId}/evidence-bundle/download`),
+        buildAuthenticatedUrl(`/api/claim-schemas/${claimSchemaId}/evidence-bundle/download`),
         {
           method: "GET",
           headers: buildHeaders(),
