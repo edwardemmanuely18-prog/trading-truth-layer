@@ -144,6 +144,38 @@ export default function WorkspaceLedgerPage() {
   const [selectedTag, setSelectedTag] = useState("");
   const tradeUsage = usage?.usage?.trades;
 
+  const filteredTrades = useMemo(() => {
+    if (!Array.isArray(trades)) return [];
+
+    return trades.filter((t) => {
+      // 🔍 search
+      if (search && typeof search === "string") {
+        const s = search.toLowerCase();
+
+        const member = String(t.member_id || "");
+        const symbol = (t.symbol || "").toLowerCase();
+
+        const matches = member.includes(s) || symbol.includes(s);
+
+        if (!matches) return false;
+      }
+
+      // 📊 symbol
+      if (symbolFilter && t.symbol !== symbolFilter) return false;
+
+      // 📊 side
+      if (sideFilter && t.side !== sideFilter) return false;
+
+      // 🏷️ tags
+      if (selectedTag) {
+        const tags = Array.isArray(t.tags) ? t.tags : [];
+        if (!tags.includes(selectedTag)) return false;
+      }
+
+      return true;
+    });
+  }, [trades, search, symbolFilter, sideFilter, selectedTag]);
+
   const tradeUsed = tradeUsage?.used ?? 0;        // consumed (billing)
   const tradeLimit = tradeUsage?.limit ?? 0;
   const ledgerCount = metrics?.ledger_count ?? 0; // actual trades
@@ -331,8 +363,6 @@ export default function WorkspaceLedgerPage() {
     let active = true;
     const resolvedWorkspaceId = workspaceId;
 
-    [selectedTag, symbolFilter, sideFilter]
-
     async function load() {
       try {
         setLoading(true);
@@ -432,30 +462,7 @@ export default function WorkspaceLedgerPage() {
     );
   }
 
-  const filteredTrades = useMemo(() => {
-    return trades.filter((t) => {
-      // 🔍 search filter
-      if (search) {
-        const s = search.toLowerCase();
-        const matches =
-          String(t.member_id).includes(s) ||
-          t.symbol?.toLowerCase().includes(s);
-
-        if (!matches) return false;
-      }
-
-      // 📊 symbol filter
-      if (symbolFilter && t.symbol !== symbolFilter) return false;
-
-      // 📊 side filter
-      if (sideFilter && t.side !== sideFilter) return false;
-
-      // 🏷️ tag filter
-      if (selectedTag && !(t.tags || []).includes(selectedTag)) return false;
-
-      return true;
-    });
-  }, [trades, search, symbolFilter, sideFilter, selectedTag]);
+  
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
