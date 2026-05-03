@@ -282,17 +282,33 @@ def serialize_trade(trade: Trade, tags: list[str]):
 @router.get("/workspaces/{workspace_id}/trades")
 def list_trades(
     workspace_id: int,
+    tag: Optional[str] = None,
+    symbol: Optional[str] = None,
+    side: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     require_workspace_member(workspace_id, current_user, db)
 
-    trades = (
-        db.query(Trade)
-        .filter(Trade.workspace_id == workspace_id)
-        .order_by(Trade.id.asc())
-        .all()
-    )
+    query = db.query(Trade).filter(Trade.workspace_id == workspace_id)
+
+    # 🔥 SYMBOL FILTER
+    if symbol:
+        query = query.filter(Trade.symbol == symbol.upper())
+
+    # 🔥 SIDE FILTER
+    if side:
+        query = query.filter(Trade.side == side.upper())
+
+    # 🔥 TAG FILTER (JOIN)
+    if tag:
+        query = (
+            query.join(TradeTagMap, Trade.id == TradeTagMap.trade_id)
+            .join(TradeTag, TradeTag.id == TradeTagMap.tag_id)
+            .filter(TradeTag.name == tag.lower())
+        )
+
+    trades = query.order_by(Trade.id.asc()).all()
 
     trade_ids = [t.id for t in trades]
 

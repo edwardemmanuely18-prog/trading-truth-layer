@@ -147,33 +147,17 @@ export default function WorkspaceLedgerPage() {
   const tradeUsed = tradeUsage?.used ?? 0;        // consumed (billing)
   const tradeLimit = tradeUsage?.limit ?? 0;
   const ledgerCount = metrics?.ledger_count ?? 0; // actual trades
-  // 🔥 Filtered trades
-  const filteredTrades = useMemo(() => {
-    return trades.filter((t) => {
-    const matchesSearch =
-      search === "" ||
-      t.symbol?.toLowerCase().includes(search.toLowerCase()) ||
-      String(t.member_id).includes(search);
-
-    const matchesSymbol =
-      symbolFilter === "" || t.symbol === symbolFilter;
-
-    const matchesSide =
-      sideFilter === "" || t.side === sideFilter;
-
-    const matchesTag =
-      selectedTag === "" ||
-      t.tags?.includes(selectedTag)
-
-    return matchesSearch && matchesSymbol && matchesSide && matchesTag;
-  });
-  }, [trades, search, symbolFilter, sideFilter, selectedTag]);
+  
   const tradeLimitReached =
     (tradeUsage?.limit ?? 0) > 0 && (tradeUsage?.used ?? 0) >= (tradeUsage?.limit ?? 0);
 
   async function reloadLedgerData(resolvedWorkspaceId: number) {
     const [tradesRes, latestAuditRes, workspaceAuditRes, usageRes] = await Promise.all([
-      api.getTrades(resolvedWorkspaceId),
+      api.getTrades(resolvedWorkspaceId, {
+        tag: selectedTag || undefined,
+        symbol: symbolFilter || undefined,
+        side: sideFilter || undefined,
+      }),
       api.getLatestAuditEvents(20),
       api.getAuditEventsForWorkspace(resolvedWorkspaceId, 50),
       api.getWorkspaceUsage(resolvedWorkspaceId),
@@ -347,6 +331,8 @@ export default function WorkspaceLedgerPage() {
     let active = true;
     const resolvedWorkspaceId = workspaceId;
 
+    [selectedTag, symbolFilter, sideFilter]
+
     async function load() {
       try {
         setLoading(true);
@@ -445,6 +431,31 @@ export default function WorkspaceLedgerPage() {
       </div>
     );
   }
+
+  const filteredTrades = useMemo(() => {
+    return trades.filter((t) => {
+      // 🔍 search filter
+      if (search) {
+        const s = search.toLowerCase();
+        const matches =
+          String(t.member_id).includes(s) ||
+          t.symbol?.toLowerCase().includes(s);
+
+        if (!matches) return false;
+      }
+
+      // 📊 symbol filter
+      if (symbolFilter && t.symbol !== symbolFilter) return false;
+
+      // 📊 side filter
+      if (sideFilter && t.side !== sideFilter) return false;
+
+      // 🏷️ tag filter
+      if (selectedTag && !(t.tags || []).includes(selectedTag)) return false;
+
+      return true;
+    });
+  }, [trades, search, symbolFilter, sideFilter, selectedTag]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">

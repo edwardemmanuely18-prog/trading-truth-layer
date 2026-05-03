@@ -2087,9 +2087,26 @@ export const api = {
     };
   },
 
-  async getTrades(workspaceId: number) {
+  async getTrades(
+    workspaceId: number,
+    params?: {
+      tag?: string;
+      symbol?: string;
+      side?: string;
+    }
+  ) {
+    const query = new URLSearchParams();
+
+    if (params?.tag) query.append("tag", params.tag);
+    if (params?.symbol) query.append("symbol", params.symbol);
+    if (params?.side) query.append("side", params.side);
+
+    const qs = query.toString();
+
     return apiFetch<Trade[]>(
-      withDevUser(`/workspaces/${workspaceId}/trades`),
+      withDevUser(
+        `/workspaces/${workspaceId}/trades${qs ? `?${qs}` : ""}`
+      ),
       { cache: "no-store" }
     );
   },
