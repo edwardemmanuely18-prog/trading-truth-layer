@@ -90,7 +90,7 @@ function tradeToFormState(trade: Trade): TradeFormState {
     quantity: trade.quantity === null || trade.quantity === undefined ? "" : String(trade.quantity),
     currency: trade.currency ?? "USD",
     net_pnl: trade.net_pnl === null || trade.net_pnl === undefined ? "" : String(trade.net_pnl),
-    strategy_tag: trade.tags?.join(", ") || "",
+    strategy_tag: (trade as any).tags?.join(", ") || "",
     source_system: trade.source_system ?? "MANUAL",
   };
 }

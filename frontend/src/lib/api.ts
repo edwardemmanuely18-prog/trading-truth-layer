@@ -97,7 +97,7 @@ export type Trade = {
   quantity: number;
   net_pnl?: number | null;
   currency: string;
-  strategy_tag?: string | null;
+  tags?: string[];
   source_system?: string | null;
 };
 
@@ -649,7 +649,7 @@ export type ClaimTradeEvidenceRow = {
   quantity: number;
   net_pnl: number;
   currency: string;
-  strategy_tag?: string | null;
+  tags?: string[];
   source_system?: string | null;
   cumulative_pnl: number | null;
 };
@@ -674,7 +674,7 @@ export type ClaimTradeScopeRow = {
   quantity: number;
   net_pnl: number;
   currency: string;
-  strategy_tag?: string | null;
+  tags?: string[];
   source_system?: string | null;
   cumulative_pnl: number | null;
   scope_status: "included" | "excluded";
@@ -1658,7 +1658,7 @@ function ensureClaimTradeScopeRow(
     quantity: Number(row.quantity ?? 0),
     net_pnl: Number(row.net_pnl ?? 0),
     currency: String(row.currency ?? ""),
-    strategy_tag: row.strategy_tag ?? null,
+    tags: row.tags ?? ((row as any).strategy_tag ? [(row as any).strategy_tag] : []),
     source_system: row.source_system ?? null,
     cumulative_pnl:
       typeof row.cumulative_pnl === "number" ? row.cumulative_pnl : row.cumulative_pnl ?? null,
