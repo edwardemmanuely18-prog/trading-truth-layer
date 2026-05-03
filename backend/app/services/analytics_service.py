@@ -8,15 +8,14 @@ def get_strategy_performance(db: Session, workspace_id: int):
     # ✅ SIMPLE + CORRECT: use strategy_tag directly (no joins)
     rows = (
         db.query(
-            Trade.strategy_tag.label("tag"),
+            func.coalesce(Trade.strategy_tag, "unclassified").label("tag"),
             func.count(Trade.id).label("trade_count"),
             func.coalesce(func.sum(Trade.net_pnl), 0).label("net_pnl"),
             func.coalesce(func.avg(Trade.net_pnl), 0).label("avg_pnl"),
             func.sum(case((Trade.net_pnl > 0, 1), else_=0)).label("wins"),
             func.sum(case((Trade.net_pnl <= 0, 1), else_=0)).label("losses"),
         )
-        # DEBUG MODE
-        # .filter(Trade.workspace_id == workspace_id)
+        .filter(Trade.workspace_id == workspace_id)   # ✅ MUST EXIST
         .group_by(Trade.strategy_tag)
         .all()
     )
@@ -53,6 +52,8 @@ def get_strategy_performance(db: Session, workspace_id: int):
             "expectancy": float(expectancy),
         })
 
-    print("STRATEGY DEBUG:", result)    
+    print("STRATEGY DEBUG:", result) 
+    print("STRATEGY RAW ROWS:", rows)
+    print("STRATEGY FINAL:", result)   
 
     return result

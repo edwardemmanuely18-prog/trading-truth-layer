@@ -1,6 +1,6 @@
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "https://trading-truth-layer.onrender.com/api";
+  "https://trading-truth-layer.onrender.com";
 
 export const API_BASE_URL = API_BASE;
 const DEV_USER_ID: number | null = null;
@@ -1145,8 +1145,18 @@ function getApiBaseUrl() {
 }
 
 export async function getStrategyPerformance(workspaceId: number) {
-  return apiFetch(`/workspaces/${workspaceId}/strategy-performance`);
+  return apiFetch(`/workspaces/${workspaceId}/strategy-performance`, {
+    cache: "no-store",
+  });
 }
+
+function withApiPrefix(path: string) {
+    // auth routes should NOT be prefixed
+    if (path.startsWith("/auth")) return path;
+
+    // everything else MUST go through /api
+    return path.startsWith("/api") ? path : `/api${path}`;
+  }
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = getAuthHeaders(options?.headers);
@@ -1162,14 +1172,6 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     headers.set("Content-Type", "application/json");
   }
 
-
-  function withApiPrefix(path: string) {
-    // auth routes should NOT be prefixed
-    if (path.startsWith("/auth")) return path;
-
-    // everything else MUST go through /api
-    return path.startsWith("/api") ? path : `/api${path}`;
-  }
 
   const res = await fetch(`${baseUrl}${finalPath}`, {
     ...options,

@@ -61,7 +61,7 @@ app.add_middleware(
 
 from app.api.routes import public
 
-app.include_router(public.router, prefix="/api")
+app.include_router(trades_router, prefix="/api")
 
 # =========================
 # SAFE STARTUP (CRITICAL)

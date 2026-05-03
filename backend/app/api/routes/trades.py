@@ -714,71 +714,25 @@ async def import_trades_csv(
             "rows_skipped_duplicates": 0,
             "errors": [str(e)],
         }
+ 
 
-
-@router.get("/workspaces/{workspace_id}/strategy-performance")
-def strategy_performance(
+@router.get("/debug/trades")
+def debug_trades(
     workspace_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
-    require_workspace_member(workspace_id, current_user, db)
-
-    trades = db.query(Trade).filter(
+    rows = db.query(Trade.id, Trade.strategy_tag, Trade.net_pnl).filter(
         Trade.workspace_id == workspace_id
     ).all()
 
-    if not trades:
-        return []
-
-    # 🔥 GROUP BY TAG
-    performance = {}
-
-    rows = (
-        db.query(TradeTagMap.trade_id, TradeTag.name)
-        .join(TradeTag, TradeTag.id == TradeTagMap.tag_id)
-        .join(Trade, Trade.id == TradeTagMap.trade_id)
-        .filter(Trade.workspace_id == workspace_id)
-        .all()
-    )
-
-    tag_map = {}
-    for trade_id, name in rows:
-        tag_map.setdefault(trade_id, []).append(name)
-
-    for trade in trades:
-        tags = tag_map.get(trade.id, ["unclassified"])
-
-        for tag in tags:
-            bucket = performance.setdefault(tag, {
-                "wins": 0,
-                "losses": 0,
-                "pnl": 0.0
-            })
-
-            pnl = trade.net_pnl or 0
-
-            if pnl >= 0:
-                bucket["wins"] += 1
-            else:
-                bucket["losses"] += 1
-
-            bucket["pnl"] += pnl
-
-    result = []
-
-    for tag, data in performance.items():
-        total = data["wins"] + data["losses"]
-        winrate = (data["wins"] / total * 100) if total else 0
-
-        result.append({
-            "tag": tag,
-            "winrate": round(winrate, 2),
-            "pnl": round(data["pnl"], 2),
-            "trades": total
-        })
-
-    return result
+    return [
+        {
+            "id": r.id,
+            "strategy_tag": r.strategy_tag,
+            "net_pnl": r.net_pnl,
+        }
+        for r in rows
+    ]    
 
 
 @router.get("/workspaces/{workspace_id}/strategy-performance")
@@ -787,22 +741,10 @@ def strategy_performance(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    require_workspace_member(workspace_id, current_user, db)
-
-    return get_strategy_performance(db, workspace_id) 
-
-
-@router.get("/workspaces/{workspace_id}/strategy-performance")
-def strategy_performance(
-    workspace_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    # ensure user has access
     require_workspace_member(workspace_id, current_user, db)
 
     data = get_strategy_performance(db, workspace_id)
 
-    print("API RESPONSE:", data)  # DEBUG
+    print("✅ STRATEGY API:", data)
 
-    return data       
+    return data    
