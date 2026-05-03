@@ -119,6 +119,8 @@ export default function WorkspaceLedgerPage() {
   const [workspaceAuditEvents, setWorkspaceAuditEvents] = useState<AuditEvent[]>([]);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
 
   // 🔥 Ledger filters
   const [search, setSearch] = useState("");
@@ -171,6 +173,9 @@ export default function WorkspaceLedgerPage() {
         tag: selectedTag || undefined,
         symbol: symbolFilter || undefined,
         side: sideFilter || undefined,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+
       }),
       api.getLatestAuditEvents(20),
       api.getAuditEventsForWorkspace(resolvedWorkspaceId, 50),
@@ -359,11 +364,17 @@ export default function WorkspaceLedgerPage() {
             tag: selectedTag || undefined,
             symbol: symbolFilter || undefined,
             side: sideFilter || undefined,
+            limit: PAGE_SIZE,
+            offset: page * PAGE_SIZE,
           }),
           api.getLatestAuditEvents(20),
           api.getAuditEventsForWorkspace(resolvedWorkspaceId, 50),
           api.getStrategyPerformance(resolvedWorkspaceId),
         ]);
+
+        useEffect(() => {
+          setPage(0);
+        }, [selectedTag, symbolFilter, sideFilter]);
 
         if (!active) return;
 

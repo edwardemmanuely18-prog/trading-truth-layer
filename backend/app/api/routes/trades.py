@@ -285,6 +285,8 @@ def list_trades(
     tag: Optional[str] = None,
     symbol: Optional[str] = None,
     side: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -309,7 +311,13 @@ def list_trades(
             .distinct()
         )
 
-    trades = query.order_by(Trade.id.asc()).all()
+    trades = (
+        query
+        .order_by(Trade.id.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
 
     trade_ids = [t.id for t in trades]
 

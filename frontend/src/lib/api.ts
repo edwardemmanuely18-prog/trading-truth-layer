@@ -2099,6 +2099,8 @@ export const api = {
       tag?: string;
       symbol?: string;
       side?: string;
+      limit?: number;
+      offset?: number;
     }
   ) {
     const query = new URLSearchParams();
@@ -2106,6 +2108,8 @@ export const api = {
     if (params?.tag) query.append("tag", params.tag);
     if (params?.symbol) query.append("symbol", params.symbol);
     if (params?.side) query.append("side", params.side);
+    if (params?.limit) query.append("limit", String(params.limit));
+    if (params?.offset) query.append("offset", String(params.offset));
 
     const qs = query.toString();
 

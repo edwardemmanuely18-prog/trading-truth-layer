@@ -10,6 +10,11 @@ class TradeTagMap(Base):
     trade_id = Column(Integer, ForeignKey("trades.id", ondelete="CASCADE"), index=True)
     tag_id = Column(Integer, ForeignKey("trade_tags.id", ondelete="CASCADE"), index=True)
 
+    __table_args__ = (
+        Index("idx_trade_tag_map_trade_id", "trade_id"),
+        Index("idx_trade_tag_map_tag_id", "tag_id"),
+    )
+
 
 # ✅ DEFINE INDEXES AFTER CLASS
 Index("idx_trade_tag_map_trade_id", TradeTagMap.trade_id)
