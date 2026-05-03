@@ -638,39 +638,6 @@ export default function WorkspaceLedgerPage() {
         </div>
 
         <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">Strategy Performance</h2>
-
-          {strategyStats.length === 0 ? (
-            <div className="text-sm text-slate-500">
-              No strategy data available.
-            </div>
-          ) : (
-            <div className="grid gap-3">
-              {strategyStats.map((s, i) => (
-                <div
-                  key={i}
-                  className="flex justify-between items-center border rounded-xl px-4 py-3"
-                >
-                  <div className="font-medium">{s.tag}</div>
-
-                  <div className="flex gap-6 text-sm">
-                    <span>{s.trade_count} trades</span>
-                    <span className={s.net_pnl >= 0 ? "text-green-600" : "text-red-600"}>
-                      {typeof s.net_pnl === "number"
-                        ? s.net_pnl.toFixed(2)
-                        : "0.00"}
-                    </span>
-                    <span>{typeof s.win_rate === "number"
-                            ? (s.win_rate * 100).toFixed(1)
-                            : "0.0"}%</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
 
         {/* 🔥 Ledger Controls */}
         <div className="mb-6 rounded-2xl border bg-white p-5 shadow-sm">
