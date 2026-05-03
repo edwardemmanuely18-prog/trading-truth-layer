@@ -349,19 +349,27 @@ export default function WorkspaceLedgerPage() {
   }, [trades, search]);
 
   useEffect(() => {
-    if (!workspaceId || !workspaceMembership) {
-      return;
-    }
+    setPage(0);
+  }, [selectedTag, symbolFilter, sideFilter]);
+
+  useEffect(() => {
+    if (!workspaceId || !workspaceMembership) return;
+
+    const resolvedWorkspaceId = workspaceId;
 
     let active = true;
-    const resolvedWorkspaceId = workspaceId;
 
     async function load() {
       try {
         setLoading(true);
         setError(null);
 
-        const [tradesRes, latestAuditRes, workspaceAuditRes, strategyRes] = await Promise.all([
+        const [
+          tradesRes,
+          latestAuditRes,
+          workspaceAuditRes,
+          strategyRes
+        ] = await Promise.all([
           api.getTrades(resolvedWorkspaceId, {
             tag: selectedTag || undefined,
             symbol: symbolFilter || undefined,
@@ -373,10 +381,6 @@ export default function WorkspaceLedgerPage() {
           api.getAuditEventsForWorkspace(resolvedWorkspaceId, 50),
           api.getStrategyPerformance(resolvedWorkspaceId),
         ]);
-
-        useEffect(() => {
-          setPage(0);
-        }, [selectedTag, symbolFilter, sideFilter]);
 
         if (!active) return;
 
@@ -400,39 +404,7 @@ export default function WorkspaceLedgerPage() {
       active = false;
     };
 
-  }, [workspaceId, workspaceMembership, selectedTag, symbolFilter, sideFilter]);
-
-  useEffect(() => {
-    if (!workspaceId || !workspaceMembership) {
-      setUsage(null);
-      setUsageLoading(false);
-      return;
-    }
-
-    const resolvedWorkspaceId = workspaceId;
-    let active = true;
-
-    async function loadUsage() {
-      try {
-        setUsageLoading(true);
-        const result = await api.getWorkspaceUsage(resolvedWorkspaceId);
-        if (!active) return;
-        setUsage(result);
-      } catch {
-        if (!active) return;
-        setUsage(null);
-      } finally {
-        if (!active) return;
-        setUsageLoading(false);
-      }
-    }
-
-    void loadUsage();
-
-    return () => {
-      active = false;
-    };
-  }, [workspaceId, workspaceMembership]);
+  }, [workspaceId, workspaceMembership, selectedTag, symbolFilter, sideFilter, page]);
 
   if (!workspaceId) {
     return <div className="p-6 text-red-600">Invalid workspace id.</div>;
