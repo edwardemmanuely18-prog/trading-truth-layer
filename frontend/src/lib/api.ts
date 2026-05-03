@@ -1144,7 +1144,7 @@ function getApiBaseUrl() {
   );
 }
 
-async function getStrategyPerformance(workspaceId: number) {
+export async function getStrategyPerformance(workspaceId: number) {
   return apiFetch(`/workspaces/${workspaceId}/strategy-performance`);
 }
 

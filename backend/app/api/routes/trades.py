@@ -15,6 +15,7 @@ from app.models.trade import Trade
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.models.workspace_membership import WorkspaceMembership
+from app.services.analytics_service import get_strategy_performance
 from app.services.entitlements import enforce_trade_import_allowed
 from app.services.ingestion_service import import_csv_trades
 from app.services.entitlements import enforce_claim_creation_allowed
@@ -778,3 +779,14 @@ def strategy_performance(
         })
 
     return result
+
+
+@router.get("/workspaces/{workspace_id}/strategy-performance")
+def strategy_performance(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_workspace_member(workspace_id, current_user, db)
+
+    return get_strategy_performance(db, workspace_id)    
