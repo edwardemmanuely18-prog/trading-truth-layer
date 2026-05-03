@@ -623,18 +623,59 @@ export default function WorkspaceLedgerPage() {
         <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
           <h2 className="text-xl font-semibold mb-4">Strategy Performance</h2>
 
-          {strategyStats.length === 0 ? (
-            <div className="text-sm text-slate-500">No strategy data.</div>
-          ) : (
-            strategyStats.map((s) => (
-              <div key={s.tag} className="flex justify-between border-b py-2 text-sm">
-                <span className="font-medium">{s.tag}</span>
-                <span>
-                  {s.winrate}% WR • ${Number(s.pnl).toFixed(2)}
-                </span>
-              </div>
-            ))
-          )}
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-left text-slate-600">
+                <tr>
+                  <th className="px-4 py-3">Strategy</th>
+                  <th className="px-4 py-3">Trades</th>
+                  <th className="px-4 py-3">Win Rate</th>
+                  <th className="px-4 py-3">Net PnL</th>
+                  <th className="px-4 py-3">Avg Win</th>
+                  <th className="px-4 py-3">Avg Loss</th>
+                  <th className="px-4 py-3">Expectancy</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {strategyStats.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-6 text-slate-500">
+                      No strategy data available.
+                    </td>
+                  </tr>
+                ) : (
+                  strategyStats.map((s, i) => (
+                    <tr key={i} className="border-t">
+                      <td className="px-4 py-3 font-medium">{s.tag || "unclassified"}</td>
+
+                      <td className="px-4 py-3">{s.trade_count}</td>
+
+                      <td className="px-4 py-3">
+                        {(s.win_rate * 100).toFixed(1)}%
+                      </td>
+
+                      <td className={`px-4 py-3 font-semibold ${s.net_pnl >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {Number(s.net_pnl || 0).toFixed(2)}
+                      </td>
+
+                      <td className="px-4 py-3 text-green-600">
+                        {Number(s.avg_win || 0).toFixed(2)}
+                      </td>
+
+                      <td className="px-4 py-3 text-red-600">
+                        {Number(s.avg_loss || 0).toFixed(2)}
+                      </td>
+
+                      <td className={`px-4 py-3 font-semibold ${s.expectancy >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {Number(s.expectancy || 0).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
