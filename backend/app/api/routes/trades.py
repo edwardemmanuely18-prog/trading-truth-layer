@@ -789,4 +789,20 @@ def strategy_performance(
 ):
     require_workspace_member(workspace_id, current_user, db)
 
-    return get_strategy_performance(db, workspace_id)    
+    return get_strategy_performance(db, workspace_id) 
+
+
+@router.get("/workspaces/{workspace_id}/strategy-performance")
+def strategy_performance(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # ensure user has access
+    require_workspace_member(workspace_id, current_user, db)
+
+    data = get_strategy_performance(db, workspace_id)
+
+    print("API RESPONSE:", data)  # DEBUG
+
+    return data       
