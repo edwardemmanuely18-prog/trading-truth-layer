@@ -42,6 +42,7 @@ class TradeCreate(BaseModel):
     net_pnl: float | None = None
     strategy_tag: str | None = None
     source_system: str | None = None
+    tags: list[str] = []
 
 
 class TradeUpdate(BaseModel):
@@ -258,7 +259,7 @@ def compute_trade_net_pnl(
     return fallback_net_pnl
 
 
-def serialize_trade(trade: Trade):
+def serialize_trade(trade: Trade, tags: list[str]):
     return {
         "id": trade.id,
         "workspace_id": trade.workspace_id,
@@ -272,11 +273,7 @@ def serialize_trade(trade: Trade):
         "quantity": trade.quantity,
         "net_pnl": trade.net_pnl,
         "currency": trade.currency,
-        "tags": [
-            t.name for t in db.query(TradeTag)
-            .join(TradeTagMap, TradeTag.id == TradeTagMap.tag_id)
-            .filter(TradeTagMap.trade_id == trade.id)
-        ],
+        "tags": tags,
         "source_system": trade.source_system,
     }
 
@@ -295,7 +292,26 @@ def list_trades(
         .order_by(Trade.id.asc())
         .all()
     )
-    return [serialize_trade(t) for t in trades]
+
+    trade_ids = [t.id for t in trades]
+
+    tag_map = {}
+
+    if trade_ids:
+        rows = (
+            db.query(TradeTagMap.trade_id, TradeTag.name)
+            .join(TradeTag, TradeTag.id == TradeTagMap.tag_id)
+            .filter(TradeTagMap.trade_id.in_(trade_ids))
+            .all()
+        )
+
+        for trade_id, name in rows:
+            tag_map.setdefault(trade_id, []).append(name)
+
+    return [
+        serialize_trade(t, tag_map.get(t.id, []))
+        for t in trades
+    ]
 
 
 @router.post("/workspaces/{workspace_id}/trades")
@@ -325,8 +341,8 @@ def create_trade(
     normalized_symbol = payload.symbol.strip().upper()
     normalized_side = payload.side.strip().upper()
     normalized_currency = (payload.currency or "USD").strip().upper()
-    normalized_strategy_tag = normalize_optional_text(payload.strategy_tag)
     normalized_source_system = normalize_optional_text(payload.source_system) or "MANUAL"
+    tags = payload.tags or []
 
     fingerprint = build_trade_fingerprint(
         workspace_id=workspace_id,
@@ -368,7 +384,7 @@ def create_trade(
     )
 
     if existing:
-        result = serialize_trade(existing)
+        result = serialize_trade(existing, [])
         result["duplicate_skipped"] = True
         return result
     
@@ -420,11 +436,6 @@ def create_trade(
         db.commit()
         db.refresh(trade)
         db.refresh(workspace)
-
-        # ✅ ADD TAG MAPPING HERE (INSIDE try)
-        for tag_id in tag_ids:
-            db.add(TradeTagMap(trade_id=trade.id, tag_id=tag_id))
-
         db.commit()
 
     except Exception as e:
@@ -436,7 +447,7 @@ def create_trade(
             detail="Database error while creating trade"
         )
 
-    result = serialize_trade(trade)
+    result = serialize_trade(trade, tags)
     result["duplicate_skipped"] = False
     result["trades_consumed_count"] = workspace.trades_consumed_count
     return result
