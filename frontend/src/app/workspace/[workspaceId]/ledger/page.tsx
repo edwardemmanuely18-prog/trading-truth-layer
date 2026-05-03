@@ -652,7 +652,7 @@ export default function WorkspaceLedgerPage() {
                       <td className="px-4 py-3">{s.trade_count}</td>
 
                       <td className="px-4 py-3">
-                        {(s.win_rate * 100).toFixed(1)}%
+                        {(Number(s.win_rate || 0) * 100).toFixed(1)}%
                       </td>
 
                       <td className={`px-4 py-3 font-semibold ${s.net_pnl >= 0 ? "text-green-600" : "text-red-600"}`}>
