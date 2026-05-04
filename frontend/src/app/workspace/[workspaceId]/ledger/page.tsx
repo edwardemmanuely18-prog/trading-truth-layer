@@ -58,7 +58,7 @@ const EMPTY_TRADE_FORM = {
   quantity: "",
   currency: "USD",
   net_pnl: "",
-  strategy_tag: "",
+  tags_input: "",
   source_system: "MANUAL",
 };
 
@@ -90,7 +90,7 @@ function tradeToFormState(trade: Trade): TradeFormState {
     quantity: trade.quantity === null || trade.quantity === undefined ? "" : String(trade.quantity),
     currency: trade.currency ?? "USD",
     net_pnl: trade.net_pnl === null || trade.net_pnl === undefined ? "" : String(trade.net_pnl),
-    strategy_tag: (trade as any).tags?.join(", ") || "",
+    tags_input: (trade.tags || []).join(", "),
     source_system: trade.source_system ?? "MANUAL",
   };
 }
@@ -199,7 +199,9 @@ export default function WorkspaceLedgerPage() {
 
   function buildTradePayload(form: TradeFormState) {
     const payload = {
-      member_id: Number(form.member_id),
+      member_id: Number.isFinite(Number(form.member_id))
+        ? Number(form.member_id)
+        : 0,
       symbol: form.symbol.trim().toUpperCase(),
       side: form.side.trim().toUpperCase(),
       opened_at: new Date(form.opened_at).toISOString(),
@@ -209,8 +211,8 @@ export default function WorkspaceLedgerPage() {
       quantity: Number(form.quantity),
       currency: form.currency.trim().toUpperCase(),
       net_pnl: form.net_pnl.trim() === "" ? null : Number(form.net_pnl),
-      tags: form.strategy_tag
-        ? form.strategy_tag.split(",").map(t => t.trim()).filter(Boolean)
+      tags: form.tags_input
+        ? form.tags_input.split(",").map(t => t.trim()).filter(Boolean)
         : [],
       source_system: form.source_system.trim() || "MANUAL",
     };
@@ -398,7 +400,8 @@ export default function WorkspaceLedgerPage() {
         const uniqueTags = new Set<string>();
 
         (tradesRes || []).forEach((t: Trade) => {
-          (t.tags || []).forEach(tag => {
+          const safeTags = Array.isArray(t.tags) ? t.tags : [];
+          safeTags.forEach(tag => {
             if (tag) uniqueTags.add(tag);
           });
         });
@@ -911,8 +914,8 @@ export default function WorkspaceLedgerPage() {
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Strategy Tag</label>
                   <input
-                    value={manualTradeForm.strategy_tag}
-                    onChange={(e) => updateManualTradeField("strategy_tag", e.target.value)}
+                    value={manualTradeForm.tags_input}
+                    onChange={(e) => updateManualTradeField("tags_input", e.target.value)}
                     className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                     placeholder="manual_entry"
                   />
@@ -1074,8 +1077,8 @@ export default function WorkspaceLedgerPage() {
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Strategy Tag</label>
                   <input
-                    value={editTradeForm.strategy_tag}
-                    onChange={(e) => updateEditTradeField("strategy_tag", e.target.value)}
+                    value={editTradeForm.tags_input}
+                    onChange={(e) => updateEditTradeField("tags_input", e.target.value)}
                     className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                   />
                 </div>
