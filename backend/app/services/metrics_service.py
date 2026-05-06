@@ -1,25 +1,27 @@
 from sqlalchemy.orm import Session
-
 from app.models.trade import Trade
 from app.models.workspace import Workspace
 
 
 def get_workspace_trade_metrics(db: Session, workspace_id: int) -> dict:
-    trades = (
-        db.query(Trade)
-        .filter(Trade.workspace_id == workspace_id)
-        .all()
-    )
+    trades = db.query(Trade).filter(
+        Trade.workspace_id == workspace_id
+    ).all()
 
     total = len(trades)
 
-    workspace = (
-        db.query(Workspace)
-        .filter(Workspace.id == workspace_id)
-        .first()
-    )
+    workspace = db.query(Workspace).filter(
+        Workspace.id == workspace_id
+    ).first()
 
-    limit = workspace.trade_limit if workspace else 200
+    limit = 200
+
+    if workspace:
+        limit = (
+            getattr(workspace, "trade_limit", None)
+            or getattr(workspace, "max_trades", None)
+            or 200
+        )
 
     wins = 0
     losses = 0
@@ -35,10 +37,17 @@ def get_workspace_trade_metrics(db: Session, workspace_id: int) -> dict:
             losses += 1
 
     win_rate = (wins / total * 100) if total > 0 else 0
-    utilization = (total / limit * 100) if limit > 0 else 0
+
+    used = (
+        getattr(workspace, "trades_consumed_count", None)
+        or total
+    )
+
+    utilization = (used / limit * 100) if limit > 0 else 0
 
     return {
-        "used": total,
+        "used": used,
+        "consumed": used,
         "ledger_count": total,
         "limit": limit,
         "utilization": round(utilization, 2),
