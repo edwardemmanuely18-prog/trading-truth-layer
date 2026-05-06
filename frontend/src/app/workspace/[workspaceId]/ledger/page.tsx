@@ -117,7 +117,6 @@ export default function WorkspaceLedgerPage() {
   const [metrics, setMetrics] = useState<any>(null);
   const [latestAuditEvents, setLatestAuditEvents] = useState<AuditEvent[]>([]);
   const [workspaceAuditEvents, setWorkspaceAuditEvents] = useState<AuditEvent[]>([]);
-  const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 50;
@@ -130,7 +129,9 @@ export default function WorkspaceLedgerPage() {
   // 🔥 NEW — Tag system
   const [tags, setTags] = useState<string[]>([]);
   const [selectedTag, setSelectedTag] = useState("");
-  const tradeUsage = usage?.usage?.trades ?? null;
+  const tradeUsed = metrics?.used ?? 0;
+  const tradeLimit = metrics?.limit ?? 0;
+  const tradeUtilization = metrics?.utilization ?? 0;
 
   const [usageLoading, setUsageLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,38 +150,41 @@ export default function WorkspaceLedgerPage() {
   const [editTradeSuccess, setEditTradeSuccess] = useState<string | null>(null);
 
   const [deletingTradeId, setDeletingTradeId] = useState<number | null>(null);
-
-  const tradeUsed = tradeUsage?.used ?? 0;        // consumed (billing)
-  const tradeLimit = tradeUsage?.limit ?? 0;
-  const ledgerCount = metrics?.ledger_count ?? 0; // actual trades
+  const ledgerCount = Array.isArray(trades) ? trades.length : 0;
   
   const tradeLimitReached =
-    (tradeUsage?.limit ?? 0) > 0 && (tradeUsage?.used ?? 0) >= (tradeUsage?.limit ?? 0);
+    tradeLimit > 0 && tradeUsed >= tradeLimit;
   
   async function reloadLedgerData(resolvedWorkspaceId: number) {
-    const [tradesRes, latestAuditRes, workspaceAuditRes, usageRes, strategyRes] = await Promise.all([
+    console.log("reloadLedgerData CALLED", resolvedWorkspaceId);
+    const [
+      tradesRes,
+      latestAuditRes,
+      workspaceAuditRes,
+      metricsRes,
+      strategyRes
+    ] = await Promise.all([
       api.getTrades(resolvedWorkspaceId, {
         tag: selectedTag || undefined,
         symbol: symbolFilter || undefined,
         side: sideFilter || undefined,
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
-
       }),
       api.getLatestAuditEvents(20),
       api.getAuditEventsForWorkspace(resolvedWorkspaceId, 50),
-      api.getWorkspaceUsage(resolvedWorkspaceId),
+      api.getWorkspaceTradeMetrics(resolvedWorkspaceId),
       api.getStrategyPerformance(
         resolvedWorkspaceId,
         selectedStrategy || undefined
       ),
     ]);
 
-    setStrategyStats(Array.isArray(strategyRes) ? strategyRes : []);
     setTrades(Array.isArray(tradesRes) ? tradesRes : []);
     setLatestAuditEvents(Array.isArray(latestAuditRes) ? latestAuditRes : []);
     setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
-    setUsage(usageRes);
+    setMetrics(metricsRes); // ✅ ADD HERE
+    setStrategyStats(Array.isArray(strategyRes) ? strategyRes : []);
   }
 
   function updateManualTradeField(field: keyof TradeFormState, value: string) {
@@ -374,7 +378,7 @@ export default function WorkspaceLedgerPage() {
           tradesRes,
           latestAuditRes,
           workspaceAuditRes,
-          usageRes,
+          metricsRes,
           strategyRes
         ] = await Promise.all([
           api.getTrades(resolvedWorkspaceId, {
@@ -386,7 +390,7 @@ export default function WorkspaceLedgerPage() {
           }),
           api.getLatestAuditEvents(20),
           api.getAuditEventsForWorkspace(resolvedWorkspaceId, 50),
-          api.getWorkspaceUsage(resolvedWorkspaceId), // ✅ ADD THIS
+          api.getWorkspaceTradeMetrics(resolvedWorkspaceId),
           api.getStrategyPerformance(
             resolvedWorkspaceId,
             selectedStrategy || undefined
@@ -410,7 +414,7 @@ export default function WorkspaceLedgerPage() {
         setLatestAuditEvents(Array.isArray(latestAuditRes) ? latestAuditRes : []);
         setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
         setStrategyStats(Array.isArray(strategyRes) ? strategyRes : []);
-        setUsage(usageRes);
+        setMetrics(metricsRes);
         setUsageLoading(false); // ✅ THIS FIXES YOUR STUCK UI
 
       } catch (err) {
@@ -530,14 +534,14 @@ export default function WorkspaceLedgerPage() {
         ) : null}
 
         {usageLoading ? (
-            <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
-              Loading workspace usage...
-            </div>
-          ) : !tradeUsage ? (
-            <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm text-sm text-slate-500">
-              No usage data available.
-            </div>
-          ) : (
+          <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
+            Loading workspace usage...
+          </div>
+        ) : !metrics ? (
+          <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm text-sm text-slate-500">
+            No usage data available.
+          </div>
+        ) : (
             <div
               className={`mb-8 rounded-2xl border p-5 shadow-sm ${
                 tradeLimitReached ? "border-amber-200 bg-amber-50" : "bg-white"
@@ -590,15 +594,15 @@ export default function WorkspaceLedgerPage() {
             <div className="mt-5 grid gap-4 md:grid-cols-3">
               <div className="rounded-xl bg-white/70 p-4">
                 <div className="text-sm text-slate-500">Used</div>
-                <div className="mt-1 text-2xl font-semibold">{tradeUsage.used}</div>
+                <div className="mt-1 text-2xl font-semibold">{tradeUsed}</div>
               </div>
               <div className="rounded-xl bg-white/70 p-4">
                 <div className="text-sm text-slate-500">Limit</div>
-                <div className="mt-1 text-2xl font-semibold">{tradeUsage.limit}</div>
+                <div className="mt-1 text-2xl font-semibold">{tradeLimit}</div>
               </div>
               <div className="rounded-xl bg-white/70 p-4">
                 <div className="text-sm text-slate-500">Utilization</div>
-                <div className="mt-1 text-2xl font-semibold">{formatPercent(tradeUsage.ratio)}</div>
+                <div className="mt-1 text-2xl font-semibold">{tradeUtilization}%</div>
               </div>
             </div>
 
@@ -620,13 +624,13 @@ export default function WorkspaceLedgerPage() {
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
             <div className="text-sm text-slate-500">Trades in Ledger</div>
             <div className="mt-2 text-2xl font-semibold">
-            {trades?.length ?? 0}
-          </div>
+              {ledgerCount}
+            </div>
           </div>
 
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
             <div className="text-sm text-slate-500">Workspace Audit Events</div>
-            <div className="mt-2 text-2xl font-semibold">{workspaceAuditEvents.length}</div>
+            <div className="mt-2 text-2xl font-semibold">{ledgerCount}</div>
           </div>
 
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
