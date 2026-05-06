@@ -222,19 +222,15 @@ def get_workspace_trade_metrics(
     """
     IMPORTANT:
 
-    trades_consumed_count is governance-aware.
+    Canonical ledger is now the single
+    source of truth for governance usage.
 
-    Fallback to actual ledger count if absent.
+    We intentionally use REAL ledger
+    records to avoid stale governance
+    counters creating UI mismatches.
     """
 
-    used = (
-        getattr(
-            workspace,
-            "trades_consumed_count",
-            None,
-        )
-        or total
-    )
+    used = total
 
     utilization = (
         (used / limit) * 100
@@ -249,11 +245,9 @@ def get_workspace_trade_metrics(
     )
 
     return {
-        # GOVERNANCE
-        "used": used,
-        "consumed": used,
-
-        # REAL LEDGER RECORDS
+        # GOVERNANCE + CANONICAL LEDGER
+        "used": total,
+        "consumed": total,
         "ledger_count": total,
 
         # PLAN GOVERNANCE
