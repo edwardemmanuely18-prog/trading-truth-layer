@@ -719,12 +719,10 @@ def get_workspace_usage(
                 "status": status(member_count, limits["member_limit"]),
             },
             "trades": {
-                "used": metrics["consumed"],        # 🔒 IMMUTABLE usage
+                "used": metrics["used"],
                 "limit": limits["trade_limit"],
-                "ratio": ratio(metrics["consumed"], limits["trade_limit"]),
-                "status": status(metrics["consumed"], limits["trade_limit"]),
-
-                # 👇 ADD THIS FOR UI DISPLAY (OPTIONAL BUT IMPORTANT)
+                "ratio": ratio(metrics["used"], limits["trade_limit"]),
+                "status": status(metrics["used"], limits["trade_limit"]),
                 "ledger_count": metrics["ledger_count"],
             },
             "claims": {
