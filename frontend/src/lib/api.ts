@@ -2025,17 +2025,9 @@ export const api = {
   },
 
   getWorkspaceTradeMetrics: async (workspaceId: number) => {
-    const res = await fetch(`/api/workspaces/${workspaceId}/metrics`, {
-      headers: {
-        "Content-Type": "application/json",
-      },
+    return apiFetch<any>(`/workspaces/${workspaceId}/usage`, {
+      cache: "no-store",
     });
-
-    if (!res.ok) {
-      throw new Error("Failed to fetch workspace metrics");
-    }
-
-    return res.json();
   },
 
   getDashboard: async (workspaceId: number): Promise<DashboardResponse> => {

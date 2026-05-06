@@ -194,8 +194,8 @@ export default function WorkspaceLedgerPage() {
     setLatestAuditEvents(Array.isArray(latestAuditRes) ? latestAuditRes : []);
     setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
     setMetrics(
-      metricsRes && typeof metricsRes === "object"
-        ? metricsRes
+      metricsRes?.metrics && typeof metricsRes.metrics === "object"
+        ? metricsRes.metrics
         : {
             used: 0,
             limit: 0,
@@ -433,8 +433,8 @@ export default function WorkspaceLedgerPage() {
         setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
         setStrategyStats(Array.isArray(strategyRes) ? strategyRes : []);
         setMetrics(
-          metricsRes && typeof metricsRes === "object"
-            ? metricsRes
+          metricsRes?.metrics && typeof metricsRes.metrics === "object"
+            ? metricsRes.metrics
             : {
                 used: 0,
                 limit: 0,
