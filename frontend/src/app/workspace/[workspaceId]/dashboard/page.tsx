@@ -1060,7 +1060,10 @@ export default function WorkspaceDashboardPage() {
 
           <DashboardStatusPanel
             workspaceId={workspaceId}
-            dashboard={dashboard}
+            dashboard={{
+              ...dashboard,
+              trade_count: tradesUsage.used,
+            }}
             claims={claims}
             usage={usage}
             canCreateClaim={canCreateClaim}
@@ -1086,7 +1089,7 @@ export default function WorkspaceDashboardPage() {
             />
             <SummaryCard
               label="Total Trades"
-              value={formatNumber(dashboard.trade_count)}
+              value={formatNumber(tradesUsage.used)}
               hint={`${formatNumber(tradesUsage.used)} / ${formatNumber(
                 tradesUsage.limit
               )} · ${formatPercent(tradesUsage.ratio)}`}
