@@ -652,7 +652,14 @@ def delete_trade(
             detail=f"Trade {trade.id} is protected by locked claim {protected_claim.id} and cannot be deleted.",
         )
 
+    # REMOVE TAG MAPPINGS FIRST
+    db.query(TradeTagMap).filter(
+        TradeTagMap.trade_id == trade.id
+    ).delete()
+
+    # REMOVE TRADE
     db.delete(trade)
+
     db.commit()
 
     return {
