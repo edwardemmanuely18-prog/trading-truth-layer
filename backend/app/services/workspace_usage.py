@@ -1,7 +1,13 @@
+```python
 from sqlalchemy.orm import Session
 
 from app.models.claim_schema import ClaimSchema
 from app.models.workspace import Workspace
+
+from app.api.routes.billing import (
+    resolve_effective_plan_code,
+    get_workspace_plan_snapshot,
+)
 
 
 def normalize_plan_code(value: str | None) -> str:
@@ -10,11 +16,15 @@ def normalize_plan_code(value: str | None) -> str:
 
 def get_workspace_usage(workspace_id: int, db: Session):
     """
-    Usage is now informational only.
-    NO HARD LIMIT ENFORCEMENT HERE.
+    Unified governance usage service.
+
+    ALL plan limits come from billing.py.
+    No duplicated hardcoded limits allowed.
     """
 
-    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    workspace = db.query(Workspace).filter(
+        Workspace.id == workspace_id
+    ).first()
 
     if not workspace:
         return {
@@ -22,7 +32,7 @@ def get_workspace_usage(workspace_id: int, db: Session):
             "locked_claims": 0,
             "plan": "sandbox",
             "billing_active": False,
-            "limit": 1,
+            "limit": 0,
         }
 
     public_claims = (
@@ -44,33 +54,28 @@ def get_workspace_usage(workspace_id: int, db: Session):
         .count()
     )
 
-    plan = normalize_plan_code(workspace.plan_code)
-    billing_active = workspace.billing_status == "active"
+    effective_plan_code = resolve_effective_plan_code(workspace)
 
-    # STRICT FREE TIER LOGIC
-    if plan == "sandbox":
-        limit = 1  # allow ONLY 1 claim ever
-    elif plan == "starter":
-        limit = 5
-    elif plan == "pro":
-        limit = 50
-    elif plan == "growth":
-        limit = 200
-    else:
-        limit = 1000
+    snapshot = get_workspace_plan_snapshot(
+        effective_plan_code
+    )
 
     return {
         "public_claims": public_claims,
         "locked_claims": locked_claims,
-        "plan": plan,
-        "billing_active": billing_active,
-        "limit": limit,
+        "plan": effective_plan_code,
+        "billing_active": workspace.billing_status == "active",
+        "limit": snapshot["claim_limit"],
     }
 
 
-def can_create_public_claim(workspace_id: int, effective_plan_code: str, db: Session):
+def can_create_public_claim(
+    workspace_id: int,
+    effective_plan_code: str,
+    db: Session,
+):
     """
-    DISABLED — kept only for backward compatibility.
-    DO NOT USE THIS FOR ENFORCEMENT.
+    Disabled enforcement hook.
     """
     return True
+```

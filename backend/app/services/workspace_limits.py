@@ -8,7 +8,7 @@ from app.models.trade import Trade
 from app.models.workspace import Workspace
 from app.models.workspace_membership import WorkspaceMembership
 from app.api.routes.billing import (
-    resolve_effective_workspace_plan_code,
+    resolve_effective_plan_code,
     get_workspace_plan_snapshot,
 )
 
@@ -35,7 +35,7 @@ def get_workspace_limit_snapshot(db: Session, workspace_id: int) -> dict:
         .count()
     )
 
-    effective_plan_code = resolve_effective_workspace_plan_code(workspace)
+    effective_plan_code = resolve_effective_plan_code(workspace)
     plan_snapshot = get_workspace_plan_snapshot(effective_plan_code)
 
     member_limit = int(plan_snapshot.get("member_limit") or 0)
