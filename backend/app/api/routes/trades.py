@@ -288,7 +288,7 @@ def list_trades(
     strategy: Optional[str] = None,
     symbol: Optional[str] = None,
     side: Optional[str] = None,
-    limit: int = 50,
+    limit: int = 1000,
     offset: int = 0,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
