@@ -167,7 +167,6 @@ export default function WorkspaceLedgerPage() {
   const [editTradeSuccess, setEditTradeSuccess] = useState<string | null>(null);
 
   const [deletingTradeId, setDeletingTradeId] = useState<number | null>(null);
-  const ledgerCount = Array.isArray(trades) ? trades.length : 0;
   
   const tradeLimitReached =
     tradeLimit > 0 && tradeUsed >= tradeLimit;
@@ -655,9 +654,12 @@ export default function WorkspaceLedgerPage() {
           </div>
 
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="text-sm text-slate-500">Trades in Ledger</div>
+            <div className="text-sm text-slate-500">
+              Trades in Ledger
+            </div>
+
             <div className="mt-2 text-2xl font-semibold">
-              {ledgerCount}
+              {metrics?.ledger_count ?? 0}
             </div>
           </div>
 
