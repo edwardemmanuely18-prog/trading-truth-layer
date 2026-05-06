@@ -23,8 +23,15 @@ function formatDateTime(value?: string | null) {
 }
 
 function formatPercent(value?: number | null) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
-  return `${(Number(value) * 100).toFixed(1)}%`;
+  if (
+    value === null ||
+    value === undefined ||
+    Number.isNaN(Number(value))
+  ) {
+    return "—";
+  }
+
+  return `${Number(value).toFixed(1)}%`;
 }
 
 function summarizeJson(value?: string | null) {
