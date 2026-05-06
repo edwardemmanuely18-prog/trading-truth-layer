@@ -129,9 +129,19 @@ export default function WorkspaceLedgerPage() {
   // 🔥 NEW — Tag system
   const [tags, setTags] = useState<string[]>([]);
   const [selectedTag, setSelectedTag] = useState("");
-  const tradeUsed = metrics?.used ?? 0;
-  const tradeLimit = metrics?.limit ?? 0;
-  const tradeUtilization = metrics?.utilization ?? 0;
+  const tradeUsed =
+    typeof metrics?.used === "number"
+      ? metrics.used
+      : 0;
+
+  const tradeLimit =
+    typeof metrics?.limit === "number"
+      ? metrics.limit
+      : 0;
+  const tradeUtilization =
+    typeof metrics?.utilization === "number"
+      ? metrics.utilization
+      : 0;
 
   const [usageLoading, setUsageLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -183,7 +193,15 @@ export default function WorkspaceLedgerPage() {
     setTrades(Array.isArray(tradesRes) ? tradesRes : []);
     setLatestAuditEvents(Array.isArray(latestAuditRes) ? latestAuditRes : []);
     setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
-    setMetrics(metricsRes); // ✅ ADD HERE
+    setMetrics(
+      metricsRes && typeof metricsRes === "object"
+        ? metricsRes
+        : {
+            used: 0,
+            limit: 0,
+            utilization: 0,
+          }
+    );
     setStrategyStats(Array.isArray(strategyRes) ? strategyRes : []);
   }
 
@@ -414,7 +432,15 @@ export default function WorkspaceLedgerPage() {
         setLatestAuditEvents(Array.isArray(latestAuditRes) ? latestAuditRes : []);
         setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
         setStrategyStats(Array.isArray(strategyRes) ? strategyRes : []);
-        setMetrics(metricsRes);
+        setMetrics(
+          metricsRes && typeof metricsRes === "object"
+            ? metricsRes
+            : {
+                used: 0,
+                limit: 0,
+                utilization: 0,
+              }
+        );
         setUsageLoading(false); // ✅ THIS FIXES YOUR STUCK UI
 
       } catch (err) {
@@ -630,7 +656,9 @@ export default function WorkspaceLedgerPage() {
 
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
             <div className="text-sm text-slate-500">Workspace Audit Events</div>
-            <div className="mt-2 text-2xl font-semibold">{ledgerCount}</div>
+            <div className="mt-2 text-2xl font-semibold">
+              {workspaceAuditEvents.length}
+            </div>
           </div>
 
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
