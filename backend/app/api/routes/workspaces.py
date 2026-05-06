@@ -698,7 +698,10 @@ def get_workspace_usage(
         storage_used_mb = 0
 
         def ratio(used, limit):
-            return round(used / limit, 4) if limit else None
+            if not limit:
+                return None
+
+            return round((used / limit) * 100, 2)
 
         def status(used, limit):
             if not limit:
