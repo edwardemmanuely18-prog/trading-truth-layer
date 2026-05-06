@@ -13,8 +13,6 @@ from app.models.workspace import Workspace
 from app.models.workspace_membership import WorkspaceMembership
 from app.services.audit_service import log_audit_event
 
-from app.models.trade import Trade
-from app.models.workspace import Workspace
 from fastapi import HTTPException
 
 router = APIRouter()
@@ -610,14 +608,16 @@ def get_workspace_dashboard(
 
     require_workspace_member(workspace_id, current_user, db)
 
-    member_ids = db.query(Trade.member_id).filter(Trade.workspace_id == workspace_id).distinct().all()
+    member_count = db.query(WorkspaceMembership).filter(
+        WorkspaceMembership.workspace_id == workspace_id
+    ).count()
     trade_count = db.query(Trade).filter(Trade.workspace_id == workspace_id).count()
     claim_count = db.query(ClaimSchema).filter(ClaimSchema.workspace_id == workspace_id).count()
 
     return {
         "workspace_id": workspace.id,
         "workspace_name": workspace.name,
-        "member_count": len(member_ids),
+        "member_count": member_count,
         "trade_count": trade_count,
         "claim_count": claim_count,
     }
@@ -789,51 +789,6 @@ def get_workspace_usage(
             status_code=500,
             detail=f"USAGE_ENDPOINT_ERROR: {str(e)}"
         )
-
-
-    return {
-        "workspace_id": workspace.id,
-        "plan_code": normalize_plan_code(workspace.plan_code),
-        "billing_status": normalize_billing_status(workspace.billing_status),
-        "effective_plan_code": governance_state["effective_plan_code"],
-        "usage": usage,
-        "metrics": metrics,
-        "stripe_ready": {
-            "has_customer_id": bool(workspace.stripe_customer_id),
-            "has_subscription_id": bool(workspace.stripe_subscription_id),
-            "integration_status": "fallback_only",
-        },
-        "governance": {
-            "has_any_over_limit": any(row["status"] == "over_limit" for row in usage.values()),
-            "has_any_at_limit": any(row["status"] == "at_limit" for row in usage.values()),
-            "has_any_near_limit": any(row["status"] == "near_limit" for row in usage.values()),
-            "upgrade_required_now": upgrade["upgrade_required_now"],
-            "upgrade_recommended_soon": upgrade["upgrade_recommended_soon"],
-            "billing_activation_recommended": upgrade["billing_activation_recommended"],
-            "configured_plan_code": governance_state["configured_plan_code"],
-            "effective_plan_code": governance_state["effective_plan_code"],
-            "paid_access_active": governance_state["paid_access_active"],
-            "plan_mismatch": governance_state["plan_mismatch"],
-            "plan_mismatch_reason": governance_state["reason"],
-            "plan_mismatch_message": governance_state["message"],
-        },
-        "upgrade_recommendation": upgrade,
-        "plan_catalog": get_plan_catalog(),
-        "configured_plan_detail": {
-            "code": configured_plan_definition["code"],
-            "name": configured_plan_definition["name"],
-            "description": configured_plan_definition["description"],
-            "recommended_for": configured_plan_definition["recommended_for"],
-            "billing": configured_plan_definition["billing"],
-        },
-        "effective_plan_detail": {
-            "code": effective_plan_definition["code"],
-            "name": effective_plan_definition["name"],
-            "description": effective_plan_definition["description"],
-            "recommended_for": effective_plan_definition["recommended_for"],
-            "billing": effective_plan_definition["billing"],
-        },
-    }
 
 
 @router.get("/workspaces/{workspace_id}/members")
