@@ -651,14 +651,22 @@ function WorkflowProgressPanel({
         : "active"
       : "pending";
   const publishStatus: "complete" | "active" | "pending" =
-    lockedCount > 0 ? "complete" : publishedCount > 0 ? "active" : "pending";
+    publishedCount > 0 || lockedCount > 0
+      ? "complete"
+      : verifiedCount > 0
+        ? "active"
+        : "pending";
 
+  const lockStatus: "complete" | "active" | "pending" =
+    lockedCount > 0 ? "complete" : "pending";
   return (
     <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
         Workflow progress
       </div>
-      <h2 className="mt-2 text-2xl font-semibold text-slate-950">Import → verify → publish</h2>
+      <h2 className="mt-2 text-2xl font-semibold text-slate-950">
+        Import → Ledger → Claim → Verify → Publish → Lock
+      </h2>
       <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
         Trading Truth Layer operates as a governed workflow. This strip shows where the workspace
         currently sits across ingestion, claim construction, verification, and public trust
@@ -674,7 +682,9 @@ function WorkflowProgressPanel({
         <div className="text-slate-300">→</div>
         <WorkflowStage label="Verify" status={verifyStatus} />
         <div className="text-slate-300">→</div>
-        <WorkflowStage label="Publish / Lock" status={publishStatus} />
+        <WorkflowStage label="Publish" status={publishStatus} />
+        <div className="text-slate-300">→</div>
+        <WorkflowStage label="Lock" status={lockStatus} />
       </div>
     </div>
   );
