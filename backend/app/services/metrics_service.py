@@ -1,21 +1,23 @@
 from sqlalchemy.orm import Session
+
 from app.models.trade import Trade
 from app.models.workspace import Workspace
 
 
 def get_workspace_trade_metrics(db: Session, workspace_id: int) -> dict:
-    trades = db.query(Trade).filter(
-        Trade.workspace_id == workspace_id
-    ).all()
+    trades = (
+        db.query(Trade)
+        .filter(Trade.workspace_id == workspace_id)
+        .all()
+    )
 
     total = len(trades)
 
-    workspace = db.query(Workspace).filter(
-        Workspace.id == workspace_id
-    ).first()
-
-    # ✅ USE TRUE CONSUMPTION (NOT CURRENT COUNT)
-    used = workspace.trades_consumed_count or 0
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
 
     limit = workspace.trade_limit if workspace else 200
 
@@ -33,16 +35,13 @@ def get_workspace_trade_metrics(db: Session, workspace_id: int) -> dict:
             losses += 1
 
     win_rate = (wins / total * 100) if total > 0 else 0
-    utilization = (used / limit * 100) if limit > 0 else 0
-
-    used = getattr(workspace, "trades_consumed_count", 0) or 0
+    utilization = (total / limit * 100) if limit > 0 else 0
 
     return {
-        "used": used,                 # ✅ billing enforcement
-        "consumed": used,             # optional alias
-        "ledger_count": total,        # ✅ real trades in DB
+        "used": total,
+        "ledger_count": total,
         "limit": limit,
-        "utilization": round((used / limit * 100), 2) if limit > 0 else 0,
+        "utilization": round(utilization, 2),
         "win_rate": round(win_rate, 2),
         "total_pnl": round(total_pnl, 2),
         "wins": wins,
