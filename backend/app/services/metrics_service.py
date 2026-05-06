@@ -222,15 +222,24 @@ def get_workspace_trade_metrics(
     """
     IMPORTANT:
 
-    Canonical ledger is now the single
-    source of truth for governance usage.
+    Governed trade usage is immutable.
 
-    We intentionally use REAL ledger
-    records to avoid stale governance
-    counters creating UI mismatches.
+    Imports increase governed usage.
+    Deleting trades MUST NOT reduce it.
+
+    Therefore:
+    - used = lifetime consumed imports
+    - ledger_count = current DB rows
     """
 
-    used = total
+    used = (
+        getattr(
+            workspace,
+            "trades_consumed_count",
+            0,
+        )
+        or 0
+    )
 
     utilization = (
         (used / limit) * 100
@@ -245,9 +254,11 @@ def get_workspace_trade_metrics(
     )
 
     return {
-        # GOVERNANCE + CANONICAL LEDGER
-        "used": total,
-        "consumed": total,
+        # IMMUTABLE GOVERNANCE
+        "used": used,
+        "consumed": used,
+
+        # LIVE LEDGER
         "ledger_count": total,
 
         # PLAN GOVERNANCE
