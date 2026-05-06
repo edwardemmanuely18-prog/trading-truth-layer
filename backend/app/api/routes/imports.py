@@ -9,6 +9,7 @@ from app.models.user import User
 
 from app.core.db import get_db
 from app.models.import_batch import ImportBatch
+from app.models.workspace import Workspace
 from app.services.trade_import import (
     build_import_job_payload,
     build_stream_event_payload,
@@ -303,6 +304,20 @@ def ingest_webhook_trades(
         audit_source="imports.ingest_webhook_trades",
     )
 
+    # IMMUTABLE GOVERNANCE CONSUMPTION
+    rows_imported = int(
+        result.get("rows_imported", 0)
+    )
+
+    workspace.trades_consumed_count = (
+        (workspace.trades_consumed_count or 0)
+        + rows_imported
+    )
+
+    db.add(workspace)
+    db.commit()
+    db.refresh(workspace)
+
     return {
         **result,
         "message": "Webhook trades ingested",
@@ -388,6 +403,21 @@ async def upload_import_file(
             actor_user_id=None,
             audit_source="imports.upload_import_file",
         )
+
+        # IMMUTABLE GOVERNANCE CONSUMPTION
+        rows_imported = int(
+            result.get("rows_imported", 0)
+        )
+
+        workspace.trades_consumed_count = (
+            (workspace.trades_consumed_count or 0)
+            + rows_imported
+        )
+
+        db.add(workspace)
+        db.commit()
+        db.refresh(workspace)
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -536,6 +566,20 @@ def ingest_stream_event(
         actor_user_id=None,
         audit_source="imports.ingest_stream_event",
     )
+
+    # IMMUTABLE GOVERNANCE CONSUMPTION
+    rows_imported = int(
+        result.get("rows_imported", 0)
+    )
+
+    workspace.trades_consumed_count = (
+        (workspace.trades_consumed_count or 0)
+        + rows_imported
+    )
+
+    db.add(workspace)
+    db.commit()
+    db.refresh(workspace)
 
     return {
         **result,
