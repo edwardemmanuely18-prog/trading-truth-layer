@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     PADDLE_WEBHOOK_SECRET: str | None = None
     PADDLE_API_BASE_URL: str = "https://api.paddle.com"
 
+    LEMON_BILLING_ENABLED: bool = False
+    LEMON_API_KEY: str | None = None
+    LEMON_STORE_ID: str | None = None
+    LEMON_WEBHOOK_SECRET: str | None = None
+    LEMON_API_BASE_URL: str = "https://api.lemonsqueezy.com/v1"
+
     MANUAL_BILLING_ENABLED: bool = True
 
     MANUAL_PAYMENT_METHOD: str | None = None

@@ -74,6 +74,33 @@ def on_startup():
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
+
+    try:
+        inspector = inspect(engine)
+
+        columns = [
+            col["name"]
+            for col in inspector.get_columns("workspaces")
+        ]
+
+        workspace_patches = {
+            "lemon_customer_id": "ALTER TABLE workspaces ADD COLUMN lemon_customer_id VARCHAR",
+            "lemon_subscription_id": "ALTER TABLE workspaces ADD COLUMN lemon_subscription_id VARCHAR",
+            "lemon_order_id": "ALTER TABLE workspaces ADD COLUMN lemon_order_id VARCHAR",
+            "lemon_product_id": "ALTER TABLE workspaces ADD COLUMN lemon_product_id VARCHAR",
+            "is_internal_workspace": "ALTER TABLE workspaces ADD COLUMN is_internal_workspace BOOLEAN DEFAULT FALSE",
+            "subscription_source": "ALTER TABLE workspaces ADD COLUMN subscription_source VARCHAR",
+        }
+
+        for column_name, sql in workspace_patches.items():
+            if column_name not in columns:
+                db.execute(text(sql))
+                db.commit()
+
+    finally:
+        db.close()
+
+    db = SessionLocal()
     try:
         # -------------------------
         # Ensure default workspace

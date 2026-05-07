@@ -1494,71 +1494,6 @@ def create_billing_portal_session(
     }
 
 
-@router.post("/paddle/webhook")
-async def paddle_webhook(request: Request):
-    body = await request.body()
-
-    secret = settings.PADDLE_WEBHOOK_SECRET
-    signature = request.headers.get("paddle-signature")
-
-    if not signature or not verify_paddle_signature(body, signature, secret):
-        return {"status": "invalid signature"}
-
-    data = await request.json()
-
-    # 👉 continue your existing logic here
-    # e.g. subscription activated, updated, etc.
-
-    return {"status": "ok"}
-
-    try:
-        payload = json.loads(raw_body.decode("utf-8"))
-    except Exception:
-        return {
-            "received": False,
-            "mode": "invalid_payload",
-            "message": "Invalid Paddle webhook payload.",
-        }
-
-    event_type = payload.get("event_type")
-    event_data = (payload.get("data") or {}) if isinstance(payload, dict) else {}
-
-    try:
-        workspace = find_workspace_for_paddle_data(db, event_data)
-        if not workspace:
-            return {
-                "received": True,
-                "event_type": event_type,
-                "message": "No matching workspace found for Paddle event.",
-            }
-
-        if event_type in {
-            "transaction.completed",
-            "transaction.paid",
-            "subscription.created",
-            "subscription.updated",
-            "subscription.activated",
-            "subscription.resumed",
-            "subscription.canceled",
-            "subscription.paused",
-            "subscription.past_due",
-        }:
-            update_workspace_billing_from_paddle_event(workspace, event_data, db)
-
-    except Exception as exc:
-        return {
-            "received": False,
-            "mode": "webhook_processing_failed",
-            "event_type": event_type,
-            "message": f"Paddle webhook processing failed: {exc}",
-        }
-
-    return {
-        "received": True,
-        "event_type": event_type,
-    }
-
-
 @router.post("/stripe/webhooks")
 async def handle_stripe_webhook(
     request: Request,
@@ -1679,6 +1614,14 @@ import json
 async def paddle_webhook(request: Request, db: Session = Depends(get_db)):
     try:
         body = await request.body()
+
+        signature = request.headers.get("paddle-signature")
+
+        if not paddle_verify_signature(body, signature):
+            return {
+                "status": "invalid_signature"
+            }
+
         payload = json.loads(body)
 
         event_type = payload.get("event_type")
