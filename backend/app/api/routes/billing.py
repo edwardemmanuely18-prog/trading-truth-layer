@@ -347,13 +347,18 @@ def get_frontend_base_url() -> str:
 
 def get_active_billing_provider(workspace: Workspace) -> str:
     provider = str(workspace.billing_provider or "").strip().lower()
-    if provider in {"paddle", "stripe", "manual"}:
+    if provider in {"paddle", "stripe", "manual", "lemon"}:
         return provider
+
+    if lemon_is_ready():
+        return "lemon"
 
     if paddle_is_ready():
         return "paddle"
+
     if stripe_is_ready():
         return "stripe"
+
     if manual_billing_is_ready():
         return "manual"
     return "none"
@@ -365,6 +370,8 @@ def get_billing_provider_display_label(provider: str | None) -> str:
         return "Paddle"
     if normalized == "stripe":
         return "Stripe"
+    if normalized == "lemon":
+        return "Lemon Squeezy"    
     if normalized == "manual":
         return "Manual Billing"
     return "Unconfigured"
@@ -475,6 +482,33 @@ def paddle_is_ready() -> bool:
         and str(settings.PADDLE_API_KEY).strip()
         and get_paddle_price_catalog()
     )
+
+
+def lemon_is_ready() -> bool:
+    return bool(
+        getattr(settings, "LEMON_BILLING_ENABLED", False)
+        and getattr(settings, "LEMON_API_KEY", None)
+        and str(settings.LEMON_API_KEY).strip()
+        and getattr(settings, "LEMON_STORE_ID", None)
+    )
+
+
+def lemon_api_headers():
+    return {
+        "Authorization": f"Bearer {settings.LEMON_API_KEY}",
+        "Accept": "application/vnd.api+json",
+        "Content-Type": "application/vnd.api+json",
+    }
+
+
+def lemon_api_base_url() -> str:
+    return str(
+        getattr(
+            settings,
+            "LEMON_API_BASE_URL",
+            "https://api.lemonsqueezy.com/v1"
+        )
+    ).rstrip("/")    
 
 
 def manual_billing_is_ready() -> bool:
@@ -957,6 +991,26 @@ def paddle_verify_signature(raw_body: bytes, signature_header: str | None) -> bo
         return hmac.compare_digest(expected, provided_h1)
     except Exception:
         return False
+
+
+def lemon_verify_signature(raw_body: bytes, signature: str | None) -> bool:
+    secret = str(
+        getattr(settings, "LEMON_WEBHOOK_SECRET", "") or ""
+    ).strip()
+
+    if not secret:
+        return False
+
+    if not signature:
+        return False
+
+    expected = hmac.new(
+        secret.encode(),
+        raw_body,
+        hashlib.sha256
+    ).hexdigest()
+
+    return hmac.compare_digest(expected, signature)        
 
 
 @router.get("/workspaces/{workspace_id}/billing-foundation")
@@ -1677,6 +1731,96 @@ async def paddle_webhook(request: Request, db: Session = Depends(get_db)):
         print("Webhook error:", str(e))
         return {"status": "error"}
 
+
+
+@router.post("/webhook/lemon")
+async def lemon_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    try:
+        raw_body = await request.body()
+
+        signature = request.headers.get("X-Signature")
+
+        if not lemon_verify_signature(raw_body, signature):
+            return {
+                "status": "invalid_signature"
+            }
+
+        payload = json.loads(raw_body)
+
+        meta = payload.get("meta", {})
+        event_name = meta.get("event_name")
+
+        data = payload.get("data", {})
+        attributes = data.get("attributes", {})
+
+        custom_data = attributes.get("custom_data", {}) or {}
+
+        workspace_id = custom_data.get("workspace_id")
+
+        if not workspace_id:
+            return {
+                "status": "workspace_missing"
+            }
+
+        workspace = (
+            db.query(Workspace)
+            .filter(Workspace.id == int(workspace_id))
+            .first()
+        )
+
+        if not workspace:
+            return {
+                "status": "workspace_not_found"
+            }
+
+        workspace.subscription_source = "lemon"
+        workspace.billing_provider = "lemon"
+
+        # --------------------------------
+        # ORDER CREATED
+        # --------------------------------
+        if event_name == "order_created":
+            workspace.lemon_order_id = str(data.get("id"))
+
+            workspace.billing_status = "active"
+
+        # --------------------------------
+        # SUBSCRIPTION CREATED
+        # --------------------------------
+        if event_name == "subscription_created":
+            workspace.lemon_subscription_id = str(data.get("id"))
+
+            workspace.billing_status = "active"
+
+        # --------------------------------
+        # SUBSCRIPTION EXPIRED
+        # --------------------------------
+        if event_name == "subscription_expired":
+            workspace.billing_status = "inactive"
+
+        # --------------------------------
+        # SUBSCRIPTION CANCELLED
+        # --------------------------------
+        if event_name == "subscription_cancelled":
+            workspace.billing_status = "canceled"
+
+        workspace.updated_at = datetime.utcnow()
+
+        db.commit()
+
+        return {
+            "status": "ok",
+            "event": event_name,
+        }
+
+    except Exception as exc:
+        return {
+            "status": "error",
+            "message": str(exc),
+        }
 
 @router.get("/workspaces/{workspace_id}/usage")
 def get_workspace_usage(

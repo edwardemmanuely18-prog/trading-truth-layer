@@ -88,6 +88,7 @@ def on_startup():
             "lemon_subscription_id": "ALTER TABLE workspaces ADD COLUMN lemon_subscription_id VARCHAR",
             "lemon_order_id": "ALTER TABLE workspaces ADD COLUMN lemon_order_id VARCHAR",
             "lemon_product_id": "ALTER TABLE workspaces ADD COLUMN lemon_product_id VARCHAR",
+            "lemon_variant_id": "ALTER TABLE workspaces ADD COLUMN lemon_variant_id VARCHAR",
             "is_internal_workspace": "ALTER TABLE workspaces ADD COLUMN is_internal_workspace BOOLEAN DEFAULT FALSE",
             "subscription_source": "ALTER TABLE workspaces ADD COLUMN subscription_source VARCHAR",
         }

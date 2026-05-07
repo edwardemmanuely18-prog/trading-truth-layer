@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     LEMON_STORE_ID: str | None = None
     LEMON_WEBHOOK_SECRET: str | None = None
     LEMON_API_BASE_URL: str = "https://api.lemonsqueezy.com/v1"
+    LEMON_WEBHOOK_URL: str | None = None
+    LEMON_TEST_MODE: bool = True
 
     MANUAL_BILLING_ENABLED: bool = True
 
