@@ -4,15 +4,16 @@ export default function TermsPage() {
       <h1>Terms & Conditions</h1>
 
       <p>
-        This platform, Trading Truth Layer, is operated by <b>Aurum Hybrid</b>,
+        This platform, Trading Truth Layer, is operated by <b>Trading Truth Layer</b>,
         based in Tanzania. By accessing or using this service, you agree to the
         following terms.
       </p>
 
       <h2>1. Service</h2>
       <p>
-        Trading Truth Layer provides verification infrastructure, claim
-        management systems, and workspace collaboration tools.
+        Trading Truth Layer provides verification infrastructure, canonical
+        ledger systems, workspace collaboration tools, governance workflows,
+        analytics, and operational record management services.
       </p>
 
       <h2>2. Accounts</h2>
@@ -23,43 +24,51 @@ export default function TermsPage() {
 
       <h2>3. Acceptable Use</h2>
       <p>
-        You agree not to misuse the platform, exploit vulnerabilities, or attempt
-        unauthorized access.
+        You agree not to misuse the platform, exploit vulnerabilities, attempt
+        unauthorized access, interfere with system operations, or abuse platform
+        infrastructure.
       </p>
 
       <h2>4. Subscription & Billing</h2>
       <p>
-        Some features require a paid subscription. Payments are processed via{" "}
-        <b>Paddle</b>, our Merchant of Record. Pricing and limits are displayed on
-        the pricing page.
+        Some features require a paid subscription. Payments are processed
+        through authorized billing and payment infrastructure providers.
+        Pricing, usage limits, and entitlements are displayed on the pricing
+        page.
       </p>
 
       <h2>5. Cancellation</h2>
       <p>
-        You may cancel your subscription at any time. Access continues until the
-        end of your billing period.
+        You may cancel your subscription at any time. Access continues until
+        the end of the active billing period unless otherwise required by law.
       </p>
 
       <h2>6. Refunds</h2>
       <p>
-        Refunds are governed by our Refund Policy.
+        Refund eligibility and processing are governed by our Refund Policy.
       </p>
 
       <h2>7. Limitation of Liability</h2>
       <p>
-        Aurum Hybrid is not liable for financial losses, trading outcomes, or
-        operational decisions made using this platform.
+        Trading Truth Layer is not liable for trading losses, financial outcomes,
+        operational decisions, or business interruptions resulting from use of
+        the platform.
       </p>
 
-      <h2>8. Changes</h2>
+      <h2>8. No Financial Advice</h2>
       <p>
-        We may update these terms at any time. Continued use implies acceptance.
+        Trading Truth Layer does not provide brokerage services, custody,
+        investment management, or financial advice.
       </p>
 
-      <h2>9. Contact</h2>
+      <h2>9. Changes</h2>
       <p>
-        Email: tradingtruthlayer@gmail.com
+        We may update these terms periodically. Continued use of the platform
+        after updates constitutes acceptance of the revised terms.
       </p>
+
+      <h2>10. Contact</h2>
+      <p>Email: tradingtruthlayer@gmail.com</p>
     </div>
   );
 }

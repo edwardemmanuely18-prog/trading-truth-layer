@@ -2,14 +2,20 @@ export default function PricingPage() {
   return (
     <div style={{ padding: "40px", maxWidth: 1100, margin: "auto" }}>
       <h1>Pricing</h1>
+
       <p>
-        Choose a plan that fits your verification workflow, scale, and team size.
+        Choose a plan that fits your operational verification workflow,
+        governance scale, and workspace requirements.
       </p>
 
       {/* Sandbox */}
       <div style={card}>
         <h2>Sandbox</h2>
-        <p>Controlled evaluation environment for product proof.</p>
+
+        <p>
+          Controlled evaluation environment for testing platform workflows and
+          product capabilities.
+        </p>
 
         <p><strong>$0/month</strong></p>
 
@@ -24,7 +30,11 @@ export default function PricingPage() {
       {/* Starter */}
       <div style={card}>
         <h2>Starter</h2>
-        <p>Entry plan for early verification workflows.</p>
+
+        <p>
+          Entry commercial tier for small verification workflows and operational
+          teams.
+        </p>
 
         <p><strong>$19/month</strong> or $190/year</p>
 
@@ -39,7 +49,11 @@ export default function PricingPage() {
       {/* Pro */}
       <div style={card}>
         <h2>Pro</h2>
-        <p>For serious traders and small commercial operators.</p>
+
+        <p>
+          Designed for active operators requiring larger canonical record
+          capacity and collaboration controls.
+        </p>
 
         <p><strong>$79/month</strong> or $790/year</p>
 
@@ -54,7 +68,11 @@ export default function PricingPage() {
       {/* Growth */}
       <div style={card}>
         <h2>Growth</h2>
-        <p>Operational tier for scaling teams.</p>
+
+        <p>
+          Operational scale tier for growing teams, governance workflows, and
+          verification infrastructure expansion.
+        </p>
 
         <p><strong>$249/month</strong> or $2,490/year</p>
 
@@ -69,7 +87,11 @@ export default function PricingPage() {
       {/* Business */}
       <div style={card}>
         <h2>Business</h2>
-        <p>High-capacity tier for institutional use.</p>
+
+        <p>
+          Enterprise-grade operational capacity for institutional workspace
+          environments.
+        </p>
 
         <p><strong>$999/month</strong> or $9,990/year</p>
 

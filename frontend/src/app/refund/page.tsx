@@ -4,32 +4,41 @@ export default function RefundPage() {
       <h1>Refund Policy</h1>
 
       <p>
-        Trading Truth Layer is operated by <b>Aurum Hybrid</b> and uses Paddle as
-        its Merchant of Record.
+        Trading Truth Layer is operated by <b>Trading Truth Layer</b> and provides
+        subscription-based software services.
       </p>
 
       <h2>14-Day Refund Guarantee</h2>
-      <p>
-        Customers are entitled to request a full refund within <b>14 days</b> of
-        purchase, without providing any reason.
-      </p>
 
-      {/* ✅ REQUIRED PADDLE ALIGNMENT LINE */}
       <p>
-        Refunds are processed in accordance with Paddle’s Buyer Terms.
+        Customers may request a refund within <b>14 days</b> of an eligible
+        purchase unless prohibited by applicable law or platform abuse policies.
       </p>
 
       <h2>Refund Processing</h2>
+
       <p>
-        Refunds will be processed via the original payment method through Paddle.
+        Approved refunds are returned through the original payment method used
+        during purchase.
       </p>
 
-      <h2>After 14 Days</h2>
+      <h2>Non-Refundable Situations</h2>
+
+      <ul>
+        <li>Fraudulent activity or abuse of the platform</li>
+        <li>Violation of platform terms</li>
+        <li>Requests made after the refund eligibility period</li>
+      </ul>
+
+      <h2>Subscription Cancellation</h2>
+
       <p>
-        After 14 days, refunds may not be granted unless required by law.
+        Subscription cancellation prevents future renewals but does not
+        automatically trigger a refund.
       </p>
 
       <h2>Contact</h2>
+
       <p>Email: tradingtruthlayer@gmail.com</p>
     </div>
   );
