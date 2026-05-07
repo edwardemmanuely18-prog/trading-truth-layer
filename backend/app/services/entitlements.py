@@ -25,35 +25,47 @@ ALLOWED_PLAN_CODES = {
 }
 
 PLAN_DEFAULTS: dict[str, dict[str, int]] = {
+
+    "sandbox": {
+        "claims": 5,
+        "trades": 1000,
+        "members": 3,
+        "storage_mb": 100,
+    },
+
     "internal": {
         "claims": 999999999,
         "trades": 999999999,
         "members": 999999999,
         "storage_mb": 999999999,
     },
+
     "starter": {
         "claims": 5,
-        "trades": 1000,
+        "trades": 5000,
         "members": 3,
         "storage_mb": 500,
     },
+
     "pro": {
-        "claims": 25,
-        "trades": 10000,
-        "members": 10,
-        "storage_mb": 5000,
+        "claims": 50,
+        "trades": 50000,
+        "members": 25,
+        "storage_mb": 2048,
     },
+
     "growth": {
-        "claims": 100,
-        "trades": 100000,
-        "members": 50,
-        "storage_mb": 25000,
+        "claims": 200,
+        "trades": 250000,
+        "members": 100,
+        "storage_mb": 10240,
     },
+
     "business": {
         "claims": 500,
         "trades": 1000000,
         "members": 250,
-        "storage_mb": 100000,
+        "storage_mb": 51200,
     },
 }
 
@@ -122,7 +134,7 @@ def _candidate_plan_fields(workspace: Workspace) -> list[str]:
 
 
 def resolve_workspace_plan_code(workspace: Workspace) -> str:
-    
+
     if getattr(workspace, "is_internal_workspace", 0):
         return "internal"
 
@@ -354,28 +366,40 @@ def enforce_member_invite_allowed(
 
 
 def enforce_trade_import_allowed(
-    *,
-    workspace,
+    workspace_id: int,
+    db: Session,
     incoming_count: int,
-    current_count: int,
-):
-    """
-    Enforce trade import limits based on workspace plan.
-    """
+) -> Workspace:
 
-    # Example logic (adjust if you already have plan fields)
-    max_trades = getattr(workspace, "trade_limit", None)
+    workspace = enforce_workspace_billing_access(
+        workspace_id,
+        db,
+        allow_past_due=True,
+        action_label="import additional trades",
+    )
 
-    if max_trades is None:
-        return  # unlimited plan
+    usage = get_workspace_usage_counts(
+        workspace_id,
+        db,
+    )
 
-    if current_count + incoming_count > max_trades:
-        from fastapi import HTTPException
-        raise HTTPException(
-            status_code=403,
-            detail="Trade import limit exceeded for your plan"
-        )
+    limits = get_workspace_plan_limits(
+        workspace
+    )
 
+    enforce_limit_not_reached(
+        used=usage["trades"],
+        limit=limits["trades"],
+        resource_label="trade",
+        workspace_id=workspace_id,
+        requested_additional=max(
+            int(incoming_count),
+            1,
+        ),
+    )
+
+    return workspace
+    
 
 def enforce_readonly_access_allowed(
     workspace_id: int,

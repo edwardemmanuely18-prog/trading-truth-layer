@@ -12,6 +12,14 @@ from app.models.user import User
 from app.models.workspace import Workspace
 from app.models.workspace_membership import WorkspaceMembership
 from app.services.audit_service import log_audit_event
+from app.services.entitlements import (
+    normalize_plan_code,
+    normalize_billing_status,
+    resolve_workspace_plan_code,
+    build_entitlement_snapshot,
+    get_workspace_plan_limits,
+    get_workspace_usage_counts,
+)
 
 from fastapi import HTTPException
 
@@ -66,305 +74,49 @@ def serialize_workspace_member(membership: WorkspaceMembership, user: User):
     }
 
 
-def normalize_plan_code(plan_code: str | None) -> str:
-    allowed = {"sandbox", "starter", "pro", "growth", "business"}
-    value = str(plan_code or "").strip().lower()
-    return value if value in allowed else "starter"
-
-
-def normalize_billing_status(status: str | None) -> str:
-    allowed = {
-        "inactive",
-        "active",
-        "trialing",
-        "past_due",
-        "canceled",
-        "unpaid",
-        "pending_manual_review",
-    }
-    value = str(status or "").strip().lower()
-    return value if value in allowed else "inactive"
-
-
 def normalize_workspace_role(value: str | None) -> str:
     normalized = str(value or "").strip().lower()
     allowed_roles = {"owner", "operator", "member", "auditor"}
     return normalized if normalized in allowed_roles else "member"
 
 
-def get_plan_order() -> list[str]:
-    return ["sandbox", "starter", "pro", "growth", "business"]
-
-
-def get_plan_catalog():
-    return [
-        {
-            "code": "sandbox",
-            "name": "Sandbox",
-            "description": "Controlled evaluation environment for product proof and safe pre-billing exploration.",
-            "limits": {
-                "claim_limit": 2,
-                "trade_limit": 200,
-                "member_limit": 2,
-                "storage_limit_mb": 100,
-            },
-            "recommended_for": [
-                "internal demos",
-                "early product proof",
-                "controlled evaluation",
-            ],
-            "billing": {
-                "monthly_price_usd": 0,
-                "annual_price_usd": 0,
-                "currency": "USD",
-                "billing_interval": "none",
-                "stripe_price_lookup_key_monthly": None,
-                "stripe_price_lookup_key_annual": None,
-            },
-            "public_price_hint": "sandbox_controlled_evaluation",
-        },
-        {
-            "code": "starter",
-            "name": "Starter",
-            "description": "Entry plan for early operators validating claim workflows.",
-            "limits": {
-                "claim_limit": 5,
-                "trade_limit": 1000,
-                "member_limit": 3,
-                "storage_limit_mb": 500,
-            },
-            "recommended_for": [
-                "solo traders",
-                "small verification pilots",
-                "early workspace setup",
-            ],
-            "billing": {
-                "monthly_price_usd": 19,
-                "annual_price_usd": 190,
-                "currency": "USD",
-                "billing_interval": "monthly_or_annual",
-                "stripe_price_lookup_key_monthly": "ttl_starter_monthly",
-                "stripe_price_lookup_key_annual": "ttl_starter_annual",
-            },
-            "public_price_hint": "starter_placeholder",
-        },
-        {
-            "code": "pro",
-            "name": "Pro",
-            "description": "Higher limits for serious traders and small commercial operators.",
-            "limits": {
-                "claim_limit": 25,
-                "trade_limit": 10000,
-                "member_limit": 10,
-                "storage_limit_mb": 5000,
-            },
-            "recommended_for": [
-                "serious traders",
-                "educators",
-                "small paid communities",
-            ],
-            "billing": {
-                "monthly_price_usd": 79,
-                "annual_price_usd": 790,
-                "currency": "USD",
-                "billing_interval": "monthly_or_annual",
-                "stripe_price_lookup_key_monthly": "ttl_pro_monthly",
-                "stripe_price_lookup_key_annual": "ttl_pro_annual",
-            },
-            "public_price_hint": "pro_placeholder",
-        },
-        {
-            "code": "growth",
-            "name": "Growth",
-            "description": "Operational tier for teams running multiple verification surfaces.",
-            "limits": {
-                "claim_limit": 100,
-                "trade_limit": 100000,
-                "member_limit": 50,
-                "storage_limit_mb": 25000,
-            },
-            "recommended_for": [
-                "signal groups",
-                "prop-style operators",
-                "growing businesses",
-            ],
-            "billing": {
-                "monthly_price_usd": 249,
-                "annual_price_usd": 2490,
-                "currency": "USD",
-                "billing_interval": "monthly_or_annual",
-                "stripe_price_lookup_key_monthly": "ttl_growth_monthly",
-                "stripe_price_lookup_key_annual": "ttl_growth_annual",
-            },
-            "public_price_hint": "growth_placeholder",
-        },
-        {
-            "code": "business",
-            "name": "Business",
-            "description": "High-capacity tier for institutional and infrastructure use cases.",
-            "limits": {
-                "claim_limit": 500,
-                "trade_limit": 1000000,
-                "member_limit": 250,
-                "storage_limit_mb": 100000,
-            },
-            "recommended_for": [
-                "funds",
-                "institutions",
-                "B2B verification operations",
-            ],
-            "billing": {
-                "monthly_price_usd": 999,
-                "annual_price_usd": 9990,
-                "currency": "USD",
-                "billing_interval": "monthly_or_annual",
-                "stripe_price_lookup_key_monthly": "ttl_business_monthly",
-                "stripe_price_lookup_key_annual": "ttl_business_annual",
-            },
-            "public_price_hint": "business_placeholder",
-        },
-    ]
-
-
-def get_plan_definition(plan_code: str | None):
-    normalized = normalize_plan_code(plan_code)
-    for plan in get_plan_catalog():
-        if plan["code"] == normalized:
-            return plan
-    return get_plan_catalog()[0]
-
-
-def is_paid_billing_status(status: str | None) -> bool:
-    normalized = normalize_billing_status(status)
-    return normalized in {"active", "trialing"}
-
-
-def resolve_effective_plan_code(workspace: Workspace) -> str:
-    configured_plan = normalize_plan_code(workspace.plan_code)
-    billing_status = normalize_billing_status(workspace.billing_status)
-
-    # 🔒 HARD OVERRIDE
-    if configured_plan == "sandbox":
-        return "sandbox"
-
-    if configured_plan == "starter":
-        return "starter"
-
-    if is_paid_billing_status(billing_status):
-        return configured_plan
-
-    return "starter"
-
-
-def resolve_effective_plan_definition(workspace: Workspace):
-    return get_plan_definition(resolve_effective_plan_code(workspace))
-
-
-def workspace_limit_snapshot(workspace: Workspace):
-    effective_plan = resolve_effective_plan_definition(workspace)
-
-    return {
-        "claim_limit": effective_plan["limits"]["claim_limit"],
-        "trade_limit": effective_plan["limits"]["trade_limit"],
-        "member_limit": effective_plan["limits"]["member_limit"],
-        "storage_limit_mb": effective_plan["limits"]["storage_limit_mb"],
-    }
-
-
-def build_plan_governance_state(workspace: Workspace):
-    configured_plan_code = normalize_plan_code(workspace.plan_code)
-    effective_plan_code = resolve_effective_plan_code(workspace)
-    billing_status = normalize_billing_status(workspace.billing_status)
-
-    plan_mismatch = configured_plan_code != effective_plan_code
-    paid_access_active = is_paid_billing_status(billing_status)
-
-    if configured_plan_code == "sandbox":
-        reason = "sandbox_evaluation"
-        message = (
-            "Workspace is operating in the controlled evaluation environment. "
-            "Sandbox limits are active and no paid billing is required for this tier."
-        )
-    elif plan_mismatch and configured_plan_code != "starter":
-        if billing_status == "pending_manual_review":
-            reason = "pending_payment_review"
-            message = (
-                "Workspace is assigned to a paid plan target, but paid entitlements are not active "
-                "until manual billing review is approved."
-            )
-        else:
-            reason = "billing_inactive_fallback"
-            message = (
-                "Workspace is assigned to a paid plan target, but paid entitlements are inactive. "
-                "Effective workspace limits fall back to Starter until billing becomes active."
-            )
-    else:
-        reason = "ok"
-        message = "Effective entitlements are aligned with current billing state."
-
-    return {
-        "configured_plan_code": configured_plan_code,
-        "effective_plan_code": effective_plan_code,
-        "billing_status": billing_status,
-        "paid_access_active": paid_access_active,
-        "plan_mismatch": plan_mismatch,
-        "reason": reason,
-        "message": message,
-    }
-
-
 def serialize_workspace_settings(workspace: Workspace):
-    configured_plan = normalize_plan_code(workspace.plan_code)
-    normalized_billing = normalize_billing_status(workspace.billing_status)
-    effective_plan = resolve_effective_plan_definition(workspace)
-    governance_state = build_plan_governance_state(workspace)
-    limits = {
-        "claim_limit": effective_plan["limits"]["claim_limit"],
-        "trade_limit": effective_plan["limits"]["trade_limit"],
-        "member_limit": effective_plan["limits"]["member_limit"],
-        "storage_limit_mb": effective_plan["limits"]["storage_limit_mb"],
-    }
-
-    configured_plan_definition = get_plan_definition(configured_plan)
+    limits = get_workspace_plan_limits(workspace)
 
     return {
         "workspace_id": workspace.id,
         "name": workspace.name,
         "description": workspace.description,
         "billing_email": workspace.billing_email,
-        "plan_code": configured_plan,
-        "billing_status": normalized_billing,
+
+        "plan_code": resolve_workspace_plan_code(workspace),
+        "billing_status": normalize_billing_status(
+            workspace.billing_status
+        ),
+
+        "limits": limits,
+
         "stripe_customer_id": workspace.stripe_customer_id,
         "stripe_subscription_id": workspace.stripe_subscription_id,
+
         "subscription_current_period_end": (
             workspace.subscription_current_period_end.isoformat()
             if workspace.subscription_current_period_end
             else None
         ),
-        "limits": limits,
-        "plan_detail": {
-            "code": configured_plan_definition["code"],
-            "name": configured_plan_definition["name"],
-            "description": configured_plan_definition["description"],
-            "recommended_for": configured_plan_definition["recommended_for"],
-            "billing": configured_plan_definition["billing"],
-        },
-        "effective_plan_code": governance_state["effective_plan_code"],
-        "effective_plan_detail": {
-            "code": effective_plan["code"],
-            "name": effective_plan["name"],
-            "description": effective_plan["description"],
-            "recommended_for": effective_plan["recommended_for"],
-            "billing": effective_plan["billing"],
-        },
-        "effective_limits": limits,
-        "plan_governance": governance_state,
-        "created_at": workspace.created_at.isoformat() if workspace.created_at else None,
-        "updated_at": workspace.updated_at.isoformat() if workspace.updated_at else None,
+
+        "created_at": (
+            workspace.created_at.isoformat()
+            if workspace.created_at
+            else None
+        ),
+
+        "updated_at": (
+            workspace.updated_at.isoformat()
+            if workspace.updated_at
+            else None
+        ),
     }
-
-
-def usage_row_for_plan(plan_code: str, used: int, dimension: str):
     plan = get_plan_definition(plan_code)
 
     limit_key_map = {
@@ -571,9 +323,9 @@ def create_workspace(
         name=payload.name.strip(),
         plan_code="sandbox",
         billing_status="inactive",
-        claim_limit=2,
-        trade_limit=200,
-        member_limit=2,
+        claim_limit=5,
+        trade_limit=1000,
+        member_limit=3,
         storage_limit_mb=100,
     )
     db.add(workspace)
@@ -662,134 +414,36 @@ def update_workspace_settings(
     
 
 
-from app.services.metrics_service import get_workspace_trade_metrics
-
 @router.get("/workspaces/{workspace_id}/usage")
 def get_workspace_usage(
     workspace_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from app.models.workspace import Workspace
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
 
-    try:
-        workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
-        if not workspace:
-            raise HTTPException(status_code=404, detail="Workspace not found")
-
-        require_workspace_member(workspace_id, current_user, db)
-
-        metrics = get_workspace_trade_metrics(db, workspace_id)
-        limits = workspace_limit_snapshot(workspace)
-        governance_state = build_plan_governance_state(workspace)
-
-        member_count = db.query(WorkspaceMembership).filter(
-            WorkspaceMembership.workspace_id == workspace_id
-        ).count()
-
-        trade_count = db.query(Trade).filter(
-            Trade.workspace_id == workspace_id
-        ).count()
-
-        claim_count = db.query(ClaimSchema).filter(
-            ClaimSchema.workspace_id == workspace_id
-        ).count()
-
-        storage_used_mb = 0
-
-        def ratio(used, limit):
-            if not limit:
-                return None
-
-            return round((used / limit) * 100, 2)
-
-        def status(used, limit):
-            if not limit:
-                return "unlimited"
-            if used > limit:
-                return "over_limit"
-            if used == limit:
-                return "at_limit"
-            if used / limit >= 0.8:
-                return "near_limit"
-            return "ok"
-
-        usage = {
-            "members": {
-                "used": member_count,
-                "limit": limits["member_limit"],
-                "ratio": ratio(member_count, limits["member_limit"]),
-                "status": status(member_count, limits["member_limit"]),
-            },
-            "trades": {
-                "used": metrics["used"],
-                "limit": limits["trade_limit"],
-                "ratio": ratio(metrics["used"], limits["trade_limit"]),
-                "status": status(metrics["used"], limits["trade_limit"]),
-                "ledger_count": metrics["ledger_count"],
-            },
-            "claims": {
-                "used": claim_count,
-                "limit": limits["claim_limit"],
-                "ratio": ratio(claim_count, limits["claim_limit"]),
-                "status": status(claim_count, limits["claim_limit"]),
-            },
-            "storage_mb": {
-                "used": storage_used_mb,
-                "limit": limits["storage_limit_mb"],
-                "ratio": ratio(storage_used_mb, limits["storage_limit_mb"]),
-                "status": status(storage_used_mb, limits["storage_limit_mb"]),
-            },
-        }
-
-        upgrade = build_upgrade_recommendation(
-            governance_state["configured_plan_code"],
-            governance_state["effective_plan_code"],
-            usage,
-            plan_mismatch=governance_state["plan_mismatch"],
-        )
-
-        # ✅ MOVE THESE INSIDE TRY
-        effective_plan_definition = resolve_effective_plan_definition(workspace)
-        configured_plan_definition = get_plan_definition(workspace.plan_code)
-
-        return {
-            "workspace_id": workspace.id,
-            "plan_code": normalize_plan_code(workspace.plan_code),
-            "billing_status": normalize_billing_status(workspace.billing_status),
-            "effective_plan_code": governance_state["effective_plan_code"],
-
-            "usage": usage,
-            "metrics": metrics,
-            "upgrade_recommendation": upgrade,
-
-            # ✅ REQUIRED FOR UI
-            "plan_catalog": get_plan_catalog(),
-
-            "configured_plan_detail": {
-                "code": configured_plan_definition["code"],
-                "name": configured_plan_definition["name"],
-                "description": configured_plan_definition["description"],
-                "recommended_for": configured_plan_definition["recommended_for"],
-                "billing": configured_plan_definition["billing"],
-            },
-            "effective_plan_detail": {
-                "code": effective_plan_definition["code"],
-                "name": effective_plan_definition["name"],
-                "description": effective_plan_definition["description"],
-                "recommended_for": effective_plan_definition["recommended_for"],
-                "billing": effective_plan_definition["billing"],
-            },
-        }
-
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-
+    if not workspace:
         raise HTTPException(
-            status_code=500,
-            detail=f"USAGE_ENDPOINT_ERROR: {str(e)}"
+            status_code=404,
+            detail="Workspace not found",
         )
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    entitlement = build_entitlement_snapshot(
+        workspace_id,
+        db,
+    )
+
+    return entitlement
 
 
 @router.get("/workspaces/{workspace_id}/members")

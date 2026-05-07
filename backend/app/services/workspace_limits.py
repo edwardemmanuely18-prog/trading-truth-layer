@@ -3,13 +3,12 @@ import os
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.claim_schema import ClaimSchema
-from app.models.trade import Trade
 from app.models.workspace import Workspace
-from app.models.workspace_membership import WorkspaceMembership
-from app.api.routes.billing import (
-    resolve_effective_plan_code,
-    get_workspace_plan_snapshot,
+from app.services.entitlements import (
+    resolve_workspace_plan_code,
+    get_workspace_plan_limits,
+    get_workspace_usage_counts,
+    build_entitlement_snapshot,
 )
 
 
@@ -19,53 +18,41 @@ def workspace_limits_disabled() -> bool:
 
 
 def get_workspace_limit_snapshot(db: Session, workspace_id: int) -> dict:
-    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
     if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found.")
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found.",
+        )
 
-    member_used = (
-        db.query(WorkspaceMembership)
-        .filter(WorkspaceMembership.workspace_id == workspace_id)
-        .count()
-    )
-    trade_used = db.query(Trade).filter(Trade.workspace_id == workspace_id).count()
-    claim_used = (
-        db.query(ClaimSchema)
-        .filter(ClaimSchema.workspace_id == workspace_id)
-        .count()
+    effective_plan_code = resolve_workspace_plan_code(workspace)
+
+    usage = get_workspace_usage_counts(
+        db=db,
+        workspace_id=workspace_id,
     )
 
-    effective_plan_code = resolve_effective_plan_code(workspace)
-    plan_snapshot = get_workspace_plan_snapshot(effective_plan_code)
+    limits = get_workspace_plan_limits(
+        effective_plan_code
+    )
 
-    member_limit = int(plan_snapshot.get("member_limit") or 0)
-    trade_limit = int(plan_snapshot.get("trade_limit") or 0)
-    claim_limit = int(plan_snapshot.get("claim_limit") or 0)
-    storage_limit_mb = int(plan_snapshot.get("storage_limit_mb") or 0)
+    snapshot = build_entitlement_snapshot(
+        workspace_id=workspace_id,
+        effective_plan_code=effective_plan_code,
+        usage=usage,
+        limits=limits,
+    )
 
-    return {
-        "workspace_id": workspace_id,
-        "limits_disabled": workspace_limits_disabled(),
-        "effective_plan_code": effective_plan_code,
-        "usage": {
-            "members": {
-                "used": member_used,
-                "limit": member_limit,
-            },
-            "trades": {
-                "used": trade_used,
-                "limit": trade_limit,
-            },
-            "claims": {
-                "used": claim_used,
-                "limit": claim_limit,
-            },
-            "storage_mb": {
-                "used": 0,
-                "limit": storage_limit_mb,
-            },
-        },
-    }
+    snapshot["limits_disabled"] = (
+        workspace_limits_disabled()
+    )
+
+    return snapshot
 
 
 def enforce_workspace_claim_limit(db: Session, workspace_id: int) -> None:

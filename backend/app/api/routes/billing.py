@@ -22,6 +22,14 @@ from app.models.user import User
 from app.models.workspace import Workspace
 from app.models.workspace_membership import WorkspaceMembership
 
+from app.services.entitlements import (
+    normalize_plan_code,
+    normalize_billing_status,
+    resolve_workspace_plan_code,
+    PLAN_DEFAULTS,
+    build_entitlement_snapshot,
+)
+
 try:
     import stripe  # type: ignore
 except ImportError:
@@ -98,19 +106,6 @@ def require_workspace_owner(workspace_id: int, current_user: User, db: Session):
     return membership
 
 
-def normalize_plan_code(plan_code: str | None) -> str:
-    allowed = {
-        "sandbox",
-        "internal",
-        "starter",
-        "pro",
-        "growth",
-        "business",
-    }
-    value = str(plan_code or "").strip().lower()
-    return value if value in allowed else "starter"
-
-
 def normalize_billing_cycle(value: str | None) -> str:
     normalized = str(value or "").strip().lower()
     if normalized == "yearly":
@@ -118,35 +113,9 @@ def normalize_billing_cycle(value: str | None) -> str:
     return normalized if normalized in {"monthly", "annual"} else "monthly"
 
 
-def normalize_billing_status(value: str | None) -> str:
-    allowed = {
-        "inactive",
-        "active",
-        "trialing",
-        "past_due",
-        "canceled",
-        "unpaid",
-        "pending_manual_review",
-    }
-    normalized = str(value or "").strip().lower()
-    return normalized if normalized in allowed else "inactive"
-
 
 def is_paid_billing_status(value: str | None) -> bool:
     return normalize_billing_status(value) in {"active", "trialing"}
-
-
-def resolve_effective_plan_code(workspace: Workspace) -> str:
-    configured_plan = normalize_plan_code(workspace.plan_code)
-    billing_status = normalize_billing_status(workspace.billing_status)
-
-    if configured_plan in {"sandbox", "starter"}:
-        return configured_plan
-
-    if is_paid_billing_status(billing_status):
-        return configured_plan
-
-    return "starter"
 
 
 def map_stripe_subscription_status(value: str | None) -> str:
@@ -210,134 +179,18 @@ def fallback_period_end_for_cycle(billing_cycle: str) -> datetime:
     return now + timedelta(days=30)
 
 
-def get_plan_catalog():
-    return [
-        {
-            "code": "internal",
-            "name": "Internal",
-            "limits": {
-                "member_limit": 999999999,
-                "trade_limit": 999999999,
-                "claim_limit": 999999999,
-                "storage_limit_mb": 999999999,
-            },
-            "billing": {
-                "monthly_price_usd": 0,
-                "annual_price_usd": 0,
-                "stripe_price_lookup_key_monthly": None,
-                "stripe_price_lookup_key_annual": None,
-            },
-        },
-        {
-            "code": "sandbox",
-            "name": "Sandbox",
-            "limits": {
-                "member_limit": 3,
-                "trade_limit": 1000,
-                "claim_limit": 5,
-                "storage_limit_mb": 100,
-            },
-            "billing": {
-                "monthly_price_usd": 0,
-                "annual_price_usd": 0,
-                "stripe_price_lookup_key_monthly": None,
-                "stripe_price_lookup_key_annual": None,
-            },
-        },
-        {
-            "code": "starter",
-            "name": "Starter",
-            "limits": {
-                "member_limit": 3,
-                "trade_limit": 5000,
-                "claim_limit": 5,
-                "storage_limit_mb": 500,
-            },
-            "billing": {
-                "monthly_price_usd": 19,
-                "annual_price_usd": 190,
-                "stripe_price_lookup_key_monthly": "ttl_starter_monthly",
-                "stripe_price_lookup_key_annual": "ttl_starter_annual",
-            },
-        },
-        {
-            "code": "pro",
-            "name": "Pro",
-            "limits": {
-                "member_limit": 25,
-                "trade_limit": 50000,
-                "claim_limit": 50,
-                "storage_limit_mb": 2048,
-            },
-            "billing": {
-                "monthly_price_usd": 79,
-                "annual_price_usd": 790,
-                "stripe_price_lookup_key_monthly": "ttl_pro_monthly",
-                "stripe_price_lookup_key_annual": "ttl_pro_annual",
-            },
-        },
-        {
-            "code": "growth",
-            "name": "Growth",
-            "limits": {
-                "member_limit": 100,
-                "trade_limit": 250000,
-                "claim_limit": 200,
-                "storage_limit_mb": 10240,
-            },
-            "billing": {
-                "monthly_price_usd": 249,
-                "annual_price_usd": 2490,
-                "stripe_price_lookup_key_monthly": "ttl_growth_monthly",
-                "stripe_price_lookup_key_annual": "ttl_growth_annual",
-            },
-        },
-        {
-            "code": "business",
-            "name": "Business",
-            "limits": {
-                "member_limit": 250,
-                "trade_limit": 1000000,
-                "claim_limit": 500,
-                "storage_limit_mb": 51200,
-            },
-            "billing": {
-                "monthly_price_usd": 999,
-                "annual_price_usd": 9990,
-                "stripe_price_lookup_key_monthly": "ttl_business_monthly",
-                "stripe_price_lookup_key_annual": "ttl_business_annual",
-            },
-        },
-    ]
-
-
-def get_plan_definition(plan_code: str | None):
-    normalized = normalize_plan_code(plan_code)
-    for plan in get_plan_catalog():
-        if plan["code"] == normalized:
-            return plan
-    return get_plan_catalog()[0]
-
-
-def get_workspace_plan_snapshot(plan_code: str | None) -> dict:
-    plan = get_plan_definition(plan_code)
-    limits = plan.get("limits", {}) or {}
-    return {
-        "plan_code": plan["code"],
-        "plan_name": plan["name"],
-        "member_limit": int(limits.get("member_limit") or 0),
-        "trade_limit": int(limits.get("trade_limit") or 0),
-        "claim_limit": int(limits.get("claim_limit") or 0),
-        "storage_limit_mb": int(limits.get("storage_limit_mb") or 0),
-    }
-
-
 def apply_workspace_plan_limits(workspace: Workspace, plan_code: str | None) -> None:
-    snapshot = get_workspace_plan_snapshot(plan_code)
-    workspace.member_limit = snapshot["member_limit"]
-    workspace.trade_limit = snapshot["trade_limit"]
-    workspace.claim_limit = snapshot["claim_limit"]
-    workspace.storage_limit_mb = snapshot["storage_limit_mb"]
+    resolved = normalize_plan_code(plan_code)
+
+    limits = PLAN_DEFAULTS.get(
+        resolved,
+        PLAN_DEFAULTS["starter"],
+    )
+
+    workspace.member_limit = limits["members"]
+    workspace.trade_limit = limits["trades"]
+    workspace.claim_limit = limits["claims"]
+    workspace.storage_limit_mb = limits["storage_mb"]
 
 
 def get_frontend_base_url() -> str:
@@ -422,12 +275,32 @@ def get_checkout_return_url(workspace_id: int) -> str:
 
 
 def get_price_lookup_key(plan_code: str, billing_cycle: str) -> str:
-    plan = get_plan_definition(plan_code)
-    billing = plan.get("billing", {})
+    normalized = normalize_plan_code(plan_code)
 
-    if billing_cycle == "annual":
-        return str(billing.get("stripe_price_lookup_key_annual") or "").strip()
-    return str(billing.get("stripe_price_lookup_key_monthly") or "").strip()
+    lookup_table = {
+        "starter": {
+            "monthly": "ttl_starter_monthly",
+            "annual": "ttl_starter_annual",
+        },
+        "pro": {
+            "monthly": "ttl_pro_monthly",
+            "annual": "ttl_pro_annual",
+        },
+        "growth": {
+            "monthly": "ttl_growth_monthly",
+            "annual": "ttl_growth_annual",
+        },
+        "business": {
+            "monthly": "ttl_business_monthly",
+            "annual": "ttl_business_annual",
+        },
+    }
+
+    return (
+        lookup_table
+        .get(normalized, {})
+        .get(billing_cycle, "")
+    )
 
 
 def get_paddle_price_catalog() -> dict[str, str]:
@@ -732,7 +605,7 @@ def update_workspace_billing_from_subscription(
     if target_plan_code:
         workspace.plan_code = normalize_plan_code(target_plan_code)
 
-    apply_workspace_plan_limits(workspace, resolve_effective_plan_code(workspace))
+    apply_workspace_plan_limits(workspace, resolve_workspace_plan_code(workspace))
     workspace.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(workspace)
@@ -760,7 +633,7 @@ def update_workspace_billing_from_checkout_session(
     if target_plan_code:
         workspace.plan_code = normalize_plan_code(target_plan_code)
 
-    apply_workspace_plan_limits(workspace, resolve_effective_plan_code(workspace))
+    apply_workspace_plan_limits(workspace, resolve_workspace_plan_code(workspace))
     workspace.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(workspace)
@@ -835,7 +708,7 @@ def update_workspace_billing_from_paddle_event(
     elif interval:
         workspace.subscription_current_period_end = fallback_period_end_for_cycle(interval)
 
-    apply_workspace_plan_limits(workspace, resolve_effective_plan_code(workspace))
+    apply_workspace_plan_limits(workspace, resolve_workspace_plan_code(workspace))
     workspace.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(workspace)
@@ -1032,10 +905,15 @@ def get_workspace_billing_foundation(
         sync_workspace_from_checkout_session_id(workspace, checkout_session_id, db)
         db.refresh(workspace)
 
-    current_plan = get_plan_definition(workspace.plan_code)
+    resolved_plan_code = normalize_plan_code(workspace.plan_code)
+
+    plan_limits = PLAN_DEFAULTS.get(
+        resolved_plan_code,
+        PLAN_DEFAULTS["starter"],
+    )
     manual_payment_details = get_manual_payment_details()
     configured_plan_code = normalize_plan_code(workspace.plan_code)
-    effective_plan_code = resolve_effective_plan_code(workspace)
+    effective_plan_code = resolve_workspace_plan_code(workspace)
     apply_workspace_plan_limits(workspace, effective_plan_code)
     db.commit()
     db.refresh(workspace)
@@ -1058,7 +936,7 @@ def get_workspace_billing_foundation(
     return {
         "workspace_id": workspace.id,
         "plan_code": configured_plan_code,
-        "plan_name": current_plan["name"],
+        "plan_name": resolved_plan_code.title(),
         "effective_plan_code": effective_plan_code,
         "billing_status": billing_status,
         "billing_status_is_paid": is_paid_billing_status(billing_status),
@@ -1085,8 +963,8 @@ def get_workspace_billing_foundation(
             else None
         ),
         "prices": {
-            "monthly_price_usd": current_plan["billing"]["monthly_price_usd"],
-            "annual_price_usd": current_plan["billing"]["annual_price_usd"],
+            "monthly_price_usd": 0,
+            "annual_price_usd": 0,
         },
         "stripe_ready": {
             "has_customer_id": bool(workspace.stripe_customer_id),
@@ -1822,19 +1700,33 @@ async def lemon_webhook(
             "message": str(exc),
         }
 
+
 @router.get("/workspaces/{workspace_id}/usage")
 def get_workspace_usage(
     workspace_id: int,
     db: Session = Depends(get_db),
 ):
-    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
 
     if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found"
+        )
+
+    snapshot = build_entitlement_snapshot(
+        db=db,
+        workspace=workspace,
+    )
 
     return {
         "workspace_id": workspace.id,
-        "trade_limit": getattr(workspace, "trade_limit", 0),
-        "trades_used": getattr(workspace, "trades_consumed_count", 0),
-        "claim_limit": getattr(workspace, "claim_limit", 0),
+        "effective_plan_code": snapshot["effective_plan_code"],
+        "billing_status": snapshot["billing_status"],
+        "usage": snapshot["usage"],
+        "limits": snapshot["limits"],
     }
