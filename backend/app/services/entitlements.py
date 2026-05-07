@@ -15,9 +15,22 @@ ACTIVE_BILLING_STATUSES = {"active", "trialing"}
 SOFT_WARNING_BILLING_STATUSES = {"past_due"}
 RESTRICTED_BILLING_STATUSES = {"inactive", "canceled", "unpaid", "pending_manual_review"}
 
-ALLOWED_PLAN_CODES = {"starter", "pro", "growth", "business"}
+ALLOWED_PLAN_CODES = {
+    "sandbox",
+    "internal",
+    "starter",
+    "pro",
+    "growth",
+    "business",
+}
 
 PLAN_DEFAULTS: dict[str, dict[str, int]] = {
+    "internal": {
+        "claims": 999999999,
+        "trades": 999999999,
+        "members": 999999999,
+        "storage_mb": 999999999,
+    },
     "starter": {
         "claims": 5,
         "trades": 1000,
@@ -109,6 +122,10 @@ def _candidate_plan_fields(workspace: Workspace) -> list[str]:
 
 
 def resolve_workspace_plan_code(workspace: Workspace) -> str:
+    
+    if getattr(workspace, "is_internal_workspace", 0):
+        return "internal"
+
     for field_name in _candidate_plan_fields(workspace):
         value = getattr(workspace, field_name, None)
         normalized = normalize_plan_code(value)

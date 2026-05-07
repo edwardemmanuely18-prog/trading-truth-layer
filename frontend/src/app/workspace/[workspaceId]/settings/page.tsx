@@ -1307,7 +1307,9 @@ export default function WorkspaceSettingsPage() {
                   </div>
 
                   <div className="mt-5 grid gap-4 xl:grid-cols-2">
-                    {planCatalog.map((plan) => (
+                    {planCatalog
+                        .filter((plan) => normalizeText(plan.code) !== "internal")
+                        .map((plan) => (
                       <PlanCard
                         key={plan.code}
                         plan={plan}
@@ -1378,7 +1380,9 @@ export default function WorkspaceSettingsPage() {
                       }}
                       className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
                     >
-                      {planCatalog.map((plan) => (
+                      {planCatalog
+                          .filter((plan) => normalizeText(plan.code) !== "internal")
+                          .map((plan) => (
                         <option key={plan.code} value={plan.code}>
                           {formatPlanCodeLabel(plan.code)}
                         </option>

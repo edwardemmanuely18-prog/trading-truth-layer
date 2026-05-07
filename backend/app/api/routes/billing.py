@@ -99,7 +99,14 @@ def require_workspace_owner(workspace_id: int, current_user: User, db: Session):
 
 
 def normalize_plan_code(plan_code: str | None) -> str:
-    allowed = {"sandbox", "starter", "pro", "growth", "business"}
+    allowed = {
+        "sandbox",
+        "internal",
+        "starter",
+        "pro",
+        "growth",
+        "business",
+    }
     value = str(plan_code or "").strip().lower()
     return value if value in allowed else "starter"
 
@@ -205,6 +212,22 @@ def fallback_period_end_for_cycle(billing_cycle: str) -> datetime:
 
 def get_plan_catalog():
     return [
+        {
+            "code": "internal",
+            "name": "Internal",
+            "limits": {
+                "member_limit": 999999999,
+                "trade_limit": 999999999,
+                "claim_limit": 999999999,
+                "storage_limit_mb": 999999999,
+            },
+            "billing": {
+                "monthly_price_usd": 0,
+                "annual_price_usd": 0,
+                "stripe_price_lookup_key_monthly": None,
+                "stripe_price_lookup_key_annual": None,
+            },
+        },
         {
             "code": "sandbox",
             "name": "Sandbox",

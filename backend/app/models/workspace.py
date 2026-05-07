@@ -4,7 +4,6 @@ from sqlalchemy import Column, DateTime, Integer, String
 
 from app.core.db import Base
 
-
 class Workspace(Base):
     __tablename__ = "workspaces"
 
@@ -25,6 +24,11 @@ class Workspace(Base):
     paddle_subscription_id = Column(String, nullable=True)
     paddle_transaction_id = Column(String, nullable=True)
     paddle_price_id = Column(String, nullable=True)
+
+    lemon_customer_id = Column(String, nullable=True)
+    lemon_subscription_id = Column(String, nullable=True)
+
+    is_internal_workspace = Column(Integer, nullable=False, default=0)
 
     subscription_current_period_end = Column(DateTime, nullable=True)
 
