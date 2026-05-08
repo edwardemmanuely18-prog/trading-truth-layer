@@ -369,15 +369,28 @@ def get_workspace_usage(
     return {
         "workspace_id": workspace_id,
 
-        "usage": {
-            "trades": metrics.get("used", 0),
-            "active_trades": metrics.get("ledger_count", 0),
-        },
+        # GOVERNANCE
+        "used": metrics.get("used", 0),
+        "consumed": metrics.get("consumed", 0),
 
-        "limits": {
-            "trades": metrics.get("limit", 0),
-        },
+        # LIVE LEDGER
+        "ledger_count": metrics.get("ledger_count", 0),
+        "active_trades": metrics.get("ledger_count", 0),
+        "trade_count": metrics.get("ledger_count", 0),
 
+        # LIMITS
+        "limit": metrics.get("limit", 0),
+
+        # UTILIZATION
+        "utilization": metrics.get("utilization", 0),
+
+        # ANALYTICS
+        "wins": metrics.get("wins", 0),
+        "losses": metrics.get("losses", 0),
+        "win_rate": metrics.get("win_rate", 0),
+        "total_pnl": metrics.get("total_pnl", 0),
+
+        # FULL METRICS
         "metrics": metrics,
     }
 
@@ -502,9 +515,11 @@ def create_trade(
         db.add(trade)
         increment_workspace_trades_consumed(workspace, db, 1)
         db.commit()
-        db.refresh(trade)
+
+        db.expire_all()
+
         db.refresh(workspace)
-        db.commit()
+        db.refresh(trade)
 
     except Exception as e:
         import traceback
@@ -697,6 +712,7 @@ def delete_trade(
     db.delete(trade)
 
     db.commit()
+    db.expire_all()
 
     return {
         "status": "deleted",
@@ -758,6 +774,9 @@ async def import_trades_csv(
             workspace = get_workspace_or_404(workspace_id, db)
             increment_workspace_trades_consumed(workspace, db, rows_imported)
             db.commit()
+
+            db.expire_all()
+
             db.refresh(workspace)
             result["trades_consumed_count"] = workspace.trades_consumed_count
 
