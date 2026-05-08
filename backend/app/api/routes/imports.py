@@ -105,11 +105,24 @@ def normalize_broker_row(row: dict, source_type: str) -> dict:
 
     # TIME PARSING FIX (CRITICAL)
     opened_at = get(
+        # GENERIC
         "open_time",
         "opened_at",
         "opentime",
         "time",
         "date_time",
+
+        # MT5 EXPORTS
+        "open time",
+        "open_time_msc",
+        "time_msc",
+
+        # CSV EXPORTS
+        "open",
+        "opened",
+        "date",
+        "datetime",
+        "timestamp",
     )
 
     closed_at = get(
@@ -117,16 +130,31 @@ def normalize_broker_row(row: dict, source_type: str) -> dict:
         "closed_at",
         "closetime",
         "close_time_msc",
+
+        # MT5
+        "close time",
+
+        # GENERIC
+        "closed",
+        "exit_time",
     )
 
     # Normalize MT5 datetime format
     def parse_dt(val):
         if not val:
             return None
+
         try:
-            return val.replace(".", "-")
-        except:
+            val = str(val).strip()
+
+            # MT5 FORMAT:
+            # 2026.05.01 14:30:00
+            val = val.replace(".", "-")
+
             return val
+
+        except Exception:
+            return None
 
     return {
         "symbol": symbol,
