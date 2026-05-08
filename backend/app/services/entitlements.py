@@ -27,6 +27,7 @@ ALLOWED_PLAN_CODES = {
 PLAN_DEFAULTS: dict[str, dict[str, int]] = {
 
     "sandbox": {
+        "is_public": True,
         "claims": 5,
         "trades": 1000,
         "members": 3,
@@ -34,6 +35,7 @@ PLAN_DEFAULTS: dict[str, dict[str, int]] = {
     },
 
     "internal": {
+        "is_public": False,
         "claims": 999999999,
         "trades": 999999999,
         "members": 999999999,
@@ -41,6 +43,7 @@ PLAN_DEFAULTS: dict[str, dict[str, int]] = {
     },
 
     "starter": {
+        "is_public": True,
         "claims": 5,
         "trades": 5000,
         "members": 3,
@@ -48,6 +51,7 @@ PLAN_DEFAULTS: dict[str, dict[str, int]] = {
     },
 
     "pro": {
+        "is_public": True,
         "claims": 50,
         "trades": 50000,
         "members": 25,
@@ -55,6 +59,7 @@ PLAN_DEFAULTS: dict[str, dict[str, int]] = {
     },
 
     "growth": {
+        "is_public": True,
         "claims": 200,
         "trades": 250000,
         "members": 100,
@@ -62,12 +67,21 @@ PLAN_DEFAULTS: dict[str, dict[str, int]] = {
     },
 
     "business": {
+        "is_public": True,
         "claims": 500,
         "trades": 1000000,
         "members": 250,
         "storage_mb": 51200,
     },
 }
+
+
+def get_public_plan_codes() -> list[str]:
+    return [
+        code
+        for code, config in PLAN_DEFAULTS.items()
+        if config.get("is_public") is True
+    ]
 
 
 def normalize_plan_code(plan_code: str | None) -> str:
@@ -219,7 +233,10 @@ def get_workspace_usage_counts(workspace_id: int, db: Session) -> dict[str, int]
 
     return {
         "members": member_count,
-        "trades": get_consumed_trade_count(workspace),
+
+        # LIVE TRADE COUNT
+        "trades": active_trade_count,
+
         "active_trades": active_trade_count,
         "claims": claim_count,
         "storage_mb": storage_mb_used,

@@ -136,19 +136,25 @@ export default function WorkspaceLedgerPage() {
   // 🔥 NEW — Tag system
   const [tags, setTags] = useState<string[]>([]);
   const [selectedTag, setSelectedTag] = useState("");
-  const tradeUsed =
-    typeof metrics?.used === "number"
-      ? metrics.used
-      : 0;
 
-  const tradeLimit =
-    typeof metrics?.limit === "number"
-      ? metrics.limit
-      : 0;
-  const tradeUtilization =
-    typeof metrics?.utilization === "number"
-      ? metrics.utilization
-      : 0;
+  const tradeUsed = Number(
+    metrics?.usage?.trades ??
+    metrics?.trades ??
+    metrics?.used ??
+    metrics?.consumed ??
+    metrics?.ledger_count ??
+    0
+  );
+
+  const tradeLimit = Number(
+    metrics?.limits?.trades ??
+    metrics?.trade_limit ??
+    metrics?.limit ??
+    0
+  );
+
+const tradeUtilization =
+  tradeUsed / Math.max(1, tradeLimit);
 
   const [usageLoading, setUsageLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -200,13 +206,14 @@ export default function WorkspaceLedgerPage() {
     setLatestAuditEvents(Array.isArray(latestAuditRes) ? latestAuditRes : []);
     setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
     setMetrics(
-      metricsRes?.metrics && typeof metricsRes.metrics === "object"
-        ? metricsRes.metrics
-        : {
-            used: 0,
-            limit: 0,
-            utilization: 0,
-          }
+      metricsRes ?? {
+        usage: {
+          trades: 0,
+        },
+        limits: {
+          trades: 0,
+        },
+      }
     );
     setStrategyStats(Array.isArray(strategyRes) ? strategyRes : []);
   }
@@ -439,13 +446,14 @@ export default function WorkspaceLedgerPage() {
         setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
         setStrategyStats(Array.isArray(strategyRes) ? strategyRes : []);
         setMetrics(
-          metricsRes?.metrics && typeof metricsRes.metrics === "object"
-            ? metricsRes.metrics
-            : {
-                used: 0,
-                limit: 0,
-                utilization: 0,
-              }
+          metricsRes ?? {
+            usage: {
+              trades: 0,
+            },
+            limits: {
+              trades: 0,
+            },
+          }
         );
         setUsageLoading(false); // ✅ THIS FIXES YOUR STUCK UI
 
@@ -626,15 +634,19 @@ export default function WorkspaceLedgerPage() {
             <div className="mt-5 grid gap-4 md:grid-cols-3">
               <div className="rounded-xl bg-white/70 p-4">
                 <div className="text-sm text-slate-500">Used</div>
-                <div className="mt-1 text-2xl font-semibold">{tradeUsed}</div>
+                <div className="mt-1 text-2xl font-semibold">
+                  {tradeUsed.toLocaleString()}
+                </div>
               </div>
               <div className="rounded-xl bg-white/70 p-4">
                 <div className="text-sm text-slate-500">Limit</div>
-                <div className="mt-1 text-2xl font-semibold">{tradeLimit}</div>
+                <div className="mt-1 text-2xl font-semibold">
+                  {tradeLimit.toLocaleString()}
+                </div>
               </div>
               <div className="rounded-xl bg-white/70 p-4">
                 <div className="text-sm text-slate-500">Utilization</div>
-                <div className="mt-1 text-2xl font-semibold">{tradeUtilization}%</div>
+                <div className="mt-1 text-2xl font-semibold">{formatPercent(tradeUtilization * 100)}</div>
               </div>
             </div>
 
@@ -659,7 +671,7 @@ export default function WorkspaceLedgerPage() {
             </div>
 
             <div className="mt-2 text-2xl font-semibold">
-              {metrics?.ledger_count ?? 0}
+              {tradeUsed}
             </div>
           </div>
 

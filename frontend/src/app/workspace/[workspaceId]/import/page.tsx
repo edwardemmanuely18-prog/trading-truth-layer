@@ -181,13 +181,6 @@ export default function WorkspaceImportPage() {
   const workspaceRole = workspaceMembership?.workspace_role ?? null;
   const canImportTradesByRole = workspaceRole === "owner" || workspaceRole === "operator";
 
-  const tradeUsage = usage?.usage?.trades;
-  const tradeLimitReached =
-    (tradeUsage?.limit ?? 0) > 0 && (tradeUsage?.used ?? 0) >= (tradeUsage?.limit ?? 0);
-
-  const canImportTrades = canImportTradesByRole && !tradeLimitReached;
-  const usageTone = getUsageTone(tradeUsage?.ratio, tradeLimitReached);
-
   useEffect(() => {
     if (!workspaceId) {
       setUsageLoading(false);
@@ -245,8 +238,28 @@ export default function WorkspaceImportPage() {
     );
   }
 
+  const tradeUsed = Number(usage?.usage?.trades ?? 0);
+
+  const canImportTrades =
+    tradeUsed < Number(usage?.limits?.trades ?? 0);
+
   const workflowTradeStatus: "complete" | "active" | "pending" =
-    (tradeUsage?.used ?? 0) > 0 ? "complete" : canImportTrades ? "active" : "pending";
+    tradeUsed > 0
+      ? "complete"
+      : canImportTrades
+        ? "active"
+        : "pending";
+
+  const tradeLimitReached =
+    tradeUsed >= Number(usage?.limits?.trades ?? 0) &&
+    Number(usage?.limits?.trades ?? 0) > 0;
+
+  const usageTone = getUsageTone(
+    tradeUsed /
+      Math.max(1, Number(usage?.limits?.trades ?? 1)),
+    tradeLimitReached
+  );
+
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -285,7 +298,7 @@ export default function WorkspaceImportPage() {
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <WorkflowStage label="Import" status={workflowTradeStatus} />
             <div className="text-slate-300">→</div>
-            <WorkflowStage label="Ledger Review" status={(tradeUsage?.used ?? 0) > 0 ? "active" : "pending"} />
+            <WorkflowStage label="Ledger Review" status={tradeUsed > 0 ? "active" : "pending"} />
             <div className="text-slate-300">→</div>
             <WorkflowStage label="Create Claim" status="pending" />
             <div className="text-slate-300">→</div>
@@ -297,17 +310,23 @@ export default function WorkspaceImportPage() {
           <div className="mb-6 rounded-2xl border bg-white p-6 shadow-sm">
             Loading workspace trade usage...
           </div>
-        ) : tradeUsage ? (
-          <div className={`mb-8 rounded-2xl border p-6 shadow-sm ${usageTone.wrapper}`}>
+        ) : usage ? (
+          <div
+            className={`mb-8 rounded-2xl border p-6 shadow-sm ${usageTone.wrapper}`}
+          >
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-semibold">Trade Usage</h2>
+
                 <p className="mt-2 text-sm leading-7 text-slate-600">
-                  Import rights are governed by workspace role and current trade-capacity posture.
+                  Import rights are governed by workspace role and current
+                  trade-capacity posture.
                 </p>
               </div>
 
-              <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${usageTone.badge}`}>
+              <span
+                className={`rounded-full border px-3 py-1 text-xs font-semibold ${usageTone.badge}`}
+              >
                 {usageTone.label}
               </span>
             </div>
@@ -315,21 +334,36 @@ export default function WorkspaceImportPage() {
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
               <div>
                 <div className="text-sm text-slate-500">Used</div>
-                <div className="mt-1 text-2xl font-semibold">{formatNumber(tradeUsage.used)}</div>
+
+                <div className="mt-1 text-2xl font-semibold">
+                  {formatNumber(tradeUsed)}
+                </div>
               </div>
+
               <div>
                 <div className="text-sm text-slate-500">Limit</div>
-                <div className="mt-1 text-2xl font-semibold">{formatNumber(tradeUsage.limit)}</div>
+
+                <div className="mt-1 text-2xl font-semibold">
+                  {formatNumber(Number(usage?.limits?.trades ?? 0))}
+                </div>
               </div>
+
               <div>
                 <div className="text-sm text-slate-500">Utilization</div>
-                <div className="mt-1 text-2xl font-semibold">{formatPercent(tradeUsage.ratio)}</div>
+
+                <div className="mt-1 text-2xl font-semibold">
+                  {formatPercent(
+                    tradeUsed /
+                      Math.max(1, Number(usage?.limits?.trades ?? 1))
+                  )}
+                </div>
               </div>
             </div>
 
             {tradeLimitReached ? (
-              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-100 px-4 py-3 text-sm text-amber-800">
-                Trade limit reached. Upgrade the workspace plan before importing additional trades.
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-100 px-4 py-3 text-sm text-amber-900">
+                Trade limit reached. Upgrade the workspace plan before importing
+                additional trades.
               </div>
             ) : null}
           </div>

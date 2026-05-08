@@ -375,14 +375,20 @@ def persist_runtime_trade_rows(
             )
 
         except Exception as e:
+            db.rollback()
+
             rows_rejected += 1
+
             rejected_preview.append(
                 {
                     "row": trade_row,
                     "reason": str(e),
                 }
             )
+
             errors.append(f"Row {idx}: {str(e)}")
+
+    print("IMPORT ERRORS:", errors, flush=True)
 
     batch = ImportBatch(
         workspace_id=workspace_id,
@@ -519,9 +525,13 @@ def import_csv_trades(
             seen_in_file.add(fingerprint)
 
         except Exception as e:
+            db.rollback()
+
             rows_rejected += 1
             errors.append(f"Row {idx}: {str(e)}")
 
+    print("IMPORT ERRORS:", errors, flush=True)
+    
     batch = ImportBatch(
         workspace_id=workspace_id,
         filename=filename,

@@ -98,6 +98,27 @@ def on_startup():
                 db.execute(text(sql))
                 db.commit()
 
+        trade_columns = [
+            col["name"]
+            for col in inspector.get_columns("trades")
+        ]
+
+        trade_patches = {
+            "trade_fingerprint":
+                "ALTER TABLE trades ADD COLUMN trade_fingerprint VARCHAR",
+
+            "source_system":
+                "ALTER TABLE trades ADD COLUMN source_system VARCHAR",
+
+            "strategy_tag":
+                "ALTER TABLE trades ADD COLUMN strategy_tag VARCHAR",
+        }
+
+        for column_name, sql in trade_patches.items():
+            if column_name not in trade_columns:
+                db.execute(text(sql))
+                db.commit()        
+
     finally:
         db.close()
 

@@ -367,6 +367,12 @@ async def upload_import_file(
         if isinstance(r, dict)
     ]
 
+    if not normalized_rows:
+        raise HTTPException(
+            status_code=400,
+            detail="No valid trade rows detected in uploaded file",
+        )
+
     print("DEBUG NORMALIZED ROW:", normalized_rows[0])
 
     # 🔒 TRADE LIMIT ENFORCEMENT (FILE IMPORT)
@@ -381,8 +387,7 @@ async def upload_import_file(
     usage = get_workspace_usage(db, workspace_id)
     current_trade_count = usage["trades"]
 
-    # ⚠️ keep temporary estimate OR improve later
-    incoming_trade_count = 0  # temporary safe fallback
+    incoming_trade_count = len(normalized_rows)
 
     from app.services.entitlements import enforce_trade_import_allowed
 
@@ -419,6 +424,8 @@ async def upload_import_file(
         db.refresh(workspace)
 
     except Exception as e:
+        print("IMPORT FAILURE:", str(e))
+
         raise HTTPException(
             status_code=500,
             detail=f"Import processing failed: {str(e)}"
@@ -486,6 +493,25 @@ async def upload_csv_import(
 # -----------------------------
 # AUTO-IMPORT FOUNDATION
 # -----------------------------
+@router.post("/workspaces/{workspace_id}/imports/auto-enable")
+def enable_auto_import(
+    workspace_id: int,
+    payload: dict | None = None,
+):
+    cadence = "daily"
+
+    if payload and payload.get("cadence"):
+        cadence = payload["cadence"]
+
+    return {
+        "workspace_id": workspace_id,
+        "enabled": True,
+        "cadence": cadence,
+        "mode": "auto",
+        "message": "Auto-import enabled",
+    }
+
+    
 @router.post("/workspaces/{workspace_id}/imports/auto")
 def configure_auto_import(
     workspace_id: int,
@@ -516,6 +542,19 @@ def configure_auto_import(
 # -----------------------------
 # REAL-TIME INGESTION FOUNDATION
 # -----------------------------
+@router.post("/workspaces/{workspace_id}/imports/stream-enable")
+def enable_stream_import(
+    workspace_id: int,
+    payload: dict | None = None,
+):
+    return {
+        "workspace_id": workspace_id,
+        "enabled": True,
+        "mode": "realtime",
+        "message": "Real-time ingestion enabled",
+    }
+
+
 @router.post("/workspaces/{workspace_id}/imports/stream-event")
 def ingest_stream_event(
     workspace_id: int,

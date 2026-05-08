@@ -63,6 +63,36 @@ def require_workspace_owner(workspace_id: int, current_user: User, db: Session):
     return membership
 
 
+def enforce_internal_workspace_access(
+    workspace: Workspace,
+    current_user: User,
+    db: Session,
+):
+    """
+    Internal workspaces are restricted to owners only.
+    Prevents non-owner access even if user knows the URL.
+    """
+
+    if not getattr(workspace, "is_internal_workspace", False):
+        return
+
+    membership = (
+        db.query(WorkspaceMembership)
+        .filter(
+            WorkspaceMembership.workspace_id == workspace.id,
+            WorkspaceMembership.user_id == current_user.id,
+            WorkspaceMembership.role == "owner",
+        )
+        .first()
+    )
+
+    if not membership:
+        raise HTTPException(
+            status_code=403,
+            detail="Internal workspace restricted to owners only",
+        )
+
+
 def serialize_workspace_member(membership: WorkspaceMembership, user: User):
     return {
         "workspace_id": membership.workspace_id,
@@ -303,14 +333,21 @@ def list_my_workspaces(
         .all()
     )
 
-    return [
-        {
+    visible_rows = []
+
+    for membership, workspace in rows:
+
+        if getattr(workspace, "is_internal_workspace", False):
+            if membership.role != "owner":
+                continue
+
+        visible_rows.append({
             "workspace_id": workspace.id,
             "workspace_name": workspace.name,
             "workspace_role": membership.role,
-        }
-        for membership, workspace in rows
-    ]
+        })
+
+    return visible_rows
 
 
 @router.post("/workspaces")
@@ -360,6 +397,12 @@ def get_workspace_dashboard(
 
     require_workspace_member(workspace_id, current_user, db)
 
+    enforce_internal_workspace_access(
+        workspace,
+        current_user,
+        db,
+    )
+
     member_count = db.query(WorkspaceMembership).filter(
         WorkspaceMembership.workspace_id == workspace_id
     ).count()
@@ -386,6 +429,13 @@ def get_workspace_settings(
         raise HTTPException(status_code=404, detail="Workspace not found")
 
     require_workspace_member(workspace_id, current_user, db)
+
+    enforce_internal_workspace_access(
+        workspace,
+        current_user,
+        db,
+    )
+
     return serialize_workspace_settings(workspace)
 
 
@@ -438,6 +488,12 @@ def get_workspace_usage(
         db,
     )
 
+    enforce_internal_workspace_access(
+        workspace,
+        current_user,
+        db,
+    )
+
     entitlement = build_entitlement_snapshot(
         workspace_id,
         db,
@@ -457,6 +513,12 @@ def list_workspace_members(
         raise HTTPException(status_code=404, detail="Workspace not found")
 
     require_workspace_member(workspace_id, current_user, db)
+
+    enforce_internal_workspace_access(
+        workspace,
+        current_user,
+        db,
+    )
 
     rows = (
         db.query(WorkspaceMembership, User)
@@ -482,6 +544,12 @@ def update_workspace_member_role(
         raise HTTPException(status_code=404, detail="Workspace not found")
 
     require_workspace_owner(workspace_id, current_user, db)
+
+    enforce_internal_workspace_access(
+        workspace,
+        current_user,
+        db,
+    )
 
     membership = (
         db.query(WorkspaceMembership)
@@ -550,6 +618,12 @@ def remove_workspace_member(
         raise HTTPException(status_code=404, detail="Workspace not found")
 
     require_workspace_owner(workspace_id, current_user, db)
+
+    enforce_internal_workspace_access(
+        workspace,
+        current_user,
+        db,
+    )
 
     membership = (
         db.query(WorkspaceMembership)

@@ -376,15 +376,27 @@ function GovernanceBanner({
   workspaceId: number;
   usage: WorkspaceUsageSummary;
 }) {
-  const membersUsage = usage?.usage?.members;
-  const tradesUsage = usage?.usage?.trades;
-  const claimsUsage = usage?.usage?.claims;
-  const storageUsage = usage?.usage?.storage_mb;
+  const membersUsed = Number(usage?.usage?.members ?? 0);
+  const tradesUsed = Number(usage?.usage?.trades ?? 0);
+  const claimsUsed = Number(usage?.usage?.claims ?? 0);
+  const storageUsed = Number(usage?.usage?.storage_mb ?? 0);
 
-  const membersAtOrOverLimit = isAtOrOverLimit(membersUsage?.used, membersUsage?.limit);
-  const tradesAtOrOverLimit = isAtOrOverLimit(tradesUsage?.used, tradesUsage?.limit);
-  const claimsAtOrOverLimit = isAtOrOverLimit(claimsUsage?.used, claimsUsage?.limit);
-  const storageAtOrOverLimit = isAtOrOverLimit(storageUsage?.used, storageUsage?.limit);
+  const membersLimit = Number(usage?.limits?.members ?? 0);
+  const tradesLimit = Number(usage?.limits?.trades ?? 0);
+  const claimsLimit = Number(usage?.limits?.claims ?? 0);
+  const storageLimit = Number(usage?.limits?.storage_mb ?? 0);
+
+  const membersAtOrOverLimit =
+    isAtOrOverLimit(membersUsed, membersLimit);
+
+  const tradesAtOrOverLimit =
+    isAtOrOverLimit(tradesUsed, tradesLimit);
+
+  const claimsAtOrOverLimit =
+    isAtOrOverLimit(claimsUsed, claimsLimit);
+
+  const storageAtOrOverLimit =
+    isAtOrOverLimit(storageUsed, storageLimit);
 
   const hasAnyAtOrOverLimit =
     membersAtOrOverLimit || tradesAtOrOverLimit || claimsAtOrOverLimit || storageAtOrOverLimit;
@@ -942,10 +954,57 @@ export default function WorkspaceDashboardPage() {
     .filter((c) => normalizeText(c?.verification_status) === "locked")
     .sort((a, b) => (b?.claim_schema_id ?? 0) - (a?.claim_schema_id ?? 0))[0];
 
-  const membersUsage = usage?.usage?.members ?? { used: 0, limit: 0, ratio: 0 };
-  const tradesUsage = usage?.usage?.trades ?? { used: 0, limit: 0, ratio: 0 };
-  const claimsUsage = usage?.usage?.claims ?? { used: 0, limit: 0, ratio: 0 };
-  const storageUsage = usage?.usage?.storage_mb ?? { used: 0, limit: 0, ratio: 0 };
+  const membersUsage: {
+    used: number;
+    limit: number;
+    ratio: number;
+  } = {
+    used: Number(usage?.usage?.members ?? 0),
+    limit: Number(usage?.limits?.members ?? 0),
+    ratio: 0,
+  };
+
+  membersUsage.ratio =
+    membersUsage.used / Math.max(1, membersUsage.limit);
+
+  const tradesUsage: {
+    used: number;
+    limit: number;
+    ratio: number;
+  } = {
+    used: Number(usage?.usage?.trades ?? 0),
+    limit: Number(usage?.limits?.trades ?? 0),
+    ratio: 0,
+  };
+
+  tradesUsage.ratio =
+    tradesUsage.used / Math.max(1, tradesUsage.limit);
+
+  const claimsUsage: {
+    used: number;
+    limit: number;
+    ratio: number;
+  } = {
+    used: Number(usage?.usage?.claims ?? 0),
+    limit: Number(usage?.limits?.claims ?? 0),
+    ratio: 0,
+  };
+
+  claimsUsage.ratio =
+    claimsUsage.used / Math.max(1, claimsUsage.limit);
+
+  const storageUsage: {
+    used: number;
+    limit: number;
+    ratio: number;
+  } = {
+    used: Number(usage?.usage?.storage_mb ?? 0),
+    limit: Number(usage?.limits?.storage_mb ?? 0),
+    ratio: 0,
+  };
+
+  storageUsage.ratio =
+    storageUsage.used / Math.max(1, storageUsage.limit);
 
   const configuredPlanName = getPlanName(
     usage,
@@ -1062,7 +1121,7 @@ export default function WorkspaceDashboardPage() {
             workspaceId={workspaceId}
             dashboard={{
               ...dashboard,
-              trade_count: tradesUsage.used,
+              trade_count: Number(usage?.usage?.trades ?? 0),
             }}
             claims={claims}
             usage={usage}
@@ -1115,24 +1174,27 @@ export default function WorkspaceDashboardPage() {
               used={membersUsage.used}
               limit={membersUsage.limit}
             />
+
             <CapacityCard
               label="Trade Capacity"
               ratio={tradesUsage.ratio}
               used={tradesUsage.used}
               limit={tradesUsage.limit}
             />
+
             <CapacityCard
               label="Claim Capacity"
               ratio={claimsUsage.ratio}
               used={claimsUsage.used}
               limit={claimsUsage.limit}
             />
+
             <CapacityCard
               label="Storage Capacity"
               ratio={storageUsage.ratio}
               used={storageUsage.used}
               limit={storageUsage.limit}
-              suffix=" MB"
+              suffix="MB"
             />
           </div>
 
@@ -1296,7 +1358,7 @@ export default function WorkspaceDashboardPage() {
                   </div>
                 </div>
 
-                                <div className="mt-5 space-y-3">
+                <div className="mt-5 space-y-3">
                   {canCreateClaim ? (
                     <ActionButton
                       onClick={() => void handleCreateDraftClick()}

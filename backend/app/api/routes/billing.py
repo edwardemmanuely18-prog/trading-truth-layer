@@ -28,6 +28,7 @@ from app.services.entitlements import (
     resolve_workspace_plan_code,
     PLAN_DEFAULTS,
     build_entitlement_snapshot,
+    get_public_plan_codes,
 )
 
 try:
@@ -316,6 +317,15 @@ def get_paddle_price_catalog() -> dict[str, str]:
         "business_monthly": "pri_01kmfe56ft09081tf3127vkz8w",
         "business_annual": "pri_01kmfe9k5hsdxcm6bj90ycjy0q",
     }
+
+
+def get_public_plan_catalog() -> dict:
+    public_codes = get_public_plan_codes()
+
+    return {
+        code: PLAN_DEFAULTS[code]
+        for code in public_codes
+    }    
 
 
 def get_paddle_price_id(plan_code: str, billing_cycle: str) -> str | None:
@@ -962,6 +972,7 @@ def get_workspace_billing_foundation(
             if workspace.subscription_current_period_end
             else None
         ),
+        "public_plans": get_public_plan_catalog(),
         "prices": {
             "monthly_price_usd": 0,
             "annual_price_usd": 0,
@@ -1021,6 +1032,13 @@ def create_billing_checkout_session(
 
     current_plan_code = normalize_plan_code(workspace.plan_code)
     resolved_plan_code = normalize_plan_code(payload.plan_code)
+
+    if resolved_plan_code == "internal":
+        raise HTTPException(
+            status_code=403,
+            detail="Internal plan is restricted",
+        )
+
     billing_cycle = normalize_billing_cycle(payload.billing_cycle)
     checkout_intent = checkout_intent_for_target_plan(workspace, resolved_plan_code)
 
@@ -1719,13 +1737,13 @@ def get_workspace_usage(
         )
 
     snapshot = build_entitlement_snapshot(
+        workspace_id=workspace.id,
         db=db,
-        workspace=workspace,
     )
 
     return {
         "workspace_id": workspace.id,
-        "effective_plan_code": snapshot["effective_plan_code"],
+        "effective_plan_code": snapshot["plan_code"],
         "billing_status": snapshot["billing_status"],
         "usage": snapshot["usage"],
         "limits": snapshot["limits"],

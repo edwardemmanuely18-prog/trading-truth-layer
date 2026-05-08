@@ -598,8 +598,8 @@ function UpgradePressureBanner({
   governance: WorkspaceUsageSummary["governance"] | undefined;
   planMismatch: boolean;
 }) {
-  const claimsUsed = usage?.usage?.claims?.used ?? 0;
-  const claimsLimit = usage?.usage?.claims?.limit ?? 0;
+  const claimsUsed = Number(usage?.usage?.claims ?? 0);
+  const claimsLimit = Number(usage?.limits?.claims ?? 0);
   const claimsRatio = getUsageRatio(claimsUsed, claimsLimit);
 
   let message =
@@ -663,12 +663,17 @@ function UpgradeSummaryPanel({
   governance: WorkspaceUsageSummary["governance"] | undefined;
   primaryAction: { label: string; helper: string | null; disabled: boolean };
 }) {
-  const claimUsed = usage?.usage?.claims?.used ?? 0;
-  const claimLimit = usage?.usage?.claims?.limit ?? 0;
-  const tradeUsed = usage?.usage?.trades?.used ?? 0;
-  const tradeLimit = usage?.usage?.trades?.limit ?? 0;
-  const memberUsed = usage?.usage?.members?.used ?? 0;
-  const memberLimit = usage?.usage?.members?.limit ?? 0;
+  const claimUsed = Number(usage?.usage?.claims ?? 0);
+  const claimLimit = Number(usage?.limits?.claims ?? 0);
+
+  const tradeUsed = Number(usage?.usage?.trades ?? 0);
+  const tradeLimit = Number(usage?.limits?.trades ?? 0);
+
+  const memberUsed = Number(usage?.usage?.members ?? 0);
+  const memberLimit = Number(usage?.limits?.members ?? 0);
+
+  const storageUsed = Number(usage?.usage?.storage_mb ?? 0);
+  const storageLimit = Number(usage?.limits?.storage_mb ?? 0);
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -1095,21 +1100,55 @@ export default function WorkspaceSettingsPage() {
     settings?.effective_plan_detail?.name ||
     formatPlanCodeLabel(effectivePlanCode);
 
-  const configuredClaimLimit = configuredPlanItem?.limits.claim_limit ?? usage?.usage.claims.limit ?? 0;
-  const configuredTradeLimit = configuredPlanItem?.limits.trade_limit ?? usage?.usage.trades.limit ?? 0;
-  const configuredMemberLimit = configuredPlanItem?.limits.member_limit ?? usage?.usage.members.limit ?? 0;
+  const configuredClaimLimit =
+    configuredPlanItem?.limits.claim_limit ??
+    usage?.limits?.claims ??
+    0;
+
+  const configuredTradeLimit =
+    configuredPlanItem?.limits.trade_limit ??
+    usage?.limits?.trades ??
+    0;
+
+  const configuredMemberLimit =
+    configuredPlanItem?.limits.member_limit ??
+    usage?.limits?.members ??
+    0;
+
   const configuredStorageLimit =
-    configuredPlanItem?.limits.storage_limit_mb ?? usage?.usage.storage_mb.limit ?? 0;
+    configuredPlanItem?.limits.storage_limit_mb ??
+    usage?.limits?.storage_mb ??
+    0;
 
-  const claimsRatio = getUsageRatio(usage?.usage.claims.used, configuredClaimLimit);
-  const tradesRatio = getUsageRatio(usage?.usage.trades.used, configuredTradeLimit);
-  const membersRatio = getUsageRatio(usage?.usage.members.used, configuredMemberLimit);
-  const storageRatio = getUsageRatio(usage?.usage.storage_mb.used, configuredStorageLimit);
+  const claimsUsed = Number(usage?.usage?.claims ?? 0);
+  const tradesUsed = Number(usage?.usage?.trades ?? 0);
+  const membersUsed = Number(usage?.usage?.members ?? 0);
+  const storageUsed = Number(usage?.usage?.storage_mb ?? 0);
 
-  const membersAtOrOverLimit = isAtOrOverLimit(usage?.usage.members.used, configuredMemberLimit);
-  const tradesAtOrOverLimit = isAtOrOverLimit(usage?.usage.trades.used, configuredTradeLimit);
-  const claimsAtOrOverLimit = isAtOrOverLimit(usage?.usage.claims.used, configuredClaimLimit);
-  const storageAtOrOverLimit = isAtOrOverLimit(usage?.usage.storage_mb.used, configuredStorageLimit);
+  const claimsRatio = getUsageRatio(claimsUsed, configuredClaimLimit);
+  const tradesRatio = getUsageRatio(tradesUsed, configuredTradeLimit);
+  const membersRatio = getUsageRatio(membersUsed, configuredMemberLimit);
+  const storageRatio = getUsageRatio(storageUsed, configuredStorageLimit);
+
+  const membersAtOrOverLimit = isAtOrOverLimit(
+    membersUsed,
+    configuredMemberLimit
+  );
+
+  const tradesAtOrOverLimit = isAtOrOverLimit(
+    tradesUsed,
+    configuredTradeLimit
+  );
+
+  const claimsAtOrOverLimit = isAtOrOverLimit(
+    claimsUsed,
+    configuredClaimLimit
+  );
+
+  const storageAtOrOverLimit = isAtOrOverLimit(
+    storageUsed,
+    configuredStorageLimit
+  );
 
   const planMismatch =
     Boolean(billingFoundation?.plan_mismatch) ||
@@ -1242,7 +1281,7 @@ export default function WorkspaceSettingsPage() {
               />
               <SummaryCard
                 label="Claims Used"
-                value={`${usage?.usage.claims.used ?? 0} / ${configuredClaimLimit}`}
+                value={`${claimsUsed} / ${configuredClaimLimit}`}
                 hint="Governed claim-capacity position"
               />
             </div>
@@ -1515,31 +1554,34 @@ export default function WorkspaceSettingsPage() {
                     <div className="mt-4 space-y-4">
                       <UsageCard
                         label="Claims"
-                        used={usage?.usage.claims.used}
+                        used={claimsUsed}
                         limit={configuredClaimLimit}
                         ratio={claimsRatio}
                         atOrOver={claimsAtOrOverLimit}
                         hint="Governed public-claim and lifecycle exposure capacity"
                       />
+
                       <UsageCard
                         label="Members"
-                        used={usage?.usage.members.used}
+                        used={membersUsed}
                         limit={configuredMemberLimit}
                         ratio={membersRatio}
                         atOrOver={membersAtOrOverLimit}
                         hint="Workspace collaborator capacity"
                       />
+
                       <UsageCard
                         label="Trades"
-                        used={usage?.usage.trades.used}
+                        used={tradesUsed}
                         limit={configuredTradeLimit}
                         ratio={tradesRatio}
                         atOrOver={tradesAtOrOverLimit}
                         hint="Evidence ingestion and operational throughput"
                       />
+
                       <UsageCard
                         label="Storage (MB)"
-                        used={usage?.usage.storage_mb.used}
+                        used={storageUsed}
                         limit={configuredStorageLimit}
                         ratio={storageRatio}
                         atOrOver={storageAtOrOverLimit}

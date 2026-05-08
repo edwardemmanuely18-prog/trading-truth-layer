@@ -364,20 +364,64 @@ export type WorkspaceStripeReadiness = {
 
 export type WorkspaceUsageSummary = {
   workspace_id: number;
+
   plan_code: string;
+
   billing_status: string;
+
   effective_plan_code: string;
-  usage: {
-    members: UsageDimension;
-    trades: UsageDimension;
-    claims: UsageDimension;
-    storage_mb: UsageDimension;
+
+  limits?: {
+    claims: number;
+    trades: number;
+    members: number;
+    storage_mb: number;
   };
+
+  usage?: {
+    members: number;
+    trades: number;
+    active_trades?: number;
+    claims: number;
+    storage_mb: number;
+  };
+
+  metrics?: {
+    used: number;
+    consumed: number;
+    ledger_count: number;
+    limit: number;
+    utilization: number;
+  };
+
+  diagnostics?: {
+    resolved_plan_code?: string;
+
+    raw_limit_columns?: {
+      claim_limit?: number;
+      trade_limit?: number;
+      member_limit?: number;
+      storage_limit_mb?: number;
+    };
+
+    defaults_for_resolved_plan?: {
+      claims?: number;
+      trades?: number;
+      members?: number;
+      storage_mb?: number;
+    };
+  };
+
   stripe_ready: WorkspaceStripeReadiness;
+
   governance?: WorkspaceGovernance;
+
   upgrade_recommendation?: UpgradeRecommendation;
+
   plan_catalog?: PlanCatalogItem[];
+
   configured_plan_detail?: PlanDetail;
+
   effective_plan_detail?: PlanDetail;
 };
 
@@ -1485,10 +1529,43 @@ function ensureWorkspaceUsageSummary(row: WorkspaceUsageSummary): WorkspaceUsage
     ...row,
     effective_plan_code: String(row?.effective_plan_code ?? row?.plan_code ?? "starter"),
     usage: {
-      members: ensureUsageDimension(row?.usage?.members),
-      trades: ensureUsageDimension(row?.usage?.trades),
-      claims: ensureUsageDimension(row?.usage?.claims),
-      storage_mb: ensureUsageDimension(row?.usage?.storage_mb),
+      members: Number(row?.usage?.members ?? 0),
+
+      trades: Number(row?.usage?.trades ?? 0),
+
+      active_trades: Number(row?.usage?.active_trades ?? 0),
+
+      claims: Number(row?.usage?.claims ?? 0),
+
+      storage_mb: Number(row?.usage?.storage_mb ?? 0),
+    },
+
+    limits: {
+      claims: Number(row?.limits?.claims ?? 0),
+
+      trades: Number(row?.limits?.trades ?? 0),
+
+      members: Number(row?.limits?.members ?? 0),
+
+      storage_mb: Number(row?.limits?.storage_mb ?? 0),
+    },
+
+    // ✅ compatibility metrics layer
+    metrics: {
+      used: Number(row?.usage?.trades ?? 0),
+
+      consumed: Number(row?.usage?.trades ?? 0),
+
+      ledger_count: Number(row?.usage?.trades ?? 0),
+
+      limit: Math.max(
+        1,
+        Number(row?.limits?.trades ?? 200)
+      ),
+
+      utilization:
+        Number(row?.usage?.trades ?? 0) /
+        Math.max(1, Number(row?.limits?.trades ?? 1)),
     },
      stripe_ready: {
       has_customer_id: Boolean(row?.stripe_ready?.has_customer_id),
@@ -2404,7 +2481,11 @@ export const api = {
       { cache: "no-store" }
     );
 
-    if (usage.usage.claims.status === "at_limit" || usage.usage.claims.status === "over_limit") {
+    const usedClaims = Number(usage?.usage?.claims ?? 0);
+
+    const limitClaims = Number(usage?.limits?.claims ?? 0);
+
+    if (usedClaims >= limitClaims && limitClaims > 0) {
       throw new Error("Claim limit reached. Upgrade required.");
     }
 
