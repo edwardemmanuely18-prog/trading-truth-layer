@@ -364,7 +364,10 @@ def persist_runtime_trade_rows(
                 trade_fingerprint=fingerprint,
             )
             db.add(trade)
+            db.flush()
+
             rows_imported += 1
+
             seen_persisted_fingerprints.add(fingerprint)
 
             accepted_preview.append(
@@ -399,7 +402,10 @@ def persist_runtime_trade_rows(
         rows_rejected=rows_rejected,
         rows_skipped_duplicates=rows_skipped_duplicates,
     )
+    db.flush()
+
     db.add(batch)
+
     db.commit()
     db.refresh(batch)
 

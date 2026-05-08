@@ -55,7 +55,11 @@ def _adapt_webhook_trade(raw_trade: dict, source_type: str) -> dict:
 def normalize_broker_row(row: dict, source_type: str) -> dict:
 
     normalized_row = {
-        normalize_key(k): v
+        normalize_key(str(k).strip()): (
+            str(v).strip()
+            if v is not None
+            else None
+        )
         for k, v in row.items()
     }
 
@@ -106,27 +110,22 @@ def normalize_broker_row(row: dict, source_type: str) -> dict:
     # TIME PARSING FIX (CRITICAL)
     opened_at = get(
 
-        # CANONICAL
+        # canonical
         "opened_at",
-        "open_time",
-        "opentime",
 
-        # MT5
+        # mt5
         "time",
-        "open time",
-        "time_msc",
+        "open_time",
         "open_time_msc",
+        "time_msc",
 
-        # IBKR
-        "date/time",
+        # ibkr
         "date_time",
 
-        # GENERIC CSV
-        "date",
+        # generic
         "datetime",
         "timestamp",
-        "open",
-        "opened",
+        "date",
     )
 
     closed_at = get(
@@ -194,12 +193,17 @@ def normalize_broker_row(row: dict, source_type: str) -> dict:
 
 
 def normalize_key(value):
+
+    value = str(value).strip().lower()
+
     return (
-        str(value)
-        .strip()
-        .lower()
+        value
         .replace(" ", "_")
+        .replace("-", "_")
         .replace("/", "_")
+        .replace(".", "_")
+        .replace("(", "")
+        .replace(")", "")
     )
 
 
