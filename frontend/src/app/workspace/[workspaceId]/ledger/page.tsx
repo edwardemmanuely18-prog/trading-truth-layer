@@ -120,7 +120,7 @@ export default function WorkspaceLedgerPage() {
   const workspaceRole = workspaceMembership?.workspace_role ?? null;
   const canWriteTrades = workspaceRole === "owner" || workspaceRole === "operator";
 
-  const [trades, setTrades] = useState<Trade[]>([]);
+  const [trades, setTrades] = useState<Trade[]>(() => []);
   const [metrics, setMetrics] = useState<any>(null);
   const [latestAuditEvents, setLatestAuditEvents] = useState<AuditEvent[]>([]);
   const [workspaceAuditEvents, setWorkspaceAuditEvents] = useState<AuditEvent[]>([]);
@@ -137,16 +137,25 @@ export default function WorkspaceLedgerPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [selectedTag, setSelectedTag] = useState("");
 
-  const activeLedgerTrades = Number(
-    metrics?.ledger_count ?? 0
-  );
+  const activeLedgerTrades =
+    Array.isArray(trades) && trades.length > 0
+      ? trades.length
+      : Number(
+          metrics?.metrics?.ledger_count ||
+          metrics?.ledger_count ||
+          0
+        );
 
   const consumedTrades = Number(
-    metrics?.used ?? 0
+    metrics?.metrics?.used ??
+    metrics?.used ??
+    0
   );
 
   const tradeLimit = Number(
-    metrics?.limit ?? 0
+    metrics?.metrics?.limit ??
+    metrics?.limit ??
+    0
   );
 
   const tradeUtilization =
@@ -154,7 +163,7 @@ export default function WorkspaceLedgerPage() {
 
   const [usageLoading, setUsageLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [strategyStats, setStrategyStats] = useState<any[]>([]);
+  const [strategyStats, setStrategyStats] = useState<Record<string, any>[]>([]);
 
   const [showManualTradeForm, setShowManualTradeForm] = useState(false);
   const [manualTradeSubmitting, setManualTradeSubmitting] = useState(false);
@@ -198,16 +207,29 @@ export default function WorkspaceLedgerPage() {
       ),
     ]);
 
-    setTrades(Array.isArray(tradesRes) ? tradesRes : []);
+    const normalizedTrades: Trade[] =
+      Array.isArray(tradesRes)
+        ? tradesRes
+        : Array.isArray((tradesRes as any)?.trades)
+        ? (tradesRes as any).trades
+        : Array.isArray((tradesRes as any)?.items)
+        ? (tradesRes as any).items
+        : Array.isArray((tradesRes as any)?.data)
+        ? (tradesRes as any).data
+        : Array.isArray((tradesRes as any)?.results)
+        ? (tradesRes as any).results
+        : [];
+
+    setTrades(normalizedTrades);
     setLatestAuditEvents(Array.isArray(latestAuditRes) ? latestAuditRes : []);
     setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
     setMetrics(
       metricsRes ?? {
-        usage: {
-          trades: 0,
-        },
-        limits: {
-          trades: 0,
+        metrics: {
+          used: 0,
+          ledger_count: 0,
+          limit: 0,
+          utilization: 0,
         },
       }
     );
@@ -426,13 +448,28 @@ export default function WorkspaceLedgerPage() {
 
         if (!active) return;
 
-        setTrades(Array.isArray(tradesRes) ? tradesRes : []);
+        const normalizedTrades: Trade[] =
+          Array.isArray(tradesRes)
+            ? tradesRes
+            : Array.isArray((tradesRes as any)?.trades)
+            ? (tradesRes as any).trades
+            : Array.isArray((tradesRes as any)?.items)
+            ? (tradesRes as any).items
+            : Array.isArray((tradesRes as any)?.data)
+            ? (tradesRes as any).data
+            : Array.isArray((tradesRes as any)?.results)
+            ? (tradesRes as any).results
+            : [];
+
+        setTrades(normalizedTrades);
+
         // ✅ BUILD TAG LIST FROM TRADES
         const uniqueTags = new Set<string>();
 
-        (tradesRes || []).forEach((t: Trade) => {
+        normalizedTrades.forEach((t: Trade) => {
           const safeTags = Array.isArray(t.tags) ? t.tags : [];
-          safeTags.forEach(tag => {
+
+          safeTags.forEach((tag: string) => {
             if (tag) uniqueTags.add(tag);
           });
         });
@@ -443,11 +480,11 @@ export default function WorkspaceLedgerPage() {
         setStrategyStats(Array.isArray(strategyRes) ? strategyRes : []);
         setMetrics(
           metricsRes ?? {
-            usage: {
-              trades: 0,
-            },
-            limits: {
-              trades: 0,
+            metrics: {
+              used: 0,
+              ledger_count: 0,
+              limit: 0,
+              utilization: 0,
             },
           }
         );
