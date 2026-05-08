@@ -393,7 +393,7 @@ function ClaimCard({
                     <td className="px-3 py-2">{row.rank}</td>
                     <td className="px-3 py-2">{row.member}</td>
                     <td className="px-3 py-2">{formatNumber(row.net_pnl)}</td>
-                    <td className="px-3 py-2">{formatNumber(row.win_rate, 4)}</td>
+                    <td className="px-3 py-2">{formatPercent(row.win_rate)}</td>
                     <td className="px-3 py-2">{formatNumber(row.profit_factor, 4)}</td>
                   </tr>
                 ))}
