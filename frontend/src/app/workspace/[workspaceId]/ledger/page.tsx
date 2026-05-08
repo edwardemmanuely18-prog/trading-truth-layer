@@ -142,13 +142,11 @@ export default function WorkspaceLedgerPage() {
   );
 
   const consumedTrades = Number(
-    metrics?.usage?.trades ?? 0
+    metrics?.used ?? 0
   );
 
   const tradeLimit = Number(
-    metrics?.limits?.trades ??
-    metrics?.trade_limit ??
-    0
+    metrics?.limit ?? 0
   );
 
   const tradeUtilization =
