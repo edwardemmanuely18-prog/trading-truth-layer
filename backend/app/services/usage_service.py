@@ -28,10 +28,16 @@ def get_workspace_usage(db: Session, workspace_id: int):
     )
 
     # Trades always count fully (no draft concept)
-    trade_count = (
-        db.query(func.count(Trade.id))
-        .filter(Trade.workspace_id == workspace_id)
-        .scalar()
+    from app.models.workspace import Workspace
+
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    trade_count = int(
+        getattr(workspace, "trades_consumed_count", 0) or 0
     )
 
     # Members = total workspace memberships

@@ -281,17 +281,14 @@ def ingest_webhook_trades(
 
     from app.services.usage_service import get_workspace_usage
 
-    usage = get_workspace_usage(db, workspace_id)
-    current_trade_count = usage["trades"]
-
     from app.services.entitlements import enforce_trade_import_allowed
 
     incoming_trade_count = len(adapted_rows)
 
     enforce_trade_import_allowed(
-        workspace=workspace,
+        workspace_id=workspace_id,
+        db=db,
         incoming_count=incoming_trade_count,
-        current_count=current_trade_count,
     )
 
     result = persist_runtime_trade_rows(
@@ -384,17 +381,14 @@ async def upload_import_file(
 
     from app.services.usage_service import get_workspace_usage
 
-    usage = get_workspace_usage(db, workspace_id)
-    current_trade_count = usage["trades"]
-
     incoming_trade_count = len(normalized_rows)
 
     from app.services.entitlements import enforce_trade_import_allowed
 
     enforce_trade_import_allowed(
-        workspace=workspace,
+        workspace_id=workspace_id,
+        db=db,
         incoming_count=incoming_trade_count,
-        current_count=current_trade_count
     )
 
     # Persist accepted rows into Trade via existing ingestion service
@@ -511,7 +505,7 @@ def enable_auto_import(
         "message": "Auto-import enabled",
     }
 
-    
+
 @router.post("/workspaces/{workspace_id}/imports/auto")
 def configure_auto_import(
     workspace_id: int,
@@ -585,15 +579,12 @@ def ingest_stream_event(
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    usage = get_workspace_usage(db, workspace_id)
-    current_trade_count = usage["trades"]
-
     incoming_trade_count = 1  # single event
 
     enforce_trade_import_allowed(
-        workspace=workspace,
+        workspace_id=workspace_id,
+        db=db,
         incoming_count=incoming_trade_count,
-        current_count=current_trade_count
     )
 
     result = persist_runtime_trade_rows(

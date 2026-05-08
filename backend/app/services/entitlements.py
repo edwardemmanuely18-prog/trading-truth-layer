@@ -218,7 +218,13 @@ def get_workspace_usage_counts(workspace_id: int, db: Session) -> dict[str, int]
         .count()
     )
 
-    active_trade_count = get_active_trade_count(workspace_id, db)
+    active_trade_count = (
+        db.query(Trade)
+        .filter(Trade.workspace_id == workspace_id)
+        .count()
+    )
+
+    consumed_trade_count = get_consumed_trade_count(workspace)
 
     claim_count = (
         db.query(ClaimSchema)
@@ -234,10 +240,12 @@ def get_workspace_usage_counts(workspace_id: int, db: Session) -> dict[str, int]
     return {
         "members": member_count,
 
-        # LIVE TRADE COUNT
-        "trades": active_trade_count,
-
+        # LIVE LEDGER
         "active_trades": active_trade_count,
+
+        # GOVERNANCE / BILLING
+        "trades": consumed_trade_count,
+
         "claims": claim_count,
         "storage_mb": storage_mb_used,
     }

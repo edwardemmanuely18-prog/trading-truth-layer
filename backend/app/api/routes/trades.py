@@ -702,7 +702,11 @@ async def import_trades_csv(
             "errors": ["CSV file appears empty or has no data rows"],
         }
 
-    enforce_trade_import_allowed(workspace_id, db, additional_trades=estimated_rows)
+    enforce_trade_import_allowed(
+        workspace_id=workspace_id,
+        db=db,
+        incoming_count=estimated_rows,
+    )
 
     try:
         result = import_csv_trades(
