@@ -23,6 +23,9 @@ from app.models.trade_tag import TradeTag
 from app.models.trade_tag_map import TradeTagMap
 from typing import Optional
 from fastapi import Query
+from app.services.metrics_service import (
+    get_workspace_trade_metrics,
+)
 
 
 router = APIRouter()
@@ -344,6 +347,39 @@ def list_trades(
         serialize_trade(t, tag_map.get(t.id, []))
         for t in trades
     ]
+
+
+@router.get("/workspaces/{workspace_id}/usage")
+def get_workspace_usage(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    metrics = get_workspace_trade_metrics(
+        db,
+        workspace_id,
+    )
+
+    return {
+        "workspace_id": workspace_id,
+
+        "usage": {
+            "trades": metrics.get("used", 0),
+            "active_trades": metrics.get("ledger_count", 0),
+        },
+
+        "limits": {
+            "trades": metrics.get("limit", 0),
+        },
+
+        "metrics": metrics,
+    }
 
 
 @router.post("/workspaces/{workspace_id}/trades")

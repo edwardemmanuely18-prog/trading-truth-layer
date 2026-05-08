@@ -1548,20 +1548,37 @@ function ensureWorkspaceUsageSummary(row: WorkspaceUsageSummary): WorkspaceUsage
 
     // ✅ compatibility metrics layer
     metrics: {
-      used: Number(row?.usage?.trades ?? 0),
+      used: Number(
+        row?.metrics?.used ??
+        row?.usage?.trades ??
+        0
+      ),
 
-      consumed: Number(row?.usage?.trades ?? 0),
+      consumed: Number(
+        row?.metrics?.consumed ??
+        row?.usage?.trades ??
+        0
+      ),
 
-      ledger_count: Number(row?.usage?.trades ?? 0),
+      ledger_count: Number(
+        row?.metrics?.ledger_count ??
+        row?.usage?.active_trades ??
+        0
+      ),
 
       limit: Math.max(
         1,
-        Number(row?.limits?.trades ?? 200)
+        Number(
+          row?.metrics?.limit ??
+          row?.limits?.trades ??
+          200
+        )
       ),
 
-      utilization:
-        Number(row?.usage?.trades ?? 0) /
-        Math.max(1, Number(row?.limits?.trades ?? 1)),
+      utilization: Number(
+        row?.metrics?.utilization ??
+        0
+      ),
     },
      stripe_ready: {
       has_customer_id: Boolean(row?.stripe_ready?.has_customer_id),
@@ -2097,10 +2114,18 @@ export const api = {
     });
   },
 
-  getWorkspaceTradeMetrics: async (workspaceId: number) => {
-    return apiFetch<any>(`/workspaces/${workspaceId}/usage`, {
-      cache: "no-store",
-    });
+  getWorkspaceTradeMetrics: async (
+    workspaceId: number
+  ): Promise<WorkspaceUsageSummary> => {
+
+    const row = await apiFetch<WorkspaceUsageSummary>(
+      withDevUser(`/workspaces/${workspaceId}/usage`),
+      {
+        cache: "no-store",
+      }
+    );
+
+    return ensureWorkspaceUsageSummary(row);
   },
 
   getDashboard: async (workspaceId: number): Promise<DashboardResponse> => {
