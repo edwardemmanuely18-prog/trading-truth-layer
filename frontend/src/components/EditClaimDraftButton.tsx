@@ -104,14 +104,18 @@ export default function EditClaimDraftButton({ claim, onSaved }: Props) {
     ? currentPlanName
     : usage?.upgrade_recommendation?.recommended_plan_name || "Review billing posture";
 
-  const claimUsage = usage?.usage?.claims;
-  const usageLabel = claimUsage
-    ? `${claimUsage.used} / ${claimUsage.limit}${
-        claimUsage.ratio !== null && claimUsage.ratio !== undefined
-          ? ` · ${formatPercent(claimUsage.ratio)}`
-          : ""
-      }`
-    : `Effective plan: ${effectivePlanName}`;
+  const claimsUsed = Number(usage?.usage?.claims ?? 0);
+  const claimsLimit = Number(usage?.limits?.claims ?? 0);
+
+  const claimsRatio =
+    claimsLimit > 0
+      ? claimsUsed / claimsLimit
+      : 0;
+
+  const usageLabel =
+    usage
+      ? `${claimsUsed} / ${claimsLimit} · ${formatPercent(claimsRatio)}`
+      : `Effective plan: ${effectivePlanName}`;
 
   const disabledReason = useMemo(() => {
     if (!stateAllowed) {

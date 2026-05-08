@@ -83,9 +83,17 @@ export default function CreateClaimVersionButton({
     return workspaceRole === "owner" || workspaceRole === "operator";
   }, [workspaceRole]);
 
-  const claimUsage = usage?.usage?.claims;
+  const claimsUsed = Number(usage?.usage?.claims ?? 0);
+  const claimsLimit = Number(usage?.limits?.claims ?? 0);
+
+  const claimUsageRatio =
+    claimsLimit > 0
+      ? claimsUsed / claimsLimit
+      : 0;
+
   const claimLimitReached =
-    (claimUsage?.limit ?? 0) > 0 && (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
+    claimsLimit > 0 &&
+    claimsUsed >= claimsLimit;
 
   const billingActivationRecommended = Boolean(
     (usage?.governance as { billing_activation_recommended?: boolean } | undefined)
@@ -223,13 +231,9 @@ export default function CreateClaimVersionButton({
   const disabled = loading || usageLoading || !canCloneByRole;
 
   const usageLabel =
-    workspaceId && !usageLoading && claimUsage
-      ? `${claimUsage.used} / ${claimUsage.limit}${
-          claimUsage.ratio !== null && claimUsage.ratio !== undefined
-            ? ` · ${formatPercent(claimUsage.ratio)}`
-            : ""
-        }`
-      : `Effective plan: ${effectivePlanName}`;
+    workspaceId && !usageLoading
+      ? `${claimsUsed} / ${claimsLimit} · ${formatPercent(claimUsageRatio)}`
+          : `Effective plan: ${effectivePlanName}`;
 
   const planMismatch =
     normalizeText(usage?.effective_plan_code) &&
@@ -260,16 +264,16 @@ export default function CreateClaimVersionButton({
           <GovernanceBadge
             label="Claim usage"
             value={
-              workspaceId && !usageLoading && claimUsage
-                ? `${claimUsage.used} / ${claimUsage.limit}`
+              workspaceId && !usageLoading
+                ? `${claimsUsed} / ${claimsLimit}`
                 : "—"
             }
           />
           <GovernanceBadge
             label="Usage ratio"
             value={
-              workspaceId && !usageLoading && claimUsage
-                ? formatPercent(claimUsage.ratio)
+              workspaceId && !usageLoading
+                ? formatPercent(claimUsageRatio)
                 : "—"
             }
           />

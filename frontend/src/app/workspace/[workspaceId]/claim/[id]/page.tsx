@@ -788,12 +788,23 @@ function UpgradeContextCard({
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="text-xs uppercase tracking-wide text-slate-500">Claim usage</div>
           <div className="mt-1 text-lg font-semibold text-slate-900">
-            {claimUsage ? `${claimUsage.used} / ${claimUsage.limit}` : "—"}
+            {claimUsage
+              ? `${Number(claimUsage ?? 0)} / ${Number(
+                  usage?.limits?.claims ?? 0
+                )}`
+              : "—"}
           </div>
           <div className="mt-1 text-xs text-slate-500">
-            {claimUsage?.ratio !== null && claimUsage?.ratio !== undefined
-              ? `${(Number(claimUsage.ratio) * 100).toFixed(1)}% of current claim capacity`
-              : "No usage telemetry available"}
+            {Number(usage?.limits?.claims ?? 0) > 0 ? (
+              <div className="mt-1 text-xs text-slate-500">
+                {Math.round(
+                  (Number(claimUsage ?? 0) /
+                    Number(usage?.limits?.claims ?? 1)) *
+                    100
+                )}
+                % utilized
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -1075,7 +1086,9 @@ export default function WorkspaceClaimDetailPage() {
 
   const claimUsage = usage?.usage?.claims;
   const claimLimitReached =
-    (claimUsage?.limit ?? 0) > 0 && (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
+    Number(usage?.limits?.claims ?? 0) > 0 &&
+    Number(claimUsage ?? 0) >=
+      Number(usage?.limits?.claims ?? 0);
 
   const effectivePlanCode = usage?.effective_plan_code || usage?.plan_code || null;
   const isSandbox = isSandboxPlan(effectivePlanCode);
@@ -1767,9 +1780,15 @@ export default function WorkspaceClaimDetailPage() {
                       : ""}
                   </div>
                   <div className="mt-1">
-                    Claim usage: {claimUsage?.used ?? 0} / {claimUsage?.limit ?? 0}
-                    {claimUsage?.ratio !== null && claimUsage?.ratio !== undefined
-                      ? ` · ${(Number(claimUsage.ratio) * 100).toFixed(1)}%`
+                    Claim usage: {Number(claimUsage ?? 0)} /{" "}
+                    {Number(usage?.limits?.claims ?? 0)}
+
+                    {Number(usage?.limits?.claims ?? 0) > 0
+                      ? ` · ${(
+                          (Number(claimUsage ?? 0) /
+                            Number(usage?.limits?.claims ?? 1)) *
+                          100
+                        ).toFixed(1)}%`
                       : ""}
                   </div>
                   <div className="mt-2">
@@ -1782,9 +1801,15 @@ export default function WorkspaceClaimDetailPage() {
                 <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                   <div className="font-medium">Local QA override active</div>
                   <div className="mt-1">
-                    Claim usage: {claimUsage?.used ?? 0} / {claimUsage?.limit ?? 0}
-                    {claimUsage?.ratio !== null && claimUsage?.ratio !== undefined
-                      ? ` · ${(Number(claimUsage.ratio) * 100).toFixed(1)}%`
+                    Claim usage: {Number(claimUsage ?? 0)} /{" "}
+                    {Number(usage?.limits?.claims ?? 0)}
+
+                    {Number(usage?.limits?.claims ?? 0) > 0
+                      ? ` · ${(
+                          (Number(claimUsage ?? 0) /
+                            Number(usage?.limits?.claims ?? 1)) *
+                          100
+                        ).toFixed(1)}%`
                       : ""}
                   </div>
                   <div className="mt-2">

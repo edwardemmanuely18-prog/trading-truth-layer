@@ -35,9 +35,17 @@ export default function InviteWorkspaceMemberForm({
   const workspaceRole = getWorkspaceRole(workspaceId);
   const isOwner = useMemo(() => workspaceRole === "owner", [workspaceRole]);
 
-  const memberUsage = usage?.usage?.members;
-  const memberLimitReached =
-    (memberUsage?.limit ?? 0) > 0 && (memberUsage?.used ?? 0) >= (memberUsage?.limit ?? 0);
+  const membersUsed = Number(usage?.usage?.members ?? 0);
+  const membersLimit = Number(usage?.limits?.members ?? 0);
+
+  const membersRatio =
+    membersLimit > 0
+      ? membersUsed / membersLimit
+      : 0;
+
+const memberLimitReached =
+  membersLimit > 0 &&
+  membersUsed >= membersLimit;
 
   useEffect(() => {
     let active = true;
@@ -137,11 +145,11 @@ export default function InviteWorkspaceMemberForm({
           <div className="font-medium">Member limit reached</div>
           <div className="mt-1">
             This workspace is currently using{" "}
-            <span className="font-semibold">{memberUsage?.used ?? 0}</span> of{" "}
-            <span className="font-semibold">{memberUsage?.limit ?? 0}</span> allowed members.
+            <span className="font-semibold">{membersUsed ?? 0}</span> of{" "}
+            <span className="font-semibold">{membersLimit ?? 0}</span> allowed members.
           </div>
           <div className="mt-1">
-            Utilization: <span className="font-medium">{formatPercent(memberUsage?.ratio)}</span>
+            Utilization: <span className="font-medium">{formatPercent(membersRatio)}</span>
           </div>
           <div className="mt-2">
             Upgrade the workspace plan before creating additional invites.
@@ -149,16 +157,16 @@ export default function InviteWorkspaceMemberForm({
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          {memberUsage ? (
+          {membersUsed ? (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
               <div>
                 Current member usage:{" "}
                 <span className="font-semibold">
-                  {memberUsage.used} / {memberUsage.limit}
+                  {membersUsed} / {membersLimit}
                 </span>
               </div>
               <div className="mt-1 text-slate-500">
-                Utilization: {formatPercent(memberUsage.ratio)}
+                Utilization: {formatPercent(membersRatio)}
               </div>
             </div>
           ) : null}

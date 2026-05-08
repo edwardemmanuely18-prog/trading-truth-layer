@@ -81,7 +81,6 @@ export default function WorkspaceInviteForm({
     };
   }, [workspaceId]);
 
-  const memberUsage = usage?.usage?.members;
 
   const configuredPlan = useMemo(() => {
     return usage?.plan_catalog?.find(
@@ -95,6 +94,22 @@ export default function WorkspaceInviteForm({
     );
   }, [usage]);
 
+  const membersUsed = Number(usage?.usage?.members ?? 0);
+
+  const membersLimit = Number(
+    (
+      (effectivePlan?.limits as { member_limit?: number } | undefined)
+        ?.member_limit ??
+      usage?.limits?.members ??
+      0
+    )
+  );
+
+  const membersRatio =
+    membersLimit > 0
+      ? membersUsed / membersLimit
+      : 0;
+
   const configuredPlanName = configuredPlan?.name || usage?.plan_code || "—";
   const effectivePlanName = effectivePlan?.name || usage?.effective_plan_code || "—";
 
@@ -102,12 +117,12 @@ export default function WorkspaceInviteForm({
     (configuredPlan?.limits as { member_limit?: number } | undefined)?.member_limit ?? null;
   const effectiveMemberLimit =
     (effectivePlan?.limits as { member_limit?: number } | undefined)?.member_limit ??
-    memberUsage?.limit ??
+    membersLimit ??
     null;
 
   const configuredMemberRatio =
-    configuredMemberLimit && configuredMemberLimit > 0 && memberUsage
-      ? memberUsage.used / configuredMemberLimit
+    configuredMemberLimit && configuredMemberLimit > 0 && membersUsed
+      ? membersUsed / configuredMemberLimit
       : null;
 
   const recommendedPlanCode = usage?.upgrade_recommendation?.recommended_plan_code;
@@ -126,7 +141,15 @@ export default function WorkspaceInviteForm({
   );
   const planMismatch = Boolean(usage?.governance?.plan_mismatch);
 
-  const memberStatus = memberUsage?.status || "ok";
+  const memberStatus =
+    membersRatio > 1
+      ? "over_limit"
+      : membersRatio === 1
+        ? "at_limit"
+        : membersRatio >= 0.9
+          ? "near_limit"
+          : "ok";
+
   const memberAtLimit = memberStatus === "at_limit";
   const memberOverLimit = memberStatus === "over_limit";
   const memberNearLimit = memberStatus === "near_limit";
@@ -240,7 +263,7 @@ export default function WorkspaceInviteForm({
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="text-sm text-slate-500">Members Used</div>
-              <div className="mt-1 text-xl font-semibold">{memberUsage?.used ?? 0}</div>
+              <div className="mt-1 text-xl font-semibold">{membersUsed ?? 0}</div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -251,14 +274,14 @@ export default function WorkspaceInviteForm({
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="text-sm text-slate-500">Effective Member Limit</div>
               <div className="mt-1 text-xl font-semibold">
-                {effectiveMemberLimit ?? memberUsage?.limit ?? "—"}
+                {effectiveMemberLimit ?? membersLimit ?? "—"}
               </div>
               <div className="mt-2 text-xs text-slate-500">Invite blocking uses this limit</div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
               <div className="text-sm text-slate-500">Effective Utilization</div>
-              <div className="mt-1 text-xl font-semibold">{formatPercent(memberUsage?.ratio)}</div>
+              <div className="mt-1 text-xl font-semibold">{formatPercent(membersRatio)}</div>
               <div className="mt-2 text-xs text-slate-500">
                 Calculated against effective enforcement, not the configured commercial tier.
               </div>

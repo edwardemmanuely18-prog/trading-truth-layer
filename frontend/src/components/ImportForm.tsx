@@ -171,9 +171,17 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
   const workspaceRole = getWorkspaceRole(workspaceId);
   const canImportByRole = workspaceRole === "owner" || workspaceRole === "operator";
 
-  const tradeUsage = usage?.usage?.trades;
+  const tradesUsed = Number(usage?.usage?.trades ?? 0);
+  const tradesLimit = Number(usage?.limits?.trades ?? 0);
+
+  const tradesRatio =
+    tradesLimit > 0
+      ? tradesUsed / tradesLimit
+      : 0;
+
   const tradeLimitReached =
-    (tradeUsage?.limit ?? 0) > 0 && (tradeUsage?.used ?? 0) >= (tradeUsage?.limit ?? 0);
+    tradesLimit > 0 &&
+    tradesUsed >= tradesLimit;
 
   const canImport = canImportByRole && !tradeLimitReached;
 
@@ -452,11 +460,11 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
             <div className="font-medium">Trade limit reached</div>
             <div className="mt-1">
               This workspace is currently using{" "}
-              <span className="font-semibold">{tradeUsage?.used ?? 0}</span> of{" "}
-              <span className="font-semibold">{tradeUsage?.limit ?? 0}</span> allowed trades.
+              <span className="font-semibold">{tradesUsed ?? 0}</span> of{" "}
+              <span className="font-semibold">{tradesLimit ?? 0}</span> allowed trades.
             </div>
             <div className="mt-1">
-              Utilization: <span className="font-medium">{formatPercent(tradeUsage?.ratio)}</span>
+              Utilization: <span className="font-medium">{formatPercent(tradesRatio)}</span>
             </div>
             <div className="mt-2">
               Upgrade the workspace plan before importing additional trades.
@@ -467,11 +475,11 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
             <div>
               Current trade usage:{" "}
               <span className="font-semibold">
-                {tradeUsage?.used ?? 0} / {tradeUsage?.limit ?? "—"}
+                {tradesUsed ?? 0} / {tradesLimit ?? "—"}
               </span>
             </div>
             <div className="mt-1 text-slate-500">
-              Utilization: {formatPercent(tradeUsage?.ratio)}
+              Utilization: {formatPercent(tradesRatio)}
             </div>
           </div>
         )}

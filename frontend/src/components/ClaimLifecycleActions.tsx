@@ -24,10 +24,17 @@ function normalizeText(value?: string | null) {
   return String(value || "").toLowerCase().trim();
 }
 
-function getUsageWarning(claimUsage?: WorkspaceUsageSummary["usage"]["claims"] | null) {
-  if (!claimUsage) return null;
+function getUsageWarning(
+  claimsUsed?: number | null,
+  claimsLimit?: number | null
+) {
+  const used = Number(claimsUsed ?? 0);
+  const limit = Number(claimsLimit ?? 0);
 
-  const ratio = Number(claimUsage.ratio ?? 0);
+  if (limit <= 0) return null;
+
+  const ratio = used / limit;
+
   if (ratio >= 1) {
     return {
       tone: "critical" as const,
@@ -415,16 +422,22 @@ export default function ClaimLifecycleActions({
     ? currentPlanName
     : usage?.upgrade_recommendation?.recommended_plan_name || "Review billing posture";
 
-  const claimUsage = usage?.usage?.claims;
-  const usageWarning = useMemo(() => getUsageWarning(claimUsage), [claimUsage]);
+  const claimsUsed = Number(usage?.usage?.claims ?? 0);
+  const claimsLimit = Number(usage?.limits?.claims ?? 0);
+  const usageWarning = useMemo(
+    () => getUsageWarning(claimsUsed, claimsLimit),
+    [claimsUsed, claimsLimit]
+  );
 
-  const usageLabel = claimUsage
-    ? `${claimUsage.used} of ${claimUsage.limit} governed claims used${
-        claimUsage.ratio !== null && claimUsage.ratio !== undefined
-          ? ` · ${formatPercent(claimUsage.ratio)}`
-          : ""
-      }`
-    : `Effective plan: ${effectivePlanName}`;
+  const usageRatio =
+    claimsLimit > 0
+      ? claimsUsed / claimsLimit
+      : 0;
+
+  const usageLabel =
+    claimsLimit > 0
+      ? `${claimsUsed} of ${claimsLimit} governed claims used · ${formatPercent(usageRatio)}`
+      : `Effective plan: ${effectivePlanName}`;
 
   const billingActive = normalizeText(usage?.billing_status) === "active";
 
@@ -692,12 +705,12 @@ export default function ClaimLifecycleActions({
               </div>
             </div>
 
-            {claimUsage ? (
+            {claimsLimit > 0 ? (
               <div className="mt-4">
                 <div className="flex items-center justify-between text-xs text-slate-500">
                   <span>Governed claim usage</span>
                   <span>
-                    {claimUsage.used} / {claimUsage.limit}
+                    {claimsUsed} / {claimsLimit}
                   </span>
                 </div>
                 <div className="mt-2 h-2 rounded-full bg-slate-100">
@@ -706,7 +719,16 @@ export default function ClaimLifecycleActions({
                     style={{
                       width: `${Math.min(
                         100,
-                        Math.max(0, Number(((claimUsage.ratio ?? 0) * 100).toFixed(1)))
+                        Math.max(
+                          0,
+                          Number(
+                            (
+                              (claimsLimit > 0
+                                ? (claimsUsed / claimsLimit)
+                                : 0) * 100
+                            ).toFixed(1)
+                          )
+                        )
                       )}%`,
                     }}
                   />

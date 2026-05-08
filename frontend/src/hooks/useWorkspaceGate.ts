@@ -256,12 +256,15 @@ export function useWorkspaceGate() {
         };
       }
 
-      const claimUsage = usage?.usage?.claims;
+      const used = Number(usage?.usage?.claims ?? 0);
 
-      const used = Number(claimUsage?.used ?? 0);
-      const limit = Number(claimUsage?.limit ?? 0);
+      const limit = Number(
+        usage?.limits?.claims ??
+        0
+      );
 
-      const claimLimitReached = limit > 0 && used >= limit;
+      const claimLimitReached =
+        limit > 0 && used >= limit;
 
       if (claimLimitReached) {
         return {

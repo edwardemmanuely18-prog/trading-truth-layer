@@ -42,12 +42,15 @@ export default async function LedgerPage() {
       api.getAuditEventsForWorkspace(1, 50),
     ]);
 
-  // ✅ Metrics extraction
-  const used = usage.usage.trades.used;
-  const limit = usage.usage.trades.limit;
-  const utilization = usage.usage.trades.ratio
-    ? Math.round(usage.usage.trades.ratio * 100)
-    : 0;
+  // ✅ Metrics extraction (new usage structure)
+  const used = Number(usage?.usage?.trades ?? 0);
+
+  const limit = Number(usage?.limits?.trades ?? 0);
+
+  const utilization =
+    limit > 0
+      ? Math.round((used / limit) * 100)
+      : 0;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">

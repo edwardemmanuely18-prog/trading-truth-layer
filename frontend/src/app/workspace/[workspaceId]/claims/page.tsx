@@ -507,7 +507,9 @@ export default function WorkspaceClaimsPage() {
 
   const claimUsage = usage?.usage?.claims;
   const claimLimitReached =
-    (claimUsage?.limit ?? 0) > 0 && (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
+    Number(usage?.limits?.claims ?? 0) > 0 &&
+    Number(claimUsage ?? 0) >=
+      Number(usage?.limits?.claims ?? 0);
   const billingActivationRecommended = Boolean(usage?.governance?.billing_activation_recommended);
 
   const configuredPlanName = getPlanName(
@@ -674,9 +676,17 @@ export default function WorkspaceClaimsPage() {
                 <div className="mt-1 font-semibold text-slate-900">
                   {usageLoading
                     ? "Loading..."
-                    : `${claimUsage?.used ?? 0} / ${claimUsage?.limit ?? "—"} · ${formatPercent(
-                        claimUsage?.ratio
-                      )}`}
+                    : `${Number(claimUsage ?? 0)} / ${Number(
+                        usage?.limits?.claims ?? 0
+                      )} · ${
+                        Number(usage?.limits?.claims ?? 0) > 0
+                          ? (
+                              (Number(claimUsage ?? 0) /
+                                Number(usage?.limits?.claims ?? 1)) *
+                              100
+                            ).toFixed(1) + "%"
+                          : "0%"
+                      }`}
                 </div>
               </div>
             </div>
@@ -876,11 +886,17 @@ export default function WorkspaceClaimsPage() {
         currentPlanName={configuredPlanName}
         currentPlanCode={usage?.plan_code || null}
         usageLabel={
-          claimUsage
-            ? `${claimUsage.used} / ${claimUsage.limit}${
-                claimUsage.ratio !== null && claimUsage.ratio !== undefined
-                  ? ` · ${formatPercent(claimUsage.ratio)}`
-                  : ""
+          claimUsage !== undefined && claimUsage !== null
+            ? `${Number(claimUsage ?? 0)} / ${Number(
+                usage?.limits?.claims ?? 0
+              )} · ${
+                Number(usage?.limits?.claims ?? 0) > 0
+                  ? (
+                      (Number(claimUsage ?? 0) /
+                        Number(usage?.limits?.claims ?? 1)) *
+                      100
+                    ).toFixed(1) + "%"
+                  : "0%"
               }`
             : `Effective plan: ${effectivePlanName}`
         }

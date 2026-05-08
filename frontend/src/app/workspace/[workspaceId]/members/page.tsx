@@ -354,7 +354,7 @@ export default function WorkspaceMembersPage() {
 
   const pendingInvites = invites.filter((row) => row.status === "pending");
   const acceptedInvites = invites.filter((row) => row.status === "accepted");
-  const memberUsage = usage?.usage.members;
+  const memberUsage = usage?.usage?.members ?? 0;
 
   const configuredPlan = usage?.plan_catalog?.find(
     (plan) => normalizeText(plan.code) === normalizeText(usage.plan_code)
@@ -370,7 +370,7 @@ export default function WorkspaceMembersPage() {
     (configuredPlan?.limits as { member_limit?: number } | undefined)?.member_limit ?? null;
   const effectiveMemberLimit =
     (effectivePlan?.limits as { member_limit?: number } | undefined)?.member_limit ??
-    memberUsage?.limit ??
+    usage?.limits?.members ??
     null;
 
   const planMismatch = Boolean(usage?.governance?.plan_mismatch);
@@ -464,9 +464,7 @@ export default function WorkspaceMembersPage() {
                 label="Members"
                 value={members.length}
                 hint={
-                  memberUsage
-                    ? `${memberUsage.used} / ${effectiveMemberLimit ?? memberUsage.limit} enforced`
-                    : "Current directory size"
+                  `${Number(memberUsage ?? 0)} / ${effectiveMemberLimit ?? "—"} enforced`
                 }
               />
               <SummaryCard
@@ -499,7 +497,7 @@ export default function WorkspaceMembersPage() {
               <GovernanceBanner usage={usage} workspaceRole={workspaceRole} />
             </div>
 
-            {memberUsage ? (
+            {usage ? (
               <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -532,7 +530,7 @@ export default function WorkspaceMembersPage() {
                 <div className="mt-4 grid gap-4 md:grid-cols-4">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="text-sm text-slate-500">Members Used</div>
-                    <div className="mt-1 text-2xl font-semibold">{memberUsage.used}</div>
+                    <div className="mt-1 text-2xl font-semibold">{Number(memberUsage ?? 0)}</div>
                   </div>
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -545,14 +543,21 @@ export default function WorkspaceMembersPage() {
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="text-sm text-slate-500">Effective Member Limit</div>
                     <div className="mt-1 text-2xl font-semibold">
-                      {effectiveMemberLimit ?? memberUsage.limit}
+                      {effectiveMemberLimit ?? "—"}
                     </div>
                   </div>
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="text-sm text-slate-500">Utilization</div>
                     <div className="mt-1 text-2xl font-semibold">
-                      {formatPercent(memberUsage.ratio)}
+                      {
+                        Number(effectiveMemberLimit ?? 0) > 0
+                          ? formatPercent(
+                              Number(memberUsage ?? 0) /
+                                Number(effectiveMemberLimit ?? 1)
+                            )
+                          : "0%"
+                      }
                     </div>
                     <div className="mt-2 text-xs text-slate-500">Against effective enforcement</div>
                   </div>

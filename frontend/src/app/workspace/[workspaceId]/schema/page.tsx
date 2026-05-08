@@ -109,13 +109,15 @@ export default function WorkspaceSchemaPage() {
 
   const workspaceRole = workspaceMembership?.workspace_role ?? null;
   const canCreateClaimRole = workspaceRole === "owner" || workspaceRole === "operator";
-  const claimUsage = usage?.usage?.claims;
+  const claimUsage = usage?.usage?.claims ?? 0;
   const paidAccessActive = Boolean(usage?.governance?.paid_access_active);
   const effectivePlanCode = usage?.effective_plan_code || usage?.plan_code || "starter";
 
+  const claimLimit = Number(usage?.limits?.claims ?? 0);
+
   const claimLimitReached =
-    (claimUsage?.limit ?? 0) > 0 &&
-    (claimUsage?.used ?? 0) >= (claimUsage?.limit ?? 0);
+    claimLimit > 0 &&
+    Number(claimUsage ?? 0) >= claimLimit;
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -171,12 +173,12 @@ export default function WorkspaceSchemaPage() {
     );
   }
 
-  const claimsUsed = claimUsage?.used ?? 0;
-  const claimsLimit = claimUsage?.limit ?? 0;
+  const claimsUsed = Number(claimUsage ?? 0);
+  const claimsLimit = Number(usage?.limits?.claims ?? 0);
   const usageRatio =
-    claimUsage?.ratio !== null && claimUsage?.ratio !== undefined
-      ? `${Math.round(claimUsage.ratio * 100)}%`
-      : "—";
+    claimsLimit > 0
+      ? `${Math.round((claimsUsed / claimsLimit) * 100)}%`
+      : "0%";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
