@@ -36,7 +36,23 @@ def get_workspace_usage(db: Session, workspace_id: int):
         .first()
     )
 
-    trade_count = int(
+    # ACTIVE ledger trades (mutable)
+    active_trade_count = (
+        db.query(func.count(Trade.id))
+        .filter(Trade.workspace_id == workspace_id)
+        .scalar()
+    )
+
+    # GOVERNANCE consumed trades (immutable)
+    from app.models.workspace import Workspace
+
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    consumed_trade_count = int(
         getattr(workspace, "trades_consumed_count", 0) or 0
     )
 
@@ -49,6 +65,12 @@ def get_workspace_usage(db: Session, workspace_id: int):
 
     return {
         "claims": claim_count or 0,
-        "trades": trade_count or 0,
+
+        # ACTIVE trades in DB
+        "trades": active_trade_count or 0,
+
+        # IMMUTABLE governance usage
+        "trades_used": consumed_trade_count or 0,
+
         "members": member_count or 0,
     }
