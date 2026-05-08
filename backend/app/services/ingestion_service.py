@@ -414,6 +414,7 @@ def persist_runtime_trade_rows(
             "import_batch_id": batch.id,
             "filename": filename,
             "format_type": normalized_source,
+            "source_type": normalized_source,
             "rows_received": rows_received,
             "rows_imported": rows_imported,
             "rows_rejected": rows_rejected,
@@ -531,7 +532,7 @@ def import_csv_trades(
             errors.append(f"Row {idx}: {str(e)}")
 
     print("IMPORT ERRORS:", errors, flush=True)
-    
+
     batch = ImportBatch(
         workspace_id=workspace_id,
         filename=filename,

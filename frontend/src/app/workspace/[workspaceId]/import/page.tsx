@@ -17,7 +17,7 @@ function formatPercent(value?: number | null) {
     return "—";
   }
 
-  return `${Number(value).toFixed(1)}%`;
+  return `${(Number(value) * 100).toFixed(1)}%`;
 }
 
 function formatNumber(value?: number | null) {

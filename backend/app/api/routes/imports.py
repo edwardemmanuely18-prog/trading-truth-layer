@@ -56,9 +56,9 @@ def normalize_broker_row(row: dict, source_type: str) -> dict:
 
     def get(*keys):
         for k in keys:
-            for actual_key in row.keys():
-                if actual_key.lower().strip().replace(" ", "_") == k.lower():
-                    val = row[actual_key]
+            for actual_key in normalized_row.keys():
+                if actual_key == normalize_key(k):
+                    val = normalized_row[actual_key]
                     if val not in (None, ""):
                         return val
         return None
@@ -86,15 +86,33 @@ def normalize_broker_row(row: dict, source_type: str) -> dict:
             side = None
 
     # QUANTITY
-    quantity = get("quantity", "size", "volume")
+    quantity = get(
+        "quantity",
+        "qty",
+        "size",
+        "volume",
+        "shares",
+    )
     try:
         quantity = float(quantity) if quantity is not None else None
     except:
         quantity = None
 
     # TIME PARSING FIX (CRITICAL)
-    opened_at = get("open_time", "opened_at", "opentime")
-    closed_at = get("close_time", "closed_at", "closetime")
+    opened_at = get(
+        "open_time",
+        "opened_at",
+        "opentime",
+        "time",
+        "date_time",
+    )
+
+    closed_at = get(
+        "close_time",
+        "closed_at",
+        "closetime",
+        "close_time_msc",
+    )
 
     # Normalize MT5 datetime format
     def parse_dt(val):
@@ -109,11 +127,38 @@ def normalize_broker_row(row: dict, source_type: str) -> dict:
         "symbol": symbol,
         "side": side,
         "quantity": quantity,
-        "entry_price": get("entry_price", "open_price", "Price", "OpenPrice"),
+        "entry_price": get(
+            "entry_price",
+            "open_price",
+            "price",
+            "tradeprice",
+            "fill_price",
+        ),
         "exit_price": get("exit_price", "close_price", "ClosePrice"),
-        "net_pnl": get("net_pnl", "profit", "RealizedPnL"),
+        "net_pnl": get(
+            "net_pnl",
+            "profit",
+            "realizedpnl",
+            "realized_p&l",
+            "pnl",
+        ),
         "opened_at": parse_dt(opened_at),
         "closed_at": parse_dt(closed_at),
+    }
+
+
+def normalize_key(value):
+    return (
+        str(value)
+        .strip()
+        .lower()
+        .replace(" ", "_")
+        .replace("/", "_")
+    )
+
+    normalized_row = {
+        normalize_key(k): v
+        for k, v in row.items()
     }
 
 

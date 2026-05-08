@@ -1142,10 +1142,6 @@ function getAuthHeaders(headers?: HeadersInit) {
     merged.set("Authorization", `Bearer ${token}`);
   }
 
-  if (token) {
-    merged.set("Authorization", `Bearer ${token}`);
-  }
-
   return merged;
 }
 
