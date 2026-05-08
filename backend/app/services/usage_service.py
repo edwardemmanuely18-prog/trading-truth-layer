@@ -43,7 +43,7 @@ def get_workspace_usage(db: Session, workspace_id: int):
         .scalar()
     )
 
-    # GOVERNANCE consumed trades (immutable)
+    # GOVERNANCE COUNT (never decreases)
     from app.models.workspace import Workspace
 
     workspace = (
@@ -56,21 +56,18 @@ def get_workspace_usage(db: Session, workspace_id: int):
         getattr(workspace, "trades_consumed_count", 0) or 0
     )
 
-    # Members = total workspace memberships
-    member_count = (
-        db.query(func.count(WorkspaceMembership.id))
-        .filter(WorkspaceMembership.workspace_id == workspace_id)
+    # LIVE LEDGER ROWS (decreases on delete)
+    ledger_trade_count = (
+        db.query(func.count(Trade.id))
+        .filter(Trade.workspace_id == workspace_id)
         .scalar()
     )
 
+    ledger_trade_count = ledger_trade_count or 0
+
     return {
         "claims": claim_count or 0,
-
-        # ACTIVE trades in DB
-        "trades": active_trade_count or 0,
-
-        # IMMUTABLE governance usage
-        "trades_used": consumed_trade_count or 0,
-
+        "trades": consumed_trade_count,
+        "ledger_trades": ledger_trade_count,
         "members": member_count or 0,
     }

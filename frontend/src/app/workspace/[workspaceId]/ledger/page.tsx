@@ -137,24 +137,24 @@ export default function WorkspaceLedgerPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [selectedTag, setSelectedTag] = useState("");
 
-  const tradeUsed = Number(
+  const activeLedgerTrades = Number(
+    metrics?.usage?.active_trades ??
     metrics?.usage?.trades ??
-    metrics?.trades ??
-    metrics?.used ??
-    metrics?.consumed ??
-    metrics?.ledger_count ??
     0
+  );
+
+  const consumedTrades = Number(
+    metrics?.usage?.trades ?? 0
   );
 
   const tradeLimit = Number(
     metrics?.limits?.trades ??
     metrics?.trade_limit ??
-    metrics?.limit ??
     0
   );
 
-const tradeUtilization =
-  tradeUsed / Math.max(1, tradeLimit);
+  const tradeUtilization =
+    consumedTrades / Math.max(1, tradeLimit);
 
   const [usageLoading, setUsageLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -175,7 +175,7 @@ const tradeUtilization =
   const [deletingTradeId, setDeletingTradeId] = useState<number | null>(null);
   
   const tradeLimitReached =
-    tradeLimit > 0 && tradeUsed >= tradeLimit;
+    tradeLimit > 0 && activeLedgerTrades >= tradeLimit;
   
   async function reloadLedgerData(resolvedWorkspaceId: number) {
     console.log("reloadLedgerData CALLED", resolvedWorkspaceId);
@@ -635,7 +635,7 @@ const tradeUtilization =
               <div className="rounded-xl bg-white/70 p-4">
                 <div className="text-sm text-slate-500">Used</div>
                 <div className="mt-1 text-2xl font-semibold">
-                  {tradeUsed.toLocaleString()}
+                  {consumedTrades.toLocaleString()}
                 </div>
               </div>
               <div className="rounded-xl bg-white/70 p-4">
@@ -671,7 +671,7 @@ const tradeUtilization =
             </div>
 
             <div className="mt-2 text-2xl font-semibold">
-              {tradeUsed}
+              {activeLedgerTrades}
             </div>
           </div>
 

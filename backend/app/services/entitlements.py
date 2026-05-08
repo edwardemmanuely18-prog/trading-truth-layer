@@ -241,7 +241,7 @@ def get_workspace_usage_counts(workspace_id: int, db: Session) -> dict[str, int]
         "members": member_count,
 
         # LIVE LEDGER
-        "active_trades": active_trade_count,
+        "ledger_trades": active_trade_count,
 
         # GOVERNANCE / BILLING
         "trades": consumed_trade_count,
