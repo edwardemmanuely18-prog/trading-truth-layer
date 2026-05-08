@@ -54,6 +54,11 @@ def _adapt_webhook_trade(raw_trade: dict, source_type: str) -> dict:
 
 def normalize_broker_row(row: dict, source_type: str) -> dict:
 
+    normalized_row = {
+        normalize_key(k): v
+        for k, v in row.items()
+    }
+
     def get(*keys):
         for k in keys:
             for actual_key in normalized_row.keys():
@@ -155,11 +160,6 @@ def normalize_key(value):
         .replace(" ", "_")
         .replace("/", "_")
     )
-
-    normalized_row = {
-        normalize_key(k): v
-        for k, v in row.items()
-    }
 
 
 def _extract_webhook_trade_rows(payload: dict) -> list[dict]:
