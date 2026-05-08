@@ -137,11 +137,9 @@ export default function WorkspaceLedgerPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [selectedTag, setSelectedTag] = useState("");
 
-  const activeLedgerTrades = Number(
-    metrics?.usage?.active_trades ??
-    metrics?.usage?.trades ??
-    0
-  );
+  const activeLedgerTrades = Array.isArray(trades)
+    ? trades.length
+    : 0;
 
   const consumedTrades = Number(
     metrics?.usage?.trades ?? 0
