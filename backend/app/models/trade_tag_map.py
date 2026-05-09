@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, ForeignKey, Index
+from sqlalchemy import Column, Integer, ForeignKey
+
 from app.core.db import Base
 
 
@@ -7,15 +8,20 @@ class TradeTagMap(Base):
 
     id = Column(Integer, primary_key=True)
 
-    trade_id = Column(Integer, ForeignKey("trades.id", ondelete="CASCADE"), index=True)
-    tag_id = Column(Integer, ForeignKey("trade_tags.id", ondelete="CASCADE"), index=True)
-
-    __table_args__ = (
-        Index("idx_trade_tag_map_trade_id", "trade_id"),
-        Index("idx_trade_tag_map_tag_id", "tag_id"),
+    trade_id = Column(
+        Integer,
+        ForeignKey(
+            "trades.id",
+            ondelete="CASCADE",
+        ),
+        index=True,
     )
 
-
-# ✅ DEFINE INDEXES AFTER CLASS
-Index("idx_trade_tag_map_trade_id", TradeTagMap.trade_id)
-Index("idx_trade_tag_map_tag_id", TradeTagMap.tag_id)
+    tag_id = Column(
+        Integer,
+        ForeignKey(
+            "trade_tags.id",
+            ondelete="CASCADE",
+        ),
+        index=True,
+    )
