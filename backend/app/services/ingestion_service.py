@@ -212,6 +212,7 @@ def persist_runtime_trade_rows(
     normalized_rows: list[dict],
     actor_user_id: int | None = None,
     audit_source: str = "ingestion_service.persist_runtime_trade_rows",
+    ingestion_mode: str = "runtime_import",
 ):
     normalized_source = (source_type or "csv").strip().lower()
 
@@ -612,8 +613,26 @@ def import_broker_trades(
 ):
     normalized_source = (source_type or "csv").strip().lower()
 
-    rows = parse_rows_by_source(normalized_source, content)
-    result = process_import_rows(rows, source_type=normalized_source)
+    from app.services.broker_service import (
+        get_trade_adapter,
+    )
+
+    adapter = get_trade_adapter(
+        normalized_source
+    )
+
+    parsed = adapter.parse(content)
+
+    if isinstance(parsed, tuple):
+        normalized_rows, detected_format = parsed
+    else:
+        normalized_rows = parsed
+        detected_format = normalized_source
+
+    result = process_import_rows(
+        normalized_rows,
+        source_type=detected_format,
+    )
 
     persisted = persist_runtime_trade_rows(
         db=db,
@@ -624,19 +643,6 @@ def import_broker_trades(
         actor_user_id=actor_user_id,
         audit_source="ingestion_service.import_broker_trades",
         ingestion_mode="broker_import",
-    )
-
-    create_ingestion_session(
-        db=db,
-        workspace_id=workspace_id,
-        actor_user_id=actor_user_id,
-        source_type=normalized_source,
-        source_name=filename,
-        ingestion_mode="broker_import",
-        rows_received=rows_received,
-        rows_imported=rows_imported,
-        rows_rejected=rows_rejected,
-        rows_skipped_duplicates=rows_skipped_duplicates,
     )
 
     persisted["rows_received"] = int(result["stats"]["received"] or 0)
@@ -656,6 +662,21 @@ def import_broker_trades(
     persisted["duplicate_preview"] = (
         normalization_duplicates + list(persisted.get("duplicate_preview", []))
     )[:20]
+
+    create_ingestion_session(
+        db=db,
+        workspace_id=workspace_id,
+        actor_user_id=actor_user_id,
+        source_type=normalized_source,
+        source_name=filename,
+        ingestion_mode="broker_import",
+        rows_received=int(persisted["rows_received"] or 0),
+        rows_imported=int(persisted["rows_imported"] or 0),
+        rows_rejected=int(persisted["rows_rejected"] or 0),
+        rows_skipped_duplicates=int(
+            persisted["rows_skipped_duplicates"] or 0
+        ),
+    )
 
     return persisted
 
