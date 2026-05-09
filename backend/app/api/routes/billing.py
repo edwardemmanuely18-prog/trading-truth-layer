@@ -30,6 +30,23 @@ from app.services.entitlements import (
     build_entitlement_snapshot,
     get_public_plan_codes,
 )
+from app.services.paddle_service import (
+    paddle_api_base_url,
+    paddle_request,
+    paddle_is_ready,
+    get_paddle_environment,
+)
+
+from app.services.lemon_service import (
+    lemon_api_base_url,
+    lemon_api_headers,
+    lemon_is_ready,
+)
+
+from app.services.billing_service import (
+    get_active_billing_provider,
+    get_billing_provider_label,
+)
 
 try:
     import stripe  # type: ignore
@@ -199,52 +216,11 @@ def get_frontend_base_url() -> str:
     return value.rstrip("/")
 
 
-def get_active_billing_provider(workspace: Workspace) -> str:
-    provider = str(workspace.billing_provider or "").strip().lower()
-    if provider in {"paddle", "stripe", "manual", "lemon"}:
-        return provider
-
-    if lemon_is_ready():
-        return "lemon"
-
-    if paddle_is_ready():
-        return "paddle"
-
-    if stripe_is_ready():
-        return "stripe"
-
-    if manual_billing_is_ready():
-        return "manual"
-    return "none"
-
-
-def get_billing_provider_display_label(provider: str | None) -> str:
-    normalized = str(provider or "").strip().lower()
-    if normalized == "paddle":
-        return "Paddle"
-    if normalized == "stripe":
-        return "Stripe"
-    if normalized == "lemon":
-        return "Lemon Squeezy"    
-    if normalized == "manual":
-        return "Manual Billing"
-    return "Unconfigured"
-
-
-def get_paddle_environment() -> str:
-    base_url = paddle_api_base_url().lower()
-    api_key = str(getattr(settings, "PADDLE_API_KEY", "") or "").strip().lower()
-
-    if "sandbox" in base_url or api_key.startswith("test_") or api_key.startswith("pdl_sdbx"):
-        return "sandbox"
-    return "live"
-
-
 def should_expose_manual_billing(workspace: Workspace) -> bool:
     if not manual_billing_is_ready():
         return False
 
-    active_provider = get_active_billing_provider(workspace)
+    active_provider = get_active_billing_provider()
 
     # Hide manual instructions when Paddle or Stripe automation is already active.
     if active_provider in {"paddle", "stripe"}:
@@ -355,43 +331,7 @@ def stripe_is_ready() -> bool:
         and stripe is not None
         and settings.STRIPE_SECRET_KEY
         and settings.STRIPE_SECRET_KEY.strip()
-    )
-
-
-def paddle_is_ready() -> bool:
-    return bool(
-        getattr(settings, "PADDLE_BILLING_ENABLED", True)
-        and getattr(settings, "PADDLE_API_KEY", None)
-        and str(settings.PADDLE_API_KEY).strip()
-        and get_paddle_price_catalog()
-    )
-
-
-def lemon_is_ready() -> bool:
-    return bool(
-        getattr(settings, "LEMON_BILLING_ENABLED", False)
-        and getattr(settings, "LEMON_API_KEY", None)
-        and str(settings.LEMON_API_KEY).strip()
-        and getattr(settings, "LEMON_STORE_ID", None)
-    )
-
-
-def lemon_api_headers():
-    return {
-        "Authorization": f"Bearer {settings.LEMON_API_KEY}",
-        "Accept": "application/vnd.api+json",
-        "Content-Type": "application/vnd.api+json",
-    }
-
-
-def lemon_api_base_url() -> str:
-    return str(
-        getattr(
-            settings,
-            "LEMON_API_BASE_URL",
-            "https://api.lemonsqueezy.com/v1"
-        )
-    ).rstrip("/")    
+    )  
 
 
 def manual_billing_is_ready() -> bool:
@@ -429,57 +369,6 @@ def configure_stripe() -> tuple[bool, str | None]:
         return False, "STRIPE_SECRET_KEY is not configured."
     stripe.api_key = settings.STRIPE_SECRET_KEY.strip()
     return True, None
-
-    
-def paddle_api_base_url() -> str:
-    return str(getattr(settings, "PADDLE_API_BASE_URL", "https://api.paddle.com")).rstrip("/")
-
-
-def paddle_request(method: str, path: str, payload: dict | None = None) -> tuple[dict | None, str | None]:
-    api_key = str(getattr(settings, "PADDLE_API_KEY", "") or "").strip()
-    if not api_key:
-        return None, "PADDLE_API_KEY is not configured."
-
-    url = f"{paddle_api_base_url()}{path}"
-    body = None
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Accept": "application/json",
-    }
-
-    if payload is not None:
-        body = json.dumps(payload).encode("utf-8")
-        headers["Content-Type"] = "application/json"
-
-    req = request.Request(
-        url=url,
-        data=body,
-        method=method.upper(),
-        headers=headers,
-    )
-
-    try:
-        with request.urlopen(req, timeout=45) as response:
-            raw = response.read().decode("utf-8")
-            if not raw:
-                return {}, None
-            return json.loads(raw), None
-    except error.HTTPError as exc:
-        try:
-            raw = exc.read().decode("utf-8")
-            parsed = json.loads(raw) if raw else {}
-        except Exception:
-            parsed = {}
-
-        detail = (
-            parsed.get("error", {}).get("detail")
-            or parsed.get("detail")
-            or parsed.get("errors")
-            or str(exc)
-        )
-        return None, f"Paddle API request failed: {detail}"
-    except Exception as exc:
-        return None, f"Paddle API request failed: {exc}"
 
 
 def get_or_create_stripe_customer(
@@ -929,8 +818,8 @@ def get_workspace_billing_foundation(
     db.refresh(workspace)
     billing_status = normalize_billing_status(workspace.billing_status)
 
-    active_provider = get_active_billing_provider(workspace)
-    provider_label = get_billing_provider_display_label(active_provider)
+    active_provider = get_active_billing_provider()
+    provider_label = get_billing_provider_label(active_provider)
     manual_visible = should_expose_manual_billing(workspace)
 
     checkout_mode = (
