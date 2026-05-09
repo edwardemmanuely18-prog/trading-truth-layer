@@ -36,7 +36,7 @@ function formatPercent(value?: number | null) {
     return "—";
   }
 
-  return `${Number(value).toFixed(1)}%`;
+  return `${(Number(value) * 100).toFixed(1)}%`;
 }
 
 function formatUsd(value?: number | null) {
@@ -1086,7 +1086,7 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
-    const planCatalog = usage?.plan_catalog ?? [];
+  const planCatalog = usage?.plan_catalog ?? [];
   const configuredPlanCode = settings?.plan_code || "starter";
   const effectivePlanCode =
     usage?.effective_plan_code || settings?.effective_plan_code || "starter";
@@ -1213,6 +1213,20 @@ export default function WorkspaceSettingsPage() {
       </div>
     );
   }
+
+  const governanceUsage = {
+    members: Number(usage?.usage?.members ?? 0),
+    trades: Number(usage?.usage?.trades ?? 0),
+    claims: Number(usage?.usage?.claims ?? 0),
+    storage_mb: Number(usage?.usage?.storage_mb ?? 0),
+  };
+
+  const governanceLimits = {
+    members: Number(usage?.limits?.members ?? 0),
+    trades: Number(usage?.limits?.trades ?? 0),
+    claims: Number(usage?.limits?.claims ?? 0),
+    storage_mb: Number(usage?.limits?.storage_mb ?? 0),
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -1554,38 +1568,66 @@ export default function WorkspaceSettingsPage() {
                     <div className="mt-4 space-y-4">
                       <UsageCard
                         label="Claims"
-                        used={claimsUsed}
-                        limit={configuredClaimLimit}
-                        ratio={claimsRatio}
-                        atOrOver={claimsAtOrOverLimit}
-                        hint="Governed public-claim and lifecycle exposure capacity"
+                        used={governanceUsage.claims}
+                        limit={governanceLimits.claims}
+                        ratio={
+                          governanceLimits.claims > 0
+                            ? governanceUsage.claims / governanceLimits.claims
+                            : 0
+                        }
+                        atOrOver={
+                          governanceLimits.claims > 0 &&
+                          governanceUsage.claims >= governanceLimits.claims
+                        }
+                        hint="Public trust-surface and governed claim-capacity envelope"
                       />
 
                       <UsageCard
                         label="Members"
-                        used={membersUsed}
-                        limit={configuredMemberLimit}
-                        ratio={membersRatio}
-                        atOrOver={membersAtOrOverLimit}
+                        used={governanceUsage.members}
+                        limit={governanceLimits.members}
+                        ratio={
+                          governanceLimits.members > 0
+                            ? governanceUsage.members / governanceLimits.members
+                            : 0
+                        }
+                        atOrOver={
+                          governanceLimits.members > 0 &&
+                          governanceUsage.members >= governanceLimits.members
+                        }
                         hint="Workspace collaborator capacity"
                       />
 
                       <UsageCard
                         label="Trades"
-                        used={tradesUsed}
-                        limit={configuredTradeLimit}
-                        ratio={tradesRatio}
-                        atOrOver={tradesAtOrOverLimit}
-                        hint="Evidence ingestion and operational throughput"
+                        used={governanceUsage.trades}
+                        limit={governanceLimits.trades}
+                        ratio={
+                          governanceLimits.trades > 0
+                            ? governanceUsage.trades / governanceLimits.trades
+                            : 0
+                        }
+                        atOrOver={
+                          governanceLimits.trades > 0 &&
+                          governanceUsage.trades >= governanceLimits.trades
+                        }
+                        hint="Evidence ingestion capacity"
                       />
 
                       <UsageCard
-                        label="Storage (MB)"
-                        used={storageUsed}
-                        limit={configuredStorageLimit}
-                        ratio={storageRatio}
-                        atOrOver={storageAtOrOverLimit}
-                        hint="Artifact and workspace storage budget"
+                        label="Storage"
+                        used={governanceUsage.storage_mb}
+                        limit={governanceLimits.storage_mb}
+                        ratio={
+                          governanceLimits.storage_mb > 0
+                            ? governanceUsage.storage_mb / governanceLimits.storage_mb
+                            : 0
+                        }
+                        atOrOver={
+                          governanceLimits.storage_mb > 0 &&
+                          governanceUsage.storage_mb >= governanceLimits.storage_mb
+                        }
+                        hint="Governed storage allocation"
                       />
                     </div>
                   </div>

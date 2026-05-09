@@ -256,6 +256,15 @@ def build_entitlement_snapshot(workspace_id: int, db: Session) -> dict[str, Any]
     resolved_plan_code = resolve_workspace_plan_code(workspace)
     limits = get_workspace_plan_limits(workspace)
     usage = get_workspace_usage_counts(workspace_id, db)
+
+    live_trade_count = usage.get("ledger_trades", 0)
+
+    immutable_trade_usage = usage.get("trades", 0)
+
+    governed_trade_usage = max(
+        live_trade_count,
+        immutable_trade_usage,
+    )
     billing_status = normalize_billing_status(workspace.billing_status)
 
     return {
@@ -268,7 +277,40 @@ def build_entitlement_snapshot(workspace_id: int, db: Session) -> dict[str, Any]
             "is_restricted": workspace_is_restricted(workspace),
         },
         "limits": limits,
-        "usage": usage,
+        "usage": {
+            "members": usage["members"],
+
+            # GOVERNED TRADE USAGE
+            "trades": governed_trade_usage,
+
+            # LIVE LEDGER ROWS
+            "active_trades": live_trade_count,
+
+            "claims": usage["claims"],
+
+            "storage_mb": usage["storage_mb"],
+        },
+        "metrics": {
+            "used": governed_trade_usage,
+
+            "consumed": immutable_trade_usage,
+
+            "ledger_count": live_trade_count,
+
+            "limit": limits["trades"],
+
+            "utilization": (
+                round(
+                    (
+                        governed_trade_usage
+                        / limits["trades"]
+                    ) * 100,
+                    2,
+                )
+                if limits["trades"] > 0
+                else 0
+            ),
+        },
         "diagnostics": {
             "resolved_plan_code": resolved_plan_code,
             "raw_limit_columns": get_workspace_raw_limit_columns(workspace),

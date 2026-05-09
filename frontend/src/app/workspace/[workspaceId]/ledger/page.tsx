@@ -177,7 +177,8 @@ export default function WorkspaceLedgerPage() {
   const [deletingTradeId, setDeletingTradeId] = useState<number | null>(null);
   
   const tradeLimitReached =
-    tradeLimit > 0 && activeLedgerTrades >= tradeLimit;
+    tradeLimit > 0 &&
+    consumedTrades >= tradeLimit;
   
   async function reloadLedgerData(resolvedWorkspaceId: number) {
     console.log("reloadLedgerData CALLED", resolvedWorkspaceId);
@@ -676,7 +677,7 @@ export default function WorkspaceLedgerPage() {
               </div>
               <div className="rounded-xl bg-white/70 p-4">
                 <div className="text-sm text-slate-500">Utilization</div>
-                <div className="mt-1 text-2xl font-semibold">{formatPercent(tradeUtilization * 100)}</div>
+                <div className="mt-1 text-2xl font-semibold">{formatPercent(tradeUtilization)}</div>
               </div>
             </div>
 

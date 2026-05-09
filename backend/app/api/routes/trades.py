@@ -349,7 +349,7 @@ def list_trades(
     ]
 
 
-@router.get("/workspaces/{workspace_id}/usage")
+@router.get("/workspaces/{workspace_id}/trade-metrics")
 def get_workspace_usage(
     workspace_id: int,
     db: Session = Depends(get_db),

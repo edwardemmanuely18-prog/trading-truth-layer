@@ -20,6 +20,9 @@ from app.services.entitlements import (
     get_workspace_plan_limits,
     get_workspace_usage_counts,
 )
+from app.services.metrics_service import (
+    get_workspace_trade_metrics,
+)
 
 from fastapi import HTTPException
 
@@ -498,6 +501,35 @@ def get_workspace_usage(
         workspace_id,
         db,
     )
+
+    # Defensive normalization layer
+    if "usage" not in entitlement:
+        entitlement["usage"] = {}
+
+    if "limits" not in entitlement:
+        entitlement["limits"] = {}
+
+    if "metrics" not in entitlement:
+        entitlement["metrics"] = {}
+
+    trade_metrics = get_workspace_trade_metrics(
+        db,
+        workspace_id,
+    )
+
+    entitlement["usage"]["trades"] = (
+        trade_metrics["used"]
+    )
+
+    entitlement["usage"]["active_trades"] = (
+        trade_metrics["ledger_count"]
+    )
+
+    entitlement["limits"]["trades"] = (
+        trade_metrics["limit"]
+    )
+
+    entitlement["trade_metrics"] = trade_metrics
 
     return entitlement
 

@@ -1096,6 +1096,20 @@ export default function WorkspaceDashboardPage() {
     return [...actionCandidates].sort((a, b) => b.priority - a.priority)[0];
   })();
 
+  const governanceUsage = {
+    members: Number(usage?.usage?.members ?? 0),
+    trades: Number(usage?.usage?.trades ?? 0),
+    claims: Number(usage?.usage?.claims ?? 0),
+    storage_mb: Number(usage?.usage?.storage_mb ?? 0),
+  };
+
+  const governanceLimits = {
+    members: Number(usage?.limits?.members ?? 0),
+    trades: Number(usage?.limits?.trades ?? 0),
+    claims: Number(usage?.limits?.claims ?? 0),
+    storage_mb: Number(usage?.limits?.storage_mb ?? 0),
+  };
+
   return (
     <>
       <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -1170,30 +1184,46 @@ export default function WorkspaceDashboardPage() {
           <div className="mb-8 grid gap-4 md:grid-cols-4">
             <CapacityCard
               label="Member Capacity"
-              ratio={membersUsage.ratio}
-              used={membersUsage.used}
-              limit={membersUsage.limit}
+              ratio={
+                governanceLimits.members > 0
+                  ? governanceUsage.members / governanceLimits.members
+                  : 0
+              }
+              used={governanceUsage.members}
+              limit={governanceLimits.members}
             />
 
             <CapacityCard
               label="Trade Capacity"
-              ratio={tradesUsage.ratio}
-              used={tradesUsage.used}
-              limit={tradesUsage.limit}
+              ratio={
+                governanceLimits.trades > 0
+                  ? governanceUsage.trades / governanceLimits.trades
+                  : 0
+              }
+              used={governanceUsage.trades}
+              limit={governanceLimits.trades}
             />
 
             <CapacityCard
               label="Claim Capacity"
-              ratio={claimsUsage.ratio}
-              used={claimsUsage.used}
-              limit={claimsUsage.limit}
+              ratio={
+                governanceLimits.claims > 0
+                  ? governanceUsage.claims / governanceLimits.claims
+                  : 0
+              }
+              used={governanceUsage.claims}
+              limit={governanceLimits.claims}
             />
 
             <CapacityCard
               label="Storage Capacity"
-              ratio={storageUsage.ratio}
-              used={storageUsage.used}
-              limit={storageUsage.limit}
+              ratio={
+                governanceLimits.storage_mb > 0
+                  ? governanceUsage.storage_mb / governanceLimits.storage_mb
+                  : 0
+              }
+              used={governanceUsage.storage_mb}
+              limit={governanceLimits.storage_mb}
               suffix="MB"
             />
           </div>

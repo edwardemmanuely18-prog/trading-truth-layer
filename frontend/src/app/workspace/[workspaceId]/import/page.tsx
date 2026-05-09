@@ -254,9 +254,15 @@ export default function WorkspaceImportPage() {
     tradeUsed >= Number(usage?.limits?.trades ?? 0) &&
     Number(usage?.limits?.trades ?? 0) > 0;
 
+  const tradeLimit = Number(usage?.limits?.trades ?? 0);
+
+  const tradeRatio =
+    tradeLimit > 0
+      ? tradeUsed / tradeLimit
+      : 0;
+
   const usageTone = getUsageTone(
-    tradeUsed /
-      Math.max(1, Number(usage?.limits?.trades ?? 1)),
+    tradeRatio,
     tradeLimitReached
   );
 
@@ -352,10 +358,7 @@ export default function WorkspaceImportPage() {
                 <div className="text-sm text-slate-500">Utilization</div>
 
                 <div className="mt-1 text-2xl font-semibold">
-                  {formatPercent(
-                    tradeUsed /
-                      Math.max(1, Number(usage?.limits?.trades ?? 1))
-                  )}
+                  {formatPercent(tradeRatio)}
                 </div>
               </div>
             </div>
