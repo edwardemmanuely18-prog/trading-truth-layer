@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.models.trade import Trade
 from app.models.import_batch import ImportBatch
 from app.models.claim_schema import ClaimSchema
+from app.models.ingestion_session import IngestionSession
 from app.services.adapters.csv_adapter import CSVTradeAdapter
 from app.services.audit_service import log_audit_event
 from app.services.trade_import import (
@@ -552,6 +553,19 @@ def import_csv_trades(
     db.commit()
     db.refresh(batch)
 
+    create_ingestion_session(
+        db=db,
+        workspace_id=workspace_id,
+        actor_user_id=actor_user_id,
+        source_type=format_type,
+        source_name=filename,
+        ingestion_mode="csv_import",
+        rows_received=rows_received,
+        rows_imported=rows_imported,
+        rows_rejected=rows_rejected,
+        rows_skipped_duplicates=rows_skipped_duplicates,
+    )
+
     log_audit_event(
         db,
         event_type="trade_import_completed",
@@ -609,6 +623,20 @@ def import_broker_trades(
         normalized_rows=result.get("normalized", []),
         actor_user_id=actor_user_id,
         audit_source="ingestion_service.import_broker_trades",
+        ingestion_mode="broker_import",
+    )
+
+    create_ingestion_session(
+        db=db,
+        workspace_id=workspace_id,
+        actor_user_id=actor_user_id,
+        source_type=normalized_source,
+        source_name=filename,
+        ingestion_mode="broker_import",
+        rows_received=rows_received,
+        rows_imported=rows_imported,
+        rows_rejected=rows_rejected,
+        rows_skipped_duplicates=rows_skipped_duplicates,
     )
 
     persisted["rows_received"] = int(result["stats"]["received"] or 0)
@@ -630,3 +658,38 @@ def import_broker_trades(
     )[:20]
 
     return persisted
+
+
+def create_ingestion_session(
+    *,
+    db: Session,
+    workspace_id: int,
+    actor_user_id: int | None,
+    source_type: str,
+    source_name: str | None,
+    ingestion_mode: str,
+    rows_received: int,
+    rows_imported: int,
+    rows_rejected: int,
+    rows_skipped_duplicates: int,
+    ingestion_fingerprint: str | None = None,
+    diagnostic_summary: str | None = None,
+):
+    session = IngestionSession(
+        workspace_id=workspace_id,
+        actor_user_id=actor_user_id,
+        source_type=source_type,
+        source_name=source_name,
+        ingestion_mode=ingestion_mode,
+        rows_received=rows_received,
+        rows_imported=rows_imported,
+        rows_rejected=rows_rejected,
+        rows_skipped_duplicates=rows_skipped_duplicates,
+        ingestion_fingerprint=ingestion_fingerprint,
+        diagnostic_summary=diagnostic_summary,
+    )
+
+    db.add(session)
+    db.flush()
+
+    return session    
