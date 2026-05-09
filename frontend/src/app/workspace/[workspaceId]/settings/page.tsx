@@ -97,6 +97,15 @@ function formatBillingProviderLabel(
   const normalized = normalizeText(label);
 
   if (normalized === "paddle") return "Paddle";
+
+  if (
+    normalized === "lemon" ||
+    normalized === "lemonsqueezy" ||
+    normalized === "lemon_squeezy"
+  ) {
+    return "Lemon Squeezy";
+  }
+
   if (normalized === "stripe") return "Stripe";
   if (normalized === "manual" || normalized === "manual billing") return "Manual Billing";
   if (normalized === "none" || !normalized) return "Unconfigured";
@@ -106,8 +115,18 @@ function formatBillingProviderLabel(
 function formatCheckoutModeLabel(mode?: string | null) {
   const normalized = normalizeText(mode);
 
-  if (normalized === "paddle_checkout_ready") return "Paddle checkout ready";
-  if (normalized === "stripe_checkout_ready") return "Stripe checkout ready";
+  if (normalized === "paddle_checkout_ready")
+    return "Paddle checkout ready";
+
+  if (
+    normalized === "lemon_checkout_ready" ||
+    normalized === "lemonsqueezy_checkout_ready"
+  ) {
+    return "Lemon Squeezy checkout ready";
+  }
+
+  if (normalized === "stripe_checkout_ready")
+    return "Stripe checkout ready";
   if (normalized === "manual_billing_ready") return "Manual billing ready";
   if (normalized === "placeholder_until_checkout") return "Checkout not configured";
   if (normalized === "sandbox_activation") return "Sandbox activation";
