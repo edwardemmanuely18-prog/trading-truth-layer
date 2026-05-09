@@ -75,3 +75,128 @@ def lemon_request(
 
     except Exception as exc:
         return None, str(exc)
+
+
+LEMON_VARIANT_MAP = {
+    "starter_monthly": "",
+    "starter_annual": "",
+    "pro_monthly": "",
+    "pro_annual": "",
+    "growth_monthly": "",
+    "growth_annual": "",
+    "business_monthly": "",
+    "business_annual": "",
+}
+
+
+def get_lemon_variant_id(
+    plan_code: str,
+    billing_cycle: str,
+) -> str | None:
+    key = f"{plan_code}_{billing_cycle}"
+    return LEMON_VARIANT_MAP.get(key)
+
+
+def create_lemon_checkout(
+    *,
+    workspace,
+    current_user,
+    plan_code: str,
+    billing_cycle: str,
+    checkout_intent: str,
+):
+    variant_id = get_lemon_variant_id(
+        plan_code,
+        billing_cycle,
+    )
+
+    if not variant_id:
+        return None, (
+            f"No Lemon variant configured for "
+            f"{plan_code} ({billing_cycle})"
+        )
+
+    payload = {
+        "data": {
+            "type": "checkouts",
+            "attributes": {
+                "checkout_data": {
+                    "email": (
+                        workspace.billing_email
+                        or current_user.email
+                    ),
+                    "custom": {
+                        "workspace_id": str(workspace.id),
+                        "workspace_name": workspace.name,
+                        "owner_user_id": str(current_user.id),
+                        "target_plan_code": plan_code,
+                        "billing_cycle": billing_cycle,
+                        "checkout_intent": checkout_intent,
+                    },
+                },
+                "checkout_options": {
+                    "embed": False,
+                    "media": False,
+                    "logo": True,
+                },
+                "product_options": {
+                    "enabled_variants": [
+                        int(variant_id)
+                    ],
+                    "redirect_url": (
+                        f"{settings.FRONTEND_BASE_URL}"
+                        f"/workspace/{workspace.id}"
+                        f"/settings?checkout=success"
+                    ),
+                },
+            },
+            "relationships": {
+                "store": {
+                    "data": {
+                        "type": "stores",
+                        "id": str(
+                            settings.LEMON_STORE_ID
+                        ),
+                    }
+                },
+                "variant": {
+                    "data": {
+                        "type": "variants",
+                        "id": str(variant_id),
+                    }
+                },
+            },
+        }
+    }
+
+    response, error_message = lemon_request(
+        "POST",
+        "/checkouts",
+        payload,
+    )
+
+    if error_message:
+        return None, error_message
+
+    data = (
+        (response or {})
+        .get("data", {})
+    )
+
+    attributes = (
+        data.get("attributes", {})
+    )
+
+    checkout_url = attributes.get("url")
+
+    if not checkout_url:
+        return None, (
+            "Lemon checkout URL "
+            "was not returned."
+        )
+
+    return {
+        "checkout_url": checkout_url,
+        "variant_id": variant_id,
+        "checkout_id": data.get("id"),
+    }, None        

@@ -36,11 +36,11 @@ from app.services.paddle_service import (
     paddle_is_ready,
     get_paddle_environment,
 )
-
 from app.services.lemon_service import (
     lemon_api_base_url,
     lemon_api_headers,
     lemon_is_ready,
+    create_lemon_checkout,
 )
 
 from app.services.billing_service import (
@@ -1066,6 +1066,56 @@ def create_billing_checkout_session(
             "paddle_price_id": paddle_price_id,
             "message": "Paddle checkout created successfully.",
         }
+
+    if lemon_is_ready():
+        lemon_checkout, lemon_error = (
+            create_lemon_checkout(
+                workspace=workspace,
+                current_user=current_user,
+                plan_code=resolved_plan_code,
+                billing_cycle=billing_cycle,
+                checkout_intent=checkout_intent,
+            )
+        )
+
+        if lemon_error:
+            return {
+                "mode": "lemon_checkout_error",
+                "checkout_url": None,
+                "url": None,
+                "workspace_id": workspace.id,
+                "message": lemon_error,
+            }
+
+        workspace.billing_provider = "lemon"
+        workspace.updated_at = datetime.utcnow()
+
+        db.commit()
+        db.refresh(workspace)
+
+        return {
+            "mode": "lemon_checkout",
+            "checkout_url": (
+                lemon_checkout["checkout_url"]
+            ),
+            "url": (
+                lemon_checkout["checkout_url"]
+            ),
+            "workspace_id": workspace.id,
+            "variant_id": (
+                lemon_checkout["variant_id"]
+            ),
+            "checkout_id": (
+                lemon_checkout["checkout_id"]
+            ),
+            "target_plan_code": resolved_plan_code,
+            "billing_cycle": billing_cycle,
+            "checkout_intent": checkout_intent,
+            "message": (
+                "Lemon checkout created "
+                "successfully."
+            ),
+        }        
 
     price_lookup_key = get_price_lookup_key(resolved_plan_code, billing_cycle)
 
