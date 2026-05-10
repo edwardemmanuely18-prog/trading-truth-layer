@@ -8,7 +8,11 @@ type Props = {
   workspaceId?: number;
 };
 
-type ImportSourceType = "csv" | "mt5" | "ibkr";
+type ImportSourceType =
+  | "auto"
+  | "csv"
+  | "mt5"
+  | "ibkr";
 type ImportCadence = "hourly" | "daily";
 
 type ImportStats = {
@@ -147,7 +151,7 @@ function StatCard({
 export default function ImportForm({ workspaceId = 1 }: Props) {
   const { getWorkspaceRole } = useAuth();
 
-  const [sourceType, setSourceType] = useState<ImportSourceType>("csv");
+  const [sourceType, setSourceType] = useState<ImportSourceType>("auto");
   const [file, setFile] = useState<File | null>(null);
 
   const [status, setStatus] = useState<string | null>(null);
@@ -368,7 +372,17 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
+          <SourceCard
+            source="auto"
+            selected={sourceType === "auto"}
+            title="Auto Detection"
+            subtitle="Automatic broker format detection"
+            onSelect={(source) => {
+              setSourceType(source);
+              resetImportFeedback();
+            }}
+          />
           <SourceCard
             source="csv"
             selected={sourceType === "csv"}
@@ -435,6 +449,55 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
           CSV, MT5, and IBKR are active ingestion paths on the shared broker-neutral pipeline.
           Auto-import configuration is available, and real-time ingestion now routes through the
           live backend ingestion surface.
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+          <h3 className="text-sm font-semibold text-slate-900">
+            Institutional Export Requirements
+          </h3>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <div className="text-sm font-semibold text-amber-900">
+                IBKR Flex Export
+              </div>
+
+              <ul className="mt-3 space-y-1 text-xs text-amber-800">
+                <li>Format: CSV</li>
+                <li>Date Format: yyyy-MM-dd</li>
+                <li>Time Format: HH:mm:ss</li>
+                <li>Required: Symbol, Buy/Sell, Quantity</li>
+                <li>Required: TradePrice, Date/Time</li>
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <div className="text-sm font-semibold text-blue-900">
+                MT5 Export
+              </div>
+
+              <ul className="mt-3 space-y-1 text-xs text-blue-800">
+                <li>Export Type: Closed Trades</li>
+                <li>Format: CSV</li>
+                <li>Required: Symbol, Type, Volume</li>
+                <li>Required: Price, Time</li>
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="text-sm font-semibold text-emerald-900">
+                Canonical CSV
+              </div>
+
+              <ul className="mt-3 space-y-1 text-xs text-emerald-800">
+                <li>Required: symbol</li>
+                <li>Required: side</li>
+                <li>Required: quantity</li>
+                <li>Required: price</li>
+                <li>Required: timestamp</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
 

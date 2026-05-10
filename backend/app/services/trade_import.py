@@ -6,6 +6,9 @@ from typing import Any, Dict, List, Tuple, Set
 from datetime import datetime
 import csv
 from io import StringIO
+from app.services.broker_detection_service import (
+    detect_source_from_headers,
+)
 
 
 # ----------------------------------------
@@ -239,6 +242,11 @@ def process_import_rows(
 def parse_rows_by_source(source_type: str, file_bytes: bytes) -> List[Dict[str, Any]]:
     text = file_bytes.decode("utf-8")
     reader = csv.DictReader(StringIO(text))
+
+    headers = reader.fieldnames or []
+
+    if source_type == "auto":
+        source_type = detect_source_from_headers(headers)
 
     if source_type == "mt5":
         return [map_mt5_row(row) for row in reader]

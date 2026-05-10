@@ -214,6 +214,12 @@ export type ImportBatch = {
   created_at?: string | null;
 };
 
+export type ImportSourceType =
+  | "auto"
+  | "csv"
+  | "mt5"
+  | "ibkr";
+
 export type ImportCsvResult = {
   workspace_id: number;
   filename: string;
@@ -2424,11 +2430,14 @@ export const api = {
   uploadImportFile: async (
     workspaceId: number,
     file: File,
-    sourceType: "csv" | "mt5" | "ibkr" = "csv"
+    sourceType?: ImportSourceType
   ): Promise<any> => {
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("source_type", sourceType);
+    formData.append(
+      "source_type",
+      sourceType ?? "auto"
+    );
     formData.append("mode", "manual");
 
     const headers = getAuthHeaders();
@@ -2463,7 +2472,7 @@ export const api = {
   configureAutoImport: async (
     workspaceId: number,
     payload: {
-      source_type: "csv" | "mt5" | "ibkr";
+      source_type: ImportSourceType;
       enabled: boolean;
       cadence: "hourly" | "daily";
     }
@@ -2483,7 +2492,7 @@ export const api = {
   sendStreamEvent: async (
     workspaceId: number,
     payload: {
-      source_type: "ibkr" | "mt5";
+      source_type: ImportSourceType;
       trade: Record<string, any>;
     }
   ) => {
