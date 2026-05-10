@@ -677,6 +677,30 @@ def confirm_import_preview(
         audit_source="imports.confirm_preview",
     )
 
+    # IMMUTABLE GOVERNANCE CONSUMPTION
+    from app.models.workspace import Workspace
+
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    if workspace:
+
+        rows_imported = int(
+            result.get("rows_imported", 0)
+        )
+
+        workspace.trades_consumed_count = (
+            (workspace.trades_consumed_count or 0)
+            + rows_imported
+        )
+
+        db.add(workspace)
+        db.commit()
+        db.refresh(workspace)
+
     mark_preview_session_confirmed(
         db=db,
         preview_session=preview_session,
@@ -903,7 +927,7 @@ def get_import_batch(import_id: int, db: Session = Depends(get_db)):
 @router.post(
     "/workspaces/{workspace_id}/imports/confirm/{preview_session_id}"
 )
-def confirm_import_preview(
+def confirm_import_preview_legacy(
     workspace_id: int,
     preview_session_id: int,
     db: Session = Depends(get_db),

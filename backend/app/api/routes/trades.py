@@ -257,10 +257,20 @@ def compute_trade_net_pnl(
     normalized_side = side.strip().upper()
 
     if normalized_side == "BUY":
-        return (exit_price - entry_price) * quantity
+
+        absolute_quantity = abs(quantity)
+
+        return (
+            exit_price - entry_price
+        ) * absolute_quantity
 
     if normalized_side == "SELL":
-        return (entry_price - exit_price) * quantity
+
+        absolute_quantity = abs(quantity)
+
+        return (
+            entry_price - exit_price
+        ) * absolute_quantity
 
     return fallback_net_pnl
 
