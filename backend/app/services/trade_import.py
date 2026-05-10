@@ -1,5 +1,3 @@
-# (FULL FILE — upgraded version)
-
 from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple, Set
@@ -44,6 +42,7 @@ def parse_datetime(value: Any) -> datetime | None:
     candidates = [
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%d %H:%M",
+        "%Y-%m-%dT%H:%M:%S",
         "%Y.%m.%d %H:%M:%S",
         "%Y.%m.%d %H:%M",
         "%d/%m/%Y %H:%M:%S",
@@ -153,7 +152,9 @@ def normalize_trade(raw: Dict[str, Any]) -> Dict[str, Any]:
     normalized = {
         "symbol": normalize_symbol(raw.get("symbol")),
         "side": normalize_side(raw.get("side")),
-        "quantity": safe_float(raw.get("quantity")),
+        "quantity": abs(
+            safe_float(raw.get("quantity"))
+        ),
         "entry_price": safe_float(raw.get("entry_price")),
         "exit_price": safe_float(raw.get("exit_price"), None),
         "net_pnl": safe_float(raw.get("net_pnl"), None),
