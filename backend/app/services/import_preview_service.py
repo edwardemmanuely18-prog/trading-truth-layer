@@ -3,6 +3,8 @@ import json
 
 from sqlalchemy.orm import Session
 
+from datetime import datetime
+
 from app.models.import_preview_session import (
     ImportPreviewSession,
 )
@@ -11,6 +13,30 @@ from app.services.trade_import import (
     process_import_rows,
     parse_rows_by_source,
 )
+
+
+def _json_safe(value):
+    """
+    Recursively convert preview payload values
+    into JSON-safe primitives.
+    """
+
+    if isinstance(value, datetime):
+        return value.isoformat()
+
+    if isinstance(value, dict):
+        return {
+            k: _json_safe(v)
+            for k, v in value.items()
+        }
+
+    if isinstance(value, list):
+        return [
+            _json_safe(v)
+            for v in value
+        ]
+
+    return value
 
 
 def build_import_preview(
@@ -67,7 +93,7 @@ def create_import_preview_session(
         source_type=source_type,
         filename=filename,
         preview_payload_json=json.dumps(
-            preview_payload
+            _json_safe(preview_payload)
         ),
         status="pending_confirmation",
     )
