@@ -16,7 +16,7 @@ class IBKRTradeAdapter:
         "Symbol",
         "Buy/Sell",
         "Quantity",
-        "TradePrice",
+        "Price"
         "Date/Time",
     }
 
@@ -40,6 +40,7 @@ class IBKRTradeAdapter:
             "%Y-%m-%d, %H:%M:%S",
             "%Y-%m-%d %H:%M:%S",
             "%Y%m%d  %H:%M:%S",
+            "%d/%m/%Y %H:%M",
         ]
 
         for fmt in formats:
@@ -111,7 +112,7 @@ class IBKRTradeAdapter:
                 )
 
                 entry_price = self._safe_float(
-                    row["TradePrice"],
+                    row["Price"],
                     0,
                 )
 
@@ -120,7 +121,7 @@ class IBKRTradeAdapter:
                 )
 
                 currency = (
-                    row.get("Currency", "USD")
+                    row.get("CurrencyPrimary", "USD")
                     .strip()
                     .upper()
                 )
