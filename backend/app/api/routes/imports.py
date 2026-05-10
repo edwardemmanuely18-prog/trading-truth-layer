@@ -606,6 +606,105 @@ async def preview_import_file(
     }
 
 
+@router.post(
+    "/workspaces/{workspace_id}/imports/preview/{preview_session_id}/confirm"
+)
+def confirm_import_preview(
+    workspace_id: int,
+    preview_session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    preview_session = (
+        get_import_preview_session(
+            db,
+            preview_session_id,
+        )
+    )
+
+    if not preview_session:
+        raise HTTPException(
+            status_code=404,
+            detail="Preview session not found",
+        )
+
+    if (
+        preview_session.workspace_id
+        != workspace_id
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Preview session does not belong to workspace",
+        )
+
+    if preview_session.status != "pending_confirmation":
+        raise HTTPException(
+            status_code=400,
+            detail="Preview session already finalized",
+        )
+
+    import json
+
+    payload = json.loads(
+        preview_session.preview_payload_json
+    )
+
+    normalized_rows = payload.get(
+        "normalized_preview",
+        [],
+    )
+
+    if not normalized_rows:
+        raise HTTPException(
+            status_code=400,
+            detail="No normalized trades available for persistence",
+        )
+
+    result = persist_runtime_trade_rows(
+        db=db,
+        workspace_id=workspace_id,
+        filename=preview_session.filename,
+        source_type=preview_session.source_type,
+        normalized_rows=normalized_rows,
+        actor_user_id=current_user.id,
+        audit_source="imports.confirm_preview",
+    )
+
+    mark_preview_session_confirmed(
+        db=db,
+        preview_session=preview_session,
+    )
+
+    return {
+        "preview_session_id": (
+            preview_session.id
+        ),
+        "status": "confirmed",
+        "rows_imported": result.get(
+            "rows_imported",
+            0,
+        ),
+        "rows_rejected": result.get(
+            "rows_rejected",
+            0,
+        ),
+        "rows_duplicates": result.get(
+            "rows_skipped_duplicates",
+            0,
+        ),
+        "message": (
+            "Import preview confirmed and persisted"
+        ),
+    }
+
+
 # -----------------------------
 # CSV INGESTION (BACKWARD COMPAT)
 # -----------------------------

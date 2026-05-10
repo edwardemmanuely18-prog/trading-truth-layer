@@ -913,6 +913,38 @@ export type PublicVerifyResult = {
   };
 };
 
+export type ImportPreviewResponse = {
+  preview_session_id: number;
+  status: string;
+
+  preview: {
+    workspace_id: number;
+    source_type: string;
+
+    rows_received: number;
+    rows_accepted: number;
+    rows_rejected: number;
+    rows_duplicates: number;
+
+    normalized_preview: any[];
+    rejected_preview: any[];
+    duplicate_preview: any[];
+  };
+
+  message: string;
+};
+
+export type ConfirmImportPreviewResponse = {
+  preview_session_id: number;
+  status: string;
+
+  rows_imported: number;
+  rows_rejected: number;
+  rows_duplicates: number;
+
+  message: string;
+};
+
 export type IntegrationProviderType =
   | "manual"
   | "csv"
@@ -2098,18 +2130,6 @@ export const api = {
     clearStoredActiveWorkspaceId();
   },
 
-  confirmImportPreview: async (
-    workspaceId: number,
-    previewSessionId: number
-  ) => {
-    return apiFetch(
-      `/workspaces/${workspaceId}/imports/confirm/${previewSessionId}`,
-      {
-        method: "POST",
-      }
-    );
-  },
-
   getStrategyPerformance,
 
   getMe: async (): Promise<MeResponse> => {
@@ -2227,6 +2247,43 @@ export const api = {
       portal_url: row?.portal_url ?? row?.url ?? null,
       manual_payment_details: ensureManualPaymentDetails(row?.manual_payment_details),
     };
+  },
+
+  async previewImportFile(
+    workspaceId: number,
+    file: File,
+    sourceType: ImportSourceType
+  ): Promise<ImportPreviewResponse> {
+
+    const formData = new FormData();
+
+    formData.append("file", file);
+    formData.append("source_type", sourceType);
+
+    return apiFetch<ImportPreviewResponse>(
+      withDevUser(
+        `/workspaces/${workspaceId}/imports/preview`
+      ),
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+  },
+
+  async confirmImportPreview(
+    workspaceId: number,
+    previewSessionId: number
+  ): Promise<ConfirmImportPreviewResponse> {
+
+    return apiFetch<ConfirmImportPreviewResponse>(
+      withDevUser(
+        `/workspaces/${workspaceId}/imports/preview/${previewSessionId}/confirm`
+      ),
+      {
+        method: "POST",
+      }
+    );
   },
 
   async getTrades(

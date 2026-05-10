@@ -176,6 +176,16 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
   const [autoImportSaving, setAutoImportSaving] = useState(false);
   const [autoImportCadence, setAutoImportCadence] = useState<ImportCadence>("daily");
 
+  const [
+    previewSessionId,
+    setPreviewSessionId,
+  ] = useState<number | null>(null);
+
+  const [
+    previewMode,
+    setPreviewMode,
+  ] = useState(false);
+
   const [realTimeEnabled, setRealTimeEnabled] = useState(false);
 
   const workspaceRole = getWorkspaceRole(workspaceId);
@@ -276,30 +286,66 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
     resetImportFeedback();
 
     try {
-      const result = await api.uploadImportFile(workspaceId, file, sourceType);
+      const result =
+        await api.previewImportFile(workspaceId, file, sourceType);
 
       setStats({
-        received: Number(result?.rows_received ?? 0),
-        imported: Number(result?.rows_imported ?? 0),
-        rejected: Number(result?.rows_rejected ?? 0),
-        duplicates: Number(result?.rows_skipped_duplicates ?? 0),
+        received: Number(
+          result.preview?.rows_received ?? 0
+        ),
+
+        imported: Number(
+          result.preview?.rows_accepted ?? 0
+        ),
+
+        rejected: Number(
+          result.preview?.rows_rejected ?? 0
+        ),
+
+        duplicates: Number(
+          result.preview?.rows_duplicates ?? 0
+        ),
       });
 
       setPreview(
-        Array.isArray(result?.normalized_preview) ? result.normalized_preview : []
-      );
-      setRejectedPreview(
-        Array.isArray(result?.rejected_preview) ? result.rejected_preview : []
-      );
-      setDuplicatePreview(
-        Array.isArray(result?.duplicate_preview) ? result.duplicate_preview : []
+        Array.isArray(
+          result.preview?.normalized_preview
+        )
+          ? result.preview.normalized_preview
+          : []
       );
 
+      setRejectedPreview(
+        Array.isArray(
+          result.preview?.rejected_preview
+        )
+          ? result.preview.rejected_preview
+          : []
+      );
+
+      setDuplicatePreview(
+        Array.isArray(
+          result.preview?.duplicate_preview
+        )
+          ? result.preview.duplicate_preview
+          : []
+      );
+
+      setPreviewSessionId(
+        result.preview_session_id
+      );
+
+      setPreviewMode(true);
+
       setStatus(
-        `${sourceType.toUpperCase()} import complete. Received: ${result?.rows_received ?? 0}, Imported: ${
-          result?.rows_imported ?? 0
-        }, Rejected: ${result?.rows_rejected ?? 0}, Duplicates: ${
-          result?.rows_skipped_duplicates ?? 0
+        `${sourceType.toUpperCase()} preview generated. Received: ${
+          result.preview.rows_received ?? 0
+        }, Accepted: ${
+          result.preview.rows_accepted ?? 0
+        }, Rejected: ${
+          result.preview.rows_rejected ?? 0
+        }, Duplicates: ${
+          result.preview.rows_duplicates ?? 0
         }`
       );
 
@@ -315,6 +361,51 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
       setError(err instanceof Error ? err.message : "Import failed");
       setStatus(null);
     } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleConfirmImport() {
+
+    if (!previewSessionId) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+
+      const result =
+        await api.confirmImportPreview(
+          workspaceId,
+          previewSessionId
+        );
+
+      setStatus(
+        `Import confirmed. Imported: ${result.rows_imported}, Rejected: ${result.rows_rejected}, Duplicates: ${result.rows_duplicates}`
+      );
+
+      setPreviewMode(false);
+
+      setPreviewSessionId(null);
+
+      const refreshedUsage =
+        await api.getWorkspaceUsage(
+          workspaceId
+        );
+
+      setUsage(refreshedUsage);
+
+    } catch (err) {
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to confirm import"
+      );
+
+    } finally {
+
       setLoading(false);
     }
   }
@@ -647,6 +738,38 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
               <StatCard label="Duplicates" value={stats.duplicates} tone="warning" />
             </div>
           ) : null}
+
+          {
+            previewMode &&
+            previewSessionId && (
+              <div className="mt-6 flex items-center gap-3">
+
+                <button
+                  type="button"
+                  onClick={handleConfirmImport}
+                  disabled={loading}
+                  className="
+                    rounded-xl
+                    bg-slate-900
+                    px-5
+                    py-3
+                    text-sm
+                    font-semibold
+                    text-white
+                    hover:bg-slate-800
+                    disabled:opacity-50
+                  "
+                >
+                  Confirm Import Persistence
+                </button>
+
+                <div className="text-xs text-slate-500">
+                  Trades will be permanently persisted into the institutional trade ledger.
+                </div>
+
+              </div>
+            )
+          }
 
           {preview.length > 0 ? (
             <div className="mt-2">
