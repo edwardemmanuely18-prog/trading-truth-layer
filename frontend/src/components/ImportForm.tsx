@@ -9,10 +9,10 @@ type Props = {
 };
 
 type ImportSourceType =
-  | "auto"
   | "csv"
   | "mt5"
   | "ibkr";
+
 type ImportCadence = "hourly" | "daily";
 
 type ImportStats = {
@@ -54,28 +54,34 @@ function formatPercent(value?: number | null) {
   return `${(Number(value) * 100).toFixed(1)}%`;
 }
 
-function formatSourceStatus(source: ImportSourceType, selected: boolean) {
-  if (selected) return "selected";
-  if (source === "csv") return "active";
-  if (source === "mt5") return "active";
-  if (source === "ibkr") return "active";
-  return "active";
+function formatSourceStatus(
+  _source: ImportSourceType,
+  selected: boolean
+) {
+  return selected ? "selected" : "active";
 }
 
-function sourceCardClass(source: ImportSourceType, selected: boolean) {
+function sourceCardClass(
+  source: ImportSourceType,
+  selected: boolean
+) {
   if (selected) {
     return "border-slate-900 bg-slate-900 text-white shadow-sm";
   }
 
-  if (source === "csv") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100";
-  }
+  switch (source) {
+    case "csv":
+      return "border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100";
 
-  if (source === "mt5") {
-    return "border-blue-200 bg-blue-50 text-blue-900 hover:bg-blue-100";
-  }
+    case "mt5":
+      return "border-blue-200 bg-blue-50 text-blue-900 hover:bg-blue-100";
 
-  return "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100";
+    case "ibkr":
+      return "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100";
+
+    default:
+      return "border-slate-200 bg-white text-slate-900";
+  }
 }
 
 function SourceCard({
@@ -151,7 +157,7 @@ function StatCard({
 export default function ImportForm({ workspaceId = 1 }: Props) {
   const { getWorkspaceRole } = useAuth();
 
-  const [sourceType, setSourceType] = useState<ImportSourceType>("auto");
+  const [sourceType, setSourceType] = useState<ImportSourceType>("csv");
   const [file, setFile] = useState<File | null>(null);
 
   const [status, setStatus] = useState<string | null>(null);
@@ -196,9 +202,19 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
   }, [file]);
 
   const sourceTitle = useMemo(() => {
-    if (sourceType === "csv") return "CSV Upload";
-    if (sourceType === "mt5") return "MT5 Adapter";
-    return "IBKR Adapter";
+    switch (sourceType) {
+      case "csv":
+        return "CSV Upload";
+
+      case "mt5":
+        return "MT5 Adapter";
+
+      case "ibkr":
+        return "IBKR Adapter";
+
+      default:
+        return "CSV Upload";
+    }
   }, [sourceType]);
 
   useEffect(() => {
@@ -373,16 +389,6 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
         </div>
 
         <div className="grid gap-4 md:grid-cols-4">
-          <SourceCard
-            source="auto"
-            selected={sourceType === "auto"}
-            title="Auto Detection"
-            subtitle="Automatic broker format detection"
-            onSelect={(source) => {
-              setSourceType(source);
-              resetImportFeedback();
-            }}
-          />
           <SourceCard
             source="csv"
             selected={sourceType === "csv"}
