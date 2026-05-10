@@ -667,6 +667,12 @@ def confirm_import_preview(
             detail="No normalized trades available for persistence",
         )
 
+    print("========== CONFIRM IMPORT DEBUG ==========")
+    print("TOTAL NORMALIZED ROWS:", len(normalized_rows))
+
+    for idx, row in enumerate(normalized_rows[:10]):
+        print(f"ROW {idx}:", row)
+
     result = persist_runtime_trade_rows(
         db=db,
         workspace_id=workspace_id,
@@ -676,6 +682,9 @@ def confirm_import_preview(
         actor_user_id=current_user.id,
         audit_source="imports.confirm_preview",
     )
+
+    print("PERSIST RESULT:", result)
+    print("=========================================")
 
     # IMMUTABLE GOVERNANCE CONSUMPTION
     from app.models.workspace import Workspace
@@ -973,6 +982,12 @@ def confirm_import_preview_legacy(
             status_code=400,
             detail="No normalized trades available for persistence",
         )
+        
+    print("========== LEGACY IMPORT DEBUG ==========")
+    print("TOTAL NORMALIZED ROWS:", len(normalized_rows))
+
+    for idx, row in enumerate(normalized_rows[:10]):
+        print(f"ROW {idx}:", row)
 
     result = persist_runtime_trade_rows(
         db=db,
@@ -983,6 +998,9 @@ def confirm_import_preview_legacy(
         actor_user_id=None,
         audit_source="preview_confirmation",
     )
+
+    print("PERSIST RESULT:", result)
+    print("========================================")
 
     mark_preview_session_confirmed(
         db=db,
