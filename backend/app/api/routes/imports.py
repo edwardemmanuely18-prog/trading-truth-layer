@@ -657,7 +657,7 @@ def confirm_import_preview(
     )
 
     normalized_rows = payload.get(
-        "normalized_preview",
+        "normalized_rows_full",
         [],
     )
 
@@ -964,9 +964,15 @@ def confirm_import_preview_legacy(
     )
 
     normalized_rows = payload.get(
-        "normalized_preview",
+        "normalized_rows_full",
         [],
     )
+
+    if not normalized_rows:
+        raise HTTPException(
+            status_code=400,
+            detail="No normalized trades available for persistence",
+        )
 
     result = persist_runtime_trade_rows(
         db=db,

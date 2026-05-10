@@ -63,16 +63,26 @@ def build_import_preview(
     return {
         "workspace_id": workspace_id,
         "source_type": source_type,
+
         "rows_received": result["stats"]["received"],
         "rows_accepted": result["stats"]["accepted"],
         "rows_rejected": result["stats"]["rejected"],
         "rows_duplicates": result["stats"]["duplicates"],
+
+        # UI PREVIEW ONLY
         "normalized_preview": (
             result["normalized"][:25]
         ),
+
+        # FULL CANONICAL PERSISTENCE PAYLOAD
+        "normalized_rows_full": (
+            result["normalized"]
+        ),
+
         "rejected_preview": (
             result["rejected"][:25]
         ),
+
         "duplicate_preview": (
             result["duplicates"][:25]
         ),
