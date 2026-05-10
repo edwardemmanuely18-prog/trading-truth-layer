@@ -2098,6 +2098,18 @@ export const api = {
     clearStoredActiveWorkspaceId();
   },
 
+  confirmImportPreview: async (
+    workspaceId: number,
+    previewSessionId: number
+  ) => {
+    return apiFetch(
+      `/workspaces/${workspaceId}/imports/confirm/${previewSessionId}`,
+      {
+        method: "POST",
+      }
+    );
+  },
+
   getStrategyPerformance,
 
   getMe: async (): Promise<MeResponse> => {

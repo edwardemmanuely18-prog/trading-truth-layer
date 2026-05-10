@@ -16,6 +16,14 @@ from app.services.trade_import import (
     parse_rows_by_source,
     process_import_rows,
 )
+
+from app.services.import_preview_service import (
+    build_import_preview,
+    create_import_preview_session,
+    get_import_preview_session,
+    mark_preview_session_confirmed,
+    mark_preview_session_rejected,
+)
 from app.services.ingestion_service import (
     import_broker_trades,
     import_csv_trades,
@@ -529,6 +537,76 @@ async def upload_import_file(
 
 
 # -----------------------------
+# IMPORT PREVIEW WORKFLOW
+# -----------------------------
+@router.post(
+    "/workspaces/{workspace_id}/imports/preview"
+)
+async def preview_import_file(
+    workspace_id: int,
+    file: UploadFile = File(...),
+    source_type: str = Form("csv"),
+    db: Session = Depends(get_db),
+):
+
+    if not file.filename:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing filename",
+        )
+
+    allowed_sources = {
+        "csv",
+        "mt5",
+        "ibkr",
+    }
+
+    normalized_source = (
+        str(source_type or "")
+        .strip()
+        .lower()
+    )
+
+    if normalized_source not in allowed_sources:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unsupported source type: "
+                f"{source_type}"
+            ),
+        )
+
+    file_bytes = await file.read()
+
+    preview = build_import_preview(
+        workspace_id=workspace_id,
+        source_type=normalized_source,
+        file_bytes=file_bytes,
+    )
+
+    preview["filename"] = file.filename
+
+    session = (
+        create_import_preview_session(
+            db=db,
+            workspace_id=workspace_id,
+            source_type=normalized_source,
+            filename=file.filename,
+            preview_payload=preview,
+        )
+    )
+
+    return {
+        "preview_session_id": session.id,
+        "status": session.status,
+        "preview": preview,
+        "message": (
+            "Import preview generated"
+        ),
+    }
+
+
+# -----------------------------
 # CSV INGESTION (BACKWARD COMPAT)
 # -----------------------------
 @router.post("/workspaces/{workspace_id}/imports/csv")
@@ -721,3 +799,111 @@ def get_import_batch(import_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Import batch not found")
 
     return serialize_import_batch(batch)
+
+
+@router.post(
+    "/workspaces/{workspace_id}/imports/confirm/{preview_session_id}"
+)
+def confirm_import_preview(
+    workspace_id: int,
+    preview_session_id: int,
+    db: Session = Depends(get_db),
+):
+
+    import json
+
+    preview_session = (
+        get_import_preview_session(
+            db,
+            preview_session_id,
+        )
+    )
+
+    if not preview_session:
+        raise HTTPException(
+            status_code=404,
+            detail="Preview session not found",
+        )
+
+    if (
+        preview_session.status
+        == "confirmed"
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Preview already confirmed"
+            ),
+        )
+
+    payload = json.loads(
+        preview_session.preview_payload_json
+    )
+
+    normalized_rows = payload.get(
+        "normalized_preview",
+        [],
+    )
+
+    result = persist_runtime_trade_rows(
+        db=db,
+        workspace_id=workspace_id,
+        filename=preview_session.filename,
+        source_type=preview_session.source_type,
+        normalized_rows=normalized_rows,
+        actor_user_id=None,
+        audit_source="preview_confirmation",
+    )
+
+    mark_preview_session_confirmed(
+        db=db,
+        preview_session=preview_session,
+    )
+
+    return {
+        **result,
+        "preview_session_id": (
+            preview_session.id
+        ),
+        "message": (
+            "Import confirmed and persisted"
+        ),
+    }
+
+
+@router.post(
+    "/workspaces/{workspace_id}/imports/reject/{preview_session_id}"
+)
+def reject_import_preview(
+    workspace_id: int,
+    preview_session_id: int,
+    db: Session = Depends(get_db),
+):
+
+    preview_session = (
+        get_import_preview_session(
+            db,
+            preview_session_id,
+        )
+    )
+
+    if not preview_session:
+        raise HTTPException(
+            status_code=404,
+            detail="Preview session not found",
+        )
+
+    mark_preview_session_rejected(
+        db=db,
+        preview_session=preview_session,
+    )
+
+    return {
+        "preview_session_id": (
+            preview_session.id
+        ),
+        "status": "rejected",
+        "message": (
+            "Import preview rejected"
+        ),
+    }
