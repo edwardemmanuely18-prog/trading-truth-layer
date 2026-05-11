@@ -17,31 +17,6 @@ from app.services.trade_import import (
 )
 
 
-def build_trade_fingerprint(
-    workspace_id: int,
-    member_id: int,
-    symbol: str,
-    side: str,
-    opened_at,
-    entry_price: float,
-    quantity: float,
-) -> str:
-    import hashlib
-
-    raw = "|".join(
-        [
-            str(workspace_id),
-            str(member_id),
-            symbol.strip().upper(),
-            side.strip().upper(),
-            opened_at.isoformat(),
-            f"{entry_price:.8f}",
-            f"{quantity:.8f}",
-        ]
-    )
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-
 def build_trade_fingerprint_from_trade(trade: Trade) -> str:
     if trade.trade_fingerprint:
         return trade.trade_fingerprint
