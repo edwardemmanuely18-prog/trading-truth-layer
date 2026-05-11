@@ -173,6 +173,12 @@ def normalize_trade(raw: Dict[str, Any]) -> Dict[str, Any]:
     opened_at = parse_datetime(raw.get("opened_at"))
     closed_at = parse_datetime(raw.get("closed_at"))
 
+    print(
+        "RAW NORMALIZE INPUT:",
+        trade,
+        flush=True,
+    )
+
     normalized = {
         "symbol": normalize_symbol(raw.get("symbol")),
         "side": normalize_side(raw.get("side")),
@@ -213,6 +219,12 @@ def normalize_trade(raw: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError(
             "Trade missing opened_at after normalization"
         )
+
+    print(
+        "NORMALIZED TRADE:",
+        normalized,
+        flush=True,
+    )
 
     return normalized
 
