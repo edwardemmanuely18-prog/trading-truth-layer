@@ -700,18 +700,45 @@ def confirm_import_preview(
     for idx, row in enumerate(normalized_rows[:10]):
         print(f"ROW {idx}:", row)
 
-    result = persist_runtime_trade_rows(
-        db=db,
-        workspace_id=workspace_id,
-        filename=preview_session.filename,
-        source_type=preview_session.source_type,
-        normalized_rows=normalized_rows,
-        actor_user_id=current_user.id,
-        audit_source="imports.confirm_preview",
-    )
+    try:
+
+        result = persist_runtime_trade_rows(
+            db=db,
+            workspace_id=workspace_id,
+            filename=preview_session.filename,
+            source_type=preview_session.source_type,
+            normalized_rows=normalized_rows,
+            actor_user_id=current_user.id,
+            audit_source="imports.confirm_preview",
+        )
+
+        db.commit()
+
+    except Exception as e:
+
+        db.rollback()
+
+        print("CONFIRM IMPORT FAILURE:", str(e))
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Persistence failed: {str(e)}"
+        )
 
     print("PERSIST RESULT:", result)
     print("=========================================")
+
+    from app.models.trade import Trade
+
+    persisted_count = (
+        db.query(Trade)
+        .filter(
+            Trade.workspace_id == workspace_id
+        )
+        .count()
+    )
+
+    print("TOTAL PERSISTED TRADES:", persisted_count)
 
     # IMMUTABLE GOVERNANCE CONSUMPTION
     from app.models.workspace import Workspace
