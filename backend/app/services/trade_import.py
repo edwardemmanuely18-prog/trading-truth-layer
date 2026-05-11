@@ -27,7 +27,11 @@ def build_trade_fingerprint(
             str(member_id),
             symbol.strip().upper(),
             side.strip().upper(),
-            opened_at.isoformat(),
+            (
+                opened_at.isoformat()
+                if opened_at is not None
+                else "missing-opened-at"
+            ),
             f"{entry_price:.8f}",
             f"{quantity:.8f}",
         ]
@@ -185,6 +189,13 @@ def normalize_trade(raw: Dict[str, Any]) -> Dict[str, Any]:
         "strategy_tag": normalize_text(raw.get("strategy_tag")) or None,
     }
 
+    if normalized.get("opened_at") is None:
+        print(
+            "WARNING: opened_at missing during normalize_trade",
+            normalized,
+            flush=True,
+        )
+
     normalized["fingerprint"] = build_trade_fingerprint(
         workspace_id=normalized.get("workspace_id", 0),
         member_id=normalized.get("member_id", 0),
@@ -198,6 +209,11 @@ def normalize_trade(raw: Dict[str, Any]) -> Dict[str, Any]:
             normalized.get("quantity") or 0
         ),
     )
+    if normalized.get("opened_at") is None:
+        raise ValueError(
+            "Trade missing opened_at after normalization"
+        )
+
     return normalized
 
 
