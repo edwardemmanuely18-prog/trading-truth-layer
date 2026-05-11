@@ -919,10 +919,27 @@ def ingest_stream_event(
         raise HTTPException(status_code=400, detail="Missing trade payload")
 
     adapted_trade = _adapt_webhook_trade(trade, source_type)
+
+    print(
+        "STREAM EVENT ADAPTED TRADE:",
+        adapted_trade,
+        flush=True,
+    )
+
     event_payload = build_stream_event_payload(
         workspace_id=workspace_id,
         source_type=source_type,
-        trade=adapted_trade,
+        trade={
+            **adapted_trade,
+
+            # HARD GUARANTEE
+            "opened_at": (
+                adapted_trade.get("opened_at")
+                or adapted_trade.get("timestamp")
+                or adapted_trade.get("time")
+                or adapted_trade.get("date")
+            ),
+        },
     )
 
     from app.services.usage_service import get_workspace_usage
