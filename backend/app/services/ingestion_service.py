@@ -219,23 +219,27 @@ def persist_runtime_trade_rows(
     seen_persisted_fingerprints: set[str] = set()
 
     for idx, trade_row in enumerate(normalized_rows, start=1):
-       
-            runtime_trade = coerce_runtime_trade_row(
-                trade_row=trade_row,
-                source_type=normalized_source,
-            )
 
-            opened_at = runtime_trade["opened_at"]
-            if opened_at is None:
-                rows_rejected += 1
-                rejected_preview.append(
-                    {
-                        "row": trade_row,
-                        "reason": "Invalid opened_at",
-                    }
-                )
-                errors.append(f"Row {idx}: invalid opened_at")
-                continue
+        print("----- ROW START -----", flush=True)
+        print("ROW INDEX:", idx, flush=True)
+        print("RAW ROW:", trade_row, flush=True)
+       
+        runtime_trade = coerce_runtime_trade_row(
+            trade_row=trade_row,
+            source_type=normalized_source,
+        )
+
+        opened_at = runtime_trade["opened_at"]
+        if opened_at is None:
+            rows_rejected += 1
+            rejected_preview.append(
+                {
+                    "row": trade_row,
+                    "reason": "Invalid opened_at",
+                }
+            )
+            errors.append(f"Row {idx}: invalid opened_at")
+            continue
 
             if not runtime_trade["symbol"]:
                 rows_rejected += 1
@@ -339,6 +343,15 @@ def persist_runtime_trade_rows(
                 )
                 continue
 
+            print(
+                "EXISTING DUPLICATE:",
+                existing.id if existing else None,
+                flush=True,
+            )
+
+            print("CREATING TRADE OBJECT", flush=True)
+            print("FINGERPRINT:", fingerprint, flush=True)
+
             trade = Trade(
                 workspace_id=workspace_id,
                 member_id=runtime_trade["member_id"],
@@ -355,6 +368,8 @@ def persist_runtime_trade_rows(
                 source_system=runtime_trade["source_system"],
                 trade_fingerprint=fingerprint,
             )
+            print("ADDING TRADE TO DB SESSION", flush=True)
+
             db.add(trade)
 
             try:
@@ -375,6 +390,14 @@ def persist_runtime_trade_rows(
 
             except Exception as flush_error:
 
+                print(
+                    "FLUSH FAILED:",
+                    str(flush_error),
+                    flush=True,
+                )
+
+                db.rollback()
+
                 rows_rejected += 1
 
                 rejected_preview.append(
@@ -393,6 +416,8 @@ def persist_runtime_trade_rows(
 
     print("IMPORT ERRORS:", errors, flush=True)
 
+    print("CREATING IMPORT BATCH", flush=True)
+
     batch = ImportBatch(
         workspace_id=workspace_id,
         filename=filename,
@@ -402,11 +427,28 @@ def persist_runtime_trade_rows(
         rows_rejected=rows_rejected,
         rows_skipped_duplicates=rows_skipped_duplicates,
     )
-    db.flush()
 
     db.add(batch)
 
+    print("COMMITTING DATABASE SESSION", flush=True)
+
     db.commit()
+
+    final_trade_count = (
+        db.query(Trade)
+        .filter(
+            Trade.workspace_id == workspace_id
+        )
+        .count()
+    )
+
+    print(
+        "FINAL WORKSPACE TRADE COUNT:",
+        final_trade_count,
+        flush=True,
+    )
+
+    print("DATABASE COMMIT SUCCESS", flush=True)
     db.refresh(batch)
 
     log_audit_event(
@@ -447,6 +489,11 @@ def persist_runtime_trade_rows(
         "duplicate_preview": duplicate_preview[:20],
         "import_batch_id": batch.id,
     }
+
+    print("========== INGESTION START ==========", flush=True)
+    print("workspace_id:", workspace_id, flush=True)
+    print("source_type:", source_type, flush=True)
+    print("incoming rows:", len(normalized_rows), flush=True)
 
 
 def import_csv_trades(
@@ -510,6 +557,7 @@ def import_csv_trades(
                 rows_skipped_duplicates += 1
                 seen_in_file.add(fingerprint)
                 continue
+
 
             trade = Trade(
                 workspace_id=workspace_id,
