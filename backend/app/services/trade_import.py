@@ -9,6 +9,32 @@ from app.services.broker_detection_service import (
 )
 
 
+
+def build_trade_fingerprint(
+    workspace_id: int,
+    member_id: int,
+    symbol: str,
+    side: str,
+    opened_at,
+    entry_price: float,
+    quantity: float,
+) -> str:
+    import hashlib
+
+    raw = "|".join(
+        [
+            str(workspace_id),
+            str(member_id),
+            symbol.strip().upper(),
+            side.strip().upper(),
+            opened_at.isoformat(),
+            f"{entry_price:.8f}",
+            f"{quantity:.8f}",
+        ]
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 # ----------------------------------------
 # LOW-LEVEL HELPERS
 # ----------------------------------------
@@ -159,7 +185,19 @@ def normalize_trade(raw: Dict[str, Any]) -> Dict[str, Any]:
         "strategy_tag": normalize_text(raw.get("strategy_tag")) or None,
     }
 
-    normalized["fingerprint"] = build_trade_fingerprint(normalized)
+    normalized["fingerprint"] = build_trade_fingerprint(
+        workspace_id=normalized.get("workspace_id", 0),
+        member_id=normalized.get("member_id", 0),
+        symbol=normalized.get("symbol", ""),
+        side=normalized.get("side", ""),
+        opened_at=normalized.get("opened_at"),
+        entry_price=float(
+            normalized.get("entry_price") or 0
+        ),
+        quantity=float(
+            normalized.get("quantity") or 0
+        ),
+    )
     return normalized
 
 
