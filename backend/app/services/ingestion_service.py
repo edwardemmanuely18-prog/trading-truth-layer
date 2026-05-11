@@ -179,9 +179,16 @@ def coerce_runtime_trade_row(
         member_id = default_member_id
 
     currency = str(trade_row.get("currency") or default_currency).strip().upper() or default_currency
+    strategy_tag_raw = (
+        str(
+            trade_row.get("strategy_tag") or ""
+        ).strip()
+    )
+
     strategy_tag = (
-        str(trade_row.get("strategy_tag") or "").strip()
-        or "unclassified"
+        strategy_tag_raw
+        if strategy_tag_raw
+        else None
     )
     source_system = (
         str(
@@ -237,7 +244,7 @@ def persist_runtime_trade_rows(
     seen_persisted_fingerprints: set[str] = set()
 
     for idx, trade_row in enumerate(normalized_rows, start=1):
-        try:
+       
             runtime_trade = coerce_runtime_trade_row(
                 trade_row=trade_row,
                 source_type=normalized_source,
@@ -374,32 +381,42 @@ def persist_runtime_trade_rows(
                 trade_fingerprint=fingerprint,
             )
             db.add(trade)
-            db.flush()
 
-            rows_imported += 1
+            try:
+                db.flush()
 
-            seen_persisted_fingerprints.add(fingerprint)
+                rows_imported += 1
 
-            accepted_preview.append(
-                {
-                    **runtime_trade,
-                    "fingerprint": fingerprint,
-                }
-            )
+                seen_persisted_fingerprints.add(
+                    fingerprint
+                )
 
-        except Exception as e:
-            db.rollback()
+                accepted_preview.append(
+                    {
+                        **runtime_trade,
+                        "fingerprint": fingerprint,
+                    }
+                )
 
-            rows_rejected += 1
+            except Exception as flush_error:
 
-            rejected_preview.append(
-                {
-                    "row": trade_row,
-                    "reason": str(e),
-                }
-            )
+                db.rollback()
 
-            errors.append(f"Row {idx}: {str(e)}")
+                rows_rejected += 1
+
+                rejected_preview.append(
+                    {
+                        "row": trade_row,
+                        "reason": str(flush_error),
+                    }
+                )
+
+                errors.append(
+                    f"Row {idx}: {str(flush_error)}"
+                )
+
+                continue
+
 
     print("IMPORT ERRORS:", errors, flush=True)
 
