@@ -517,6 +517,7 @@ def create_trade(
         currency=normalized_currency,
         source_system=normalized_source_system,
         trade_fingerprint=fingerprint,
+        strategy_tag=normalize_optional_text(payload.strategy_tag),
     )
 
     print("CREATING TRADE:", {

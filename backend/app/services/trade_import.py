@@ -74,19 +74,12 @@ def normalize_side(value: Any) -> str:
     return "unknown"
 
 
-def build_trade_fingerprint(trade: Dict[str, Any]) -> str:
-    return "|".join(
-        [
-            normalize_symbol(trade.get("symbol")),
-            normalize_side(trade.get("side")),
-            str(safe_float(trade.get("quantity"))),
-            str(safe_float(trade.get("entry_price"))),
-            str(safe_float(trade.get("net_pnl"))),
-            normalize_text(trade.get("opened_at")),
-            normalize_text(trade.get("external_id")),
-            normalize_text(trade.get("source_type")),
-        ]
-    )
+# DEPRECATED
+# Canonical fingerprint generation now lives in:
+# app.services.ingestion_service.build_trade_fingerprint
+#
+# This function is intentionally disabled to avoid
+# architectural divergence between normalization and persistence layers.
 
 
 # ----------------------------------------
@@ -121,6 +114,7 @@ def map_ibkr_row(row: Dict[str, Any]) -> Dict[str, Any]:
         "closed_at": row.get("Date/Time"),
         "external_id": row.get("TradeID"),
         "source_type": "ibkr",
+        "strategy_tag": "ibkr_import",
         "raw_row": row,
     }
 
@@ -162,6 +156,7 @@ def normalize_trade(raw: Dict[str, Any]) -> Dict[str, Any]:
         "closed_at": closed_at,
         "external_id": normalize_text(raw.get("external_id")) or None,
         "source_type": normalize_text(raw.get("source_type")),
+        "strategy_tag": normalize_text(raw.get("strategy_tag")) or None,
     }
 
     normalized["fingerprint"] = build_trade_fingerprint(normalized)

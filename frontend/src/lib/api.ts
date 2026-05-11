@@ -2290,6 +2290,7 @@ export const api = {
     workspaceId: number,
     params?: {
       tag?: string;
+      strategy?: string
       symbol?: string;
       side?: string;
       limit?: number;
@@ -2299,6 +2300,8 @@ export const api = {
     const query = new URLSearchParams();
 
     if (params?.tag) query.append("tag", params.tag);
+    if (params?.strategy)
+        query.set("strategy", params.strategy)
     if (params?.symbol) query.append("symbol", params.symbol);
     if (params?.side) query.append("side", params.side);
     if (params?.limit) query.append("limit", String(params.limit));

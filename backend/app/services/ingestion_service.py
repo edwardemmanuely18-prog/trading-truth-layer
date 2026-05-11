@@ -188,7 +188,7 @@ def coerce_runtime_trade_row(
     strategy_tag = (
         strategy_tag_raw
         if strategy_tag_raw
-        else None
+        else "unclassified"
     )
     source_system = (
         str(
@@ -399,8 +399,6 @@ def persist_runtime_trade_rows(
                 )
 
             except Exception as flush_error:
-
-                db.rollback()
 
                 rows_rejected += 1
 

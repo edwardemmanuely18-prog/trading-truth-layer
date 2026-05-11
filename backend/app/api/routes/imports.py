@@ -84,18 +84,36 @@ def normalize_broker_row(row: dict, source_type: str) -> dict:
     symbol = get("symbol", "item", "instrument")
 
     # SIDE
-    side = get("side", "type", "action")
+    side = get(
+        "side",
+        "type",
+        "action",
+        "buy_sell",
+        "buy/sell",
+    )
 
     if isinstance(side, str):
-        side = side.upper()
-        if side == "BUY":
-            side = "BUY"
-        elif side == "SELL":
-            side = "SELL"
+        normalized = side.strip().lower()
+
+        if normalized in ["buy", "long", "b"]:
+            side = "buy"
+
+        elif normalized in ["sell", "short", "s"]:
+            side = "sell"
+
+        else:
+            side = "unknown"
 
     # IBKR fallback (no side)
     if side is None:
-        qty = get("quantity", "Quantity", "Size", "qty", "Qty")
+        qty = get(
+            "quantity",
+            "Quantity",
+            "Size",
+            "qty",
+            "Qty",
+            "shares",
+        )
         try:
             qty = float(qty)
             side = "BUY" if qty > 0 else "SELL"
@@ -176,6 +194,14 @@ def normalize_broker_row(row: dict, source_type: str) -> dict:
         except Exception:
             return None
 
+    strategy_tag = get(
+        "strategy_tag",
+        "strategy",
+        "setup",
+        "system",
+        "algo",
+    )
+
     return {
         "symbol": symbol,
         "side": side,
@@ -195,6 +221,7 @@ def normalize_broker_row(row: dict, source_type: str) -> dict:
             "realized_p&l",
             "pnl",
         ),
+        "strategy_tag": strategy_tag,
         "opened_at": parse_dt(opened_at),
         "closed_at": parse_dt(closed_at),
     }

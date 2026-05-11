@@ -66,6 +66,7 @@ const EMPTY_TRADE_FORM = {
   currency: "USD",
   net_pnl: "",
   tags_input: "",
+  strategy_tag: "",
   source_system: "MANUAL",
 };
 
@@ -98,6 +99,7 @@ function tradeToFormState(trade: Trade): TradeFormState {
     currency: trade.currency ?? "USD",
     net_pnl: trade.net_pnl === null || trade.net_pnl === undefined ? "" : String(trade.net_pnl),
     tags_input: (trade.tags || []).join(", "),
+    strategy_tag: trade.strategy_tag ?? "",
     source_system: trade.source_system ?? "MANUAL",
   };
 }
@@ -191,6 +193,7 @@ export default function WorkspaceLedgerPage() {
     ] = await Promise.all([
       api.getTrades(resolvedWorkspaceId, {
         tag: selectedTag || undefined,
+        strategy: selectedStrategy || undefined,
         symbol: symbolFilter || undefined,
         side: sideFilter || undefined,
         limit: PAGE_SIZE,
@@ -204,6 +207,12 @@ export default function WorkspaceLedgerPage() {
         selectedStrategy || undefined
       ),
     ]);
+
+    console.log("TRADES RESPONSE")
+    console.log(tradesRes)
+    console.log(Array.isArray(tradesRes))
+    console.log("KEYS", Object.keys(tradesRes as any))
+    console.log("RAW", JSON.stringify(tradesRes, null, 2))
 
     const normalizedTrades: Trade[] =
       Array.isArray(tradesRes)
@@ -265,6 +274,7 @@ export default function WorkspaceLedgerPage() {
       tags: form.tags_input
         ? form.tags_input.split(",").map(t => t.trim()).filter(Boolean)
         : [],
+      strategy_tag: form.strategy_tag.trim() || null,
       source_system: form.source_system.trim() || "MANUAL",
     };
 
@@ -430,6 +440,7 @@ export default function WorkspaceLedgerPage() {
         ] = await Promise.all([
           api.getTrades(resolvedWorkspaceId, {
             tag: selectedTag || undefined,
+            strategy: selectedStrategy || undefined,
             symbol: symbolFilter || undefined,
             side: sideFilter || undefined,
             limit: PAGE_SIZE,
@@ -814,10 +825,7 @@ export default function WorkspaceLedgerPage() {
             <select
               value={selectedStrategy}
               onChange={(e) => {
-                const value = e.target.value
-
-                setSelectedStrategy(value)
-                setSelectedTag(value) // 🔥 keeps both in sync
+                  setSelectedStrategy(e.target.value)
               }}
               className="rounded-xl border px-3 py-2 text-sm"
             >
@@ -997,11 +1005,12 @@ export default function WorkspaceLedgerPage() {
 
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Strategy Tag</label>
+                  <label>Strategy Tag</label>
                   <input
-                    value={manualTradeForm.tags_input}
-                    onChange={(e) => updateManualTradeField("tags_input", e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                    placeholder="manual_entry"
+                    value={manualTradeForm.strategy_tag}
+                    onChange={(e) =>
+                        updateManualTradeField("strategy_tag", e.target.value)
+                    }
                   />
                 </div>
 
