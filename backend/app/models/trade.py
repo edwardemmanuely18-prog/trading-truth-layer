@@ -17,6 +17,10 @@ class Trade(Base):
     quantity = Column(Float, nullable=False)
     net_pnl = Column(Float, nullable=True)
     currency = Column(String, nullable=False, default="USD")
-    strategy_tag = Column(String, nullable=True)
+    strategy_tag = Column(
+        String,
+        nullable=True,
+        default="unclassified",
+    )
     source_system = Column(String, nullable=True)
     trade_fingerprint = Column(String, nullable=True, index=True)

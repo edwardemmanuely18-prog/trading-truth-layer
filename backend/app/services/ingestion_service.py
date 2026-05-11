@@ -148,7 +148,7 @@ def coerce_runtime_trade_row(
     *,
     trade_row: dict,
     source_type: str,
-    default_member_id: int = 999,
+    default_member_id: int = 1,
     default_currency: str = "USD",
 ) -> dict:
     normalized_source = (source_type or "csv").strip().lower()
@@ -179,9 +179,17 @@ def coerce_runtime_trade_row(
         member_id = default_member_id
 
     currency = str(trade_row.get("currency") or default_currency).strip().upper() or default_currency
-    strategy_tag = (str(trade_row.get("strategy_tag") or "").strip() or None)
+    strategy_tag = (
+        str(trade_row.get("strategy_tag") or "").strip()
+        or "unclassified"
+    )
     source_system = (
-        str(trade_row.get("source_system") or normalized_source.upper()).strip()
+        str(
+            trade_row.get("source_system")
+            or normalized_source.upper()
+        )
+        .strip()
+        .upper()
         or normalized_source.upper()
     )
 

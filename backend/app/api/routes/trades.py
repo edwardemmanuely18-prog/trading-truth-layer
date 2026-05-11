@@ -289,6 +289,10 @@ def serialize_trade(trade: Trade, tags: list[str]):
         "quantity": trade.quantity,
         "net_pnl": trade.net_pnl,
         "currency": trade.currency,
+
+        # CRITICAL FIX
+        "strategy_tag": trade.strategy_tag,
+
         "tags": tags,
         "source_system": trade.source_system,
     }
