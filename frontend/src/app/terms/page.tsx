@@ -15,7 +15,7 @@ export default function TermsPage() {
 
       <p style={{ marginBottom: 18 }}>
         This platform, Trading Truth Layer, is operated by
-        <b> Trading Truth Layer</b>, based in Tanzania. By accessing or using
+        <b> Aurum Hybrid</b>, based in Tanzania. By accessing or using
         this service, you agree to the following terms.
       </p>
 
@@ -31,9 +31,10 @@ export default function TermsPage() {
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        Trading Truth Layer provides verification infrastructure, canonical
-        ledger systems, workspace collaboration tools, governance workflows,
-        analytics, and operational record management services.
+        Trading Truth Layer provides verification infrastructure,
+        canonical ledger systems, governance workflows,
+        auditability tooling, operational record management,
+        evidence generation systems, and collaboration services.
       </p>
 
       <h2
@@ -48,8 +49,8 @@ export default function TermsPage() {
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        You are responsible for maintaining account confidentiality and all
-        activities under your account.
+        You are responsible for maintaining account confidentiality
+        and all activities performed under your account.
       </p>
 
       <h2
@@ -64,9 +65,9 @@ export default function TermsPage() {
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        You agree not to misuse the platform, exploit vulnerabilities, attempt
-        unauthorized access, interfere with system operations, or abuse platform
-        infrastructure.
+        You agree not to misuse the platform, exploit vulnerabilities,
+        attempt unauthorized access, interfere with infrastructure
+        operations, abuse system resources, or upload unlawful data.
       </p>
 
       <h2
@@ -81,10 +82,10 @@ export default function TermsPage() {
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        Some features require a paid subscription. Payments are processed
-        through authorized billing and payment infrastructure providers.
-        Pricing, usage limits, and entitlements are displayed on the pricing
-        page.
+        Certain platform capabilities require paid subscriptions.
+        Payments are processed through authorized billing and payment
+        infrastructure providers. Pricing, usage limits, and
+        entitlements are displayed on the pricing page.
       </p>
 
       <h2
@@ -99,8 +100,9 @@ export default function TermsPage() {
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        You may cancel your subscription at any time. Access continues until
-        the end of the active billing period unless otherwise required by law.
+        You may cancel your subscription at any time. Access to paid
+        services remains active until the end of the current billing
+        cycle unless otherwise required by law.
       </p>
 
       <h2
@@ -115,7 +117,8 @@ export default function TermsPage() {
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        Refund eligibility and processing are governed by our Refund Policy.
+        Refund eligibility and processing are governed by our Refund
+        Policy.
       </p>
 
       <h2
@@ -130,9 +133,10 @@ export default function TermsPage() {
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        Trading Truth Layer is not liable for trading losses, financial outcomes,
-        operational decisions, or business interruptions resulting from use of
-        the platform.
+        Trading Truth Layer is not liable for trading losses,
+        financial outcomes, operational decisions, data inaccuracies,
+        business interruptions, or indirect damages resulting from
+        use of the platform.
       </p>
 
       <h2
@@ -147,8 +151,9 @@ export default function TermsPage() {
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        Trading Truth Layer does not provide brokerage services, custody,
-        investment management, or financial advice.
+        Trading Truth Layer does not provide brokerage services,
+        custody services, investment management, financial advice,
+        portfolio management, or trade execution services.
       </p>
 
       <h2
@@ -159,12 +164,19 @@ export default function TermsPage() {
           marginBottom: 14,
         }}
       >
-        9. Changes
+        9. User Responsibility
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        We may update these terms periodically. Continued use of the platform
-        after updates constitutes acceptance of the revised terms.
+        Users are solely responsible for the legality, ownership,
+        authorization, and accuracy of uploaded records, imported
+        broker exports, claims, evidence payloads, and operational
+        data.
+      </p>
+
+      <p style={{ marginBottom: 18 }}>
+        Users are also responsible for compliance with laws and
+        regulations applicable within their jurisdiction.
       </p>
 
       <h2
@@ -175,8 +187,50 @@ export default function TermsPage() {
           marginBottom: 14,
         }}
       >
-        10. Contact
+        10. Changes
       </h2>
+
+      <p style={{ marginBottom: 18 }}>
+        We may update these terms periodically. Continued use of the
+        platform after updates constitutes acceptance of the revised
+        terms.
+      </p>
+
+      <h2
+        style={{
+          fontSize: 24,
+          fontWeight: 700,
+          marginTop: 36,
+          marginBottom: 14,
+        }}
+      >
+        11. Platform Classification
+      </h2>
+
+      <p style={{ marginBottom: 18 }}>
+        Trading Truth Layer is an independent software infrastructure
+        platform and is not a broker-dealer, exchange, investment
+        advisor, custodian, prop firm, or financial institution.
+      </p>
+
+      <h2
+        style={{
+          fontSize: 24,
+          fontWeight: 700,
+          marginTop: 36,
+          marginBottom: 14,
+        }}
+      >
+        12. Contact
+      </h2>
+
+      <p style={{ marginBottom: 18 }}>
+        Aurum Hybrid
+      </p>
+
+      <p style={{ marginBottom: 18 }}>
+        Tanzania
+      </p>
 
       <p style={{ marginBottom: 18 }}>
         Email: tradingtruthlayer@gmail.com

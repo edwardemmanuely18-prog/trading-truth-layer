@@ -14,28 +14,168 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
+      <body
+        style={{
+          margin: 0,
+          background: "#f8fafc",
+          color: "#0f172a",
+          fontFamily:
+            "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+        }}
+      >
         <AuthProvider>
-          {children}
-
-          {/* ✅ FOOTER MUST BE INSIDE BODY */}
-          <footer
+          <div
             style={{
-              borderTop: "1px solid #e5e7eb",
-              padding: "20px",
-              marginTop: "40px",
-              textAlign: "center",
-              fontSize: "14px",
+              minHeight: "100vh",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-            <a href="/terms" style={{ marginRight: 12 }}>
-              Terms
-            </a>
-            <a href="/privacy" style={{ marginRight: 12 }}>
-              Privacy
-            </a>
-            <a href="/refund">Refund</a>
-          </footer>
+            <div style={{ flex: 1 }}>
+              {children}
+            </div>
+
+            {/* FOOTER */}
+            <footer
+              style={{
+                borderTop: "1px solid #e5e7eb",
+                background: "#ffffff",
+                marginTop: 60,
+                padding: "32px 24px",
+              }}
+            >
+              <div
+                style={{
+                  maxWidth: 1200,
+                  margin: "0 auto",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 18,
+                }}
+              >
+                {/* Brand */}
+                <div>
+                  <div
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 700,
+                      marginBottom: 6,
+                    }}
+                  >
+                    Trading Truth Layer
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: 14,
+                      color: "#475569",
+                      lineHeight: 1.7,
+                      maxWidth: 720,
+                    }}
+                  >
+                    Verification infrastructure for trading records,
+                    canonical ledgers, auditability, governance
+                    workflows, and dispute-ready proof systems.
+                  </div>
+                </div>
+
+                {/* Links */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 18,
+                    fontSize: 14,
+                  }}
+                >
+                  <a
+                    href="/pricing"
+                    style={{
+                      textDecoration: "none",
+                      color: "#0f172a",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Pricing
+                  </a>
+
+                  <a
+                    href="/terms"
+                    style={{
+                      textDecoration: "none",
+                      color: "#0f172a",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Terms
+                  </a>
+
+                  <a
+                    href="/privacy"
+                    style={{
+                      textDecoration: "none",
+                      color: "#0f172a",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Privacy
+                  </a>
+
+                  <a
+                    href="/refund"
+                    style={{
+                      textDecoration: "none",
+                      color: "#0f172a",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Refund
+                  </a>
+
+                  <a
+                    href="/risk"
+                    style={{
+                      textDecoration: "none",
+                      color: "#0f172a",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Risk Disclosure
+                  </a>
+                </div>
+
+                {/* Compliance */}
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "#64748b",
+                    lineHeight: 1.8,
+                    borderTop: "1px solid #e5e7eb",
+                    paddingTop: 18,
+                  }}
+                >
+                  Trading Truth Layer is operated by Aurum Hybrid,
+                  Tanzania. The platform provides infrastructure
+                  software for operational verification, canonical
+                  ledger systems, governance workflows, evidence
+                  generation, and auditability infrastructure.
+
+                  <br />
+                  <br />
+
+                  Trading Truth Layer does not provide brokerage,
+                  investment advisory, portfolio management,
+                  custody, financial advice, or trade execution
+                  services.
+
+                  <br />
+                  <br />
+
+                  Contact: tradingtruthlayer@gmail.com
+                </div>
+              </div>
+            </footer>
+          </div>
         </AuthProvider>
       </body>
     </html>

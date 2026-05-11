@@ -14,8 +14,9 @@ export default function PrivacyPage() {
       </h1>
 
       <p style={{ marginBottom: 18 }}>
-        This service is operated by <b>Trading Truth Layer</b> (Tanzania). We are
-        committed to protecting user privacy and platform data.
+        This service is operated by <b>Aurum Hybrid</b> (Tanzania).
+        We are committed to protecting user privacy, operational
+        records, and platform data.
       </p>
 
       <h2
@@ -30,16 +31,22 @@ export default function PrivacyPage() {
       </h2>
 
       <ul style={{ paddingLeft: 24, marginBottom: 24 }}>
-        <li style={{ marginBottom: 10 }}>Email address</li>
+        <li style={{ marginBottom: 10 }}>
+          Email address
+        </li>
+
         <li style={{ marginBottom: 10 }}>
           Name and account profile information
         </li>
+
         <li style={{ marginBottom: 10 }}>
           Workspace and operational usage data
         </li>
+
         <li style={{ marginBottom: 10 }}>
           Technical logs and device activity
         </li>
+
         <li style={{ marginBottom: 10 }}>
           Subscription and billing metadata
         </li>
@@ -57,9 +64,10 @@ export default function PrivacyPage() {
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        Data is used to operate the platform, authenticate users, manage
-        subscriptions, enforce platform limits, process billing, improve
-        services, and maintain platform security.
+        Data is used to operate the platform, authenticate users,
+        manage subscriptions, enforce platform limits, process
+        billing, improve services, maintain operational continuity,
+        and strengthen platform security.
       </p>
 
       <h2
@@ -74,17 +82,38 @@ export default function PrivacyPage() {
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        We use trusted infrastructure and operational providers including:
+        We use trusted infrastructure and operational providers
+        including:
       </p>
 
       <ul style={{ paddingLeft: 24, marginBottom: 24 }}>
         <li style={{ marginBottom: 10 }}>
           Payment and billing infrastructure providers
         </li>
-        <li style={{ marginBottom: 10 }}>Vercel (frontend hosting)</li>
-        <li style={{ marginBottom: 10 }}>Render (backend infrastructure)</li>
-        <li style={{ marginBottom: 10 }}>Neon (database infrastructure)</li>
+
+        <li style={{ marginBottom: 10 }}>
+          Vercel (frontend hosting)
+        </li>
+
+        <li style={{ marginBottom: 10 }}>
+          Render (backend infrastructure)
+        </li>
+
+        <li style={{ marginBottom: 10 }}>
+          Neon (database infrastructure)
+        </li>
       </ul>
+
+      <p style={{ marginBottom: 18 }}>
+        Third-party providers process data solely for infrastructure,
+        hosting, billing, analytics, operational delivery, platform
+        security, and service continuity purposes.
+      </p>
+
+      <p style={{ marginBottom: 18 }}>
+        We do not sell personal data to advertisers or unrelated
+        third parties.
+      </p>
 
       <h2
         style={{
@@ -98,8 +127,8 @@ export default function PrivacyPage() {
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        We apply commercially reasonable safeguards and operational controls to
-        protect platform and user data.
+        We apply commercially reasonable safeguards and operational
+        controls designed to protect platform and user data.
       </p>
 
       <h2
@@ -114,8 +143,9 @@ export default function PrivacyPage() {
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        Data may be retained as necessary for operational continuity, compliance,
-        security, analytics, and dispute resolution purposes.
+        Data may be retained as necessary for operational continuity,
+        compliance, dispute resolution, security analysis,
+        infrastructure integrity, and analytics purposes.
       </p>
 
       <h2
@@ -128,6 +158,14 @@ export default function PrivacyPage() {
       >
         Contact
       </h2>
+
+      <p style={{ marginBottom: 18 }}>
+        Aurum Hybrid
+      </p>
+
+      <p style={{ marginBottom: 18 }}>
+        Tanzania
+      </p>
 
       <p style={{ marginBottom: 18 }}>
         Email: tradingtruthlayer@gmail.com
