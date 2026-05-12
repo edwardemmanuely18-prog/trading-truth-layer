@@ -163,11 +163,30 @@ def coerce_runtime_trade_row(
         ).strip()
     )
 
-    strategy_tag = (
-        strategy_tag_raw
-        if strategy_tag_raw
-        else "unclassified"
-    )
+    if strategy_tag_raw:
+
+        strategy_tag = strategy_tag_raw
+
+    else:
+
+        symbol = str(symbol or "").upper()
+
+        if symbol in {"BTCUSD", "ETHUSD"}:
+            strategy_tag = "crypto"
+
+        elif symbol in {"GLD", "XAUUSD"}:
+            strategy_tag = "gold"
+
+        elif "USD" in symbol:
+            strategy_tag = "forex"
+
+        elif symbol in {"SPY", "QQQ", "AAPL", "TSLA"}:
+            strategy_tag = "equities"
+
+        else:
+            strategy_tag = "macro"
+
+
     source_system = (
         str(
             trade_row.get("source_system")
