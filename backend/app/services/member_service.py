@@ -25,6 +25,17 @@ def accept_workspace_invite(
             detail="Invite not found",
         )
 
+    # normalize emails before comparison
+    invite_email = (invite.email or "").strip().lower()
+    current_email = (current_user.email or "").strip().lower()
+
+    # enforce invite ownership
+    if invite_email != current_email:
+        raise HTTPException(
+            status_code=400,
+            detail="Invite email does not match authenticated user",
+        )
+
     if invite.status != "pending":
         raise HTTPException(
             status_code=400,
