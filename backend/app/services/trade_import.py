@@ -137,9 +137,18 @@ def map_ibkr_row(row: Dict[str, Any]) -> Dict[str, Any]:
         "symbol": row.get("Symbol"),
         "side": row.get("Buy/Sell"),
         "quantity": row.get("Quantity"),
-        "entry_price": row.get("TradePrice"),
-        "exit_price": row.get("TradePrice"),
-        "net_pnl": row.get("Realized P&L"),
+        "entry_price": (
+            row.get("TradePrice")
+            or row.get("Price")
+        ),
+        "exit_price": (
+            row.get("TradePrice")
+            or row.get("Price")
+        ),
+        "net_pnl": (
+            row.get("Realized P&L")
+            or row.get("Realized P/L")
+        ),
         "opened_at": row.get("Date/Time"),
         "closed_at": row.get("Date/Time"),
         "external_id": row.get("TradeID"),
@@ -175,7 +184,7 @@ def normalize_trade(raw: Dict[str, Any]) -> Dict[str, Any]:
 
     print(
         "RAW NORMALIZE INPUT:",
-        trade,
+        raw,
         flush=True,
     )
 

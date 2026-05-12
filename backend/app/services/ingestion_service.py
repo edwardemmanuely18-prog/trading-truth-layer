@@ -241,177 +241,129 @@ def persist_runtime_trade_rows(
             errors.append(f"Row {idx}: invalid opened_at")
             continue
 
-            if not runtime_trade["symbol"]:
-                rows_rejected += 1
-                rejected_preview.append(
-                    {
-                        "row": trade_row,
-                        "reason": "Missing symbol",
-                    }
-                )
-                errors.append(f"Row {idx}: missing symbol")
-                continue
+        if not runtime_trade["symbol"]:
+            rows_rejected += 1
+            rejected_preview.append(
+                {
+                    "row": trade_row,
+                    "reason": "Missing symbol",
+                }
+            )
+            errors.append(f"Row {idx}: missing symbol")
+            continue
 
-            if runtime_trade["side"] == "unknown":
-                rows_rejected += 1
-                rejected_preview.append(
-                    {
-                        "row": trade_row,
-                        "reason": "Invalid side",
-                    }
-                )
-                errors.append(f"Row {idx}: invalid side")
-                continue
+        if runtime_trade["side"] == "unknown":
+            rows_rejected += 1
+            rejected_preview.append(
+                {
+                    "row": trade_row,
+                    "reason": "Invalid side",
+                }
+            )
+            errors.append(f"Row {idx}: invalid side")
+            continue
 
-            if runtime_trade["quantity"] <= 0:
-                rows_rejected += 1
-                rejected_preview.append(
-                    {
-                        "row": trade_row,
-                        "reason": "Invalid quantity",
-                    }
-                )
-                errors.append(f"Row {idx}: invalid quantity")
-                continue
+        if runtime_trade["quantity"] <= 0:
+            rows_rejected += 1
+            rejected_preview.append(
+                {
+                    "row": trade_row,
+                    "reason": "Invalid quantity",
+                }
+            )
+            errors.append(f"Row {idx}: invalid quantity")
+            continue
 
-            if runtime_trade["entry_price"] <= 0:
-                rows_rejected += 1
-                rejected_preview.append(
-                    {
-                        "row": trade_row,
-                        "reason": "Invalid entry_price",
-                    }
-                )
-                errors.append(f"Row {idx}: invalid entry_price")
-                continue
+        if runtime_trade["entry_price"] <= 0:
+            rows_rejected += 1
+            rejected_preview.append(
+                {
+                    "row": trade_row,
+                    "reason": "Invalid entry_price",
+                }
+            )
+            errors.append(f"Row {idx}: invalid entry_price")
+            continue
 
-            fingerprint = build_runtime_trade_fingerprint(
-                workspace_id=workspace_id,
-                member_id=runtime_trade["member_id"],
-                symbol=runtime_trade["symbol"],
-                side=runtime_trade["side"],
-                opened_at=runtime_trade["opened_at"],
-                entry_price=runtime_trade["entry_price"],
-                quantity=runtime_trade["quantity"],
+        fingerprint = build_runtime_trade_fingerprint(
+            workspace_id=workspace_id,
+            member_id=runtime_trade["member_id"],
+            symbol=runtime_trade["symbol"],
+            side=runtime_trade["side"],
+            opened_at=runtime_trade["opened_at"],
+            entry_price=runtime_trade["entry_price"],
+            quantity=runtime_trade["quantity"],
+        )
+
+        print(
+            "EXISTING DUPLICATE:",
+            existing.id if existing else None,
+            flush=True,
+        )
+
+        print("CREATING TRADE OBJECT", flush=True)
+        print("FINGERPRINT:", fingerprint, flush=True)
+
+        trade = Trade(
+            workspace_id=workspace_id,
+            member_id=runtime_trade["member_id"],
+            symbol=runtime_trade["symbol"],
+            side=runtime_trade["side"].upper(),
+            opened_at=runtime_trade["opened_at"],
+            closed_at=runtime_trade["closed_at"],
+            entry_price=runtime_trade["entry_price"],
+            exit_price=runtime_trade["exit_price"],
+            quantity=runtime_trade["quantity"],
+            net_pnl=runtime_trade["net_pnl"],
+            currency=runtime_trade["currency"],
+            strategy_tag=runtime_trade["strategy_tag"],
+            source_system=runtime_trade["source_system"],
+            trade_fingerprint=fingerprint,
+        )
+        print("ADDING TRADE TO DB SESSION", flush=True)
+
+        db.add(trade)
+
+        try:
+            db.flush()
+
+            rows_imported += 1
+
+            seen_persisted_fingerprints.add(
+                fingerprint
             )
 
-            conflict = find_locked_claim_conflict_for_fingerprint(
-                locked_trade_lookup=locked_trade_lookup,
-                fingerprint=fingerprint,
-            )
-            if conflict:
-                rows_rejected += 1
-                rejected_preview.append(
-                    {
-                        "row": trade_row,
-                        "reason": f"Conflicts with locked claim {conflict.id}",
-                    }
-                )
-                errors.append(
-                    f"Row {idx}: conflicts with locked claim {conflict.id} by exact locked trade match"
-                )
-                continue
-
-            if fingerprint in seen_persisted_fingerprints:
-                rows_skipped_duplicates += 1
-                duplicate_preview.append(
-                    {
-                        "row": trade_row,
-                        "reason": "Duplicate trade fingerprint",
-                        "fingerprint": fingerprint,
-                    }
-                )
-                continue
-
-            existing = (
-                db.query(Trade)
-                .filter(
-                    Trade.workspace_id == workspace_id,
-                    Trade.trade_fingerprint == fingerprint,
-                )
-                .first()
+            accepted_preview.append(
+                {
+                    **runtime_trade,
+                    "fingerprint": fingerprint,
+                }
             )
 
-            if existing:
-                rows_skipped_duplicates += 1
-                duplicate_preview.append(
-                    {
-                        "row": trade_row,
-                        "reason": "Duplicate trade fingerprint",
-                        "fingerprint": fingerprint,
-                    }
-                )
-                continue
+        except Exception as flush_error:
 
             print(
-                "EXISTING DUPLICATE:",
-                existing.id if existing else None,
+                "FLUSH FAILED:",
+                str(flush_error),
                 flush=True,
             )
 
-            print("CREATING TRADE OBJECT", flush=True)
-            print("FINGERPRINT:", fingerprint, flush=True)
+            db.rollback()
 
-            trade = Trade(
-                workspace_id=workspace_id,
-                member_id=runtime_trade["member_id"],
-                symbol=runtime_trade["symbol"],
-                side=runtime_trade["side"].upper(),
-                opened_at=runtime_trade["opened_at"],
-                closed_at=runtime_trade["closed_at"],
-                entry_price=runtime_trade["entry_price"],
-                exit_price=runtime_trade["exit_price"],
-                quantity=runtime_trade["quantity"],
-                net_pnl=runtime_trade["net_pnl"],
-                currency=runtime_trade["currency"],
-                strategy_tag=runtime_trade["strategy_tag"],
-                source_system=runtime_trade["source_system"],
-                trade_fingerprint=fingerprint,
+            rows_rejected += 1
+
+            rejected_preview.append(
+                {
+                    "row": trade_row,
+                    "reason": str(flush_error),
+                }
             )
-            print("ADDING TRADE TO DB SESSION", flush=True)
 
-            db.add(trade)
+            errors.append(
+                f"Row {idx}: {str(flush_error)}"
+            )
 
-            try:
-                db.flush()
-
-                rows_imported += 1
-
-                seen_persisted_fingerprints.add(
-                    fingerprint
-                )
-
-                accepted_preview.append(
-                    {
-                        **runtime_trade,
-                        "fingerprint": fingerprint,
-                    }
-                )
-
-            except Exception as flush_error:
-
-                print(
-                    "FLUSH FAILED:",
-                    str(flush_error),
-                    flush=True,
-                )
-
-                db.rollback()
-
-                rows_rejected += 1
-
-                rejected_preview.append(
-                    {
-                        "row": trade_row,
-                        "reason": str(flush_error),
-                    }
-                )
-
-                errors.append(
-                    f"Row {idx}: {str(flush_error)}"
-                )
-
-                continue
+            continue
 
 
     print("IMPORT ERRORS:", errors, flush=True)
