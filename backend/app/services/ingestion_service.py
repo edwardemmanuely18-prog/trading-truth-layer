@@ -15,6 +15,9 @@ from app.services.trade_import import (
     process_import_rows,
     safe_float,
 )
+from app.services.trade_import import (
+    build_trade_fingerprint,
+)
 
 
 def build_trade_fingerprint_from_trade(trade: Trade) -> str:
