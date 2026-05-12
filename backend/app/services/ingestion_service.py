@@ -298,15 +298,51 @@ def persist_runtime_trade_rows(
             quantity=runtime_trade["quantity"],
         )
 
+        existing = (
+            db.query(Trade)
+            .filter(
+                Trade.workspace_id == workspace_id,
+                Trade.trade_fingerprint == fingerprint,
+            )
+            .first()
+        )
+
         print(
             "EXISTING DUPLICATE:",
             existing.id if existing else None,
             flush=True,
         )
 
+        if existing:
+            rows_skipped_duplicates += 1
+
+            duplicate_preview.append(
+                {
+                    "row": trade_row,
+                    "fingerprint": fingerprint,
+                    "existing_trade_id": existing.id,
+                }
+            )
+
+            continue
+
+        if fingerprint in seen_persisted_fingerprints:
+            rows_skipped_duplicates += 1
+
+            duplicate_preview.append(
+                {
+                    "row": trade_row,
+                    "fingerprint": fingerprint,
+                    "reason": "duplicate_in_runtime_batch",
+                }
+            )
+
+            continue
+
         print("CREATING TRADE OBJECT", flush=True)
         print("FINGERPRINT:", fingerprint, flush=True)
 
+        
         trade = Trade(
             workspace_id=workspace_id,
             member_id=runtime_trade["member_id"],
