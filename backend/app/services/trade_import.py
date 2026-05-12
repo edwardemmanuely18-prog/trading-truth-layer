@@ -159,16 +159,53 @@ def map_ibkr_row(row: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def map_csv_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    opened_at = (
+        row.get("timestamp")
+        or row.get("opened_at")
+        or row.get("Date/Time")
+        or row.get("date")
+    )
+
+    entry_price = (
+        row.get("price")
+        or row.get("entry_price")
+        or row.get("Price")
+    )
+
+    quantity = (
+        row.get("quantity")
+        or row.get("qty")
+        or row.get("Quantity")
+    )
+
+    side = (
+        row.get("side")
+        or row.get("Side")
+        or row.get("Buy/Sell")
+    )
+
+    symbol = (
+        row.get("symbol")
+        or row.get("Symbol")
+    )
+
     return {
-        "symbol": row.get("symbol"),
-        "side": row.get("side"),
-        "quantity": row.get("quantity"),
-        "entry_price": row.get("price"),
-        "exit_price": None,
-        "net_pnl": row.get("pnl"),
-        "opened_at": row.get("timestamp"),
-        "closed_at": None,
-        "external_id": row.get("id"),
+        "symbol": symbol,
+        "side": side,
+        "quantity": quantity,
+        "entry_price": entry_price,
+        "exit_price": row.get("exit_price"),
+        "net_pnl": (
+            row.get("pnl")
+            or row.get("net_pnl")
+            or row.get("Realized P/L")
+        ),
+        "opened_at": opened_at,
+        "closed_at": row.get("closed_at"),
+        "external_id": (
+            row.get("id")
+            or row.get("TradeID")
+        ),
         "source_type": "csv",
         "raw_row": row,
     }
@@ -225,6 +262,12 @@ def normalize_trade(raw: Dict[str, Any]) -> Dict[str, Any]:
         ),
     )
     if normalized.get("opened_at") is None:
+        print(
+            "NORMALIZATION FAILURE RAW:",
+            raw,
+            flush=True,
+        )
+
         raise ValueError(
             "Trade missing opened_at after normalization"
         )
@@ -318,6 +361,18 @@ def parse_rows_by_source(source_type: str, file_bytes: bytes) -> List[Dict[str, 
 
     if source_type == "auto":
         source_type = detect_source_from_headers(headers)
+
+    print(
+        "DETECTED SOURCE TYPE:",
+        source_type,
+        flush=True,
+    )
+
+    print(
+        "CSV HEADERS:",
+        headers,
+        flush=True,
+    )
 
     if source_type == "mt5":
         return [map_mt5_row(row) for row in reader]
