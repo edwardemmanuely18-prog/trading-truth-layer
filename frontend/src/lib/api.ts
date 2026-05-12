@@ -2383,10 +2383,12 @@ export const api = {
   },
 
   acceptWorkspaceInvite: async (token: string) => {
-    return apiFetch(`/invites/accept`, {
-      method: "POST",
-      body: JSON.stringify({ token }),
-    });
+    return apiFetch<any>(
+      `/invites/${token}/accept`,
+      {
+        method: "POST",
+      }
+    )
   },
 
   getLatestClaimSchema: async (): Promise<ClaimSchema> => {

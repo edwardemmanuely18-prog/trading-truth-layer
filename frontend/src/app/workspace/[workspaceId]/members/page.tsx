@@ -258,11 +258,10 @@ function InviteVisibilityNotice({
           <div className="mt-3 space-y-2">
             {pending.map((invite) => (
               <Link
-                key={invite.id}
                 href={`/invite/${invite.token}`}
-                className="block rounded-xl border border-blue-300 bg-white px-4 py-2 text-sm font-medium hover:bg-blue-100"
+                className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800"
               >
-                Accept invite → {invite.email}
+                Accept Invite
               </Link>
             ))}
           </div>

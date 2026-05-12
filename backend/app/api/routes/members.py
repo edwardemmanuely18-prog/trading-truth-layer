@@ -7,6 +7,10 @@ from app.models.workspace import Workspace
 from app.api.deps import get_current_user
 from app.models.user import User
 
+from app.models.workspace_invite import WorkspaceInvite
+from app.schemas.member import AcceptInviteResponse
+from app.services.member_service import accept_workspace_invite
+
 from app.services.entitlements import enforce_member_invite_allowed
 
 router = APIRouter()
@@ -33,3 +37,19 @@ def add_member(
     db.refresh(membership)
 
     return {"message": "Member added"}
+
+
+@router.post(
+    "/invites/{token}/accept",
+    response_model=AcceptInviteResponse,
+)
+def accept_invite(
+    token: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return accept_workspace_invite(
+        db=db,
+        token=token,
+        current_user=current_user,
+    )
