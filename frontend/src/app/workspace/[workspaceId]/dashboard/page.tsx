@@ -10,6 +10,7 @@ import {
   type DashboardResponse,
   type PublicClaimDirectoryItem,
   type WorkspaceUsageSummary,
+  type InstitutionalDashboardResponse,
 } from "../../../../lib/api";
 import PaywallModal from "../../../../components/PaywallModal";
 import { useWorkspaceGate } from "../../../../hooks/useWorkspaceGate";
@@ -822,6 +823,12 @@ export default function WorkspaceDashboardPage() {
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [claims, setClaims] = useState<PublicClaimDirectoryItem[]>([]);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
+  const [
+    institutionalDashboard,
+    setInstitutionalDashboard,
+  ] = useState<
+    InstitutionalDashboardResponse | null
+  >(null);
   const [loading, setLoading] = useState(true);
   const [createChecking, setCreateChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -834,15 +841,24 @@ export default function WorkspaceDashboardPage() {
         setLoading(true);
         setError(null);
 
-        const [dashboardRes, claimsRes, usageRes] = await Promise.all([
+        const [
+          dashboardRes,
+          claimsRes,
+          usageRes,
+          institutionalRes,
+        ] = await Promise.all([
           api.getDashboard(workspaceId),
           api.getWorkspaceClaims(workspaceId),
           api.getWorkspaceUsage(workspaceId),
+          api.getInstitutionalDashboard(workspaceId),
         ]);
 
         setDashboard(dashboardRes ?? null);
         setClaims(Array.isArray(claimsRes) ? claimsRes : []);
         setUsage(usageRes ?? null);
+        setInstitutionalDashboard(
+          institutionalRes ?? null
+        );
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load workspace dashboard.");
       } finally {
@@ -1142,6 +1158,188 @@ export default function WorkspaceDashboardPage() {
             canCreateClaim={canCreateClaim}
             canImportTrades={canImportTrades}
           />
+
+          {institutionalDashboard ? (
+            <div className="mb-8 grid gap-6 lg:grid-cols-3">
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Strategy Intelligence
+                </div>
+
+                <h3 className="mt-2 text-xl font-semibold text-slate-950">
+                  Institutional Strategy Analytics
+                </h3>
+
+                <div className="mt-5 space-y-4">
+
+                  <div>
+                    <div className="text-sm text-slate-500">
+                      Strategy Count
+                    </div>
+
+                    <div className="mt-1 text-3xl font-bold">
+                      {
+                        institutionalDashboard
+                          .strategy_analytics
+                          .strategy_count
+                      }
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm text-slate-500">
+                      Best Performing Strategy
+                    </div>
+
+                    <div className="mt-1 text-lg font-semibold">
+                      {
+                        institutionalDashboard
+                          .strategy_analytics
+                          .best_strategy?.tag
+                        || "unclassified"
+                      }
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm text-slate-500">
+                      Strategy Expectancy
+                    </div>
+
+                    <div className="mt-1 text-2xl font-bold">
+                      {
+                        institutionalDashboard
+                          .strategy_analytics
+                          .best_strategy?.expectancy
+                        || 0
+                      }
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Import Governance
+                </div>
+
+                <h3 className="mt-2 text-xl font-semibold text-slate-950">
+                  Import Integrity Health
+                </h3>
+
+                <div className="mt-5 space-y-4">
+
+                  <div>
+                    <div className="text-sm text-slate-500">
+                      Rows Imported
+                    </div>
+
+                    <div className="mt-1 text-3xl font-bold">
+                      {
+                        institutionalDashboard
+                          .import_health
+                          .rows_imported
+                      }
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm text-slate-500">
+                      Duplicate Ratio
+                    </div>
+
+                    <div className="mt-1 text-2xl font-bold">
+                      {
+                        (
+                          institutionalDashboard
+                            .import_health
+                            .duplicate_ratio * 100
+                        ).toFixed(2)
+                      }%
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm text-slate-500">
+                      Rejection Ratio
+                    </div>
+
+                    <div className="mt-1 text-2xl font-bold">
+                      {
+                        (
+                          institutionalDashboard
+                            .import_health
+                            .rejection_ratio * 100
+                        ).toFixed(2)
+                      }%
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Governance Posture
+                </div>
+
+                <h3 className="mt-2 text-xl font-semibold text-slate-950">
+                  Operational Governance
+                </h3>
+
+                <div className="mt-5 space-y-4">
+
+                  <div>
+                    <div className="text-sm text-slate-500">
+                      Utilization
+                    </div>
+
+                    <div className="mt-1 text-3xl font-bold">
+                      {
+                        institutionalDashboard
+                          .governance
+                          .utilization
+                      }%
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm text-slate-500">
+                      Governance Status
+                    </div>
+
+                    <div className="mt-1 text-xl font-semibold capitalize">
+                      {
+                        institutionalDashboard
+                          .governance
+                          .status
+                      }
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-sm text-slate-500">
+                      Effective Plan
+                    </div>
+
+                    <div className="mt-1 text-xl font-semibold">
+                      {
+                        institutionalDashboard
+                          .governance
+                          .effective_plan_code
+                      }
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+            </div>
+          ) : null}
 
           <WorkflowProgressPanel
             tradeCount={tradeCount}

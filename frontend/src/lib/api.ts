@@ -239,6 +239,66 @@ export type DashboardResponse = {
   claim_count: number;
 };
 
+export type InstitutionalDashboardResponse = {
+  workspace_id: number;
+
+  workspace: {
+    member_count: number;
+    trade_count: number;
+    claim_count: number;
+  };
+
+  claims: {
+    draft: number;
+    verified: number;
+    published: number;
+    locked: number;
+  };
+
+  workflow: {
+    import_complete: boolean;
+    claim_created: boolean;
+    verification_started: boolean;
+    published: boolean;
+    locked: boolean;
+  };
+
+  governance: {
+    utilization: number;
+    status: string;
+    effective_plan_code: string;
+  };
+
+  import_health: {
+    rows_received: number;
+    rows_imported: number;
+    rows_rejected: number;
+    rows_duplicates: number;
+
+    duplicate_ratio: number;
+    rejection_ratio: number;
+  };
+
+  strategy_analytics: {
+    strategy_count: number;
+
+    best_strategy?: {
+      tag: string;
+      trade_count: number;
+      net_pnl: number;
+      avg_pnl: number;
+      win_rate: number;
+      avg_win: number;
+      avg_loss: number;
+      expectancy: number;
+    };
+
+    strategies: any[];
+  };
+
+  trading_metrics: any;
+};
+
 export type PlanBilling = {
   monthly_price_usd?: number | null;
   annual_price_usd?: number | null;
@@ -1222,6 +1282,23 @@ function getApiBaseUrl() {
   );
 }
 
+export const getInstitutionalDashboard =
+  async (
+    workspaceId: number
+  ): Promise<InstitutionalDashboardResponse> => {
+
+    return apiFetch<
+      InstitutionalDashboardResponse
+    >(
+      withDevUser(
+        `/workspaces/${workspaceId}/dashboard`
+      ),
+      {
+        cache: "no-store",
+      }
+    );
+  };
+
 export const getStrategyPerformance = async (
   workspaceId: number,
   strategy?: string
@@ -2128,6 +2205,22 @@ export const api = {
   logout: () => {
     clearStoredAccessToken();
     clearStoredActiveWorkspaceId();
+  },
+
+  getInstitutionalDashboard: async (
+    workspaceId: number
+  ): Promise<InstitutionalDashboardResponse> => {
+
+    return apiFetch<
+      InstitutionalDashboardResponse
+    >(
+      withDevUser(
+        `/workspaces/${workspaceId}/dashboard`
+      ),
+      {
+        cache: "no-store",
+      }
+    );
   },
 
   getStrategyPerformance,
