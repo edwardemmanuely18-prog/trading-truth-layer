@@ -128,7 +128,10 @@ export default function InviteAcceptPage() {
     void acceptInvite();
   }, [token, refresh]);
 
-  const workspaceId = result?.membership?.workspace_id;
+  const workspaceId =
+    result?.membership?.workspace_id
+    || result?.invite?.workspace_id
+    || (result as any)?.workspace_id;
   const inviteEmail = result?.invite?.email || "";
   const currentUserEmail = user?.email || result?.user?.email || "";
   const errorTone = error ? getErrorTone(error) : "red";
@@ -258,7 +261,12 @@ export default function InviteAcceptPage() {
               <div className="rounded-xl border bg-slate-50 p-4">
                 <div className="text-sm text-slate-500">Workspace ID</div>
                 <div className="mt-2 font-medium">
-                  {result?.membership?.workspace_id || result?.invite?.workspace_id || "—"}
+                  {
+                    result?.membership?.workspace_id
+                    || result?.invite?.workspace_id
+                    || (result as any)?.workspace_id
+                    || "—"
+                  }
                 </div>
               </div>
 
