@@ -7,6 +7,9 @@ from io import StringIO
 from app.services.broker_detection_service import (
     detect_source_from_headers,
 )
+from app.services.strategy_classifier import (
+    classify_symbol,
+)
 
 
 print("=== TRADE IMPORT FILE LOADED V2 ===", flush=True)
@@ -272,7 +275,12 @@ def normalize_trade(raw: Dict[str, Any]) -> Dict[str, Any]:
         "closed_at": closed_at,
         "external_id": normalize_text(raw.get("external_id")) or None,
         "source_type": normalize_text(raw.get("source_type")),
-        "strategy_tag": normalize_text(raw.get("strategy_tag")) or None,
+        "strategy_tag": (
+            normalize_text(raw.get("strategy_tag"))
+            or classify_symbol(
+                normalize_symbol(raw.get("symbol"))
+            )
+        ),
     }
 
     if normalized.get("opened_at") is None:

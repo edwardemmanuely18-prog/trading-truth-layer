@@ -18,6 +18,9 @@ from app.services.trade_import import (
 from app.services.trade_import import (
     build_trade_fingerprint,
 )
+from app.services.strategy_classifier import (
+    classify_symbol,
+)
 
 
 def build_trade_fingerprint_from_trade(trade: Trade) -> str:
@@ -163,28 +166,30 @@ def coerce_runtime_trade_row(
         ).strip()
     )
 
-    if strategy_tag_raw:
+    classified_strategy = classify_symbol(symbol)
 
-        strategy_tag = strategy_tag_raw
+    # -------------------------------------------------
+    # PRIORITY:
+    # 1. Explicit manual strategy
+    # 2. Institutional classifier
+    # 3. fallback unclassified
+    # -------------------------------------------------
+
+    if (
+        strategy_tag_raw
+        and strategy_tag_raw.lower()
+        not in {
+            "ibkr_import",
+            "mt5_import",
+            "csv_import",
+            "macro",
+            "unclassified",
+        }
+    ):
+        strategy_tag = strategy_tag_raw.lower()
 
     else:
-
-        symbol = str(symbol or "").upper()
-
-        if symbol in {"BTCUSD", "ETHUSD"}:
-            strategy_tag = "crypto"
-
-        elif symbol in {"GLD", "XAUUSD"}:
-            strategy_tag = "gold"
-
-        elif "USD" in symbol:
-            strategy_tag = "forex"
-
-        elif symbol in {"SPY", "QQQ", "AAPL", "TSLA"}:
-            strategy_tag = "equities"
-
-        else:
-            strategy_tag = "macro"
+        strategy_tag = classified_strategy
 
 
     source_system = (
