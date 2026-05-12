@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "./AuthProvider";
 import { api, type WorkspaceInvite } from "../lib/api";
 
 type Props = {
@@ -68,6 +70,8 @@ export default function WorkspaceInvitesTable({
   onChanged,
 }: Props) {
   const safeRows = useMemo(() => dedupeInvites(Array.isArray(rows) ? rows : []), [rows]);
+  const router = useRouter();
+  const { refresh } = useAuth();
   const [busyInviteId, setBusyInviteId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -166,12 +170,18 @@ export default function WorkspaceInvitesTable({
                               try {
                                 setBusyInviteId(row.id);
 
-                                await api.acceptWorkspaceInvite(row.token);
+                                const result = await api.acceptWorkspaceInvite(row.token);
+
+                                await refresh();
 
                                 setFeedback("Invite accepted successfully.");
 
                                 if (onChanged) {
                                   await onChanged();
+                                }
+
+                                if (result?.workspace_id) {
+                                  router.push(`/workspace/${result.workspace_id}/dashboard`);
                                 }
                               } catch (err) {
                                 setError(
