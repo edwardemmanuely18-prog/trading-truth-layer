@@ -1180,9 +1180,9 @@ export default function WorkspaceDashboardPage() {
 
                     <div className="mt-1 text-3xl font-bold">
                       {
-                        institutionalDashboard
-                          ?.strategy_analytics
-                          ?.strategy_count ?? 0
+                        Number(
+                          institutionalDashboard?.strategy_analytics?.strategy_count ?? 0
+                        )
                       }
                     </div>
                   </div>
@@ -1194,10 +1194,8 @@ export default function WorkspaceDashboardPage() {
 
                     <div className="mt-1 text-lg font-semibold">
                       {
-                        institutionalDashboard
-                          ?.strategy_analytics
-                          ?.best_strategy?.tag
-                        || "unclassified"
+                        institutionalDashboard?.strategy_analytics?.best_strategy?.tag
+                          ?? "unclassified"
                       }
                     </div>
                   </div>
@@ -1209,10 +1207,8 @@ export default function WorkspaceDashboardPage() {
 
                     <div className="mt-1 text-2xl font-bold">
                       {
-                        institutionalDashboard
-                          ?.strategy_analytics
-                          ?.best_strategy?.expectancy
-                        || 0
+                        institutionalDashboard?.strategy_analytics?.best_strategy?.expectancy
+                          ?? 0
                       }
                     </div>
                   </div>
@@ -1239,9 +1235,9 @@ export default function WorkspaceDashboardPage() {
 
                     <div className="mt-1 text-3xl font-bold">
                       {
-                        institutionalDashboard
-                          ?.import_health
-                          ?.rows_imported ?? 0
+                        Number(
+                          institutionalDashboard?.import_health?.rows_imported ?? 0
+                        )
                       }
                     </div>
                   </div>
@@ -1304,9 +1300,9 @@ export default function WorkspaceDashboardPage() {
 
                     <div className="mt-1 text-3xl font-bold">
                       {
-                        institutionalDashboard
-                          ?.governance
-                          ?.utilization ?? 0
+                        Number(
+                          institutionalDashboard?.governance?.utilization ?? 0
+                        )
                       }%
                     </div>
                   </div>
