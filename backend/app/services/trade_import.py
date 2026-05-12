@@ -8,6 +8,8 @@ from app.services.broker_detection_service import (
     detect_source_from_headers,
 )
 
+print("=== TRADE IMPORT FILE LOADED V2 ===", flush=True)
+
 
 
 def build_trade_fingerprint(
