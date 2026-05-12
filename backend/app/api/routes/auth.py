@@ -10,6 +10,9 @@ from app.core.security import create_access_token, hash_password, verify_passwor
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.models.workspace_membership import WorkspaceMembership
+from app.models.workspace_invite import WorkspaceInvite
+from datetime import datetime
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -69,6 +72,8 @@ def register(payload: RegisterPayload, db: Session = Depends(get_db)):
     db.add(user)
     db.flush()
 
+    created_workspace = False
+
     if payload.workspace_name:
         workspace = Workspace(name=payload.workspace_name)
         db.add(workspace)
@@ -79,7 +84,42 @@ def register(payload: RegisterPayload, db: Session = Depends(get_db)):
             user_id=user.id,
             role="owner",
         )
+
         db.add(membership)
+
+        created_workspace = True
+
+    pending_invites = (
+        db.query(WorkspaceInvite)
+        .filter(
+            WorkspaceInvite.email == payload.email,
+            WorkspaceInvite.status == "pending",
+        )
+        .all()
+    )
+
+    for invite in pending_invites:
+        existing_membership = (
+            db.query(WorkspaceMembership)
+            .filter(
+                WorkspaceMembership.workspace_id == invite.workspace_id,
+                WorkspaceMembership.user_id == user.id,
+            )
+            .first()
+        )
+
+        if not existing_membership:
+            membership = WorkspaceMembership(
+                workspace_id=invite.workspace_id,
+                user_id=user.id,
+                role=invite.role,
+            )
+
+            db.add(membership)
+
+        invite.status = "accepted"
+        invite.accepted_by_user_id = user.id
+        invite.accepted_at = datetime.utcnow()
 
     db.commit()
     db.refresh(user)
