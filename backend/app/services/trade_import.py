@@ -43,13 +43,22 @@ def build_trade_fingerprint(
 # LOW-LEVEL HELPERS
 # ----------------------------------------
 
-def safe_float(value: Any, default: float = 0.0) -> float:
+def safe_float(
+    value: Any,
+    default: float | None = 0.0,
+) -> float | None:
     try:
-        if value is None or value == "":
+        if value is None:
             return default
+
         if isinstance(value, str):
             value = value.replace(",", "").strip()
+
+            if value == "":
+                return default
+
         return float(value)
+
     except Exception:
         return default
 
@@ -66,8 +75,16 @@ def normalize_symbol(value: Any) -> str:
 
 def parse_datetime(value: Any) -> datetime | None:
     raw = normalize_text(value)
+
     if not raw:
         return None
+
+    raw = raw.replace(",", " ")
+
+    while "  " in raw:
+        raw = raw.replace("  ", " ")
+
+    raw = raw.strip()
 
     candidates = [
         "%Y-%m-%d %H:%M:%S",
@@ -75,6 +92,7 @@ def parse_datetime(value: Any) -> datetime | None:
         "%Y-%m-%dT%H:%M:%S",
         "%Y.%m.%d %H:%M:%S",
         "%Y.%m.%d %H:%M",
+        "%Y%m%d %H:%M:%S",
         "%d/%m/%Y %H:%M:%S",
         "%d/%m/%Y %H:%M",
         "%m/%d/%Y %H:%M:%S",
@@ -86,6 +104,12 @@ def parse_datetime(value: Any) -> datetime | None:
             return datetime.strptime(raw, fmt)
         except Exception:
             pass
+
+    print(
+        "DATETIME PARSE FAILURE:",
+        raw,
+        flush=True,
+    )
 
     return None
 
@@ -124,8 +148,15 @@ def map_mt5_row(row: Dict[str, Any]) -> Dict[str, Any]:
         "entry_price": row.get("Price"),
         "exit_price": row.get("Price") if row.get("Profit") else None,
         "net_pnl": row.get("Profit"),
-        "opened_at": row.get("Time"),
-        "closed_at": row.get("Time"),
+        "opened_at": (
+            row.get("Open Time")
+            or row.get("Time")
+        ),
+
+        "closed_at": (
+            row.get("Close Time")
+            or row.get("Time")
+        ),
         "external_id": row.get("Ticket"),
         "source_type": "mt5",
         "raw_row": row,
@@ -268,6 +299,12 @@ def normalize_trade(raw: Dict[str, Any]) -> Dict[str, Any]:
             flush=True,
         )
 
+        print(
+            "NORMALIZATION FAILURE NORMALIZED:",
+            normalized,
+            flush=True,
+        )
+
         raise ValueError(
             "Trade missing opened_at after normalization"
         )
@@ -320,6 +357,13 @@ def process_import_rows(
     existing = existing_fingerprints or set()
 
     for row in rows:
+
+        print(
+            "PROCESSING ROW:",
+            row,
+            flush=True,
+        )
+
         trade = normalize_trade(row)
         ok, reason = validate_trade(trade)
 

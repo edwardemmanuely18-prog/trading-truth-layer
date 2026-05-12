@@ -16,7 +16,7 @@ class IBKRTradeAdapter:
         "Symbol",
         "Buy/Sell",
         "Quantity",
-        "Price"
+        "Price",
         "Date/Time",
     }
 
