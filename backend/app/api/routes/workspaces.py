@@ -24,6 +24,11 @@ from app.services.metrics_service import (
     get_workspace_trade_metrics,
 )
 
+from secrets import token_urlsafe
+
+from app.models.workspace_invite import WorkspaceInvite
+
+
 from fastapi import HTTPException
 
 router = APIRouter()
@@ -636,6 +641,135 @@ def update_workspace_member_role(
         raise HTTPException(status_code=404, detail="User not found")
 
     return serialize_workspace_member(membership, user)
+
+
+
+class CreateWorkspaceInvitePayload(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    role: str = Field(default="member", min_length=1, max_length=50)
+
+
+@router.get("/workspaces/{workspace_id}/invites")
+def list_workspace_invites(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    invites = (
+        db.query(WorkspaceInvite)
+        .filter(
+            WorkspaceInvite.workspace_id == workspace_id
+        )
+        .order_by(WorkspaceInvite.id.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": invite.id,
+            "email": invite.email,
+            "role": invite.role,
+            "status": invite.status,
+            "token": invite.token,
+            "created_at": (
+                invite.created_at.isoformat()
+                if invite.created_at
+                else None
+            ),
+        }
+        for invite in invites
+    ]
+
+
+@router.post("/workspaces/{workspace_id}/invites")
+def create_workspace_invite(
+    workspace_id: int,
+    payload: CreateWorkspaceInvitePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    require_workspace_owner(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    normalized_email = payload.email.strip().lower()
+
+    existing_invite = (
+        db.query(WorkspaceInvite)
+        .filter(
+            WorkspaceInvite.workspace_id == workspace_id,
+            WorkspaceInvite.email == normalized_email,
+            WorkspaceInvite.status == "pending",
+        )
+        .first()
+    )
+
+    if existing_invite:
+        return {
+            "id": existing_invite.id,
+            "email": existing_invite.email,
+            "role": existing_invite.role,
+            "status": existing_invite.status,
+            "token": existing_invite.token,
+        }
+
+    invite = WorkspaceInvite(
+        workspace_id=workspace_id,
+        email=normalized_email,
+        role=normalize_workspace_role(payload.role),
+        token=token_urlsafe(24),
+        status="pending",
+    )
+
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+
+    invite_link = (
+        f"https://trading-truth-layer.vercel.app/invite/"
+        f"{invite.token}"
+    )
+
+    return {
+        "id": invite.id,
+        "email": invite.email,
+        "role": invite.role,
+        "status": invite.status,
+        "token": invite.token,
+        "invite_link": invite_link,
+    }
 
 
 @router.delete("/workspaces/{workspace_id}/members/{user_id}")
