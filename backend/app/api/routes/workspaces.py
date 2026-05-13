@@ -751,6 +751,7 @@ def create_workspace_invite(
         role=normalize_workspace_role(payload.role),
         token=token_urlsafe(24),
         status="pending",
+        invited_by_user_id=current_user.id,
     )
 
     db.add(invite)
