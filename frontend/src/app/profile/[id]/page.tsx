@@ -17,9 +17,7 @@ type ExtendedProfile = PublicProfileResponse & {
 };
 
 type PageProps = {
-  params: {
-    id: string;
-  };
+  params: { id: string };
 };
 
 function getDisputeLabel(profile: any): string {
@@ -160,7 +158,7 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
   export default async function Page({
     params,
   }: {
-    params: Promise<{ id: string }>;
+  params: Promise<{ id: string }>;
   }) {
     const { id } = await params;
     const workspaceId = Number(id);

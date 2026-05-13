@@ -14,7 +14,7 @@ async function getPublicProfile(id: number) {
 }
 
 type PageProps = {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 };
 
 export default async function EmbedProfilePage({ params }: PageProps) {
