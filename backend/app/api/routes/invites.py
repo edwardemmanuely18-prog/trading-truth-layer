@@ -332,7 +332,7 @@ def accept_invite_by_token(token: str, current_user: User, db: Session):
     }
 
 
-@router.post("/workspaces/{workspace_id}")
+@router.post("/workspaces/{workspace_id}/invites")
 def create_workspace_invite(
     workspace_id: int,
     payload: WorkspaceInviteCreate,
@@ -437,7 +437,7 @@ def create_workspace_invite(
     return serialize_invite(invite)
 
 
-@router.get("/workspaces/{workspace_id}")
+@router.get("/workspaces/{workspace_id}/invites")
 def list_workspace_invites(
     workspace_id: int,
     db: Session = Depends(get_db),
@@ -457,7 +457,7 @@ def list_workspace_invites(
     return [serialize_invite(invite) for invite in invites]
 
 
-@router.post("/workspaces/{workspace_id}/{invite_id}/revoke")
+@router.post("/workspaces/{workspace_id}/invites/{invite_id}/revoke")
 def revoke_workspace_invite(
     workspace_id: int,
     invite_id: int,
