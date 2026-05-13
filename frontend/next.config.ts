@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const backendBase =
-  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_BASE ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:8000";
 
 const normalizedBackendBase = backendBase.replace(/\/+$/, "");
 
@@ -10,7 +12,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: `${normalizedBackendBase}/:path*`,
+        destination: `${normalizedBackendBase}/api/:path*`,
       },
     ];
   },

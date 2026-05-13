@@ -2808,14 +2808,85 @@ export const api = {
     workspaceId: number
   ): Promise<PublicProfileResponse> => {
 
-    const row = await apiFetch<PublicProfileResponse>(
+    const row = await apiFetch<any>(
       `/public/profile/${workspaceId}`,
       {
         cache: "no-store",
       }
     );
 
-    return ensurePublicProfileResponse(row);
+    return ensurePublicProfileResponse({
+      profile: {
+        profile_id: `workspace:${workspaceId}`,
+
+        workspace_id: Number(
+          row?.profile?.workspace_id ??
+          row?.workspace_id ??
+          workspaceId
+        ),
+
+        name:
+          row?.profile?.name ??
+          row?.name ??
+          `Workspace #${workspaceId}`,
+
+        type:
+          row?.profile?.type ??
+          "workspace",
+
+        network:
+          row?.profile?.network ??
+          "internal",
+
+        claims_count: Number(
+          row?.profile?.claims_count ??
+          row?.stats?.claim_count ??
+          0
+        ),
+
+        locked_claims_count: Number(
+          row?.profile?.locked_claims_count ??
+          row?.stats?.claim_count ??
+          0
+        ),
+
+        contested_claims_count: Number(
+          row?.profile?.contested_claims_count ??
+          0
+        ),
+
+        average_trust_score: Number(
+          row?.profile?.average_trust_score ??
+          row?.stats?.avg_trust ??
+          0
+        ),
+
+        average_network_score: Number(
+          row?.profile?.average_network_score ??
+          0
+        ),
+
+        total_net_pnl: Number(
+          row?.profile?.total_net_pnl ??
+          row?.stats?.total_pnl ??
+          0
+        ),
+
+        trust_profile_band:
+          row?.profile?.trust_profile_band ??
+          "developing",
+      },
+
+      claims: Array.isArray(row?.claims)
+        ? row.claims
+        : [],
+
+      claims_count: Number(
+        row?.claims_count ??
+        row?.stats?.claim_count ??
+        0
+      ),
+    });
   },
 
   getPublicClaim: async (claimSchemaId: number): Promise<PublicClaim> => {
