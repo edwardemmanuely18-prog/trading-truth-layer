@@ -166,37 +166,12 @@ export default function WorkspaceInvitesTable({
                         {row.status?.toLowerCase() === "pending" ? (
                           <button
                             type="button"
-                            onClick={async () => {
-                              try {
-                                setBusyInviteId(row.id);
-
-                                const result = await api.acceptWorkspaceInvite(row.token);
-
-                                await refresh();
-
-                                setFeedback("Invite accepted successfully.");
-
-                                if (onChanged) {
-                                  await onChanged();
-                                }
-
-                                if (result?.workspace_id) {
-                                  router.push(`/workspace/${result.workspace_id}/dashboard`);
-                                }
-                              } catch (err) {
-                                setError(
-                                  err instanceof Error
-                                    ? err.message
-                                    : "Failed to accept invite."
-                                );
-                              } finally {
-                                setBusyInviteId(null);
-                              }
+                            onClick={() => {
+                              router.push(`/invite/${encodeURIComponent(row.token)}`);
                             }}
-                            disabled={isBusy}
-                            className="rounded-lg bg-green-600 px-3 py-2 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                            className="rounded-lg bg-green-600 px-3 py-2 text-xs font-medium text-white hover:bg-green-700"
                           >
-                            {isBusy ? "Accepting..." : "Accept"}
+                            Open Invite
                           </button>
                         ) : null}
 
