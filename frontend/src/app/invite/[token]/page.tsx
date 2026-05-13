@@ -114,7 +114,11 @@ export default function InviteAcceptPage() {
         setLoading(true);
         setError(null);
 
-        const accepted = (await api.acceptWorkspaceInvite(token)) as AcceptResult;
+        const accepted = (
+          await api.acceptWorkspaceInvite(
+            encodeURIComponent(token)
+          )
+        ) as AcceptResult;
         setResult(accepted);
         await refresh();
       } catch (err) {
