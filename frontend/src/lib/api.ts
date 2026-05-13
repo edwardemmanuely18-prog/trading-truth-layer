@@ -2804,10 +2804,16 @@ export const api = {
     );
   },
 
-  getPublicProfile: async (workspaceId: number): Promise<PublicProfileResponse> => {
-    const row = await apiFetch<PublicProfileResponse>(`/public/profile/${workspaceId}`, {
-      cache: "no-store",
-    });
+  getPublicProfile: async (
+    workspaceId: number
+  ): Promise<PublicProfileResponse> => {
+
+    const row = await apiFetch<PublicProfileResponse>(
+      `/public/profile/${workspaceId}`,
+      {
+        cache: "no-store",
+      }
+    );
 
     return ensurePublicProfileResponse(row);
   },
