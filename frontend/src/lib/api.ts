@@ -2475,13 +2475,28 @@ export const api = {
     return ensureWorkspaceInvite(row);
   },
 
-  acceptWorkspaceInvite: async (token: string) => {
-    return apiFetch<any>(
-      `/invites/${token}/accept`,
+  acceptWorkspaceInvite: async (
+    token: string
+  ): Promise<{
+    message: string;
+    workspace_id: number;
+    role: string;
+  }> => {
+    const normalizedToken = String(token)
+      .trim()
+      .replace(/\s+/g, "_");
+
+    console.log(
+      "NORMALIZED INVITE TOKEN:",
+      normalizedToken
+    );
+
+    return apiFetch(
+      `/invites/${encodeURIComponent(normalizedToken)}/accept`,
       {
         method: "POST",
       }
-    )
+    );
   },
 
   getLatestClaimSchema: async (): Promise<ClaimSchema> => {
