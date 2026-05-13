@@ -1,24 +1,16 @@
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://trading-truth-layer.onrender.com"; // ✅ FIXED backend URL
+import { api } from "../../../../lib/api";
   
+
 type PublicClaim = {
   id: string | number;
   trust_score: number;
   net_pnl: number;
 };
 
+
+
 async function getPublicProfile(id: number) {
-  const res = await fetch(`${API_BASE}/api/public/profile/${id}`, {
-     next: { revalidate: 60 }, 
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status}`);
-  }
-
-  return res.json();
+  return api.getPublicProfile(id);
 }
 
 type PageProps = {
