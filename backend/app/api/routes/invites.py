@@ -16,7 +16,7 @@ from app.models.workspace_membership import WorkspaceMembership
 from app.services.audit_service import log_audit_event
 from app.services.entitlements import enforce_member_invite_allowed
 
-router = APIRouter()
+router = APIRouter(prefix="/invites", tags=["invites"])
 
 
 class WorkspaceInviteCreate(BaseModel):
@@ -332,7 +332,7 @@ def accept_invite_by_token(token: str, current_user: User, db: Session):
     }
 
 
-@router.post("/workspaces/{workspace_id}/invites")
+@router.post("/workspaces/{workspace_id}")
 def create_workspace_invite(
     workspace_id: int,
     payload: WorkspaceInviteCreate,
@@ -437,7 +437,7 @@ def create_workspace_invite(
     return serialize_invite(invite)
 
 
-@router.get("/workspaces/{workspace_id}/invites")
+@router.get("/workspaces/{workspace_id}")
 def list_workspace_invites(
     workspace_id: int,
     db: Session = Depends(get_db),
@@ -457,7 +457,7 @@ def list_workspace_invites(
     return [serialize_invite(invite) for invite in invites]
 
 
-@router.post("/workspaces/{workspace_id}/invites/{invite_id}/revoke")
+@router.post("/workspaces/{workspace_id}/{invite_id}/revoke")
 def revoke_workspace_invite(
     workspace_id: int,
     invite_id: int,
@@ -504,7 +504,7 @@ def revoke_workspace_invite(
     return serialize_invite(invite)
 
 
-@router.post("/invites/accept")
+@router.post("/accept")
 def accept_workspace_invite_via_body(
     payload: WorkspaceInviteAccept,
     db: Session = Depends(get_db),
@@ -513,7 +513,7 @@ def accept_workspace_invite_via_body(
     return accept_invite_by_token(payload.token, current_user, db)
 
 
-@router.post("/invites/{token}/accept")
+@router.post("/{token}/accept")
 def accept_workspace_invite_legacy(
     token: str,
     db: Session = Depends(get_db),
