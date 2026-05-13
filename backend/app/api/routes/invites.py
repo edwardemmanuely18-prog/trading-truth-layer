@@ -166,8 +166,15 @@ def enforce_workspace_member_limit(workspace_id: int, db: Session):
 
 def accept_invite_by_token(token: str, current_user: User, db: Session):
     normalized_token = token.strip()
+
+    print("RAW TOKEN:", repr(token), flush=True)
+    print("NORMALIZED TOKEN:", repr(normalized_token), flush=True)
+
     if not normalized_token:
         raise HTTPException(status_code=400, detail="Invite token is required")
+
+    all_tokens = db.query(WorkspaceInvite.token).all()
+    print("DATABASE TOKENS:", all_tokens, flush=True)
 
     matched_invite = (
         db.query(WorkspaceInvite)
