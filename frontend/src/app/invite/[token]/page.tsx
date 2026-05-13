@@ -94,8 +94,15 @@ export default function InviteAcceptPage() {
   const { user, refresh, logout } = useAuth();
 
   const token = useMemo(() => {
-    const raw = Array.isArray(params?.token) ? params.token[0] : params?.token;
-    return raw ? String(raw) : "";
+    const raw = Array.isArray(params?.token)
+      ? params.token[0]
+      : params?.token;
+
+    if (!raw) {
+      return "";
+    }
+
+    return decodeURIComponent(String(raw)).trim();
   }, [params]);
 
   const [loading, setLoading] = useState(true);
@@ -115,9 +122,7 @@ export default function InviteAcceptPage() {
         setError(null);
 
         const accepted = (
-          await api.acceptWorkspaceInvite(
-            encodeURIComponent(token)
-          )
+          await api.acceptWorkspaceInvite(token)
         ) as AcceptResult;
         setResult(accepted);
         await refresh();
