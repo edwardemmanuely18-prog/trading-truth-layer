@@ -60,40 +60,14 @@ export default function RefundPage() {
           marginBottom: 14,
         }}
       >
-        Non-Refundable Situations
-      </h2>
-
-      <ul style={{ paddingLeft: 24, marginBottom: 24 }}>
-        <li style={{ marginBottom: 10 }}>
-          Fraudulent activity or payment abuse
-        </li>
-
-        <li style={{ marginBottom: 10 }}>
-          Violation of platform terms or misuse of services
-        </li>
-
-        <li style={{ marginBottom: 10 }}>
-          Refund requests submitted after the eligibility period
-        </li>
-      </ul>
-
-      <h2
-        style={{
-          fontSize: 24,
-          fontWeight: 700,
-          marginTop: 36,
-          marginBottom: 14,
-        }}
-      >
-        Delivered Digital Services
+        Refund Review Process
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        Generated evidence artifacts, exported reports, processed
-        verification outputs, consumed infrastructure resources,
-        operational computation services, and delivered digital
-        platform functionality may be considered delivered digital
-        services once accessed or generated through the platform.
+        Refund requests are reviewed on a case-by-case basis in
+        accordance with Paddle buyer protection standards,
+        applicable consumer protection laws, subscription status,
+        transaction timing, and platform service usage.
       </p>
 
       <h2
@@ -108,14 +82,26 @@ export default function RefundPage() {
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        Subscription cancellation prevents future renewals but does
-        not automatically trigger a refund.
+        Subscription cancellation prevents future renewals.
+        Customers may continue using paid features until the
+        active billing period expires.
       </p>
 
+      <h2
+        style={{
+          fontSize: 24,
+          fontWeight: 700,
+          marginTop: 36,
+          marginBottom: 14,
+        }}
+      >
+        Billing Assistance
+      </h2>
+
       <p style={{ marginBottom: 18 }}>
-        Refund requests may be denied in cases involving fraud,
-        abuse, excessive resource consumption, platform misuse,
-        chargeback abuse, or violations of platform policies.
+        For billing support, refund inquiries, or subscription
+        assistance, contact:
+        <b> support@tradingtruthlayer.com</b>
       </p>
 
       <h2
