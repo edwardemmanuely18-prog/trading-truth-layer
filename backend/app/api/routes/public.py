@@ -146,7 +146,10 @@ def get_global_public_claims(
 def get_leaderboard(db: Session = Depends(get_db)):
     claims = (
         db.query(ClaimSchema)
-        .filter(ClaimSchema.visibility == "public")
+        .filter(
+            ClaimSchema.visibility == "public",
+            ClaimSchema.status == "locked"
+        )
         .all()
     )
 
@@ -192,6 +195,7 @@ def get_public_profile(
         .filter(
             ClaimSchema.workspace_id == workspace_id,
             ClaimSchema.visibility == "public",
+            ClaimSchema.status == "locked",
         )
         .all()
     )
