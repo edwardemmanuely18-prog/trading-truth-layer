@@ -292,7 +292,10 @@ export default async function WorkspaceLeaderboardPage({ params, searchParams }:
 
     const claimWorkspaceId = Number(
       (claim as any)?.workspace_id ??
+      (claim as any)?.workspace?.id ??
       (claim as any)?.profile?.workspace_id ??
+      (claim as any)?.issuer?.workspace_id ??
+      (claim as any)?.issuer_workspace_id ??
       0
     );
 
@@ -303,17 +306,6 @@ export default async function WorkspaceLeaderboardPage({ params, searchParams }:
     const externallyVisible =
       visibility === "public" ||
       visibility === "unlisted";
-
-    console.log("WORKSPACE CLAIM DEBUG", {
-      claim_id: claim.claim_schema_id,
-      name: claim.name,
-      workspace_id: (claim as any)?.workspace_id,
-      profile_workspace_id: (claim as any)?.profile?.workspace_id,
-      resolved_workspace_id: claimWorkspaceId,
-      target_workspace_id: workspaceId,
-      visibility: scope.visibility,
-      lifecycle_status: lifecycle.status,
-    });
 
     return (
       belongsToWorkspace &&
