@@ -144,7 +144,11 @@ export default function RiskPage() {
       </p>
 
       <p style={{ marginBottom: 18 }}>
-        tradingtruthlayer@gmail.com
+        Email: support@tradingtruthlayer.com
+      </p>
+
+      <p style={{ marginBottom: 18 }}>
+        Website: https://www.tradingtruthlayer.com
       </p>
     </div>
   );

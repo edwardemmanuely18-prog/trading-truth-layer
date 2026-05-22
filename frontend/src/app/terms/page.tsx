@@ -233,7 +233,11 @@ export default function TermsPage() {
       </p>
 
       <p style={{ marginBottom: 18 }}>
-        Email: tradingtruthlayer@gmail.com
+        Email: support@tradingtruthlayer.com
+      </p>
+
+      <p style={{ marginBottom: 18 }}>
+        Website: https://www.tradingtruthlayer.com
       </p>
     </div>
   );

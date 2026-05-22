@@ -171,7 +171,10 @@ export default function RootLayout({
                   <br />
                   <br />
 
-                  Contact: tradingtruthlayer@gmail.com
+                  Contact: support@tradingtruthlayer.com
+
+                  <br />
+                  Website: https://www.tradingtruthlayer.com
                 </div>
               </div>
             </footer>
