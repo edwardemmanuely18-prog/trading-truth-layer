@@ -321,10 +321,10 @@ export default function PublicClaimPage() {
   const isLocked = normalizeText(claim.status) === "locked";
   const claimHash = claim.claim_hash || preview.claim_hash || "";
   const publicPath =
-    (claim as ClaimSchema & { public_view_path?: string | null }).public_view_path ||
+    preview.public_view_path ||
     `/claim/${claimId}/public`;
   const verifyPath =
-    (claim as ClaimSchema & { verify_path?: string | null }).verify_path ||
+    preview.verify_path ||
     (claimHash ? `/verify/${claimHash}` : null);
   const topEntry =
     Array.isArray(preview.leaderboard) && preview.leaderboard.length > 0

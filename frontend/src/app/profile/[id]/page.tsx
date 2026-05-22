@@ -186,31 +186,6 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
   const resolvedWorkspaceId =
   Number(data?.workspace_id) || workspaceId;
 
-const profile = data
-  ? {
-      workspace_id: resolvedWorkspaceId,
-
-      name:
-        typeof data?.name === "string" && data.name.trim().length > 0
-          ? data.name
-          : `Workspace #${resolvedWorkspaceId}`,
-
-      type: "workspace",
-      network: "internal",
-      profile_id: `workspace:${resolvedWorkspaceId}`,
-
-      trust_profile_band: "developing",
-
-      claims_count: Number(data?.stats?.claim_count ?? 0),
-      locked_claims_count: Number(data?.stats?.claim_count ?? 0),
-      contested_claims_count: 0,
-
-      average_trust_score: Number(data?.stats?.avg_trust ?? 0),
-      average_network_score: 0,
-      total_net_pnl: Number(data?.stats?.total_pnl ?? 0),
-    }
-  : null;
-
   const claims = sortClaims(
     (Array.isArray(data?.claims) ? data.claims : []).map((c: any, i: number) => ({
       claim_schema_id: c.id ?? i,
@@ -232,6 +207,57 @@ const profile = data
       },
     }))
   );
+
+  const profile = data
+  ? {
+      workspace_id: resolvedWorkspaceId,
+
+      name:
+        typeof data?.name === "string" && data.name.trim().length > 0
+          ? data.name
+          : `Workspace #${resolvedWorkspaceId}`,
+
+      type: "workspace",
+      network: "internal",
+      profile_id: `workspace:${resolvedWorkspaceId}`,
+
+      trust_profile_band:
+        Number(data?.stats?.avg_trust ?? 0) >= 80
+          ? "institutional"
+          : Number(data?.stats?.avg_trust ?? 0) >= 60
+          ? "strong"
+          : "developing",
+
+      claims_count: claims.length,
+
+      locked_claims_count: claims.length,
+
+      contested_claims_count: claims.filter(
+        (c: any) => c.has_active_dispute
+      ).length,
+
+      average_trust_score:
+        claims.length > 0
+          ? claims.reduce(
+              (sum, c: any) => sum + Number(c.trust_score ?? 0),
+              0
+            ) / claims.length
+          : 0,
+
+      average_network_score:
+        claims.length > 0
+          ? claims.reduce(
+              (sum, c: any) => sum + Number(c.network_score ?? 0),
+              0
+            ) / claims.length
+          : 0,
+
+      total_net_pnl: claims.reduce(
+        (sum, c: any) => sum + Number(c.net_pnl ?? 0),
+        0
+      ),
+    }
+  : null;
 
   const derived = {
     claim_count: claims.length,

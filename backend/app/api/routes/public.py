@@ -18,6 +18,131 @@ router = APIRouter()
 
 
 # =========================
+# 🌐 CANONICAL PUBLIC CLAIM PAYLOAD
+# =========================
+def build_public_claim_payload(
+    claim,
+    db: Session,
+):
+    trust, metrics = compute_full_trust(claim, db)
+
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == claim.workspace_id)
+        .first()
+    )
+
+    profile_payload = {
+        "profile_id": f"workspace:{claim.workspace_id}",
+        "workspace_id": claim.workspace_id,
+        "name": workspace.name if workspace else f"Workspace {claim.workspace_id}",
+        "type": "workspace",
+        "network": "internal",
+        "claims_count": 0,
+        "locked_claims_count": 0,
+        "contested_claims_count": 0,
+        "average_trust_score": trust,
+        "average_network_score": 0,
+        "total_net_pnl": metrics.get("net_pnl", 0),
+        "trust_profile_band":
+            "high"
+            if trust >= 80
+            else "moderate"
+            if trust >= 60
+            else "developing",
+    }
+
+    return {
+        # =========================
+        # CORE IDENTIFIERS
+        # =========================
+        "claim_schema_id": claim.id,
+        "claim_hash": claim.claim_hash,
+        "workspace_id": claim.workspace_id,
+
+        # =========================
+        # CANONICAL ROUTES
+        # =========================
+        "public_view_path": f"/claim/{claim.id}/public",
+        "verify_path": f"/verify/{claim.claim_hash}",
+
+        # =========================
+        # CORE CLAIM
+        # =========================
+        "name": getattr(claim, "name", f"Claim {claim.id}"),
+
+        # =========================
+        # ISSUER
+        # =========================
+        "issuer": {
+            "id": claim.workspace_id,
+            "name": workspace.name if workspace else f"Workspace {claim.workspace_id}",
+            "type": "workspace",
+            "network": "internal",
+            "profile": profile_payload,
+        },
+
+        # =========================
+        # PROFILE
+        # =========================
+        "profile": profile_payload,
+
+        # =========================
+        # VISIBILITY + SCOPE
+        # =========================
+        "scope": {
+            "visibility": claim.visibility,
+            "period_start": None,
+            "period_end": None,
+            "included_members": [],
+            "included_symbols": [],
+            "methodology_notes": "",
+        },
+
+        # =========================
+        # LIFECYCLE
+        # =========================
+        "lifecycle": {
+            "status": getattr(claim, "status", "unknown"),
+            "verified_at": getattr(claim, "verified_at", None),
+            "published_at": getattr(claim, "published_at", None),
+            "locked_at": getattr(claim, "locked_at", None),
+        },
+
+        # =========================
+        # COMPATIBILITY
+        # =========================
+        "verification_status": getattr(claim, "status", "unknown"),
+
+        # =========================
+        # PERFORMANCE
+        # =========================
+        "trade_count": metrics.get("trade_count", 0),
+        "net_pnl": metrics.get("net_pnl", 0),
+        "profit_factor": metrics.get("profit_factor", 0),
+        "win_rate": metrics.get("win_rate", 0),
+
+        # =========================
+        # TRUST
+        # =========================
+        "trust_score": trust,
+
+        # =========================
+        # LEADERBOARD
+        # =========================
+        "leaderboard": [],
+
+        # =========================
+        # PUBLIC STATE
+        # =========================
+        "is_publicly_accessible": (
+            claim.visibility == "public"
+            and getattr(claim, "status", "") == "locked"
+        ),
+    }
+
+
+# =========================
 # 🧠 TRUST COMPUTATION CORE
 # =========================
 def compute_full_trust(claim, db: Session):
@@ -35,8 +160,8 @@ def compute_full_trust(claim, db: Session):
 # 🌍 GLOBAL CLAIM DIRECTORY
 # =========================
 @router.get("/public/claims")
-def get_global_public_claims(
-    min_trust: int = 0,
+def get_public_claims(
+    min_trust: float = 0,
     min_trades: int = 0,
     sort_by: str = "trust",
     db: Session = Depends(get_db),
@@ -45,7 +170,7 @@ def get_global_public_claims(
         db.query(ClaimSchema)
         .filter(
             ClaimSchema.visibility == "public",
-            ClaimSchema.status == "locked"
+            ClaimSchema.status == "locked",
         )
         .all()
     )
@@ -53,68 +178,29 @@ def get_global_public_claims(
     enriched = []
 
     for c in claims:
-        trust, metrics = compute_full_trust(c, db)
+        payload = build_public_claim_payload(c, db)
 
-        if trust < min_trust:
+        if payload["trust_score"] < min_trust:
             continue
 
-        if (metrics.get("trade_count", 0)) < min_trades:
+        if payload["trade_count"] < min_trades:
             continue
 
-        enriched.append({
-            "claim_schema_id": c.id,
-            "claim_hash": c.claim_hash,
-
-            # 👇 REQUIRED FOR WORKSPACE FILTER
-            "issuer": {
-                "id": c.workspace_id,
-            },
-
-            "profile": {
-                "workspace_id": c.workspace_id,
-            },
-
-            # 👇 REQUIRED FOR VISIBILITY FILTER
-            "scope": {
-                "visibility": c.visibility,
-                "period_start": None,
-                "period_end": None,
-                "included_members": [],
-                "included_symbols": [],
-                "methodology_notes": "",
-            },
-
-            # 👇 REQUIRED FOR LOCK FILTER
-            "lifecycle": {
-                "status": "locked" if getattr(c, "status", "") == "locked" else "unlocked",
-                "locked_at": getattr(c, "locked_at", None),
-                "verified_at": getattr(c, "verified_at", None),
-                "published_at": None,
-                "locked_trade_set_hash": None,
-            },
-
-            # 👇 CORE DATA
-            "name": getattr(c, "name", f"Claim {c.id}"),
-            "verification_status": getattr(c, "status", "unknown"),
-
-            "net_pnl": metrics.get("net_pnl", 0),
-            "trade_count": metrics.get("trade_count", 0),
-
-            # 👇 ADD THESE (your UI expects them)
-            "profit_factor": metrics.get("profit_factor", 0),
-            "win_rate": metrics.get("win_rate", 0),
-
-            "trust_score": trust,
-
-            # 👇 REQUIRED FOR MEMBER TABLE (safe empty)
-            "leaderboard": [],
-        })
+        enriched.append(payload)
 
     # SORTING ENGINE
     if sort_by == "pnl":
-        ranked = sorted(enriched, key=lambda x: x["net_pnl"], reverse=True)
+        ranked = sorted(
+            enriched,
+            key=lambda x: x["net_pnl"],
+            reverse=True
+        )
     elif sort_by == "trades":
-        ranked = sorted(enriched, key=lambda x: x["trade_count"], reverse=True)
+        ranked = sorted(
+            enriched,
+            key=lambda x: x["trade_count"],
+            reverse=True
+        )
     else:
         ranked = sorted(
             enriched,
@@ -127,14 +213,13 @@ def get_global_public_claims(
         row["rank"] = i + 1
 
         score = row["trust_score"]
+
         if score >= 80:
             row["tier"] = "gold"
         elif score >= 60:
             row["tier"] = "silver"
-        elif score >= 40:
-            row["tier"] = "bronze"
         else:
-            row["tier"] = "unranked"
+            row["tier"] = "bronze"
 
     return ranked
 
@@ -209,16 +294,13 @@ def get_public_profile(
     for c in claims:
         trust, metrics = compute_full_trust(c, db)
 
-        enriched.append({
-            "id": c.id,
-            "net_pnl": metrics.get("net_pnl", 0),
-            "trade_count": metrics.get("trade_count", 0),
-            "trust_score": trust,
-        })
+        payload = build_public_claim_payload(c, db)
 
-        total_trust += trust
-        total_pnl += metrics.get("net_pnl", 0)
-        total_trades += metrics.get("trade_count", 0)
+        enriched.append(payload)
+
+        total_trust += payload["trust_score"]
+        total_pnl += payload["net_pnl"]
+        total_trades += payload["trade_count"]
 
     ranked = sorted(
         enriched,
