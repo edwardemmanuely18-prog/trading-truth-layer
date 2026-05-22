@@ -971,6 +971,8 @@ export type PublicVerifyResult = {
     ending_equity: number;
     curve: EquityCurvePoint[];
   };
+  public_view_path?: string;
+  verify_path?: string;
 };
 
 export type ImportPreviewResponse = {
