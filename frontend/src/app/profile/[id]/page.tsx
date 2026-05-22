@@ -188,9 +188,35 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
 
   const claims = sortClaims(
     (Array.isArray(data?.claims) ? data.claims : []).map((c: any, i: number) => ({
-      claim_schema_id: c.id ?? i,
+      claim_schema_id:
+        c.claim_schema_id ??
+        c.root_claim_id ??
+        c.id ??
+        i,
       claim_hash: c.claim_hash ?? `claim-${c.id ?? i}`,
-      name: c.name ?? `Claim #${c.id ?? i}`,
+
+      root_claim_id:
+        c.root_claim_id ??
+        c.claim_schema_id ??
+        c.id ??
+        null,
+
+      public_view_path:
+        c.public_view_path ??
+        null,
+
+      verify_path:
+        c.verify_path ??
+        null,
+        
+      name:
+        c.name ??
+        `Claim #${
+          c.claim_schema_id ??
+          c.root_claim_id ??
+          c.id ??
+          i
+        }`,
       verification_status: "locked",
 
       trade_count: Number(c.trade_count ?? 0),
@@ -490,6 +516,21 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
                         const networkScore = Number((claim as ExtendedClaim)?.network_score ?? 0);
                         const disputesCount = Number((claim as ExtendedClaim)?.disputes_count ?? 0);
 
+                        const canonicalClaimId =
+                          (claim as any)?.root_claim_id ??
+                          claim.claim_schema_id;
+
+                        const publicViewPath =
+                          (claim as any)?.public_view_path ??
+                          `/claim/${canonicalClaimId}/public`;
+
+                        const verifyPath =
+                          (claim as any)?.verify_path ??
+                          `/verify/${claim.claim_hash}`;
+
+                        const proofPath =
+                          publicViewPath.replace("/public", "/proof");
+
                         return (
                           <tr
                             key={`${claim.claim_schema_id}-${claim.claim_hash}`}
@@ -564,21 +605,21 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
                             <td className="px-3 py-3">
                               <div className="flex flex-wrap gap-2">
                                 <Link
-                                  href={`/claim/${claim.claim_schema_id}/public`}
+                                  href={publicViewPath}
                                 className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
                                 >
                                   Public Record
                                 </Link>
 
                                 <Link
-                                  href={`/verify/${claim.claim_hash}`}
+                                  href={verifyPath}
                                   className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
                                 >
                                   Verify
                                 </Link>
 
                                 <Link
-                                  href={`/claim/${claim.claim_schema_id}/public`}
+                                  href={publicViewPath}
                                   className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
                                 >
                                   Claim Proof

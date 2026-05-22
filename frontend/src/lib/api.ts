@@ -878,6 +878,9 @@ export type EvidenceBundle = {
 export type PublicClaim = {
   claim_schema_id: number;
   claim_hash: string;
+  root_claim_id?: number | null;
+  public_view_path?: string | null;
+  verify_path?: string | null;
   name: string;
   verification_status: string;
   trade_count: number;
@@ -1605,6 +1608,19 @@ function ensureWorkspaceSettings(row: WorkspaceSettings): WorkspaceSettings {
 function ensurePublicClaim(row: PublicClaimDirectoryItem): PublicClaimDirectoryItem {
   return {
     ...row,
+    root_claim_id:
+      typeof row.root_claim_id === "number"
+        ? row.root_claim_id
+        : null,
+
+    public_view_path:
+      row.public_view_path ??
+      `/claim/${row.claim_schema_id}/public`,
+
+    verify_path:
+      row.verify_path ??
+      `/verify/${row.claim_hash}`,
+      
     leaderboard: Array.isArray(row.leaderboard) ? row.leaderboard : [],
     scope: row.scope ?? {
       period_start: "—",

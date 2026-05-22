@@ -340,31 +340,27 @@ def get_public_profile(
 # 📄 SINGLE CLAIM
 # =========================
 @router.get("/public/claim/{claim_id}")
-def get_public_claim(claim_id: int, db: Session = Depends(get_db)):
+def get_public_claim(
+    claim_id: int,
+    db: Session = Depends(get_db)
+):
     claim = (
         db.query(ClaimSchema)
         .filter(
             ClaimSchema.id == claim_id,
-            ClaimSchema.visibility == "public"
+            ClaimSchema.visibility == "public",
+            ClaimSchema.status == "locked",
         )
         .first()
     )
 
     if not claim:
-        raise HTTPException(status_code=404, detail="Claim not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Public claim not found"
+        )
 
-    trust, metrics = compute_full_trust(claim, db)
-
-    return {
-        "id": claim.id,
-        "workspace_id": claim.workspace_id,
-        "net_pnl": metrics.get("net_pnl", 0),
-        "trade_count": metrics.get("trade_count", 0),
-        "trust_score": trust,
-        "created_at": claim.created_at,
-        "verification_status": claim.verification_status,
-        "integrity_status": claim.integrity_status,
-    }
+    return build_public_claim_payload(claim, db)
 
 
 # =========================
@@ -374,29 +370,24 @@ def get_public_claim(claim_id: int, db: Session = Depends(get_db)):
 def verify_claim_by_hash(claim_hash: str, db: Session = Depends(get_db)):
     claim = (
         db.query(ClaimSchema)
-        .filter(ClaimSchema.claim_hash == claim_hash)
+        .filter(
+            ClaimSchema.claim_hash == claim_hash,
+            ClaimSchema.visibility == "public",
+            ClaimSchema.status == "locked",
+        )
         .first()
     )
 
     if not claim:
-        return {"error": "Claim not found"}
+        raise HTTPException(
+            status_code=404,
+            detail="Public claim not found for supplied hash"
+        )
 
-    if claim.visibility != "public":
-        return {"error": "Claim not public"}
 
-    trust, metrics = compute_full_trust(claim, db)
-
-    workspace = db.query(Workspace).filter(Workspace.id == claim.workspace_id).first()
+    payload = build_public_claim_payload(claim, db)
 
     return {
-        "claim_hash": claim.claim_hash,
-        "workspace_id": claim.workspace_id,
-        "name": workspace.name if workspace else f"Workspace {claim.workspace_id}",
-        "net_pnl": metrics.get("net_pnl", 0),
-        "trade_count": metrics.get("trade_count", 0),
-        "integrity_status": claim.integrity_status,
-        "verification_status": claim.verification_status,
-        "trust_score": trust,
-        "verified_at": claim.verified_at,
-        "created_at": claim.created_at,
+        **payload,
+        "verification_result": "verified",
     }
