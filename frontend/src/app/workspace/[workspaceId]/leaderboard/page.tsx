@@ -296,10 +296,16 @@ export default async function WorkspaceLeaderboardPage({ params, searchParams }:
     const belongsToWorkspace =
       profileWorkspaceId === workspaceId || issuerWorkspaceId === workspaceId;
 
+    const visibility = normalizeText(scope.visibility);
+
+    const externallyVisible =
+      visibility === "public" ||
+      visibility === "unlisted";
+
     return (
       belongsToWorkspace &&
       normalizeText(lifecycle.status) === "locked" &&
-      normalizeText(scope.visibility) === "public"
+      externallyVisible
     );
   });
 
