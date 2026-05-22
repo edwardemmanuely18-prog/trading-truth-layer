@@ -290,26 +290,42 @@ export default async function WorkspaceLeaderboardPage({ params, searchParams }:
     const lifecycle = safeLifecycle(claim);
     const scope = safeScope(claim);
 
-    const claimWorkspaceId = Number(
+    const resolvedWorkspaceId = Number(
       (claim as any)?.workspace_id ??
       (claim as any)?.workspace?.id ??
+      (claim as any)?.workspace?.workspace_id ??
       (claim as any)?.profile?.workspace_id ??
+      (claim as any)?.profile?.workspace?.id ??
       (claim as any)?.issuer?.workspace_id ??
+      (claim as any)?.issuer?.workspace?.id ??
       (claim as any)?.issuer_workspace_id ??
+      (claim as any)?.claim?.workspace_id ??
       0
     );
 
-    const belongsToWorkspace = claimWorkspaceId === workspaceId;
+    const resolvedStatus = normalizeText(
+      lifecycle.status ??
+      (claim as any)?.verification_status ??
+      (claim as any)?.status ??
+      ""
+    );
 
-    const visibility = normalizeText(scope.visibility);
+    const resolvedVisibility = normalizeText(
+      scope.visibility ??
+      (claim as any)?.visibility ??
+      ""
+    );
+
+    const belongsToWorkspace =
+      resolvedWorkspaceId === workspaceId;
 
     const externallyVisible =
-      visibility === "public" ||
-      visibility === "unlisted";
+      resolvedVisibility === "public" ||
+      resolvedVisibility === "unlisted";
 
     return (
       belongsToWorkspace &&
-      normalizeText(lifecycle.status) === "locked" &&
+      resolvedStatus === "locked" &&
       externallyVisible
     );
   });
