@@ -290,11 +290,13 @@ export default async function WorkspaceLeaderboardPage({ params, searchParams }:
     const lifecycle = safeLifecycle(claim);
     const scope = safeScope(claim);
 
-    const profileWorkspaceId = Number((claim as any)?.profile?.workspace_id ?? 0);
-    const issuerWorkspaceId = Number((claim as any)?.issuer?.id ?? 0);
+    const claimWorkspaceId = Number(
+      (claim as any)?.workspace_id ??
+      (claim as any)?.profile?.workspace_id ??
+      0
+    );
 
-    const belongsToWorkspace =
-      profileWorkspaceId === workspaceId || issuerWorkspaceId === workspaceId;
+    const belongsToWorkspace = claimWorkspaceId === workspaceId;
 
     const visibility = normalizeText(scope.visibility);
 
