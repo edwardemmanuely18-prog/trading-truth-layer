@@ -197,23 +197,18 @@ def fallback_period_end_for_cycle(billing_cycle: str) -> datetime:
     return now + timedelta(days=30)
 
 
-def apply_workspace_plan_limits(
-    workspace: Workspace,
-    plan_code: str | None,
-) -> None:
+def apply_workspace_plan_limits(workspace: Workspace, plan_code: str | None) -> None:
     resolved = normalize_plan_code(plan_code)
 
-    plan = PLAN_DEFAULTS.get(
+    limits = PLAN_DEFAULTS.get(
         resolved,
         PLAN_DEFAULTS["starter"],
     )
 
-    limits = plan.get("limits", {})
-
-    workspace.member_limit = limits.get("members", 0)
-    workspace.trade_limit = limits.get("trades", 0)
-    workspace.claim_limit = limits.get("claims", 0)
-    workspace.storage_limit_mb = limits.get("storage_mb", 0)
+    workspace.member_limit = limits["members"]
+    workspace.trade_limit = limits["trades"]
+    workspace.claim_limit = limits["claims"]
+    workspace.storage_limit_mb = limits["storage_mb"]
 
 
 def get_frontend_base_url() -> str:
@@ -303,35 +298,10 @@ def get_paddle_price_catalog() -> dict[str, str]:
 def get_public_plan_catalog() -> list[dict]:
     public_codes = get_public_plan_codes()
 
-    catalog = []
-
-    for code in public_codes:
-        plan = PLAN_DEFAULTS[code]
-        limits = plan.get("limits", {})
-        pricing = plan.get("pricing", {})
-
-        catalog.append(
-            {
-                "code": code,
-                "name": plan.get("name", code.title()),
-                "description": plan.get("description", ""),
-                "recommended_for": plan.get("recommended_for", []),
-
-                "limits": {
-                    "claim_limit": limits.get("claims", 0),
-                    "trade_limit": limits.get("trades", 0),
-                    "member_limit": limits.get("members", 0),
-                    "storage_limit_mb": limits.get("storage_mb", 0),
-                },
-
-                "billing": {
-                    "monthly_price_usd": pricing.get("monthly", 0),
-                    "annual_price_usd": pricing.get("annual", 0),
-                },
-            }
-        )
-
-    return catalog
+    return [
+        PLAN_DEFAULTS[code]
+        for code in public_codes
+    ]
 
 
 def get_paddle_price_id(plan_code: str, billing_cycle: str) -> str | None:
