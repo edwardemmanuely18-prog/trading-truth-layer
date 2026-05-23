@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams, usePathname } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import {
   api,
   type AuditEvent,
@@ -1028,6 +1028,7 @@ function ClaimGraph({
 export default function WorkspaceClaimDetailPage() {
   const params = useParams();
   const pathname = usePathname();
+  const router = useRouter();
   const { getWorkspaceRole, loading: authLoading } = useAuth();
 
   const workspaceId = useMemo(
@@ -1230,6 +1231,7 @@ export default function WorkspaceClaimDetailPage() {
     async (updated: ClaimSchema) => {
       setClaim(updated);
       await loadClaimPage();
+      router.refresh();
     },
     [loadClaimPage],
   );

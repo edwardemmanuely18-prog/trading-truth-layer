@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type ClaimSchema, type ClaimSchemaUpdatePayload } from "../lib/api";
 import { useAuth } from "./AuthProvider";
+import { useRouter } from "next/navigation";
 
 type Props = {
   open: boolean;
@@ -141,6 +142,7 @@ function detectIssues(form: FormState) {
 
 export default function EditClaimDraftModal({ open, claim, onClose, onSaved }: Props) {
   const { getWorkspaceRole } = useAuth();
+  const router = useRouter();
   const bodyScrollRef = useRef<HTMLDivElement | null>(null);
 
   const [form, setForm] = useState<FormState>(() => buildInitialFormState(claim));
@@ -243,7 +245,12 @@ export default function EditClaimDraftModal({ open, claim, onClose, onSaved }: P
 
       const updated = await api.updateClaimSchema(claim.id, payload);
       await onSaved(updated);
-      onClose();
+
+      router.refresh();
+
+      setTimeout(() => {
+        onClose();
+      }, 50);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update claim draft.");
     } finally {

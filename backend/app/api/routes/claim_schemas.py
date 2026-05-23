@@ -40,6 +40,13 @@ from app.services.claim_service import compute_claim_hash
 from app.services.entitlements import enforce_claim_creation_allowed
 from app.services.evidence_pack_service import build_evidence_zip
 from app.services.report_service import build_claim_pdf
+from app.services.claim_governance_service import (
+    can_access_verify_route,
+    can_embed_claim,
+    can_show_in_leaderboard,
+    can_show_in_profile,
+    can_show_in_public_directory,
+)
 
 router = APIRouter()
 
@@ -209,10 +216,7 @@ def sandbox_public_visibility_allowed(visibility: str) -> bool:
 
 
 def is_claim_publicly_accessible(schema: ClaimSchema) -> bool:
-    return (
-        schema.visibility in {"public", "unlisted"}
-        and schema.status in {"published", "locked"}
-    )
+    return can_access_verify_route(schema)
 
 
 def serialize_schema(schema: ClaimSchema):
@@ -1000,7 +1004,7 @@ def build_public_trust_profile_for_workspace(workspace_id: int, db: Session):
     public_claims = [
         schema
         for schema in claims
-        if schema.visibility in {"public", "unlisted"}
+        if can_show_in_profile(schema)
     ]
     locked_claims = [
         schema
@@ -1071,7 +1075,7 @@ def build_public_profile_response(workspace_id: int, db: Session):
     claim_rows = [
         build_claim_list_row(schema, db)
         for schema in claims
-        if is_claim_publicly_accessible(schema)
+        if can_show_in_profile(schema)
     ]
 
     return {
@@ -1162,6 +1166,12 @@ def build_public_claim_payload(schema: ClaimSchema, db: Session):
     metrics = compute_trade_metrics(filtered_trades)
     dispute_ctx = resolve_claim_dispute_context(schema, db)
     leaderboard = build_leaderboard(filtered_trades)
+
+    if not can_access_verify_route(schema):
+        raise HTTPException(
+            status_code=403,
+            detail="Claim is not publicly accessible",
+        )
 
     # apply dispute penalty to leaderboard scores
     if dispute_ctx["has_active_dispute"]:
@@ -4029,28 +4039,29 @@ def list_public_claims(db: Session = Depends(get_db)):
 
 
 @router.get("/public/verify/{claim_hash}")
-def verify_public_claim_by_hash(claim_hash: str, db: Session = Depends(get_db)):
-    rows = (
+def verify_public_claim(
+    claim_hash: str,
+    db: Session = Depends(get_db),
+):
+    schema = (
         db.query(ClaimSchema)
-        .filter(
-            ClaimSchema.visibility.in_(["public", "unlisted"]),
-            ClaimSchema.status.in_(["published", "locked"]),
-        )
-        .all()
+        .filter(ClaimSchema.claim_hash == claim_hash)
+        .first()
     )
 
-    matched_schema = None
-    for schema in rows:
-        if compute_claim_hash(schema) == claim_hash:
-            matched_schema = schema
-            break
+    if not schema:
+        raise HTTPException(
+            status_code=404,
+            detail="Claim not found",
+        )
 
-    if not matched_schema:
-        raise HTTPException(status_code=404, detail="Public claim not found for supplied hash")
+    if not can_access_verify_route(schema):
+        raise HTTPException(
+            status_code=404,
+            detail="Public claim not found for supplied hash",
+        )
 
-    payload = build_public_claim_payload(matched_schema, db)
-    payload["claim_hash"] = claim_hash
-    return payload
+    return build_public_claim_payload(schema, db)
 
 
 @router.get("/claim-schemas/{claim_schema_id}/verify-integrity")
@@ -4118,58 +4129,18 @@ def get_workspace_public_claims(workspace_id: int, db: Session = Depends(get_db)
         db.query(ClaimSchema)
         .filter(
             ClaimSchema.workspace_id == workspace_id,
-            ClaimSchema.visibility.in_(["public", "unlisted"]),
-            ClaimSchema.status.in_(["published", "locked"]),
         )
         .order_by(ClaimSchema.id.desc())
         .all()
     )
 
-    return [build_claim_list_row(schema, db) for schema in rows]    
-
-
-@router.get("/workspaces/{workspace_id}/public-claims")
-def get_workspace_public_claims(
-    workspace_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    workspace = get_workspace_or_404(workspace_id, db)
-
-    membership = require_workspace_member(workspace_id, current_user, db)
-
-    claims = (
-        db.query(ClaimSchema)
-        .filter(
-            ClaimSchema.workspace_id == workspace_id,
-            ClaimSchema.visibility.in_(["public", "unlisted"]),
-        )
-        .all()
-    )
-
-    result = [
-        build_claim_list_row(schema, db)
-        for schema in claims
-        if is_claim_publicly_accessible(schema)
+    rows = [
+        schema
+        for schema in rows
+        if can_show_in_public_directory(schema)
     ]
 
-    return result    
-
-@router.get("/workspaces/{workspace_id}/public-claims")
-def get_workspace_public_claims(
-    workspace_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    return build_public_profile_response(workspace_id, db)    
-
-@router.get("/workspaces/{workspace_id}/public-claims")
-def get_workspace_public_claims(
-    workspace_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    return build_public_profile_response(workspace_id, db)    
+    return [build_claim_list_row(schema, db) for schema in rows]       
 
 
 @router.post("/api/claims/create")
@@ -4222,6 +4193,12 @@ def lock_claim(
 
     trade_hash = compute_trade_set_hash(trades)
 
+    if schema.status not in ["verified", "published"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Only verified or published claims can be locked",
+        )
+
     schema.locked_trade_set_hash = trade_hash
     schema.status = "locked"
     schema.locked_at = datetime.utcnow()
@@ -4246,14 +4223,32 @@ def publish_claim(
     if not schema:
         raise HTTPException(status_code=404, detail="Claim not found")
 
-    require_workspace_operator_or_owner(schema.workspace_id, current_user, db)
+    require_workspace_operator_or_owner(
+        schema.workspace_id,
+        current_user,
+        db,
+    )
 
-    schema.visibility = "public"
-    schema.status = "locked"  # enforce final state
+    if schema.status == "draft":
+        raise HTTPException(
+            status_code=400,
+            detail="Claim must be verified before publication",
+        )
+
+    schema.status = "published"
+
+    if not schema.published_at:
+        schema.published_at = datetime.utcnow()
 
     db.commit()
+    db.refresh(schema)
 
-    return {"status": "published"}    
+    return {
+        "status": schema.status,
+        "claim_id": schema.id,
+        "visibility": schema.visibility,
+        "published_at": schema.published_at,
+    } 
 
 
 @router.get("/claim-schemas/{claim_id}/evidence-bundle/download")
