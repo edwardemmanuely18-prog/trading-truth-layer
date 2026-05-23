@@ -298,27 +298,10 @@ def get_paddle_price_catalog() -> dict[str, str]:
 def get_public_plan_catalog() -> list[dict]:
     public_codes = get_public_plan_codes()
 
-    catalog = []
-
-    for code in public_codes:
-        plan = PLAN_DEFAULTS.get(code, {})
-
-        catalog.append({
-            "code": code,
-            "name": plan.get("name", code.title()),
-            "description": plan.get("description", ""),
-            "limits": {
-                "claims": plan.get("claims", 0),
-                "trades": plan.get("trades", 0),
-                "members": plan.get("members", 0),
-                "storage_mb": plan.get("storage_mb", 0),
-            },
-            "recommended_for": plan.get("recommended_for", []),
-            "public_price_hint": plan.get("public_price_hint"),
-            "billing": plan.get("billing", {}),
-        })
-
-    return catalog
+    return [
+        PLAN_DEFAULTS[code]
+        for code in public_codes
+    ]
 
 
 def get_paddle_price_id(plan_code: str, billing_cycle: str) -> str | None:
