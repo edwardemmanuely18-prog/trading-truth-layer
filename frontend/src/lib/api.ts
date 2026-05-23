@@ -1287,6 +1287,20 @@ function getApiBaseUrl() {
   );
 }
 
+const PUBLIC_ROUTES = {
+  verify: (claimHash: string) =>
+    `/public/verify/${claimHash}`,
+
+  claim: (claimId: number | string) =>
+    `/public/claim/${claimId}`,
+
+  profile: (workspaceId: number | string) =>
+    `/public/profile/${workspaceId}`,
+
+  leaderboard: () =>
+    `/public/leaderboard`,
+};
+
 export const getInstitutionalDashboard =
   async (
     workspaceId: number
@@ -1620,7 +1634,7 @@ function ensurePublicClaim(row: PublicClaimDirectoryItem): PublicClaimDirectoryI
     verify_path:
       row.verify_path ??
       `/verify/${row.claim_hash}`,
-      
+
     leaderboard: Array.isArray(row.leaderboard) ? row.leaderboard : [],
     scope: row.scope ?? {
       period_start: "—",
@@ -2243,6 +2257,66 @@ export const api = {
 
   getStrategyPerformance,
 
+  verifyClaimByHash: async (
+    claimHash: string
+  ): Promise<ExternalVerificationLookupResult> => {
+
+    const row =
+      await apiFetch<ExternalVerificationLookupResult>(
+        PUBLIC_ROUTES.verify(claimHash),
+        {
+          cache: "no-store",
+        }
+      );
+
+    return ensureExternalVerificationLookupResult(row);
+  },
+
+  getPublicClaim: async (
+    claimId: number
+  ): Promise<PublicClaim> => {
+
+    const row =
+      await apiFetch<PublicClaim>(
+        PUBLIC_ROUTES.claim(claimId),
+        {
+          cache: "no-store",
+        }
+      );
+
+    return ensurePublicClaim(row);
+  },
+
+  getPublicProfile: async (
+    workspaceId: number
+  ): Promise<PublicProfileResponse> => {
+
+    const row =
+      await apiFetch<PublicProfileResponse>(
+        PUBLIC_ROUTES.profile(workspaceId),
+        {
+          cache: "no-store",
+        }
+      );
+
+    return ensurePublicProfileResponse(row);
+  },
+
+  getPublicLeaderboard: async (): Promise<PublicClaimDirectoryItem[]> => {
+
+    const rows =
+      await apiFetch<PublicClaimDirectoryItem[]>(
+        PUBLIC_ROUTES.leaderboard(),
+        {
+          cache: "no-store",
+        }
+      );
+
+    return Array.isArray(rows)
+      ? rows.map(ensurePublicClaim)
+      : [];
+  },
+
   getMe: async (): Promise<MeResponse> => {
     try {
       return await apiFetch<MeResponse>(withDevUser(`/auth/me`), {
@@ -2822,99 +2896,6 @@ export const api = {
     );
   },
 
-  getPublicProfile: async (
-    workspaceId: number
-  ): Promise<PublicProfileResponse> => {
-
-    const row = await apiFetch<any>(
-      `/public/profile/${workspaceId}`,
-      {
-        cache: "no-store",
-      }
-    );
-
-    return ensurePublicProfileResponse({
-      profile: {
-        profile_id: `workspace:${workspaceId}`,
-
-        workspace_id: Number(
-          row?.profile?.workspace_id ??
-          row?.workspace_id ??
-          workspaceId
-        ),
-
-        name:
-          row?.profile?.name ??
-          row?.name ??
-          `Workspace #${workspaceId}`,
-
-        type:
-          row?.profile?.type ??
-          "workspace",
-
-        network:
-          row?.profile?.network ??
-          "internal",
-
-        claims_count: Number(
-          row?.profile?.claims_count ??
-          row?.stats?.claim_count ??
-          0
-        ),
-
-        locked_claims_count: Number(
-          row?.profile?.locked_claims_count ??
-          row?.stats?.claim_count ??
-          0
-        ),
-
-        contested_claims_count: Number(
-          row?.profile?.contested_claims_count ??
-          0
-        ),
-
-        average_trust_score: Number(
-          row?.profile?.average_trust_score ??
-          row?.stats?.avg_trust ??
-          0
-        ),
-
-        average_network_score: Number(
-          row?.profile?.average_network_score ??
-          0
-        ),
-
-        total_net_pnl: Number(
-          row?.profile?.total_net_pnl ??
-          row?.stats?.total_pnl ??
-          0
-        ),
-
-        trust_profile_band:
-          row?.profile?.trust_profile_band ??
-          "developing",
-      },
-
-      claims: Array.isArray(row?.claims)
-        ? row.claims
-        : [],
-
-      claims_count: Number(
-        row?.claims_count ??
-        row?.stats?.claim_count ??
-        0
-      ),
-    });
-  },
-
-  getPublicClaim: async (claimSchemaId: number): Promise<PublicClaim> => {
-    const row = await apiFetch<PublicClaim>(`/public/claim-schemas/${claimSchemaId}`, {
-      cache: "no-store",
-    });
-
-    return ensurePublicClaim(row);
-  },
-
   getPublicClaims: async (): Promise<PublicClaimDirectoryItem[]> => {
     const rows = await apiFetch<PublicClaimDirectoryItem[]>(`/public/claims`, {
       cache: "no-store",
@@ -3017,17 +2998,6 @@ export const api = {
         recommended_next_step: null,
       }
     );
-  },
-
-  getVerifyClaimByHash: async (claimHash: string): Promise<VerifyClaimResult> => {
-    const row = await apiFetch<VerifyPayloadV7 | VerifyClaimResult>(
-      `/verify/${claimHash}`,
-      {
-        cache: "no-store",
-      }
-    );
-
-    return normalizeVerifyPayload(row);
   },
 
     // =========================

@@ -426,8 +426,8 @@ export default function PublicVerifyClaimPage() {
 
   const claimHash = useMemo(() => {
     const raw = Array.isArray(params?.claimHash)
-      ? params.claimHash[0]
-      : params?.claimHash;
+  ? params.claimHash[0]
+  : params?.claimHash;
     return String(raw || "").trim();
   }, [params]);
 
@@ -459,7 +459,7 @@ export default function PublicVerifyClaimPage() {
 
         // Phase 7 canonical endpoint
         try {
-          const verify = await api.getVerifyClaimByHash(claimHash);
+          const verify = await api.verifyClaimByHash(claimHash);
           
           // detect V7 payload (raw)
           if ((verify as any)?.payload_version) {
