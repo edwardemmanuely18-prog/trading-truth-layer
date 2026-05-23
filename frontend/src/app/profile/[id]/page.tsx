@@ -95,7 +95,14 @@ function resolveProfileTrustBand(profile?: PublicTrustProfile | null) {
 
 function resolveClaimTrustBand(claim: PublicClaimDirectoryItem) {
   const trustBand = normalizeText((claim as any)?.trust_band);
-  const hasActiveDispute = Boolean((claim as any)?.has_active_dispute ?? false);
+
+  const trustScore = Number(
+    (claim as any)?.trust_score ?? 0
+  );
+
+  const hasActiveDispute = Boolean(
+    (claim as any)?.has_active_dispute ?? false
+  );
 
   if (hasActiveDispute || trustBand === "contested") {
     return {
@@ -104,6 +111,7 @@ function resolveClaimTrustBand(claim: PublicClaimDirectoryItem) {
     };
   }
 
+  // explicit backend trust band
   if (trustBand === "high") {
     return {
       label: "High Trust",
@@ -112,6 +120,21 @@ function resolveClaimTrustBand(claim: PublicClaimDirectoryItem) {
   }
 
   if (trustBand === "moderate") {
+    return {
+      label: "Moderate Trust",
+      className: "border-amber-200 bg-amber-100 text-amber-800",
+    };
+  }
+
+  // fallback derived from numerical score
+  if (trustScore >= 80) {
+    return {
+      label: "High Trust",
+      className: "border-emerald-200 bg-emerald-100 text-emerald-800",
+    };
+  }
+
+  if (trustScore >= 60) {
     return {
       label: "Moderate Trust",
       className: "border-amber-200 bg-amber-100 text-amber-800",

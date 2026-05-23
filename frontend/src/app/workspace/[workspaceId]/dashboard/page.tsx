@@ -1159,7 +1159,7 @@ export default function WorkspaceDashboardPage() {
             canImportTrades={canImportTrades}
           />
 
-          {institutionalDashboard ? (
+          {false ? (
             <div className="mb-8 grid gap-6 lg:grid-cols-3">
 
               <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
