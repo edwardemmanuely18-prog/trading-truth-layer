@@ -1551,10 +1551,26 @@ function ensurePlanCatalogItem(row: Partial<PlanCatalogItem>): PlanCatalogItem {
     name: String(row.name ?? ""),
     description: String(row.description ?? ""),
     limits: {
-      claim_limit: Number(row.limits?.claim_limit ?? 0),
-      trade_limit: Number(row.limits?.trade_limit ?? 0),
-      member_limit: Number(row.limits?.member_limit ?? 0),
-      storage_limit_mb: Number(row.limits?.storage_limit_mb ?? 0),
+      claim_limit: Number(
+        row.limits?.claim_limit ??
+        (row.limits as any)?.claims ??
+        0
+      ),
+      trade_limit: Number(
+        row.limits?.trade_limit ??
+        (row.limits as any)?.trades ??
+        0
+      ),
+      member_limit: Number(
+        row.limits?.member_limit ??
+        (row.limits as any)?.members ??
+        0
+      ),
+      storage_limit_mb: Number(
+        row.limits?.storage_limit_mb ??
+        (row.limits as any)?.storage_mb ??
+        0
+      ),
     },
     recommended_for: Array.isArray(row.recommended_for) ? row.recommended_for.map(String) : [],
     public_price_hint: row.public_price_hint ?? undefined,
