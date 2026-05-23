@@ -397,7 +397,12 @@ function PlanCard({
           <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
             Storage MB
           </div>
-          <div className="mt-1 font-semibold">{plan.limits.storage_limit_mb}</div>
+          <div className="mt-1 font-semibold">{plan.limits.storage_limit_mb >= 1024
+            ? `${(plan.limits.storage_limit_mb / 1024).toFixed(
+                plan.limits.storage_limit_mb % 1024 === 0 ? 0 : 1
+              )} GB`
+            : `${plan.limits.storage_limit_mb} MB`}
+          </div>
         </div>
       </div>
 
@@ -405,6 +410,7 @@ function PlanCard({
         <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
           Recommended for
         </div>
+
         <div className="mt-2 flex flex-wrap gap-2">
           {plan.recommended_for.map((item) => (
             <span
