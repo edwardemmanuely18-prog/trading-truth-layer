@@ -301,37 +301,13 @@ def get_public_plan_catalog() -> dict:
     return {
         code: {
             **PLAN_DEFAULTS[code],
-
-            "description": PLAN_DEFAULTS[code].get(
-                "description",
-                ""
-            ),
-
-            "recommended_for": PLAN_DEFAULTS[code].get(
-                "recommended_for",
-                ""
-            ),
-
-            "billing": {
-                "monthly_price_usd": (
-                    PLAN_DEFAULTS[code]
-                    .get("billing", {})
-                    .get("monthly_price_usd")
-                ),
-                "annual_price_usd": (
-                    PLAN_DEFAULTS[code]
-                    .get("billing", {})
-                    .get("annual_price_usd")
-                ),
-            },
-
             "limits": {
                 "claim_limit": PLAN_DEFAULTS[code]["limits"].get("claims", 0),
                 "trade_limit": PLAN_DEFAULTS[code]["limits"].get("trades", 0),
                 "member_limit": PLAN_DEFAULTS[code]["limits"].get("members", 0),
                 "storage_limit_mb": PLAN_DEFAULTS[code]["limits"].get("storage_mb", 0),
 
-                # compatibility
+                # backward + forward compatibility
                 "claims": PLAN_DEFAULTS[code]["limits"].get("claims", 0),
                 "trades": PLAN_DEFAULTS[code]["limits"].get("trades", 0),
                 "members": PLAN_DEFAULTS[code]["limits"].get("members", 0),
@@ -339,7 +315,7 @@ def get_public_plan_catalog() -> dict:
             },
         }
         for code in public_codes
-    }
+    } 
 
 
 def get_paddle_price_id(plan_code: str, billing_cycle: str) -> str | None:
