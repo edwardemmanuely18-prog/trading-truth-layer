@@ -267,38 +267,10 @@ def build_entitlement_snapshot(workspace_id: int, db: Session) -> dict[str, Any]
     )
     billing_status = normalize_billing_status(workspace.billing_status)
 
-    public_plan_codes = get_public_plan_codes()
-
-    public_plans = [
-        {
-            "code": code,
-            "name": code.capitalize(),
-            "limits": {
-                "claims": PLAN_DEFAULTS[code]["claims"],
-                "trades": PLAN_DEFAULTS[code]["trades"],
-                "members": PLAN_DEFAULTS[code]["members"],
-                "storage_mb": PLAN_DEFAULTS[code]["storage_mb"],
-            },
-        }
-        for code in public_plan_codes
-    ]
-
-    current_plan_detail = {
-        "code": resolved_plan_code,
-        "name": resolved_plan_code.capitalize(),
-        "limits": limits,
-    }
-
     return {
         "workspace_id": workspace.id,
         "plan_code": resolved_plan_code,
         "billing_status": billing_status,
-
-        "plan_catalog": public_plans,
-        "public_plans": public_plans,
-        "plan_detail": current_plan_detail,
-        "effective_plan_detail": current_plan_detail,
-
         "access": {
             "has_active_access": workspace_has_active_access(workspace),
             "has_soft_warning_access": workspace_has_soft_warning_access(workspace),
