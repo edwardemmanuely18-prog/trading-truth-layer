@@ -2896,7 +2896,7 @@ export const api = {
       },
 
       claims: Array.isArray(row?.claims)
-        ? row.claims.map(ensurePublicClaim)
+        ? row.claims
         : [],
 
       claims_count: Number(

@@ -217,10 +217,7 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
           c.id ??
           i
         }`,
-      verification_status:
-        c.verification_status ??
-        c.lifecycle?.status ??
-        "published",
+      verification_status: "locked",
 
       trade_count: Number(c.trade_count ?? 0),
       net_pnl: Number(c.net_pnl ?? 0),
