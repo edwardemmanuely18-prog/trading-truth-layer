@@ -1004,7 +1004,7 @@ def build_public_trust_profile_for_workspace(workspace_id: int, db: Session):
     public_claims = [
         schema
         for schema in claims
-        if can_show_in_profile(schema)
+        if schema.status in {"published", "locked"}
     ]
     locked_claims = [
         schema
@@ -1067,7 +1067,7 @@ def build_public_profile_response(workspace_id: int, db: Session):
         db.query(ClaimSchema)
         .filter(
             ClaimSchema.workspace_id == workspace_id,
-            ClaimSchema.visibility.in_(["public", "unlisted"]),
+            ClaimSchema.status.in_(["published", "locked"]),
         )
         .all()
     )
@@ -3352,13 +3352,23 @@ def create_claim_schema(
     if not workspace_limits_disabled():
         enforce_claim_creation_allowed(payload.workspace_id, db)
 
+    # =========================================
+    # GOVERNANCE: drafts are always private
+    # =========================================
+
     visibility = normalize_visibility(payload.visibility)
+
+    if visibility == "public":
+        raise HTTPException(
+            status_code=400,
+            detail="Draft claims cannot be public."
+        )
 
     workspace = get_workspace_or_404(payload.workspace_id, db)
     effective_plan_code = resolve_effective_workspace_plan_code(workspace)
 
-    if effective_plan_code == "sandbox" and visibility == "public":
-        visibility = "unlisted"
+    # drafts should never become externally visible
+    visibility = "private"
 
     schema = ClaimSchema(
         workspace_id=payload.workspace_id,
@@ -3423,11 +3433,25 @@ def update_claim_schema(
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
     require_workspace_operator_or_owner(schema.workspace_id, current_user, db)
+
     if not workspace_limits_disabled():
-        enforce_claim_creation_allowed(source.workspace_id, db)
+        enforce_claim_creation_allowed(schema.workspace_id, db)
+
+    # =========================================
+    # IMMUTABLE FINALITY GOVERNANCE
+    # =========================================
+
+    if schema.status == "locked":
+        raise HTTPException(
+            status_code=403,
+            detail="Locked claims are immutable."
+        )
 
     if schema.status != "draft":
-        raise HTTPException(status_code=400, detail="Only draft claims can be edited")
+        raise HTTPException(
+            status_code=400,
+            detail="Only draft claims can be edited"
+        )
 
     old_state = serialize_schema(schema)
 
@@ -3442,11 +3466,20 @@ def update_claim_schema(
     workspace = get_workspace_or_404(schema.workspace_id, db)
     effective_plan_code = resolve_effective_workspace_plan_code(workspace)
 
-    next_visibility = normalize_visibility(payload.visibility)
-    if effective_plan_code == "sandbox" and next_visibility == "public":
-        next_visibility = "unlisted"
+    # =========================================
+    # DRAFT CLAIM GOVERNANCE
+    # =========================================
 
-    schema.visibility = next_visibility
+    next_visibility = normalize_visibility(payload.visibility)
+
+    if next_visibility == "public":
+        raise HTTPException(
+            status_code=400,
+            detail="Draft claims cannot be public."
+        )
+
+    # drafts remain private until publish lifecycle
+    schema.visibility = "private"
 
     db.commit()
     db.refresh(schema)
@@ -3658,20 +3691,28 @@ def publish_claim_schema(
 
     original_visibility = schema.visibility
 
-    schema.status = "published"
-    schema.published_at = datetime.utcnow()
-    schema.claim_hash = compute_claim_hash(schema)
+    # =========================================
+    # CANONICAL PUBLISH GOVERNANCE
+    # =========================================
 
-    # Normalize visibility
+    schema.status = "published"
+
+    # published claims cannot remain private
     if schema.visibility == "private":
         schema.visibility = "unlisted"
+
+    schema.published_at = datetime.utcnow()
+    schema.claim_hash = compute_claim_hash(schema)
 
     workspace = get_workspace_or_404(schema.workspace_id, db)
     effective_plan_code = resolve_effective_workspace_plan_code(workspace)
 
-    # Sandbox cannot publish to fully public visibility.
-    # It may still use unlisted verification surfaces for controlled evaluation.
-    if effective_plan_code == "sandbox" and not sandbox_public_visibility_allowed(schema.visibility):
+    # =========================================
+    # SANDBOX GOVERNANCE
+    # =========================================
+
+    # sandbox workspaces cannot expose fully public claims
+    if effective_plan_code == "sandbox" and schema.visibility == "public":
         schema.visibility = "unlisted"
 
     # Public/unlisted exposure should be governed by the effective entitlement tier,
@@ -3761,10 +3802,21 @@ def lock_claim_schema(
         "claim_hash": compute_claim_hash(schema),
     }
 
+    # =========================================
+    # CANONICAL LOCK GOVERNANCE
+    # =========================================
+
     schema.locked_trade_set_hash = compute_trade_set_hash(filtered_trades)
-    schema.locked_trade_ids_json = json.dumps(locked_trade_ids)  # ✅ NEW
+
+    schema.locked_trade_ids_json = json.dumps(locked_trade_ids)
+
     schema.status = "locked"
+
+    # locked claims are institutionally public
+    schema.visibility = "public"
+
     schema.locked_at = datetime.utcnow()
+
     schema.claim_hash = compute_claim_hash(schema)
 
     db.commit()

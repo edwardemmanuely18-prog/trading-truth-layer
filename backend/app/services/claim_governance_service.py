@@ -23,22 +23,19 @@ def is_claim_locked(schema: ClaimSchema) -> bool:
     return schema.status == LOCKED_STATUS
 
 
-def can_access_verify_route(schema: ClaimSchema) -> bool:
+def can_access_verify_route(schema) -> bool:
     """
-    Verify routes are accessible for:
-    - public claims
-    - unlisted claims
-
-    ONLY after publication lifecycle.
+    Verify routes are only available for
+    institutionally finalized claims.
     """
 
-    if not is_claim_published(schema):
+    if schema.status not in {"published", "locked"}:
         return False
 
-    return schema.visibility in [
-        PUBLIC_VISIBILITY,
-        UNLISTED_VISIBILITY,
-    ]
+    if schema.visibility not in {"public", "unlisted"}:
+        return False
+
+    return True
 
 
 def can_show_in_public_directory(schema: ClaimSchema) -> bool:

@@ -1,4 +1,3 @@
-```python
 from sqlalchemy.orm import Session
 
 from app.models.claim_schema import ClaimSchema
@@ -78,4 +77,4 @@ def can_create_public_claim(
     Disabled enforcement hook.
     """
     return True
-```
+
