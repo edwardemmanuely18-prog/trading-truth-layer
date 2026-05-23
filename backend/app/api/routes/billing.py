@@ -300,36 +300,40 @@ def get_paddle_price_catalog() -> dict[str, str]:
     }
 
 
-def get_public_plan_catalog() -> list[dict]:
+def get_public_plan_catalog() -> dict:
     public_codes = get_public_plan_codes()
 
     catalog = []
 
     for code in public_codes:
-        plan = PLAN_DEFAULTS[code]
-        limits = plan.get("limits", {})
-        pricing = plan.get("pricing", {})
+        defaults = PLAN_DEFAULTS.get(code, {})
 
-        catalog.append(
-            {
-                "code": code,
-                "name": plan.get("name", code.title()),
-                "description": plan.get("description", ""),
-                "recommended_for": plan.get("recommended_for", []),
+        limits = defaults.get("limits", {})
+        pricing = defaults.get("pricing", {})
 
-                "limits": {
-                    "claim_limit": limits.get("claims", 0),
-                    "trade_limit": limits.get("trades", 0),
-                    "member_limit": limits.get("members", 0),
-                    "storage_limit_mb": limits.get("storage_mb", 0),
-                },
+        catalog.append({
+            "code": code,
+            "name": defaults.get("name", code.title()),
 
-                "billing": {
-                    "monthly_price_usd": pricing.get("monthly", 0),
-                    "annual_price_usd": pricing.get("annual", 0),
-                },
-            }
-        )
+            "description": defaults.get("description", ""),
+
+            "recommended_for": defaults.get(
+                "recommended_for",
+                []
+            ),
+
+            "billing": {
+                "monthly": pricing.get("monthly", 0),
+                "annual": pricing.get("annual", 0),
+            },
+
+            "limits": {
+                "claims": limits.get("claims", 0),
+                "trades": limits.get("trades", 0),
+                "members": limits.get("members", 0),
+                "storage_mb": limits.get("storage_mb", 0),
+            },
+        })
 
     return catalog
 
