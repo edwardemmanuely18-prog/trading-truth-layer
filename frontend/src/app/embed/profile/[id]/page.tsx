@@ -51,7 +51,19 @@ export default async function EmbedProfilePage({ params }: PageProps) {
         ? data.name
         : `Workspace #${resolvedWorkspaceId}`,
     trust_score: Number(data?.stats?.avg_trust ?? 0),
-    network_score: 0,
+    network_score:
+      Number(
+        data?.profile?.average_network_score ??
+        (
+          Array.isArray(data?.claims)
+            ? data.claims.reduce(
+                (sum: number, c: any) =>
+                  sum + Number(c?.network_score ?? 0),
+                0
+              ) / Math.max(data.claims.length, 1)
+            : 0
+        )
+      ),
     locked_claims: Number(data?.stats?.claim_count ?? 0),
     net_pnl: Number(data?.stats?.total_pnl ?? 0),
     };
