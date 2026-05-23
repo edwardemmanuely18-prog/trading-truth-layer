@@ -45,15 +45,41 @@ export default async function EmbedProfilePage({ params }: PageProps) {
     Number(data?.workspace_id) || workspaceId;
 
     const profile = {
-    id: resolvedWorkspaceId,
-    name:
-        typeof data?.name === "string" && data.name.trim().length > 0
-        ? data.name
-        : `Workspace #${resolvedWorkspaceId}`,
-    trust_score: Number(data?.stats?.avg_trust ?? 0),
-    network_score: 0,
-    locked_claims: Number(data?.stats?.claim_count ?? 0),
-    net_pnl: Number(data?.stats?.total_pnl ?? 0),
+      id:
+        Number(data?.profile?.workspace_id) ||
+        resolvedWorkspaceId,
+
+      name:
+        typeof data?.profile?.name === "string" &&
+        data.profile.name.trim().length > 0
+          ? data.profile.name
+          : typeof data?.name === "string" &&
+            data.name.trim().length > 0
+              ? data.name
+              : `Workspace #${resolvedWorkspaceId}`,
+
+      trust_score: Number(
+        data?.profile?.average_trust_score ??
+        data?.stats?.avg_trust ??
+        0
+      ),
+
+      network_score: Number(
+        data?.profile?.average_network_score ??
+        0
+      ),
+
+      locked_claims: Number(
+        data?.profile?.locked_claims_count ??
+        data?.stats?.claim_count ??
+        0
+      ),
+
+      net_pnl: Number(
+        data?.profile?.total_net_pnl ??
+        data?.stats?.total_pnl ??
+        0
+      ),
     };
 
   // ✅ SAFE CLAIMS NORMALIZATION
