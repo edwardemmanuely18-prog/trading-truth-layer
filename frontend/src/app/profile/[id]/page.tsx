@@ -208,7 +208,7 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
       verify_path:
         c.verify_path ??
         null,
-
+        
       name:
         c.name ??
         `Claim #${
@@ -517,22 +517,19 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
                         const disputesCount = Number((claim as ExtendedClaim)?.disputes_count ?? 0);
 
                         const canonicalClaimId =
+                          (claim as any)?.root_claim_id ??
                           claim.claim_schema_id;
 
                         const publicViewPath =
-                          claim.public_view_path &&
-                          claim.public_view_path.trim().length > 0
-                            ? claim.public_view_path
-                            : `/claim/${claim.claim_schema_id}/public`;
+                          (claim as any)?.public_view_path ??
+                          `/claim/${canonicalClaimId}/public`;
 
                         const verifyPath =
-                          claim.verify_path &&
-                          claim.verify_path.trim().length > 0
-                            ? claim.verify_path
-                            : `/verify/${claim.claim_hash}`;
+                          (claim as any)?.verify_path ??
+                          `/verify/${claim.claim_hash}`;
 
                         const proofPath =
-                          `/claim/${claim.claim_schema_id}/proof`;
+                          publicViewPath.replace("/public", "/proof");
 
                         return (
                           <tr
@@ -542,13 +539,8 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
                             <td className="px-3 py-3">
                               <div className="font-medium text-slate-950">{claim.name}</div>
                               <div className="mt-1 text-xs text-slate-500">
-                                schema #{claim.claim_schema_id}
+                                claim #{claim.claim_schema_id}
                               </div>
-
-                              <div className="mt-1 text-[10px] text-slate-400">
-                                root #{(claim as any)?.root_claim_id ?? "null"}
-                              </div>
-                              
                               <div className="mt-1 font-mono text-xs text-slate-500">
                                 {claim.claim_hash}
                               </div>
@@ -627,7 +619,7 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
                                 </Link>
 
                                 <Link
-                                  href={proofPath}
+                                  href={publicViewPath}
                                   className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
                                 >
                                   Claim Proof

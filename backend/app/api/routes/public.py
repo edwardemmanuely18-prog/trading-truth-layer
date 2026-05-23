@@ -14,10 +14,7 @@ from app.api.routes.claim_schemas import (
     resolve_claim_integrity_status,
 )
 
-router = APIRouter(
-    prefix="/public",
-    tags=["public"]
-)
+router = APIRouter()
 
 
 # =========================
