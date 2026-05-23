@@ -1,5 +1,9 @@
 import os
 
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, text
@@ -38,6 +42,32 @@ from app.api.routes import billing
 
 from app.core.security import hash_password
 
+
+# =========================
+# SENTRY
+# =========================
+
+SENTRY_DSN = os.getenv("SENTRY_DSN")
+
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+
+        integrations=[
+            FastApiIntegration(),
+            SqlalchemyIntegration(),
+        ],
+
+        traces_sample_rate=1.0,
+
+        profiles_sample_rate=1.0,
+
+        send_default_pii=False,
+
+        environment=os.getenv("ENVIRONMENT", "development"),
+    )
+
+
 # =========================
 # APP INIT
 # =========================
@@ -49,7 +79,15 @@ app = FastAPI(title="Trading Truth Layer API")
 
 origins = os.getenv(
     "CORS_ALLOW_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000,https://trading-truth-layer.vercel.app"
+    ",".join([
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "https://tradingtruthlayer.com",
+        "https://www.tradingtruthlayer.com",
+        "https://trading-truth-layer.vercel.app",
+    ])
 ).split(",")
 
 app.add_middleware(
