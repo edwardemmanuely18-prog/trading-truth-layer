@@ -24,166 +24,56 @@ ALLOWED_PLAN_CODES = {
     "business",
 }
 
-
-
-PLAN_DEFAULTS = {
+PLAN_DEFAULTS: dict[str, dict[str, int]] = {
 
     "sandbox": {
         "is_public": True,
-        "name": "Sandbox",
-
-        "description":
-            "Controlled evaluation environment for testing platform workflows and infrastructure capabilities.",
-
-        "recommended_for": [
-            "evaluation",
-            "testing",
-            "sandbox workflows",
-        ],
-
-        "pricing": {
-            "monthly": 0,
-            "annual": 0,
-        },
-
-        "limits": {
-            "claims": 2,
-            "trades": 200,
-            "members": 2,
-            "storage_mb": 100,
-        },
-    },
-
-    "starter": {
-        "is_public": True,
-        "name": "Starter",
-
-        "description":
-            "Entry commercial tier for smaller operational workflows and verification infrastructure usage.",
-
-        "recommended_for": [
-            "small teams",
-            "light governance",
-            "verification workflows",
-        ],
-
-        "pricing": {
-            "monthly": 19,
-            "annual": 190,
-        },
-
-        "limits": {
-            "claims": 5,
-            "trades": 1000,
-            "members": 3,
-            "storage_mb": 500,
-        },
-    },
-
-    "pro": {
-        "is_public": True,
-        "name": "Pro",
-
-        "description":
-            "Designed for active operators requiring larger canonical record capacity and collaboration controls.",
-
-        "recommended_for": [
-            "active operators",
-            "larger workflows",
-            "collaboration controls",
-        ],
-
-        "pricing": {
-            "monthly": 79,
-            "annual": 790,
-        },
-
-        "limits": {
-            "claims": 25,
-            "trades": 10000,
-            "members": 10,
-            "storage_mb": 5120,
-        },
-    },
-
-    "growth": {
-        "is_public": True,
-        "name": "Growth",
-
-        "description":
-            "Operational scale tier for expanding governance workflows and evidence infrastructure operations.",
-
-        "recommended_for": [
-            "scaling governance",
-            "evidence infrastructure",
-            "growing organizations",
-        ],
-
-        "pricing": {
-            "monthly": 249,
-            "annual": 2490,
-        },
-
-        "limits": {
-            "claims": 100,
-            "trades": 100000,
-            "members": 50,
-            "storage_mb": 25600,
-        },
-    },
-
-    "business": {
-        "is_public": True,
-        "name": "Business",
-
-        "description":
-            "Enterprise-grade operational infrastructure for larger institutional verification environments.",
-
-        "recommended_for": [
-            "institutions",
-            "enterprise governance",
-            "large-scale operations",
-        ],
-
-        "pricing": {
-            "monthly": 999,
-            "annual": 9990,
-        },
-
-        "limits": {
-            "claims": 500,
-            "trades": 1000000,
-            "members": 250,
-            "storage_mb": 102400,
-        },
+        "claims": 5,
+        "trades": 1000,
+        "members": 3,
+        "storage_mb": 100,
     },
 
     "internal": {
         "is_public": False,
-        "name": "Internal",
+        "claims": 999999999,
+        "trades": 999999999,
+        "members": 999999999,
+        "storage_mb": 999999999,
+    },
 
-        "description":
-            "Internal unrestricted owner workspace.",
+    "starter": {
+        "is_public": True,
+        "claims": 5,
+        "trades": 5000,
+        "members": 3,
+        "storage_mb": 500,
+    },
 
-        "recommended_for": [
-            "platform ownership",
-            "internal operations",
-        ],
+    "pro": {
+        "is_public": True,
+        "claims": 50,
+        "trades": 50000,
+        "members": 25,
+        "storage_mb": 2048,
+    },
 
-        "pricing": {
-            "monthly": 0,
-            "annual": 0,
-        },
+    "growth": {
+        "is_public": True,
+        "claims": 200,
+        "trades": 250000,
+        "members": 100,
+        "storage_mb": 10240,
+    },
 
-        "limits": {
-            "claims": 999999999,
-            "trades": 999999999,
-            "members": 999999999,
-            "storage_mb": 999999999,
-        },
+    "business": {
+        "is_public": True,
+        "claims": 500,
+        "trades": 1000000,
+        "members": 250,
+        "storage_mb": 51200,
     },
 }
-
 
 
 def get_public_plan_codes() -> list[str]:
@@ -282,7 +172,7 @@ def _positive_int_or_none(value: Any) -> int | None:
 
 def get_workspace_plan_limits(workspace: Workspace) -> dict[str, int]:
     plan_code = resolve_workspace_plan_code(workspace)
-    plan_defaults = PLAN_DEFAULTS[plan_code]["limits"]
+    plan_defaults = PLAN_DEFAULTS[plan_code]
 
     return {
         "claims": plan_defaults["claims"],
@@ -384,10 +274,10 @@ def build_entitlement_snapshot(workspace_id: int, db: Session) -> dict[str, Any]
             "code": code,
             "name": code.capitalize(),
             "limits": {
-                "claims": PLAN_DEFAULTS[code]["limits"]["claims"],
-                "trades": PLAN_DEFAULTS[code]["limits"]["trades"],
-                "members": PLAN_DEFAULTS[code]["limits"]["members"],
-                "storage_mb": PLAN_DEFAULTS[code]["limits"]["storage_mb"],
+                "claims": PLAN_DEFAULTS[code]["claims"],
+                "trades": PLAN_DEFAULTS[code]["trades"],
+                "members": PLAN_DEFAULTS[code]["members"],
+                "storage_mb": PLAN_DEFAULTS[code]["storage_mb"],
             },
         }
         for code in public_plan_codes
