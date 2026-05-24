@@ -32,7 +32,7 @@ export default function RefundPage() {
 
       <p style={{ marginBottom: 18 }}>
         Customers may request a refund within <b>14 days</b> of an
-        eligible purchase in accordance with Paddle buyer protection
+        eligible purchase in accordance with applicable consumer protection
         requirements and applicable consumer protection laws.
       </p>
 
@@ -65,7 +65,7 @@ export default function RefundPage() {
 
       <p style={{ marginBottom: 18 }}>
         Refund requests are reviewed on a case-by-case basis in
-        accordance with Paddle buyer protection standards,
+        accordance with applicable billing and consumer protection standards,
         applicable consumer protection laws, subscription status,
         transaction timing, and platform service usage.
       </p>

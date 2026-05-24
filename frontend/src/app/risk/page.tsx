@@ -19,8 +19,9 @@ export default function RiskPage() {
       </h1>
 
       <p style={{ marginBottom: 18 }}>
-        Trading activity involves substantial financial risk.
-        Past performance does not guarantee future results.
+        Users are responsible for evaluating the suitability,
+        legality, and operational use of the platform within
+        their jurisdiction and infrastructure environment.
       </p>
 
       <p style={{ marginBottom: 18 }}>
@@ -31,7 +32,8 @@ export default function RiskPage() {
       </p>
 
       <p style={{ marginBottom: 18 }}>
-        Trading Truth Layer does not provide:
+        Trading Truth Layer operates exclusively as
+        infrastructure software and does not provide:
       </p>
 
       <ul
@@ -41,27 +43,27 @@ export default function RiskPage() {
         }}
       >
         <li style={{ marginBottom: 10 }}>
-          Financial advice
+          Brokerage infrastructure
         </li>
 
         <li style={{ marginBottom: 10 }}>
-          Investment recommendations
+          Custodial account services
         </li>
 
         <li style={{ marginBottom: 10 }}>
-          Brokerage services
+          Fund management operations
         </li>
 
         <li style={{ marginBottom: 10 }}>
-          Portfolio management
+          Asset custody infrastructure
         </li>
 
         <li style={{ marginBottom: 10 }}>
-          Custody services
+          Financial transaction execution
         </li>
 
         <li style={{ marginBottom: 10 }}>
-          Trade execution services
+          Regulated investment operations
         </li>
       </ul>
 
@@ -77,9 +79,10 @@ export default function RiskPage() {
       </h2>
 
       <p style={{ marginBottom: 18 }}>
-        Users are solely responsible for their trading decisions,
-        financial outcomes, regulatory compliance, uploaded data,
-        imported broker records, and operational activities.
+        Users are solely responsible for uploaded records,
+        imported operational data, regulatory compliance,
+        connected infrastructure usage, and platform-related
+        operational activities.
       </p>
 
       <h2
@@ -119,9 +122,10 @@ export default function RiskPage() {
 
       <p style={{ marginBottom: 18 }}>
         Trading Truth Layer and Aurum Hybrid are not liable
-        for financial losses, trading outcomes, investment
-        performance, business interruption, operational damages,
-        indirect losses, or disputes arising from platform use.
+        for operational interruptions, infrastructure misuse,
+        user-provided data inaccuracies, indirect damages,
+        third-party service failures, or disputes arising
+        from platform usage.
       </p>
 
       <h2
