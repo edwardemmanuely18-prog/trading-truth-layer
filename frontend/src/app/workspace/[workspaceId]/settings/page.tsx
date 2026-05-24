@@ -1146,6 +1146,15 @@ export default function WorkspaceSettingsPage() {
     return uniquePlans.map((plan: any) => ({
       ...plan,
 
+      code:
+        plan.code ??
+        normalizeText(plan.name) ??
+        "unknown",
+
+      name:
+        plan.name ??
+        formatPlanCodeLabel(plan.code ?? "unknown"),
+
       description:
         typeof plan.description === "string"
           ? plan.description
@@ -1560,7 +1569,6 @@ export default function WorkspaceSettingsPage() {
                         new Map(
                           planCatalog
                             .filter((plan) => {
-                              console.log("FILTER PLAN", plan);
 
                               return (
                                 normalizeText(plan.code || plan.name) !== "internal"
