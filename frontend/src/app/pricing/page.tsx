@@ -48,9 +48,9 @@ export default function PricingPage() {
         </p>
 
         <ul style={list}>
-          <li style={item}>Claims: 2</li>
-          <li style={item}>Trades: 200</li>
-          <li style={item}>Members: 2</li>
+          <li style={item}>Claims: 5</li>
+          <li style={item}>Trades: 1,000</li>
+          <li style={item}>Members: 3</li>
           <li style={item}>Storage: 100 MB</li>
         </ul>
       </div>
@@ -72,7 +72,7 @@ export default function PricingPage() {
 
         <ul style={list}>
           <li style={item}>Claims: 5</li>
-          <li style={item}>Trades: 1,000</li>
+          <li style={item}>Trades: 5,000</li>
           <li style={item}>Members: 3</li>
           <li style={item}>Storage: 500 MB</li>
         </ul>
@@ -94,10 +94,10 @@ export default function PricingPage() {
         </p>
 
         <ul style={list}>
-          <li style={item}>Claims: 25</li>
-          <li style={item}>Trades: 10,000</li>
-          <li style={item}>Members: 10</li>
-          <li style={item}>Storage: 5 GB</li>
+          <li style={item}>Claims: 50</li>
+          <li style={item}>Trades: 50,000</li>
+          <li style={item}>Members: 25</li>
+          <li style={item}>Storage: 2 GB</li>
         </ul>
       </div>
 
@@ -117,10 +117,10 @@ export default function PricingPage() {
         </p>
 
         <ul style={list}>
-          <li style={item}>Claims: 100</li>
-          <li style={item}>Trades: 100,000</li>
-          <li style={item}>Members: 50</li>
-          <li style={item}>Storage: 25 GB</li>
+          <li style={item}>Claims: 200</li>
+          <li style={item}>Trades: 250,000</li>
+          <li style={item}>Members: 100</li>
+          <li style={item}>Storage: 10 GB</li>
         </ul>
       </div>
 
@@ -143,7 +143,7 @@ export default function PricingPage() {
           <li style={item}>Claims: 500</li>
           <li style={item}>Trades: 1,000,000</li>
           <li style={item}>Members: 250</li>
-          <li style={item}>Storage: 100 GB</li>
+          <li style={item}>Storage: 50 GB</li>
         </ul>
       </div>
     </div>
