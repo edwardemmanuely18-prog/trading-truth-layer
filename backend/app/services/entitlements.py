@@ -24,10 +24,24 @@ ALLOWED_PLAN_CODES = {
     "business",
 }
 
-PLAN_DEFAULTS: dict[str, dict[str, int]] = {
+PLAN_DEFAULTS = {
 
     "sandbox": {
         "is_public": True,
+        "name": "Sandbox",
+        "description": (
+            "Controlled evaluation environment for product proof, "
+            "limited governed capacity, and safe pre-billing exploration."
+        ),
+        "recommended_for": [
+            "product evaluation",
+            "proof of concept",
+            "sandbox testing",
+        ],
+        "pricing": {
+            "monthly": 0,
+            "annual": 0,
+        },
         "claims": 5,
         "trades": 1000,
         "members": 3,
@@ -36,6 +50,18 @@ PLAN_DEFAULTS: dict[str, dict[str, int]] = {
 
     "internal": {
         "is_public": False,
+        "name": "Internal",
+        "description": (
+            "Internal unrestricted owner workspace."
+        ),
+        "recommended_for": [
+            "platform ownership",
+            "internal operations",
+        ],
+        "pricing": {
+            "monthly": 0,
+            "annual": 0,
+        },
         "claims": 999999999,
         "trades": 999999999,
         "members": 999999999,
@@ -44,6 +70,20 @@ PLAN_DEFAULTS: dict[str, dict[str, int]] = {
 
     "starter": {
         "is_public": True,
+        "name": "Starter",
+        "description": (
+            "Commercial onboarding tier for independent verification "
+            "workflows and governed claim operations."
+        ),
+        "recommended_for": [
+            "independent traders",
+            "solo verification",
+            "small governance workflows",
+        ],
+        "pricing": {
+            "monthly": 19,
+            "annual": 190,
+        },
         "claims": 5,
         "trades": 5000,
         "members": 3,
@@ -52,6 +92,20 @@ PLAN_DEFAULTS: dict[str, dict[str, int]] = {
 
     "pro": {
         "is_public": True,
+        "name": "Pro",
+        "description": (
+            "Expanded governed infrastructure for active verification, "
+            "broker ingestion, and operational continuity."
+        ),
+        "recommended_for": [
+            "professional traders",
+            "active verification",
+            "broker integrations",
+        ],
+        "pricing": {
+            "monthly": 79,
+            "annual": 790,
+        },
         "claims": 50,
         "trades": 50000,
         "members": 25,
@@ -60,6 +114,20 @@ PLAN_DEFAULTS: dict[str, dict[str, int]] = {
 
     "growth": {
         "is_public": True,
+        "name": "Growth",
+        "description": (
+            "Scaled operational trust infrastructure for growing "
+            "teams, external verification, and API-connected workflows."
+        ),
+        "recommended_for": [
+            "growing organizations",
+            "API verification",
+            "team governance",
+        ],
+        "pricing": {
+            "monthly": 249,
+            "annual": 2490,
+        },
         "claims": 200,
         "trades": 250000,
         "members": 100,
@@ -68,6 +136,20 @@ PLAN_DEFAULTS: dict[str, dict[str, int]] = {
 
     "business": {
         "is_public": True,
+        "name": "Business",
+        "description": (
+            "Enterprise-scale governance and verification capacity "
+            "for institutional trust infrastructure."
+        ),
+        "recommended_for": [
+            "institutions",
+            "enterprise verification",
+            "large governance operations",
+        ],
+        "pricing": {
+            "monthly": 999,
+            "annual": 9990,
+        },
         "claims": 500,
         "trades": 1000000,
         "members": 250,

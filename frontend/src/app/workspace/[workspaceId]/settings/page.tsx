@@ -321,8 +321,11 @@ function PlanCard({
   const isEffective = normalizeText(plan.code) === normalizeText(effectivePlanCode);
   const isSelected = normalizeText(plan.code) === normalizeText(selectedPlanCode);
 
+  const storageMb = plan.limits.storage_limit_mb ?? 0;
+
   const monthlyPrice = plan.billing?.monthly_price_usd;
   const annualPrice = plan.billing?.annual_price_usd;
+  console.log("PLAN CARD DATA", plan);
 
   return (
     <div
@@ -397,11 +400,13 @@ function PlanCard({
           <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
             Storage MB
           </div>
-          <div className="mt-1 font-semibold">{plan.limits.storage_limit_mb >= 1024
-            ? `${(plan.limits.storage_limit_mb / 1024).toFixed(
-                plan.limits.storage_limit_mb % 1024 === 0 ? 0 : 1
-              )} GB`
-            : `${plan.limits.storage_limit_mb} MB`}
+
+          <div className="mt-1 font-semibold">
+            {storageMb >= 1024
+              ? `${(storageMb / 1024).toFixed(
+                  storageMb % 1024 === 0 ? 0 : 1
+                )} GB`
+              : `${storageMb} MB`}
           </div>
         </div>
       </div>
@@ -1111,7 +1116,86 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
-  const planCatalog = usage?.plan_catalog ?? [];
+  const planCatalog = useMemo(() => {
+
+    const rawPlans: any[] = Array.isArray(billingFoundation?.public_plans)
+      ? billingFoundation.public_plans
+      : billingFoundation?.public_plans &&
+        typeof billingFoundation.public_plans === "object"
+      ? Object.values(billingFoundation.public_plans as Record<string, any>)
+      : Array.isArray(usage?.plan_catalog)
+      ? usage.plan_catalog
+      : [];
+
+    const uniquePlans = Array.from(
+      new Map(
+        rawPlans.map((plan: any) => [
+          String(plan.code ?? plan.name).toLowerCase(),
+          plan,
+        ])
+      ).values()
+    );
+
+    console.log("BILLING FOUNDATION FULL", billingFoundation);
+    console.log("PUBLIC PLANS TYPE", typeof billingFoundation?.public_plans);
+    console.log("PUBLIC PLANS VALUE", billingFoundation?.public_plans);
+    console.log("USAGE FULL", usage);
+    console.log("USAGE PLAN CATALOG", usage?.plan_catalog);
+    console.log("RAW PLANS FINAL", rawPlans);
+
+    return uniquePlans.map((plan: any) => ({
+      ...plan,
+
+      description:
+        typeof plan.description === "string"
+          ? plan.description
+          : "",
+
+      recommended_for: Array.isArray(plan.recommended_for)
+        ? plan.recommended_for
+        : [],
+
+      billing: {
+        monthly_price_usd:
+          plan.pricing?.monthly_price_usd ??
+          plan.pricing?.monthly_price ??
+          plan.pricing?.monthly ??
+          null,
+
+        annual_price_usd:
+          plan.pricing?.annual_price_usd ??
+          plan.pricing?.annual_price ??
+          plan.pricing?.annual ??
+          null,
+      },
+
+      limits: {
+        claim_limit:
+          plan.claims ??
+          plan.limits?.claim_limit ??
+          plan.limits?.claims ??
+          0,
+
+        trade_limit:
+          plan.trades ??
+          plan.limits?.trade_limit ??
+          plan.limits?.trades ??
+          0,
+
+        member_limit:
+          plan.members ??
+          plan.limits?.member_limit ??
+          plan.limits?.members ??
+          0,
+
+        storage_limit_mb:
+          plan.storage_mb ??
+          plan.limits?.storage_limit_mb ??
+          plan.limits?.storage_mb ??
+          0,
+      },
+    }));
+  }, [usage, billingFoundation]);
   const configuredPlanCode = settings?.plan_code || "starter";
   const effectivePlanCode =
     usage?.effective_plan_code || settings?.effective_plan_code || "starter";
@@ -1387,9 +1471,9 @@ export default function WorkspaceSettingsPage() {
                   <div className="mt-5 grid gap-4 xl:grid-cols-2">
                     {planCatalog
                         .filter((plan) => normalizeText(plan.code) !== "internal")
-                        .map((plan) => (
+                        .map((plan, index) => (
                       <PlanCard
-                        key={plan.code}
+                        key={`${plan.code}-${index}`}
                         plan={plan}
                         configuredPlanCode={settings?.plan_code}
                         effectivePlanCode={effectivePlanCode}
@@ -1450,6 +1534,20 @@ export default function WorkspaceSettingsPage() {
                     <label className="mb-2 block text-sm font-medium text-slate-700">
                       Selected Upgrade Plan
                     </label>
+
+                    {(() => {
+                      console.log(
+                        "UPGRADE DROPDOWN SOURCE",
+                        planCatalog.map((p: any) => ({
+                          code: p.code,
+                          name: p.name,
+                          is_public: p.is_public,
+                        }))
+                      );
+
+                      return null;
+                    })()}
+
                     <select
                       value={selectedPlanCode}
                       onChange={(e) => {
@@ -1458,11 +1556,27 @@ export default function WorkspaceSettingsPage() {
                       }}
                       className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
                     >
-                      {planCatalog
-                          .filter((plan) => normalizeText(plan.code) !== "internal")
-                          .map((plan) => (
-                        <option key={plan.code} value={plan.code}>
-                          {formatPlanCodeLabel(plan.code)}
+                      {Array.from(
+                        new Map(
+                          planCatalog
+                            .filter((plan) => {
+                              console.log("FILTER PLAN", plan);
+
+                              return (
+                                normalizeText(plan.code || plan.name) !== "internal"
+                              );
+                            })
+                            .map((plan: any) => [
+                              normalizeText(plan.code || plan.name),
+                              plan,
+                            ])
+                        ).values()
+                      ).map((plan: any) => (
+                        <option
+                          key={normalizeText(plan.code || plan.name)}
+                          value={plan.code || plan.name}
+                        >
+                          {formatPlanCodeLabel(plan.code || plan.name)}
                         </option>
                       ))}
                     </select>

@@ -302,6 +302,14 @@ export type InstitutionalDashboardResponse = {
 export type PlanBilling = {
   monthly_price_usd?: number | null;
   annual_price_usd?: number | null;
+
+  /*
+    Backward compatibility layer.
+    Legacy plan responses still expose these keys.
+  */
+  monthly?: number | null;
+  annual?: number | null;
+
   currency?: string | null;
   billing_interval?: string | null;
   stripe_price_lookup_key_monthly?: string | null;
@@ -379,10 +387,18 @@ export type PlanCatalogItem = {
   name: string;
   description: string;
   limits: {
-    claim_limit: number;
-    trade_limit: number;
-    member_limit: number;
-    storage_limit_mb: number;
+    claim_limit?: number;
+    trade_limit?: number;
+    member_limit?: number;
+    storage_limit_mb?: number;
+
+    /*
+      Legacy compact keys still supported by normalization layer.
+    */
+    claims?: number;
+    trades?: number;
+    members?: number;
+    storage_mb?: number;
   };
   recommended_for: string[];
   public_price_hint?: string;
@@ -594,6 +610,7 @@ export type WorkspaceBillingFoundation = {
     payment_method?: string | null;
   };
   manual_payment_details?: ManualPaymentDetails;
+  public_plans?: PlanCatalogItem[];
   checkout_state: {
     can_start_checkout: boolean;
     mode: string;
@@ -1857,6 +1874,13 @@ function ensureWorkspaceBillingFoundation(
       row?.manual_billing_visible || row?.manual_billing?.visible
         ? ensureManualPaymentDetails(row?.manual_payment_details)
         : undefined,
+
+    public_plans: Array.isArray((row as any)?.public_plans)
+      ? (row as any).public_plans.map((item: any) =>
+          ensurePlanCatalogItem(item)
+        )
+      : [],
+
     checkout_state: {
       can_start_checkout: Boolean(row?.checkout_state?.can_start_checkout),
       mode: row?.checkout_state?.mode || "placeholder_until_checkout",
@@ -2331,17 +2355,32 @@ export const api = {
     return ensureWorkspaceUsageSummary(row);
   },
 
-  getWorkspaceBillingFoundation: async (
-    workspaceId: number
-  ): Promise<WorkspaceBillingFoundation> => {
-    const row = await apiFetch<WorkspaceBillingFoundation>(
-      withDevUser(`/billing/workspaces/${workspaceId}/billing-foundation`),
+  getWorkspaceBillingFoundation: async (workspaceId: number) => {
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("ttl_access_token")
+        : null;
+
+    const response = await fetch(
+      `${API_BASE_URL}/api/billing/workspaces/${workspaceId}/billing-foundation`,
       {
-        cache: "no-store",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token
+            ? {
+                Authorization: `Bearer ${token}`,
+              }
+            : {}),
+        },
       }
     );
 
-    return ensureWorkspaceBillingFoundation(row);
+    if (!response.ok) {
+      throw new Error("Failed to load billing foundation");
+    }
+
+    return response.json();
   },
 
   createBillingCheckoutSession: async (
