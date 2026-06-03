@@ -1,6 +1,8 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { AuthProvider } from "../components/AuthProvider";
+import PaddleLoader from "../components/PaddleLoader";
+
 
 export const metadata: Metadata = {
   title: "Trading Truth Layer",
@@ -24,6 +26,8 @@ export default function RootLayout({
         }}
       >
         <AuthProvider>
+          <PaddleLoader />
+          
           <div
             style={{
               minHeight: "100vh",
