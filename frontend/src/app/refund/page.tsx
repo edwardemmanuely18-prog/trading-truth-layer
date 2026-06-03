@@ -13,122 +13,50 @@ export default function RefundPage() {
         Refund Policy
       </h1>
 
-      <p style={{ marginBottom: 18 }}>
-        Trading Truth Layer is operated by
-        <b> Aurum Hybrid</b> and provides
-        subscription-based infrastructure software services.
+      <p>
+        Trading Truth Layer is operated by Aurum Hybrid and provides
+        subscription-based software services.
       </p>
 
-      <h2
-        style={{
-          fontSize: 24,
-          fontWeight: 700,
-          marginTop: 36,
-          marginBottom: 14,
-        }}
-      >
-        14-Day Refund Eligibility
+      <h2 style={{ fontSize: 24, marginTop: 36 }}>
+        Refunds
       </h2>
 
-      <p style={{ marginBottom: 18 }}>
-        Customers may request a refund within <b>14 days</b> of an
-        eligible purchase in accordance with applicable consumer protection
-        requirements and applicable consumer protection laws.
+      <p>
+        Customers may request a refund within fourteen (14) days of the
+        original purchase date.
       </p>
 
-      <h2
-        style={{
-          fontSize: 24,
-          fontWeight: 700,
-          marginTop: 36,
-          marginBottom: 14,
-        }}
-      >
-        Refund Processing
-      </h2>
-
-      <p style={{ marginBottom: 18 }}>
-        Approved refunds are processed back to the original payment
-        method used during purchase.
+      <p>
+        Refunds will be returned to the original payment method used for
+        the transaction.
       </p>
 
-      <h2
-        style={{
-          fontSize: 24,
-          fontWeight: 700,
-          marginTop: 36,
-          marginBottom: 14,
-        }}
-      >
-        Refund Review Process
-      </h2>
-
-      <p style={{ marginBottom: 18 }}>
-        Refund requests are reviewed on a case-by-case basis in
-        accordance with applicable billing and consumer protection standards,
-        applicable consumer protection laws, subscription status,
-        transaction timing, and platform service usage.
-      </p>
-
-      <h2
-        style={{
-          fontSize: 24,
-          fontWeight: 700,
-          marginTop: 36,
-          marginBottom: 14,
-        }}
-      >
+      <h2 style={{ fontSize: 24, marginTop: 36 }}>
         Subscription Cancellation
       </h2>
 
-      <p style={{ marginBottom: 18 }}>
-        Subscription cancellation prevents future renewals.
-        Customers may continue using paid features until the
-        active billing period expires.
+      <p>
+        Customers may cancel their subscription at any time.
+        Cancellation prevents future renewal charges.
+        Access to paid services continues until the end of the current
+        billing period.
       </p>
 
-      <h2
-        style={{
-          fontSize: 24,
-          fontWeight: 700,
-          marginTop: 36,
-          marginBottom: 14,
-        }}
-      >
-        Billing Assistance
-      </h2>
-
-      <p style={{ marginBottom: 18 }}>
-        For billing support, refund inquiries, or subscription
-        assistance, contact:
-        <b> support@tradingtruthlayer.com</b>
-      </p>
-
-      <h2
-        style={{
-          fontSize: 24,
-          fontWeight: 700,
-          marginTop: 36,
-          marginBottom: 14,
-        }}
-      >
+      <h2 style={{ fontSize: 24, marginTop: 36 }}>
         Contact
       </h2>
 
-      <p style={{ marginBottom: 18 }}>
-        Aurum Hybrid
+      <p>
+        For billing and refund assistance:
       </p>
 
-      <p style={{ marginBottom: 18 }}>
-        Tanzania
+      <p>
+        support@tradingtruthlayer.com
       </p>
 
-      <p style={{ marginBottom: 18 }}>
-        Email: support@tradingtruthlayer.com
-      </p>
-
-      <p style={{ marginBottom: 18 }}>
-        Website: https://www.tradingtruthlayer.com
+      <p>
+        https://www.tradingtruthlayer.com
       </p>
     </div>
   );
