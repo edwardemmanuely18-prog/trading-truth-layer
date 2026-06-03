@@ -1011,6 +1011,15 @@ def create_billing_checkout_session(
         }
 
         paddle_response, paddle_error = paddle_request("POST", "/transactions", payload_data)
+
+        data = (paddle_response or {}).get("data") or {}
+
+        print("PADDLE TX")
+        print("transaction_id:", data.get("id"))
+        print("status:", data.get("status"))
+        print("customer_id:", data.get("customer_id"))
+        print("checkout_url:", (data.get("checkout") or {}).get("url"))
+        
         if paddle_error:
             return {
                 "mode": "paddle_checkout_error",
