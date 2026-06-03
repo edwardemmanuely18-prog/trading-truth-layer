@@ -78,14 +78,18 @@ function initializePaddle(
 
     if (transactionId) {
       console.log(
-        "Opening Paddle checkout for transaction:",
-        transactionId
+          "Opening Paddle checkout for transaction:",
+          transactionId
       );
 
       window.Paddle.Checkout.open({
-        transactionId,
+          transactionId,
+
+          settings: {
+          displayMode: "overlay"
+          }
       });
-    }
+      }
   } catch (err) {
     console.error(
       "Paddle initialization failed:",
