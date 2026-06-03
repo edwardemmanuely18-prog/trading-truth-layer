@@ -983,6 +983,10 @@ def create_billing_checkout_session(
                 "message": f"No Paddle price id is mapped for {resolved_plan_code} ({billing_cycle}).",
             }
 
+        print("CURRENT USER")
+        print("ID:", current_user.id)
+        print("EMAIL:", getattr(current_user, "email", None))
+
         payload_data = {
             "items": [
                 {
