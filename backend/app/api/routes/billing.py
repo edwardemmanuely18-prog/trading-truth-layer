@@ -983,10 +983,6 @@ def create_billing_checkout_session(
                 "message": f"No Paddle price id is mapped for {resolved_plan_code} ({billing_cycle}).",
             }
 
-        print("CURRENT USER")
-        print("ID:", current_user.id)
-        print("EMAIL:", getattr(current_user, "email", None))
-
         payload_data = {
             "items": [
                 {
@@ -994,6 +990,11 @@ def create_billing_checkout_session(
                     "quantity": 1,
                 }
             ],
+
+            "customer": {
+                "email": current_user.email
+            },
+
             "custom_data": {
                 "workspace_id": str(workspace.id),
                 "workspace_name": workspace.name,
@@ -1002,6 +1003,7 @@ def create_billing_checkout_session(
                 "billing_cycle": billing_cycle,
                 "checkout_intent": checkout_intent,
             },
+
             "checkout": {
                 "success_url": f"{get_frontend_base_url()}/workspace/{workspace.id}/settings?checkout=success",
                 "cancel_url": f"{get_frontend_base_url()}/workspace/{workspace.id}/settings?checkout=cancelled"
