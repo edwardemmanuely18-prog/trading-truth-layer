@@ -1010,7 +1010,14 @@ def create_billing_checkout_session(
             }
         }
 
-        paddle_response, paddle_error = paddle_request("POST", "/transactions", payload_data)
+        print("PADDLE REQUEST PAYLOAD")
+        print(json.dumps(payload_data, indent=2))
+
+        paddle_response, paddle_error = paddle_request(
+            "POST",
+            "/transactions",
+            payload_data
+        )
 
         print("PADDLE RESPONSE")
         print(json.dumps(paddle_response, indent=2, default=str))
