@@ -1004,15 +1004,6 @@ def create_billing_checkout_session(
             }
         }
 
-        print("=" * 80)
-        print("PADDLE DEBUG")
-        print("PADDLE_API_KEY_PREFIX:", (settings.PADDLE_API_KEY or "")[:25])
-        print("PADDLE_BILLING_ENABLED:", settings.PADDLE_BILLING_ENABLED)
-        print("PADDLE_API_BASE_URL:", settings.PADDLE_API_BASE_URL)
-        print("FRONTEND_BASE_URL:", settings.FRONTEND_BASE_URL)
-        print("PRICE_ID:", paddle_price_id)
-        print("=" * 80)
-
         paddle_response, paddle_error = paddle_request("POST", "/transactions", payload_data)
         if paddle_error:
             return {
