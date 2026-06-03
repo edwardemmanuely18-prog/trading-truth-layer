@@ -60,6 +60,11 @@ function initializePaddle(
     return;
   }
 
+  console.log(
+    "CLIENT TOKEN PREFIX:",
+    clientToken.substring(0, 20)
+  );
+
   try {
     window.Paddle.Initialize({
       token: clientToken,
