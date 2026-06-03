@@ -1005,10 +1005,6 @@ def create_billing_checkout_session(
         }
 
         paddle_response, paddle_error = paddle_request("POST", "/transactions", payload_data)
-
-        print("PADDLE RAW RESPONSE")
-        print(json.dumps(paddle_response, indent=2))
-
         if paddle_error:
             return {
                 "mode": "paddle_checkout_error",
