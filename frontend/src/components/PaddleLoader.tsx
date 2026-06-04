@@ -74,27 +74,9 @@ function initializePaddle(
       "Paddle initialized successfully."
     );
 
-    const params = new URLSearchParams(
-      window.location.search
-    );
-
-    const transactionId =
-      params.get("_ptxn");
-
-    if (transactionId) {
-      console.log(
-          "Opening Paddle checkout for transaction:",
-          transactionId
-      );
-
-      window.Paddle.Checkout.open({
-          transactionId,
-
-          settings: {
-          displayMode: "overlay"
-          }
-      });
-      }
+    // Hosted checkout flow.
+    // No automatic Paddle overlay launch.
+    
   } catch (err) {
     console.error(
       "Paddle initialization failed:",
