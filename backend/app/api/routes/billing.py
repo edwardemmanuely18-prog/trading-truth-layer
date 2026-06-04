@@ -1016,6 +1016,15 @@ def create_billing_checkout_session(
             payload_data
         )
 
+        print("=== PADDLE REQUEST ===")
+        print(payload_data)
+
+        print("=== PADDLE RESPONSE ===")
+        print(paddle_response)
+
+        print("=== PADDLE ERROR ===")
+        print(paddle_error)
+
         data = (paddle_response or {}).get("data") or {}
 
         if paddle_error:
