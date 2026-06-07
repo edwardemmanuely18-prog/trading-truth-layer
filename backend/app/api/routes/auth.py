@@ -246,6 +246,59 @@ def verify_email(
     }
 
 
+@router.post("/resend-verification")
+def resend_verification(
+    payload: ForgotPasswordPayload,
+    db: Session = Depends(get_db),
+):
+    user = (
+        db.query(User)
+        .filter(User.email == payload.email)
+        .first()
+    )
+
+    if not user:
+        return {
+            "message": "Verification email sent if account exists."
+        }
+
+    if user.email_verified:
+        return {
+            "message": "Email already verified."
+        }
+
+    raw_token, hashed_token = (
+        generate_email_verification_token()
+    )
+
+    user.email_verification_token = hashed_token
+
+    user.email_verification_expires_at = (
+        datetime.utcnow()
+        + timedelta(
+            minutes=settings.EMAIL_VERIFICATION_EXPIRE_MINUTES
+        )
+    )
+
+    db.commit()
+
+    verification_url = (
+        f"{settings.FRONTEND_BASE_URL}"
+        f"/verify-email"
+        f"?token={raw_token}"
+    )
+
+    send_verification_email(
+        user.email,
+        user.name,
+        verification_url,
+    )
+
+    return {
+        "message": "Verification email sent."
+    }
+
+
 @router.post("/forgot-password")
 def forgot_password(
     payload: ForgotPasswordPayload,
