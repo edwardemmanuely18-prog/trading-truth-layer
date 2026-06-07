@@ -93,6 +93,17 @@ def register(payload: RegisterPayload, db: Session = Depends(get_db)):
 
     db.add(membership)
 
+    print(
+        "REGISTER DEBUG BEFORE COMMIT",
+        {
+            "user_id": user.id,
+            "workspace_id": workspace.id,
+            "workspace_name": workspace.name,
+            "membership_user_id": membership.user_id,
+            "membership_workspace_id": membership.workspace_id,
+        }
+    )
+
     created_workspace = True
 
     pending_invites = (
@@ -130,8 +141,41 @@ def register(payload: RegisterPayload, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
+    membership_count = (
+        db.query(WorkspaceMembership)
+        .filter(
+            WorkspaceMembership.user_id == user.id
+        )
+        .count()
+    )
+
+    workspace_count = (
+        db.query(Workspace)
+        .filter(
+            Workspace.id == workspace.id
+        )
+        .count()
+    )
+
+    print(
+        "REGISTER DEBUG AFTER COMMIT",
+        {
+            "user_id": user.id,
+            "membership_count": membership_count,
+            "workspace_count": workspace_count,
+        }
+    )
+
     token = create_access_token(str(user.id))
     workspaces = get_user_workspaces(db, user.id)
+
+    print(
+        "REGISTER DEBUG WORKSPACES",
+        {
+            "user_id": user.id,
+            "workspaces": workspaces,
+        }
+    )
 
     return {
         "access_token": token,
