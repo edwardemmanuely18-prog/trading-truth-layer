@@ -1023,26 +1023,16 @@ export default function WorkspaceLedgerPage() {
 
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Net PnL</label>
-                  <input
-                    value={manualTradeForm.net_pnl}
-                    onChange={(e) => updateManualTradeField("net_pnl", e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                    placeholder="Optional"
-                  />
-                </div>
 
-                <div>
-
-                  <div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-700">
                       Strategy Tag
                     </label>
 
                     <input
-                      value={editTradeForm.strategy_tag}
+                      value={manualTradeForm.strategy_tag}
                       onChange={(e) =>
-                        updateEditTradeField(
+                        updateManualTradeField(
                           "strategy_tag",
                           e.target.value
                         )
@@ -1058,9 +1048,9 @@ export default function WorkspaceLedgerPage() {
                     </label>
 
                     <input
-                      value={editTradeForm.tags_input}
+                      value={manualTradeForm.tags_input}
                       onChange={(e) =>
-                        updateEditTradeField(
+                        updateManualTradeField(
                           "tags_input",
                           e.target.value
                         )
@@ -1069,7 +1059,17 @@ export default function WorkspaceLedgerPage() {
                       placeholder="swing, breakout, london-session"
                     />
                   </div>
+
+                  <input
+                    value={manualTradeForm.net_pnl}
+                    onChange={(e) => updateManualTradeField("net_pnl", e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Optional"
+                  />
                 </div>
+
+                <div>
+                  
                 </div>
 
                 <div className="md:col-span-2 xl:col-span-3">
@@ -1218,6 +1218,43 @@ export default function WorkspaceLedgerPage() {
 
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Net PnL</label>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">
+                      Strategy Tag
+                    </label>
+
+                    <input
+                      value={manualTradeForm.strategy_tag}
+                      onChange={(e) =>
+                        updateManualTradeField(
+                          "strategy_tag",
+                          e.target.value
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                      placeholder="macro, scalping, swing, crypto..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">
+                      Tags
+                    </label>
+
+                    <input
+                      value={manualTradeForm.tags_input}
+                      onChange={(e) =>
+                        updateManualTradeField(
+                          "tags_input",
+                          e.target.value
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                      placeholder="swing, breakout, london-session"
+                    />
+                  </div>
+                  
                   <input
                     value={editTradeForm.net_pnl}
                     onChange={(e) => updateEditTradeField("net_pnl", e.target.value)}
