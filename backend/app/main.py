@@ -156,6 +156,33 @@ def on_startup():
         for column_name, sql in trade_patches.items():
             if column_name not in trade_columns:
                 db.execute(text(sql))
+                db.commit()
+
+        user_columns = [
+            col["name"]
+            for col in inspector.get_columns("users")
+        ]
+
+        user_patches = {
+            "email_verified":
+                "ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT FALSE",
+
+            "email_verification_token":
+                "ALTER TABLE users ADD COLUMN email_verification_token VARCHAR",
+
+            "email_verification_expires_at":
+                "ALTER TABLE users ADD COLUMN email_verification_expires_at TIMESTAMP",
+
+            "password_reset_token":
+                "ALTER TABLE users ADD COLUMN password_reset_token VARCHAR",
+
+            "password_reset_expires_at":
+                "ALTER TABLE users ADD COLUMN password_reset_expires_at TIMESTAMP",
+        }
+
+        for column_name, sql in user_patches.items():
+            if column_name not in user_columns:
+                db.execute(text(sql))
                 db.commit()        
 
     finally:

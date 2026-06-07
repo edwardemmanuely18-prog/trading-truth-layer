@@ -10,7 +10,17 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
-    FRONTEND_BASE_URL: str = "http://localhost:3000"
+    FRONTEND_BASE_URL: str = "http://localhost:3001"
+
+    RESEND_API_KEY: str | None = None
+
+    EMAIL_FROM: str = "noreply@tradingtruthlayer.com"
+
+    SUPPORT_EMAIL: str = "support@tradingtruthlayer.com"
+
+    EMAIL_VERIFICATION_EXPIRE_MINUTES: int = 60 * 24
+
+    PASSWORD_RESET_EXPIRE_MINUTES: int = 60
 
     STRIPE_BILLING_ENABLED: bool = False
     STRIPE_SECRET_KEY: str | None = None
