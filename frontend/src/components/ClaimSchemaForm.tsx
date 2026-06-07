@@ -13,7 +13,7 @@ import PaywallModal from "./PaywallModal";
 import { useWorkspaceGate } from "../hooks/useWorkspaceGate";
 
 type Props = {
-  workspaceId?: number;
+  workspaceId: number;
 };
 
 type FormErrors = {
