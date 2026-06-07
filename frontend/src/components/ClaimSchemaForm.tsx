@@ -116,7 +116,21 @@ function getPlanName(usage?: WorkspaceUsageSummary | null, planCode?: string | n
   return matched?.name || planCode || "current plan";
 }
 
-export default function ClaimSchemaForm({ workspaceId = 1 }: Props) {
+export default function ClaimSchemaForm({ workspaceId }: Props) {
+  if (!workspaceId) {
+    return (
+      <section className="rounded-3xl border border-red-200 bg-red-50 p-6">
+        <h3 className="text-lg font-semibold text-red-700">
+          Workspace context required
+        </h3>
+
+        <p className="mt-2 text-sm text-red-600">
+          Claim creation requires an active workspace context.
+        </p>
+      </section>
+    );
+  }
+
   const router = useRouter();
   const { paywallState, closePaywall, openPaywall, gateAndExecute } = useWorkspaceGate();
 

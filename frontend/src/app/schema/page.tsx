@@ -198,7 +198,9 @@ export default function SchemaPage() {
 
         <section className="grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
           <div>
-            <ClaimSchemaForm />
+            <ClaimSchemaForm
+              workspaceId={firstWorkspace?.workspace_id}
+            />
           </div>
 
           <aside className="space-y-5">
