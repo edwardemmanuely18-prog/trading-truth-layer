@@ -100,7 +100,7 @@ function RegisterPageInner() {
         name,
         email: email.trim(),
         password,
-        workspace_name: inviteToken ? undefined : workspaceName || undefined,
+        workspace_name: inviteToken ? undefined : workspaceName.trim(),
       });
 
       await refresh();
@@ -218,14 +218,21 @@ function RegisterPageInner() {
 
           {!inviteToken ? (
             <div>
-              <label className="mb-2 block text-sm font-medium">Workspace Name (optional)</label>
+              <label className="mb-2 block text-sm font-medium">Workspace Name</label>
               <input
                 type="text"
                 className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
                 value={workspaceName}
                 onChange={(e) => setWorkspaceName(e.target.value)}
                 placeholder="My Trading Workspace"
+                minLength={3}
+                required
               />
+
+              <p className="mt-2 text-xs text-slate-500">
+                This workspace will be created automatically and assigned to you as the owner.
+              </p>
+              
             </div>
           ) : null}
 
