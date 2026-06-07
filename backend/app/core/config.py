@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
-    FRONTEND_BASE_URL: str = "http://localhost:3001"
+    FRONTEND_BASE_URL: str = "https://tradingtruthlayer.com"
 
     RESEND_API_KEY: str | None = None
 

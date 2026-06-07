@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
+import secrets
+import hashlib
+
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
@@ -48,3 +51,30 @@ def decode_access_token(token: str) -> Dict[str, Any]:
 
     except JWTError:
         raise JWTError("Invalid or expired token")
+
+def generate_secure_token() -> str:
+    return secrets.token_urlsafe(48)
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(
+        token.encode("utf-8")
+    ).hexdigest()
+
+
+def generate_email_verification_token() -> tuple[str, str]:
+    token = generate_secure_token()
+
+    return (
+        token,
+        hash_token(token),
+    )
+
+
+def generate_password_reset_token() -> tuple[str, str]:
+    token = generate_secure_token()
+
+    return (
+        token,
+        hash_token(token),
+    )

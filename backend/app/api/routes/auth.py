@@ -6,12 +6,27 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.db import get_db
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    hash_password,
+    verify_password,
+    generate_email_verification_token,
+    generate_password_reset_token,
+    hash_token,
+)
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.models.workspace_membership import WorkspaceMembership
 from app.models.workspace_invite import WorkspaceInvite
 from datetime import datetime
+
+from datetime import timedelta
+from app.core.config import settings
+from app.services.email_service import (
+    send_verification_email,
+    send_password_reset_email,
+    send_welcome_email,
+)
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -30,6 +45,18 @@ class RegisterPayload(BaseModel):
 class LoginPayload(BaseModel):
     email: EmailStr
     password: str
+
+
+class ForgotPasswordPayload(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordPayload(BaseModel):
+    token: str
+    password: str = Field(
+        min_length=6,
+        max_length=200,
+    )
 
 
 def serialize_user(user: User) -> dict:
@@ -66,11 +93,26 @@ def register(payload: RegisterPayload, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    raw_token, hashed_token = (
+        generate_email_verification_token()
+    )
+
     user = User(
         email=payload.email,
         name=payload.name,
         role="member",
         password_hash=hash_password(payload.password),
+
+        email_verified=False,
+
+        email_verification_token=hashed_token,
+
+        email_verification_expires_at=(
+            datetime.utcnow()
+            + timedelta(
+                minutes=settings.EMAIL_VERIFICATION_EXPIRE_MINUTES
+            )
+        ),
     )
     db.add(user)
     db.flush()
@@ -129,6 +171,18 @@ def register(payload: RegisterPayload, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
+    verification_url = (
+        f"{settings.FRONTEND_BASE_URL}"
+        f"/verify-email"
+        f"?token={raw_token}"
+    )
+
+    send_verification_email(
+        user.email,
+        user.name,
+        verification_url,
+    )
+
     token = create_access_token(str(user.id))
     workspaces = get_user_workspaces(db, user.id)
 
@@ -137,6 +191,58 @@ def register(payload: RegisterPayload, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "user": serialize_user(user),
         "workspaces": workspaces,
+    }
+
+
+@router.get("/verify-email")
+def verify_email(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    token_hash = hash_token(token)
+
+    user = (
+        db.query(User)
+        .filter(
+            User.email_verification_token == token_hash,
+        )
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid verification token",
+        )
+
+    if user.email_verified:
+        return {
+            "status": "already_verified",
+        }
+
+    if (
+        user.email_verification_expires_at
+        and user.email_verification_expires_at < datetime.utcnow()
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Verification token expired",
+        )
+
+    user.email_verified = True
+
+    user.email_verification_token = None
+    user.email_verification_expires_at = None
+
+    db.commit()
+
+    send_welcome_email(
+        user.email,
+        user.name,
+    )
+
+    return {
+        "status": "verified",
     }
 
 
