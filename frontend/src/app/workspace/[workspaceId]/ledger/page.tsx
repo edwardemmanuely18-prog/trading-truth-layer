@@ -258,14 +258,42 @@ export default function WorkspaceLedgerPage() {
   }
 
   function buildTradePayload(form: TradeFormState) {
+
+    if (!form.opened_at?.trim()) {
+      throw new Error("Opened At is required.");
+    }
+
+    const openedDate = new Date(form.opened_at);
+
+    if (Number.isNaN(openedDate.getTime())) {
+      throw new Error("Opened At is invalid.");
+    }
+
+    let closedDateIso: string | null = null;
+
+    if (form.closed_at.trim() !== "") {
+      const closedDate = new Date(form.closed_at);
+
+      if (Number.isNaN(closedDate.getTime())) {
+        throw new Error("Closed At is invalid.");
+      }
+
+      closedDateIso = closedDate.toISOString();
+    }
+
     const payload = {
       member_id: Number.isFinite(Number(form.member_id))
         ? Number(form.member_id)
         : 0,
+
       symbol: form.symbol.trim().toUpperCase(),
+
       side: form.side.trim().toUpperCase(),
-      opened_at: new Date(form.opened_at).toISOString(),
-      closed_at: form.closed_at.trim() === "" ? null : new Date(form.closed_at).toISOString(),
+
+      opened_at: openedDate.toISOString(),
+
+      closed_at: closedDateIso,
+      
       entry_price: Number(form.entry_price),
       exit_price: form.exit_price.trim() === "" ? null : Number(form.exit_price),
       quantity: Number(form.quantity),
@@ -829,7 +857,7 @@ export default function WorkspaceLedgerPage() {
               }}
               className="rounded-xl border px-3 py-2 text-sm"
             >
-              <option value="">All Tags</option>
+              <option value="">All Strategies</option>
 
               {tags.map((tag) => (
                 <option key={tag} value={tag}>
@@ -1004,6 +1032,25 @@ export default function WorkspaceLedgerPage() {
                 </div>
 
                 <div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">
+                      Tags
+                    </label>
+
+                    <input
+                      value={manualTradeForm.tags_input}
+                      onChange={(e) =>
+                        updateManualTradeField(
+                          "tags_input",
+                          e.target.value
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                      placeholder="swing, breakout, london-session"
+                    />
+                  </div>
+
                   <label className="mb-1 block text-sm font-medium text-slate-700">
                     Strategy Tag
                   </label>
@@ -1172,6 +1219,25 @@ export default function WorkspaceLedgerPage() {
                 </div>
 
                 <div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">
+                      Tags
+                    </label>
+
+                    <input
+                      value={editTradeForm.tags_input}
+                      onChange={(e) =>
+                        updateEditTradeField(
+                          "tags_input",
+                          e.target.value
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                      placeholder="swing, breakout, london-session"
+                    />
+                  </div>
+
                   <label className="mb-1 block text-sm font-medium text-slate-700">
                     Strategy Tag
                   </label>
