@@ -3,10 +3,6 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.core.config import settings
 
-# =========================
-# DEBUG (REMOVE LATER)
-# =========================
-print("DATABASE_URL DEBUG:", settings.DATABASE_URL)
 
 # =========================
 # ENGINE CONFIG
