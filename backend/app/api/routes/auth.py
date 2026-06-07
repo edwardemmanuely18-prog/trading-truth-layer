@@ -72,22 +72,28 @@ def register(payload: RegisterPayload, db: Session = Depends(get_db)):
     db.add(user)
     db.flush()
 
-    created_workspace = False
+    workspace_name = (
+        payload.workspace_name.strip()
+        if payload.workspace_name
+        else f"{payload.name} Workspace"
+    )
 
-    if payload.workspace_name:
-        workspace = Workspace(name=payload.workspace_name)
-        db.add(workspace)
-        db.flush()
+    workspace = Workspace(
+        name=workspace_name
+    )
 
-        membership = WorkspaceMembership(
-            workspace_id=workspace.id,
-            user_id=user.id,
-            role="owner",
-        )
+    db.add(workspace)
+    db.flush()
 
-        db.add(membership)
+    membership = WorkspaceMembership(
+        workspace_id=workspace.id,
+        user_id=user.id,
+        role="owner",
+    )
 
-        created_workspace = True
+    db.add(membership)
+
+    created_workspace = True
 
     pending_invites = (
         db.query(WorkspaceInvite)

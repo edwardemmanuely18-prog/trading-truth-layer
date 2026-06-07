@@ -218,13 +218,13 @@ function RegisterPageInner() {
 
           {!inviteToken ? (
             <div>
-              <label className="mb-2 block text-sm font-medium">Workspace Name</label>
+              <label className="mb-2 block text-sm font-medium">Workspace Name (optional)</label>
               <input
                 type="text"
                 className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
                 value={workspaceName}
                 onChange={(e) => setWorkspaceName(e.target.value)}
-                placeholder="Optional for standard signup"
+                placeholder="My Trading Workspace"
               />
             </div>
           ) : null}
