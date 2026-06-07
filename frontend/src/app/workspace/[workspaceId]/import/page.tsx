@@ -417,10 +417,16 @@ export default function WorkspaceImportPage() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-              <div className="text-base font-semibold text-slate-900">Live ingestion</div>
-              <div className="mt-2 text-sm text-slate-700">Available</div>
+              <div className="text-base font-semibold text-slate-900">
+                Live ingestion
+              </div>
+
+              <div className="mt-2 text-sm text-slate-700">
+                Planned
+              </div>
+
               <div className="mt-1 text-sm text-slate-500">
-                Stream-event and webhook ingestion routes are active in backend infrastructure.
+                Real-time broker streaming is reserved for future releases.
               </div>
             </div>
           </div>

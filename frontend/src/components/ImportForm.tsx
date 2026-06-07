@@ -186,8 +186,6 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
     setPreviewMode,
   ] = useState(false);
 
-  const [realTimeEnabled, setRealTimeEnabled] = useState(false);
-
   const workspaceRole = getWorkspaceRole(workspaceId);
   const canImportByRole = workspaceRole === "owner" || workspaceRole === "operator";
 
@@ -434,41 +432,6 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
     }
   }
 
-  async function handleRealTimeToggle() {
-    const nextValue = !realTimeEnabled;
-    setRealTimeEnabled(nextValue);
-
-    if (!nextValue) {
-      setStatus("Real-time ingestion toggle turned off locally.");
-      return;
-    }
-
-    try {
-      await api.sendStreamEvent(workspaceId, {
-        source_type: sourceType === "ibkr" ? "ibkr" : "mt5",
-        trade: {
-          symbol: "DEMO",
-          side: "buy",
-          quantity: 1,
-          price: 100,
-          pnl: 0,
-          timestamp: new Date().toISOString(),
-          external_id: `demo-${Date.now()}`,
-        },
-      });
-
-      setStatus(
-        `Real-time ingestion event processed for ${
-          sourceType === "ibkr" ? "IBKR" : "MT5"
-        }.`
-      );
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to send real-time ingestion event"
-      );
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -534,18 +497,23 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-            <div className="font-semibold text-slate-900">Real-time Ingestion</div>
-            <div className="mt-2">{realTimeEnabled ? "Enabled" : "Available"}</div>
+            <div className="font-semibold text-slate-900">
+              Import Status
+            </div>
+
+            <div className="mt-2">
+              Active
+            </div>
+
             <div className="mt-1 text-xs text-slate-500">
-              Stream-event ingestion and webhook ingestion are now active in backend.
+              CSV, MT5 and IBKR import pipelines available.
             </div>
           </div>
         </div>
 
         <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
           CSV, MT5, and IBKR are active ingestion paths on the shared broker-neutral pipeline.
-          Auto-import configuration is available, and real-time ingestion now routes through the
-          live backend ingestion surface.
+          Auto-import configuration is available for recurring broker export ingestion workflows.
         </div>
 
         <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -705,15 +673,6 @@ export default function ImportForm({ workspaceId = 1 }: Props) {
                   : autoImportEnabled
                     ? "Disable Auto-import"
                     : "Enable Auto-import"}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleRealTimeToggle}
-                disabled={!canImportByRole}
-                className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {realTimeEnabled ? "Disable Real-time" : "Enable Real-time"}
               </button>
             </div>
           </div>

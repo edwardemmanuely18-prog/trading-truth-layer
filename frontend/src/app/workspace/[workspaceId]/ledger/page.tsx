@@ -1034,14 +1034,33 @@ export default function WorkspaceLedgerPage() {
                 <div>
 
                   <div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">
+                      Strategy Tag
+                    </label>
+
+                    <input
+                      value={editTradeForm.strategy_tag}
+                      onChange={(e) =>
+                        updateEditTradeField(
+                          "strategy_tag",
+                          e.target.value
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                      placeholder="macro, scalping, swing, crypto..."
+                    />
+                  </div>
+
+                  <div>
                     <label className="mb-1 block text-sm font-medium text-slate-700">
                       Tags
                     </label>
 
                     <input
-                      value={manualTradeForm.tags_input}
+                      value={editTradeForm.tags_input}
                       onChange={(e) =>
-                        updateManualTradeField(
+                        updateEditTradeField(
                           "tags_input",
                           e.target.value
                         )
@@ -1050,19 +1069,7 @@ export default function WorkspaceLedgerPage() {
                       placeholder="swing, breakout, london-session"
                     />
                   </div>
-
-                  <label className="mb-1 block text-sm font-medium text-slate-700">
-                    Strategy Tag
-                  </label>
-
-                  <input
-                    value={manualTradeForm.strategy_tag}
-                    onChange={(e) =>
-                      updateManualTradeField("strategy_tag", e.target.value)
-                    }
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                    placeholder="macro, scalping, swing, crypto..."
-                  />
+                </div>
                 </div>
 
                 <div className="md:col-span-2 xl:col-span-3">
