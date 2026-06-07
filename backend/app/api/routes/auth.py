@@ -339,7 +339,7 @@ def reset_password(
     return {
         "status": "password_reset_successful"
     }
-    
+
 
 @router.post("/login")
 def login(payload: LoginPayload, db: Session = Depends(get_db)):
@@ -357,10 +357,10 @@ def login(payload: LoginPayload, db: Session = Depends(get_db)):
         )
 
     if not user.email_verified:
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Please verify your email address",
-    )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email address",
+        )
 
     token = create_access_token(str(user.id))
     workspaces = get_user_workspaces(db, user.id)
