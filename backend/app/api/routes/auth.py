@@ -246,6 +246,101 @@ def verify_email(
     }
 
 
+@router.post("/forgot-password")
+def forgot_password(
+    payload: ForgotPasswordPayload,
+    db: Session = Depends(get_db),
+):
+    user = (
+        db.query(User)
+        .filter(User.email == payload.email)
+        .first()
+    )
+
+    if user:
+        raw_token, hashed_token = (
+            generate_password_reset_token()
+        )
+
+        user.password_reset_token = hashed_token
+
+        user.password_reset_expires_at = (
+            datetime.utcnow()
+            + timedelta(
+                minutes=settings.PASSWORD_RESET_EXPIRE_MINUTES
+            )
+        )
+
+        db.commit()
+
+        reset_url = (
+            f"{settings.FRONTEND_BASE_URL}"
+            f"/reset-password"
+            f"?token={raw_token}"
+        )
+
+        send_password_reset_email(
+            user.email,
+            user.name,
+            reset_url,
+        )
+
+    return {
+        "message": (
+            "If an account exists for that email,"
+            " a reset link has been sent."
+        )
+    }
+
+
+@router.post("/reset-password")
+def reset_password(
+    payload: ResetPasswordPayload,
+    db: Session = Depends(get_db),
+):
+    token_hash = hash_token(
+        payload.token
+    )
+
+    user = (
+        db.query(User)
+        .filter(
+            User.password_reset_token
+            == token_hash
+        )
+        .first()
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid reset token",
+        )
+
+    if (
+        user.password_reset_expires_at
+        and user.password_reset_expires_at
+        < datetime.utcnow()
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Reset token expired",
+        )
+
+    user.password_hash = hash_password(
+        payload.password
+    )
+
+    user.password_reset_token = None
+    user.password_reset_expires_at = None
+
+    db.commit()
+
+    return {
+        "status": "password_reset_successful"
+    }
+    
+
 @router.post("/login")
 def login(payload: LoginPayload, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
@@ -260,6 +355,12 @@ def login(payload: LoginPayload, db: Session = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
+
+    if not user.email_verified:
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Please verify your email address",
+    )
 
     token = create_access_token(str(user.id))
     workspaces = get_user_workspaces(db, user.id)
