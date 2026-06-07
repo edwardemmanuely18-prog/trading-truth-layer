@@ -1283,6 +1283,26 @@ function parseApiErrorPayload(rawText: string): ApiErrorPayload | null {
           return { message: detail, detail };
         }
 
+        if (Array.isArray(detail)) {
+          const first = detail[0];
+
+          if (
+            first &&
+            typeof first === "object" &&
+            "msg" in first
+          ) {
+            return {
+              message: String((first as any).msg),
+              detail: String((first as any).msg),
+            };
+          }
+
+          return {
+            message: "Validation failed",
+            detail: "Validation failed",
+          };
+        }
+
         if (detail && typeof detail === "object") {
           return detail as ApiErrorPayload;
         }
