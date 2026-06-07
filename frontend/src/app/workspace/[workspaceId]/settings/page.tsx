@@ -1047,10 +1047,23 @@ export default function WorkspaceSettingsPage() {
       setError(null);
       setSuccess(null);
 
-      const response: BillingCheckoutResponse = await api.createBillingCheckoutSession(workspaceId, {
-        plan_code: selectedPlanCode,
-        billing_cycle: selectedBillingCycle,
-      });
+      const response: BillingCheckoutResponse =
+        await api.createBillingCheckoutSession(workspaceId, {
+          plan_code: selectedPlanCode,
+          billing_cycle: selectedBillingCycle,
+        });
+
+      if (
+        response.checkout_intent === "sandbox_activation" ||
+        response.mode === "sandbox_activation"
+      ) {
+        await refreshBillingState(workspaceId);
+
+        setSuccess("Sandbox activated successfully.");
+        setBillingMessage(null);
+
+        return;
+      }
 
       if (response.url) {
         window.location.href = response.url;
