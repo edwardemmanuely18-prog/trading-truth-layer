@@ -1022,55 +1022,56 @@ export default function WorkspaceLedgerPage() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Net PnL</label>
-
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">
-                      Strategy Tag
-                    </label>
-
-                    <input
-                      value={manualTradeForm.strategy_tag}
-                      onChange={(e) =>
-                        updateManualTradeField(
-                          "strategy_tag",
-                          e.target.value
-                        )
-                      }
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                      placeholder="macro, scalping, swing, crypto..."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">
-                      Tags
-                    </label>
-
-                    <input
-                      value={manualTradeForm.tags_input}
-                      onChange={(e) =>
-                        updateManualTradeField(
-                          "tags_input",
-                          e.target.value
-                        )
-                      }
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                      placeholder="swing, breakout, london-session"
-                    />
-                  </div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Net PnL
+                  </label>
 
                   <input
                     value={manualTradeForm.net_pnl}
-                    onChange={(e) => updateManualTradeField("net_pnl", e.target.value)}
+                    onChange={(e) =>
+                      updateManualTradeField("net_pnl", e.target.value)
+                    }
                     className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                     placeholder="Optional"
                   />
                 </div>
 
                 <div>
-                  
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Strategy Tag
+                  </label>
+
+                  <input
+                    value={manualTradeForm.strategy_tag}
+                    onChange={(e) =>
+                      updateManualTradeField(
+                        "strategy_tag",
+                        e.target.value
+                      )
+                    }
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="macro, scalping, swing, crypto..."
+                  />
                 </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Tags
+                  </label>
+
+                  <input
+                    value={manualTradeForm.tags_input}
+                    onChange={(e) =>
+                      updateManualTradeField(
+                        "tags_input",
+                        e.target.value
+                      )
+                    }
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="swing, breakout, london-session"
+                  />
+                </div>
+
 
                 <div className="md:col-span-2 xl:col-span-3">
                   <label className="mb-1 block text-sm font-medium text-slate-700">Source System</label>
@@ -1217,71 +1218,23 @@ export default function WorkspaceLedgerPage() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Net PnL</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Net PnL
+                  </label>
 
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">
-                      Strategy Tag
-                    </label>
-
-                    <input
-                      value={manualTradeForm.strategy_tag}
-                      onChange={(e) =>
-                        updateManualTradeField(
-                          "strategy_tag",
-                          e.target.value
-                        )
-                      }
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                      placeholder="macro, scalping, swing, crypto..."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">
-                      Tags
-                    </label>
-
-                    <input
-                      value={manualTradeForm.tags_input}
-                      onChange={(e) =>
-                        updateManualTradeField(
-                          "tags_input",
-                          e.target.value
-                        )
-                      }
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                      placeholder="swing, breakout, london-session"
-                    />
-                  </div>
-                  
                   <input
                     value={editTradeForm.net_pnl}
-                    onChange={(e) => updateEditTradeField("net_pnl", e.target.value)}
+                    onChange={(e) =>
+                      updateEditTradeField(
+                        "net_pnl",
+                        e.target.value
+                      )
+                    }
                     className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                   />
                 </div>
 
                 <div>
-
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">
-                      Tags
-                    </label>
-
-                    <input
-                      value={editTradeForm.tags_input}
-                      onChange={(e) =>
-                        updateEditTradeField(
-                          "tags_input",
-                          e.target.value
-                        )
-                      }
-                      className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                      placeholder="swing, breakout, london-session"
-                    />
-                  </div>
-
                   <label className="mb-1 block text-sm font-medium text-slate-700">
                     Strategy Tag
                   </label>
@@ -1289,13 +1242,34 @@ export default function WorkspaceLedgerPage() {
                   <input
                     value={editTradeForm.strategy_tag}
                     onChange={(e) =>
-                      updateEditTradeField("strategy_tag", e.target.value)
+                      updateEditTradeField(
+                        "strategy_tag",
+                        e.target.value
+                      )
                     }
                     className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
                     placeholder="macro, equities, forex..."
                   />
                 </div>
 
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Tags
+                  </label>
+
+                  <input
+                    value={editTradeForm.tags_input}
+                    onChange={(e) =>
+                      updateEditTradeField(
+                        "tags_input",
+                        e.target.value
+                      )
+                    }
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="swing, breakout, london-session"
+                  />
+                </div>
+                  
                 <div className="md:col-span-2 xl:col-span-3">
                   <label className="mb-1 block text-sm font-medium text-slate-700">Source System</label>
                   <input
