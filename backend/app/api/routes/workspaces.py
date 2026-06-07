@@ -851,3 +851,12 @@ def remove_workspace_member(
         "user_id": user_id,
     }
 
+
+@router.get("/api/debug/whoami")
+def debug_whoami(
+    current_user: User = Depends(get_current_user),
+):
+    return {
+        "user_id": current_user.id,
+        "email": current_user.email,
+    }
