@@ -6,8 +6,8 @@ import { FormEvent, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "../../lib/api";
 
+
 export default function ResetPasswordPage() {
-  import { useEffect, useState } from "react";
 
   const [token, setToken] = useState("");
 
