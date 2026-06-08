@@ -42,29 +42,58 @@ def send_verification_email(
     verification_url: str,
 ):
     html = f"""
-    <h2>Verify your Trading Truth Layer account</h2>
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;">
 
-    <p>Hello {name},</p>
+        <h1 style="color:#111827;margin-bottom:20px;">
+            Verify Your Email Address
+        </h1>
 
-    <p>
-    Please verify ownership of your email address before
-    using Trading Truth Layer.
-    </p>
+        <p>Hello {name},</p>
 
-    <p>
-        <a href="{verification_url}">
-            Verify Email
-        </a>
-    </p>
+        <p>
+            Welcome to Trading Truth Layer.
+            Before continuing, please verify ownership of your email address.
+        </p>
 
-    <p>
-    If you did not create this account, you may ignore
-    this message.
-    </p>
+        <div style="text-align:center;margin:40px 0;">
 
-    <p>
-    Trading Truth Layer
-    </p>
+            <a
+                href="{verification_url}"
+                style="
+                    background:#111827;
+                    color:#ffffff;
+                    padding:18px 40px;
+                    text-decoration:none;
+                    border-radius:12px;
+                    font-size:18px;
+                    font-weight:700;
+                    display:inline-block;
+                "
+            >
+                VERIFY EMAIL
+            </a>
+
+        </div>
+
+        <p>
+            If you did not create this account, you may safely ignore this email.
+        </p>
+
+        <p>
+            If the button above does not work, copy and paste this link:
+        </p>
+
+        <p>
+            {verification_url}
+        </p>
+
+        <hr style="margin:30px 0;">
+
+        <p style="color:#6b7280;">
+            Trading Truth Layer
+        </p>
+
+    </div>
     """
 
     send_email(
@@ -80,29 +109,59 @@ def send_password_reset_email(
     reset_url: str,
 ):
     html = f"""
-    <h2>Password Reset Request</h2>
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;">
 
-    <p>Hello {name},</p>
+        <h1 style="color:#111827;margin-bottom:20px;">
+            Reset Your Password
+        </h1>
 
-    <p>
-    A password reset request was submitted for your
-    Trading Truth Layer account.
-    </p>
+        <p>Hello {name},</p>
 
-    <p>
-        <a href="{reset_url}">
-            Reset Password
-        </a>
-    </p>
+        <p>
+            A request was made to reset the password for your
+            Trading Truth Layer account.
+        </p>
 
-    <p>
-    If you did not request a password reset, you can
-    safely ignore this email.
-    </p>
+        <div style="text-align:center;margin:40px 0;">
 
-    <p>
-    Trading Truth Layer
-    </p>
+            <a
+                href="{reset_url}"
+                style="
+                    background:#dc2626;
+                    color:#ffffff;
+                    padding:18px 40px;
+                    text-decoration:none;
+                    border-radius:12px;
+                    font-size:18px;
+                    font-weight:700;
+                    display:inline-block;
+                "
+            >
+                RESET PASSWORD
+            </a>
+
+        </div>
+
+        <p>
+            If you did not request a password reset,
+            you may safely ignore this email.
+        </p>
+
+        <p>
+            If the button above does not work, copy and paste this link:
+        </p>
+
+        <p>
+            {reset_url}
+        </p>
+
+        <hr style="margin:30px 0;">
+
+        <p style="color:#6b7280;">
+            Trading Truth Layer
+        </p>
+
+    </div>
     """
 
     send_email(
@@ -117,28 +176,42 @@ def send_welcome_email(
     name: str,
 ):
     html = f"""
-    <h2>Welcome to Trading Truth Layer</h2>
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;">
 
-    <p>Hello {name},</p>
+        <h1 style="color:#111827;">
+            Welcome to Trading Truth Layer
+        </h1>
 
-    <p>
-    Your account has been successfully created.
-    </p>
+        <p>Hello {name},</p>
 
-    <p>
-    Trading Truth Layer provides governed claim creation,
-    canonical trade ledgers, evidence generation,
-    verification workflows, and public proof surfaces.
-    </p>
+        <p>
+            Your account has been successfully verified and activated.
+        </p>
 
-    <p>
-    Need help?
-    Contact {SUPPORT_EMAIL}
-    </p>
+        <p>
+            Trading Truth Layer provides governed claim creation,
+            canonical trade ledgers,
+            evidence generation,
+            verification workflows,
+            dispute handling,
+            and public proof surfaces.
+        </p>
 
-    <p>
-    Trading Truth Layer
-    </p>
+        <p>
+            Need assistance?
+        </p>
+
+        <p>
+            {SUPPORT_EMAIL}
+        </p>
+
+        <hr style="margin:30px 0;">
+
+        <p style="color:#6b7280;">
+            Trading Truth Layer
+        </p>
+
+    </div>
     """
 
     send_email(
