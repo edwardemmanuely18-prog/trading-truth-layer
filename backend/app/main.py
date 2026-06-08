@@ -42,6 +42,11 @@ from app.api.routes import billing
 
 from app.core.security import hash_password
 
+from app.core.rate_limit import limiter
+
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+
 
 # =========================
 # SENTRY
@@ -72,6 +77,13 @@ if SENTRY_DSN:
 # APP INIT
 # =========================
 app = FastAPI(title="Trading Truth Layer API")
+
+app.state.limiter = limiter
+
+app.add_exception_handler(
+    RateLimitExceeded,
+    _rate_limit_exceeded_handler,
+)
 
 # =========================
 # CORS (FINAL CLEAN VERSION)

@@ -33,6 +33,8 @@ from app.services.security_audit import (
     log_security_event,
 )
 
+from app.core.rate_limit import limiter
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -94,6 +96,7 @@ def get_user_workspaces(db: Session, user_id: int) -> list[dict]:
 
 
 @router.post("/register")
+@limiter.limit("3/hour")
 def register(
     payload: RegisterPayload,
     request: Request,
@@ -272,8 +275,10 @@ def verify_email(
 
 
 @router.post("/resend-verification")
+@limiter.limit("5/hour")
 def resend_verification(
     payload: ForgotPasswordPayload,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     user = (
@@ -332,8 +337,10 @@ def resend_verification(
 
 
 @router.post("/forgot-password")
+@limiter.limit("3/hour")
 def forgot_password(
     payload: ForgotPasswordPayload,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     user = (
@@ -441,6 +448,7 @@ def reset_password(
 
 
 @router.post("/login")
+@limiter.limit("5/minute")
 def login(
     payload: LoginPayload,
     request: Request,
