@@ -28,6 +28,11 @@ from app.services.email_service import (
     send_welcome_email,
 )
 
+from fastapi import Request
+from app.services.security_audit import (
+    log_security_event,
+)
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -89,7 +94,11 @@ def get_user_workspaces(db: Session, user_id: int) -> list[dict]:
 
 
 @router.post("/register")
-def register(payload: RegisterPayload, db: Session = Depends(get_db)):
+def register(
+    payload: RegisterPayload,
+    request: Request,
+    db: Session = Depends(get_db)
+):
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -172,6 +181,14 @@ def register(payload: RegisterPayload, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
+    log_security_event(
+        db=db,
+        event_type="register",
+        user_id=user.id,
+        email=user.email,
+        ip_address=request.client.host,
+    )
+
     verification_url = (
         f"{settings.FRONTEND_BASE_URL}"
         f"/verify-email"
@@ -231,6 +248,13 @@ def verify_email(
         )
 
     user.email_verified = True
+
+    log_security_event(
+        db=db,
+        event_type="email_verified",
+        user_id=user.id,
+        email=user.email,
+    )
 
     user.email_verification_token = None
     user.email_verification_expires_at = None
@@ -295,6 +319,13 @@ def resend_verification(
         verification_url,
     )
 
+    log_security_event(
+        db=db,
+        event_type="verification_resent",
+        user_id=user.id,
+        email=user.email,
+    )
+
     return {
         "message": "Verification email sent."
     }
@@ -337,6 +368,13 @@ def forgot_password(
             user.email,
             user.name,
             reset_url,
+        )
+
+        log_security_event(
+            db=db,
+            event_type="password_reset_requested",
+            user_id=user.id,
+            email=user.email,
         )
 
     return {
@@ -390,21 +428,49 @@ def reset_password(
 
     db.commit()
 
+    log_security_event(
+        db=db,
+        event_type="password_reset_completed",
+        user_id=user.id,
+        email=user.email,
+    )
+
     return {
         "status": "password_reset_successful"
     }
 
 
 @router.post("/login")
-def login(payload: LoginPayload, db: Session = Depends(get_db)):
+def login(
+    payload: LoginPayload,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not user.password_hash:
+
+        log_security_event(
+            db=db,
+            event_type="login_failed",
+            email=payload.email,
+            ip_address=request.client.host,
+        )
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
 
     if not verify_password(payload.password, user.password_hash):
+
+        log_security_event(
+            db=db,
+            event_type="login_failed",
+            user_id=user.id,
+            email=user.email,
+            ip_address=request.client.host,
+        )
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -415,6 +481,14 @@ def login(payload: LoginPayload, db: Session = Depends(get_db)):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Please verify your email address",
         )
+
+    log_security_event(
+        db=db,
+        event_type="login_success",
+        user_id=user.id,
+        email=user.email,
+        ip_address=request.client.host,
+    )
 
     token = create_access_token(str(user.id))
     workspaces = get_user_workspaces(db, user.id)
