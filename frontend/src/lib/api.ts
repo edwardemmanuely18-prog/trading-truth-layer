@@ -1407,13 +1407,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
       res.status === 403
     ) {
       clearStoredAccessToken();
-
-      if (
-        typeof window !== "undefined"
-      ) {
-        window.location.href =
-          "/login?expired=1";
-      }
+      clearStoredActiveWorkspaceId();
     }
 
     const rawText = await res.text();
