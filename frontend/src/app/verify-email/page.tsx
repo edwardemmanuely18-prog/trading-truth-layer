@@ -1,22 +1,29 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { api } from "../../lib/api";
 
 export default function VerifyEmailPage() {
-  const searchParams = useSearchParams();
+  const [token, setToken] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const token = searchParams.get("token");
+    const params = new URLSearchParams(
+      window.location.search
+    );
 
+    setToken(
+      params.get("token") || ""
+    );
+  }, []);
+
+  useEffect(() => {
     if (!token) {
-      setError("Missing verification token");
-      setLoading(false);
       return;
     }
 
@@ -35,7 +42,14 @@ export default function VerifyEmailPage() {
       .finally(() => {
         setLoading(false);
       });
-  }, [searchParams]);
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      setError("Missing verification token");
+      setLoading(false);
+    }
+  }, [token]);
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-50 px-6">

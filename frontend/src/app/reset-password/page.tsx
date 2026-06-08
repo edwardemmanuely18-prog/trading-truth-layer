@@ -2,9 +2,14 @@
 
 export const dynamic = "force-dynamic";
 
-import { FormEvent, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import {
+  FormEvent,
+  useState,
+  useEffect,
+} from "react";
+
 import { api } from "../../lib/api";
+
 
 
 export default function ResetPasswordPage() {
