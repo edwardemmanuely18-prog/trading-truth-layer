@@ -22,6 +22,11 @@ function LoginPageInner() {
 
   const prefilledEmail = useMemo(() => searchParams.get("email") || "", [searchParams]);
 
+  const registered = useMemo(
+    () => searchParams.get("registered"),
+    [searchParams]
+  );
+
   const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -172,6 +177,13 @@ function LoginPageInner() {
           </div>
         ) : null}
 
+        {registered ? (
+          <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+            Account created successfully.
+            Please verify your email before signing in.
+          </div>
+        ) : null}
+
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="mb-2 block text-sm font-medium">Email</label>
@@ -205,6 +217,15 @@ function LoginPageInner() {
                 {showPassword ? "Hide" : "Show"}
               </button>
             </div>
+          </div>
+
+          <div className="text-right">
+            <Link
+              href="/forgot-password"
+              className="text-sm text-slate-600 hover:underline"
+            >
+              Forgot Password?
+            </Link>
           </div>
 
           {error ? (

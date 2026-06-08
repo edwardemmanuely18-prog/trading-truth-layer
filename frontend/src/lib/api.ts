@@ -84,6 +84,15 @@ export type LoginPayload = {
   password: string;
 };
 
+export type ForgotPasswordPayload = {
+  email: string;
+};
+
+export type ResetPasswordPayload = {
+  token: string;
+  password: string;
+};
+
 export type Trade = {
   id: number;
   workspace_id?: number;
@@ -2278,6 +2287,45 @@ export const api = {
     }
 
     return result;
+  },
+
+  verifyEmail: async (token: string) => {
+    return apiFetch<{
+      status: string;
+    }>(
+      `/auth/verify-email?token=${encodeURIComponent(token)}`,
+      {
+        method: "GET",
+      }
+    );
+  },
+
+  forgotPassword: async (
+    payload: ForgotPasswordPayload
+  ) => {
+    return apiFetch<{
+      message: string;
+    }>(
+      `/auth/forgot-password`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+  },
+
+  resetPassword: async (
+    payload: ResetPasswordPayload
+  ) => {
+    return apiFetch<{
+      status: string;
+    }>(
+      `/auth/reset-password`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
   },
 
   logout: () => {

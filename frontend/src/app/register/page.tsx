@@ -96,38 +96,20 @@ function RegisterPageInner() {
       setLoading(true);
       setError(null);
 
-      const result = await api.register({
+      await api.register({
         name,
         email: email.trim(),
         password,
-        workspace_name: inviteToken ? undefined : workspaceName.trim(),
+        workspace_name: inviteToken
+          ? undefined
+          : workspaceName.trim(),
       });
 
-      await refresh();
-
-      const firstWorkspace = result.workspaces?.[0];
-
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
-
-        if (firstWorkspace) {
-          window.localStorage.setItem(
-            ACTIVE_WORKSPACE_KEY,
-            String(firstWorkspace.workspace_id)
-          );
-        }
-      }
-
-      if (finalRedirect) {
-        router.push(finalRedirect);
-        return;
-      }
-
-      if (firstWorkspace) {
-        router.push(`/workspace/${firstWorkspace.workspace_id}/dashboard`);
-      } else {
-        router.push("/");
-      }
+      router.push(
+        `/login?email=${encodeURIComponent(
+          email.trim()
+        )}&registered=true`
+      );
     } catch (err) {
       setError(
         err instanceof Error
@@ -232,7 +214,7 @@ function RegisterPageInner() {
               <p className="mt-2 text-xs text-slate-500">
                 This workspace will be created automatically and assigned to you as the owner.
               </p>
-              
+
             </div>
           ) : null}
 
