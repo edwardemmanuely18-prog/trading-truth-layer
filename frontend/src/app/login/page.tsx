@@ -27,11 +27,25 @@ function LoginPageInner() {
     [searchParams]
   );
 
+  const expired = useMemo(
+    () => searchParams.get("expired"),
+    [searchParams]
+  );
+
   const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showResendVerification, setShowResendVerification] =
+    useState(false);
+
+  const [resendMessage, setResendMessage] =
+    useState("");
+
+  const [resending, setResending] =
+    useState(false);
+  
 
   const inviteRedirect = useMemo(() => {
     if (!inviteToken) return null;
@@ -96,6 +110,7 @@ function LoginPageInner() {
     router.replace("/");
   }, [authLoading, isAuthenticated, user, finalRedirect, workspaces, router]);
 
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
 
@@ -134,13 +149,45 @@ function LoginPageInner() {
         router.push("/");
       }
     } catch (err) {
-      setError(
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Login failed";
+
+        setError(message);
+
+        if (
+          message.includes(
+            "Please verify your email address"
+          )
+        ) {
+          setShowResendVerification(true);
+        }
+      }finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResendVerification() {
+    try {
+      setResending(true);
+
+      const result =
+        await api.resendVerification({
+          email: email.trim(),
+        });
+
+      setResendMessage(
+        result.message
+      );
+    } catch (err) {
+      setResendMessage(
         err instanceof Error
           ? err.message
-          : "Login failed. Please check your details and try again."
+          : "Unable to resend email"
       );
     } finally {
-      setLoading(false);
+      setResending(false);
     }
   }
 
@@ -184,6 +231,13 @@ function LoginPageInner() {
           </div>
         ) : null}
 
+        {expired ? (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
+            Your session expired.
+            Please sign in again.
+          </div>
+        ) : null}
+
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="mb-2 block text-sm font-medium">Email</label>
@@ -219,14 +273,42 @@ function LoginPageInner() {
             </div>
           </div>
 
-          <div className="text-right">
+          <div className="flex items-center justify-between">
+
             <Link
               href="/forgot-password"
               className="text-sm text-slate-600 hover:underline"
             >
               Forgot Password?
             </Link>
+
           </div>
+
+          {showResendVerification && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+
+              <p className="text-sm text-blue-800">
+                Your account is not verified.
+              </p>
+
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                disabled={resending}
+                className="mt-3 rounded-xl bg-blue-600 px-4 py-2 text-white"
+              >
+                {resending
+                  ? "Sending..."
+                  : "Resend Verification Email"}
+              </button>
+
+              {resendMessage && (
+                <div className="mt-3 text-sm text-blue-700">
+                  {resendMessage}
+                </div>
+              )}
+            </div>
+          )}
 
           {error ? (
             <div className="break-words rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">

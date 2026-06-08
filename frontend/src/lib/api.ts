@@ -88,6 +88,10 @@ export type ForgotPasswordPayload = {
   email: string;
 };
 
+export type ResendVerificationPayload = {
+  email: string;
+};
+
 export type ResetPasswordPayload = {
   token: string;
   password: string;
@@ -1397,6 +1401,21 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
+
+    if (
+      res.status === 401 ||
+      res.status === 403
+    ) {
+      clearStoredAccessToken();
+
+      if (
+        typeof window !== "undefined"
+      ) {
+        window.location.href =
+          "/login?expired=1";
+      }
+    }
+
     const rawText = await res.text();
     const payload = parseApiErrorPayload(rawText);
 
@@ -2321,6 +2340,20 @@ export const api = {
       status: string;
     }>(
       `/auth/reset-password`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+  },
+
+  async resendVerification(
+    payload: ResendVerificationPayload
+  ) {
+    return apiFetch<{
+      message: string;
+    }>(
+      "/auth/resend-verification",
       {
         method: "POST",
         body: JSON.stringify(payload),
