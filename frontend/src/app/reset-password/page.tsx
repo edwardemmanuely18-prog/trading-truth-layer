@@ -1,14 +1,25 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { FormEvent, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api } from "../../lib/api";
 
 export default function ResetPasswordPage() {
-  const searchParams = useSearchParams();
+  import { useEffect, useState } from "react";
 
-  const token =
-    searchParams.get("token") || "";
+  const [token, setToken] = useState("");
+
+  useEffect(() => {
+  const params = new URLSearchParams(
+      window.location.search
+  );
+
+  setToken(
+      params.get("token") || ""
+  );
+  }, []);
 
   const [password, setPassword] =
     useState("");
