@@ -8,6 +8,9 @@ import { api } from "../../lib/api";
 export default function VerifyEmailPage() {
   const [token, setToken] = useState("");
 
+  const [initialized, setInitialized] =
+  useState(false);
+
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -20,36 +23,50 @@ export default function VerifyEmailPage() {
     setToken(
       params.get("token") || ""
     );
+
+    setInitialized(true);
   }, []);
 
   useEffect(() => {
-    if (!token) {
+    if (!initialized || token === "") {
       return;
     }
 
-    api
-      .verifyEmail(token)
-      .then((result) => {
-        setStatus(result.status);
-      })
-      .catch((err) => {
+    async function verify() {
+      try {
+        const result = await api.verifyEmail(
+          token
+        );
+
+        setStatus(
+          result.status
+        );
+      } catch (err) {
         setError(
           err instanceof Error
             ? err.message
             : "Verification failed"
         );
-      })
-      .finally(() => {
+      } finally {
         setLoading(false);
-      });
+      }
+    }
+
+    verify();
   }, [token]);
 
   useEffect(() => {
-    if (!token) {
-      setError("Missing verification token");
+    if (
+      initialized &&
+      token === ""
+    ) {
+      setError(
+        "Missing verification token"
+      );
+
       setLoading(false);
     }
-  }, [token]);
+  }, [initialized, token]);
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-50 px-6">

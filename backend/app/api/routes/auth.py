@@ -65,6 +65,7 @@ def serialize_user(user: User) -> dict:
         "email": user.email,
         "name": user.name,
         "role": user.role,
+        "email_verified": user.email_verified,
     }
 
 

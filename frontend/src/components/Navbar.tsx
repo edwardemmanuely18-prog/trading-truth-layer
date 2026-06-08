@@ -235,7 +235,43 @@ export default function Navbar({ workspaceId }: Props) {
                 ) : null}
               </div>
 
-              <div className="text-xs text-slate-500">{user?.email || "—"}</div>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+
+                <span>
+                  {user?.email || "—"}
+                </span>
+
+                {user?.email_verified ? (
+                  <span
+                    className="
+                    rounded-full
+                    bg-green-100
+                    px-2
+                    py-0.5
+                    text-[10px]
+                    font-semibold
+                    text-green-700
+                    "
+                  >
+                    VERIFIED
+                  </span>
+                ) : (
+                  <span
+                    className="
+                    rounded-full
+                    bg-amber-100
+                    px-2
+                    py-0.5
+                    text-[10px]
+                    font-semibold
+                    text-amber-700
+                    "
+                  >
+                    UNVERIFIED
+                  </span>
+                )}
+
+              </div>
             </div>
 
             <button

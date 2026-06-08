@@ -52,6 +52,7 @@ export type AuthUser = {
   email: string;
   name: string;
   role: string;
+  email_verified: boolean;
 };
 
 export type AuthWorkspace = {
