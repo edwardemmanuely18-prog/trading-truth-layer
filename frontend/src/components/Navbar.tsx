@@ -25,6 +25,7 @@ function isPublicTrustPath(currentPath: string) {
   return (
     currentPath === "/claims" ||
     currentPath === "/leaderboard" ||
+    currentPath === "/verification" ||
     currentPath === "/how-it-works" ||
     startsWithPath(currentPath, "/claim") ||
     startsWithPath(currentPath, "/verify") ||
@@ -126,10 +127,6 @@ export default function Navbar({ workspaceId }: Props) {
   const ledgerHref = resolvedWorkspaceId ? `${base}/ledger` : "/";
   const workspaceSchemaHref = resolvedWorkspaceId ? `${base}/schema` : "/";
   const claimsHref = resolvedWorkspaceId ? `${base}/claims` : "/";
-  const verificationHref =
-    resolvedWorkspaceId
-      ? `${base}/verification`
-      : "/";
   const latestClaimHref =
     resolvedWorkspaceId && latestClaimId ? `${base}/claim/${latestClaimId}` : null;
   const evidenceHref =
@@ -170,13 +167,6 @@ export default function Navbar({ workspaceId }: Props) {
     ? startsWithPath(currentPath, claimsHref) ||
       startsWithPath(currentPath, `${base}/claim`)
     : false;
-  const verificationActive =
-    resolvedWorkspaceId
-      ? startsWithPath(
-          currentPath,
-          verificationHref
-        )
-      : false;
   const latestClaimActive = latestClaimHref
     ? startsWithPath(currentPath, latestClaimHref)
     : false;
@@ -321,6 +311,15 @@ export default function Navbar({ workspaceId }: Props) {
               Profile
             </Link>
 
+            <Link
+              href="/verification"
+              className={navClass(
+                startsWithPath(currentPath, "/verification")
+              )}
+            >
+              Verification
+            </Link>
+
             {resolvedWorkspaceId ? (
               <Link href={claimBuilderHref} className={navClass(schemaBuilderActive)}>
                 Claim Builder
@@ -353,19 +352,12 @@ export default function Navbar({ workspaceId }: Props) {
 
                 {canSeeSchema ? (
                   <Link href={workspaceSchemaHref} className={navClass(workspaceSchemaActive)}>
-                    Methodology Registry
+                    Schema Registry
                   </Link>
                 ) : null}
 
                 <Link href={claimsHref} className={navClass(claimsActive)}>
                   Claim Library
-                </Link>
-
-                <Link
-                  href={verificationHref}
-                  className={navClass(verificationActive)}
-                >
-                  Verification Center
                 </Link>
 
                 <Link href={evidenceHref} className={navClass(evidenceActive)}>
