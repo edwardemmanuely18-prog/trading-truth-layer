@@ -25,7 +25,6 @@ function isPublicTrustPath(currentPath: string) {
   return (
     currentPath === "/claims" ||
     currentPath === "/leaderboard" ||
-    currentPath === "/verification" ||
     currentPath === "/how-it-works" ||
     startsWithPath(currentPath, "/claim") ||
     startsWithPath(currentPath, "/verify") ||
@@ -309,15 +308,6 @@ export default function Navbar({ workspaceId }: Props) {
 
             <Link href={publicProfileHref} className={navClass(publicProfileActive)}>
               Profile
-            </Link>
-
-            <Link
-              href="/verification"
-              className={navClass(
-                startsWithPath(currentPath, "/verification")
-              )}
-            >
-              Verification
             </Link>
 
             {resolvedWorkspaceId ? (
