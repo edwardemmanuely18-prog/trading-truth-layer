@@ -1,7 +1,49 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
 export default function AurumUsersPage() {
+  const [users, setUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/aurum/users`
+    )
+      .then(r => r.json())
+      .then(setUsers);
+  }, []);
+
   return (
     <main className="p-8">
-      Users module coming soon.
+      <h1 className="text-4xl font-bold mb-8">
+        Platform Users
+      </h1>
+
+      <table className="w-full border">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Verified</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {users.map((u) => (
+            <tr key={u.id}>
+              <td>{u.name}</td>
+              <td>{u.email}</td>
+              <td>{u.role}</td>
+              <td>
+                {u.email_verified
+                  ? "Verified"
+                  : "Pending"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </main>
   );
 }

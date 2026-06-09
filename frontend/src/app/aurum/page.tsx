@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
+
 
 type Overview = {
   total_users: number;
@@ -32,7 +34,7 @@ export default function AurumPage() {
       try {
         const response =
           await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/aurum/overview`
+            `${process.env.NEXT_PUBLIC_API_URL}/aurum/overview`
           );
 
         const json =
@@ -75,6 +77,31 @@ export default function AurumPage() {
             workspaces, claims and platform
             activity.
           </p>
+
+          <div className="mt-8 flex gap-4">
+
+            <Link
+              href="/aurum/users"
+              className="rounded-xl border px-4 py-2"
+            >
+              Users
+            </Link>
+
+            <Link
+              href="/aurum/workspaces"
+              className="rounded-xl border px-4 py-2"
+            >
+              Workspaces
+            </Link>
+
+            <Link
+              href="/aurum/claims"
+              className="rounded-xl border px-4 py-2"
+            >
+              Claims
+            </Link>
+
+          </div>
         </div>
 
         <div className="grid gap-6 md:grid-cols-4">

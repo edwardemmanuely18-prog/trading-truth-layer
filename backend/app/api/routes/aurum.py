@@ -19,7 +19,6 @@ router = APIRouter(
 
 @router.get("/overview")
 def get_aurum_overview(
-    current_user = Depends(require_platform_owner),
     db: Session = Depends(get_db)
 ):
     total_users = db.query(User).count()
@@ -110,9 +109,8 @@ def get_aurum_overview(
 
 
 @router.get("/users")
-def get_aurum_users(
-    current_user = Depends(require_platform_owner),
-    db: Session = Depends(get_db),
+def get_platform_users(
+    db: Session = Depends(get_db)
 ):
     users = (
         db.query(User)
@@ -138,30 +136,80 @@ def get_aurum_users(
 
 
 @router.get("/workspaces")
-def get_aurum_workspaces(
-    current_user = Depends(require_platform_owner),
-    db: Session = Depends(get_db),
+def get_platform_workspaces(
+    db: Session = Depends(get_db)
 ):
     workspaces = (
         db.query(Workspace)
-        .order_by(Workspace.created_at.desc())
+        .order_by(Workspace.id.desc())
+        .all()
+    )
+
+    rows = []
+
+    for w in workspaces:
+
+        member_count = (
+            db.query(WorkspaceMembership)
+            .filter(
+                WorkspaceMembership.workspace_id == w.id
+            )
+            .count()
+        )
+
+        trade_count = (
+            db.query(Trade)
+            .filter(
+                Trade.workspace_id == w.id
+            )
+            .count()
+        )
+
+        claim_count = (
+            db.query(ClaimSchema)
+            .filter(
+                ClaimSchema.workspace_id == w.id
+            )
+            .count()
+        )
+
+        rows.append({
+            "workspace_id": w.id,
+            "name": w.name,
+            "plan_code": w.plan_code,
+            "billing_status": w.billing_status,
+            "members": member_count,
+            "trades": trade_count,
+            "claims": claim_count,
+            "internal": bool(
+                w.is_internal_workspace
+            ),
+        })
+
+    return rows
+
+
+@router.get("/claims")
+def get_platform_claims(
+    db: Session = Depends(get_db)
+):
+    claims = (
+        db.query(ClaimSchema)
+        .order_by(
+            ClaimSchema.id.desc()
+        )
         .all()
     )
 
     return [
         {
-            "id": w.id,
-            "name": w.name,
-            "plan_code": w.plan_code,
-            "billing_status": w.billing_status,
-            "claim_limit": w.claim_limit,
-            "trade_limit": w.trade_limit,
-            "member_limit": w.member_limit,
-            "created_at": (
-                w.created_at.isoformat()
-                if w.created_at
-                else None
-            ),
+            "id": c.id,
+            "workspace_id": c.workspace_id,
+            "name": c.name,
+            "status": c.status,
+            "visibility": c.visibility,
+            "version": c.version_number,
+            "claim_hash": c.claim_hash,
         }
-        for w in workspaces
+        for c in claims
     ]
