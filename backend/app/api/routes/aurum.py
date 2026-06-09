@@ -135,3 +135,33 @@ def get_aurum_users(
         }
         for u in users
     ]
+
+
+@router.get("/workspaces")
+def get_aurum_workspaces(
+    current_user = Depends(require_platform_owner),
+    db: Session = Depends(get_db),
+):
+    workspaces = (
+        db.query(Workspace)
+        .order_by(Workspace.created_at.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": w.id,
+            "name": w.name,
+            "plan_code": w.plan_code,
+            "billing_status": w.billing_status,
+            "claim_limit": w.claim_limit,
+            "trade_limit": w.trade_limit,
+            "member_limit": w.member_limit,
+            "created_at": (
+                w.created_at.isoformat()
+                if w.created_at
+                else None
+            ),
+        }
+        for w in workspaces
+    ]

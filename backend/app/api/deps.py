@@ -127,3 +127,17 @@ def require_workspace_auditor_operator_or_owner(
         )
 
     return membership
+
+
+
+def require_platform_owner(
+    current_user: User = Depends(get_current_user),
+) -> User:
+
+    if current_user.email.lower() != "owner@tradingtruthlayer.com":
+        raise HTTPException(
+            status_code=403,
+            detail="Platform owner access required",
+        )
+
+    return current_user
