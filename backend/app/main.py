@@ -40,12 +40,16 @@ from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes import workspace_members
 from app.api.routes import billing
 
+from app.api.routes import aurum
+
 from app.core.security import hash_password
 
 from app.core.rate_limit import limiter
 
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
+
+
 
 
 # =========================
@@ -83,6 +87,11 @@ app.state.limiter = limiter
 app.add_exception_handler(
     RateLimitExceeded,
     _rate_limit_exceeded_handler,
+)
+
+app.include_router(
+    aurum.router,
+    prefix="/api"
 )
 
 # =========================
