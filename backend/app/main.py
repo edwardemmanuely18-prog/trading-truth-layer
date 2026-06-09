@@ -89,10 +89,7 @@ app.add_exception_handler(
     _rate_limit_exceeded_handler,
 )
 
-app.include_router(
-    aurum.router,
-    prefix="/api"
-)
+
 
 # =========================
 # CORS (FINAL CLEAN VERSION)
@@ -313,6 +310,7 @@ app.include_router(platform_router, prefix="/api")
 app.include_router(claim_disputes_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(public.router, prefix="/api")
+app.include_router(aurum.router)
 
 # IMPORTANT: prefix for API routes
 app.include_router(workspace_members.router, prefix="/api")

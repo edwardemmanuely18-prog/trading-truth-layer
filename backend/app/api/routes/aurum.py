@@ -9,6 +9,8 @@ from app.models.claim_schema import ClaimSchema
 from app.models.trade import Trade
 from app.models.workspace_membership import WorkspaceMembership
 
+from app.api.deps import require_platform_owner
+
 router = APIRouter(
     prefix="/aurum",
     tags=["Aurum Operations"]
@@ -17,6 +19,7 @@ router = APIRouter(
 
 @router.get("/overview")
 def get_aurum_overview(
+    current_user = Depends(require_platform_owner),
     db: Session = Depends(get_db)
 ):
     total_users = db.query(User).count()
@@ -104,3 +107,31 @@ def get_aurum_overview(
 
         "total_trades": total_trades,
     }
+
+
+@router.get("/users")
+def get_aurum_users(
+    current_user = Depends(require_platform_owner),
+    db: Session = Depends(get_db),
+):
+    users = (
+        db.query(User)
+        .order_by(User.created_at.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": u.id,
+            "name": u.name,
+            "email": u.email,
+            "role": u.role,
+            "email_verified": u.email_verified,
+            "created_at": (
+                u.created_at.isoformat()
+                if u.created_at
+                else None
+            ),
+        }
+        for u in users
+    ]
