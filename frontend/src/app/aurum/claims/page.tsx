@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import AurumNav from "../../../components/AurumNav";
 
 export default function ClaimsPage() {
   const [claims, setClaims] =
@@ -10,17 +11,19 @@ export default function ClaimsPage() {
     fetch(
       `${process.env.NEXT_PUBLIC_API_URL}/aurum/claims`
     )
-      .then(r => r.json())
+      .then((r) => r.json())
       .then(setClaims);
   }, []);
 
   return (
     <main className="p-8">
-      <h1 className="text-4xl font-bold mb-8">
+      <h1 className="text-4xl font-bold mb-4">
         Claim Registry
       </h1>
 
-      <table className="w-full border">
+      <AurumNav />
+
+      <table className="w-full border mt-8">
         <thead>
           <tr>
             <th>ID</th>

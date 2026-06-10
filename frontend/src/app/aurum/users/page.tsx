@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import AurumNav from "../../../components/AurumNav";
 
 export default function AurumUsersPage() {
   const [users, setUsers] = useState<any[]>([]);
@@ -9,17 +10,19 @@ export default function AurumUsersPage() {
     fetch(
       `${process.env.NEXT_PUBLIC_API_URL}/aurum/users`
     )
-      .then(r => r.json())
+      .then((r) => r.json())
       .then(setUsers);
   }, []);
 
   return (
     <main className="p-8">
-      <h1 className="text-4xl font-bold mb-8">
+      <h1 className="text-4xl font-bold mb-4">
         Platform Users
       </h1>
 
-      <table className="w-full border">
+      <AurumNav />
+
+      <table className="w-full border mt-8">
         <thead>
           <tr>
             <th>Name</th>
