@@ -14,9 +14,6 @@ export default function PaddleLoader() {
       process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
 
     if (!clientToken) {
-      console.error(
-        "Paddle client token missing."
-      );
       return;
     }
 

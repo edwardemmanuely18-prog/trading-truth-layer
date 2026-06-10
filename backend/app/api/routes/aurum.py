@@ -19,6 +19,7 @@ router = APIRouter(
 
 @router.get("/overview")
 def get_aurum_overview(
+    owner=Depends(require_platform_owner),
     db: Session = Depends(get_db)
 ):
     total_users = db.query(User).count()
@@ -110,6 +111,7 @@ def get_aurum_overview(
 
 @router.get("/users")
 def get_platform_users(
+    owner=Depends(require_platform_owner),
     db: Session = Depends(get_db)
 ):
     users = (
@@ -137,6 +139,7 @@ def get_platform_users(
 
 @router.get("/workspaces")
 def get_platform_workspaces(
+    owner=Depends(require_platform_owner),
     db: Session = Depends(get_db)
 ):
     workspaces = (
@@ -191,6 +194,7 @@ def get_platform_workspaces(
 
 @router.get("/claims")
 def get_platform_claims(
+    owner=Depends(require_platform_owner),
     db: Session = Depends(get_db)
 ):
     claims = (

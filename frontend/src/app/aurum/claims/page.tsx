@@ -11,8 +11,18 @@ export default function ClaimsPage() {
     fetch(
       `${process.env.NEXT_PUBLIC_API_URL}/aurum/claims`
     )
-      .then((r) => r.json())
-      .then(setClaims);
+      .then(async (r) => {
+        const data = await r.json();
+
+        if (Array.isArray(data)) {
+          setClaims(data);
+        } else {
+          setClaims([]);
+        }
+      })
+      .catch(() => {
+        setClaims([]);
+      });
   }, []);
 
   return (

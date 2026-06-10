@@ -8,11 +8,21 @@ export default function AurumUsersPage() {
 
   useEffect(() => {
     fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/aurum/users`
+        `${process.env.NEXT_PUBLIC_API_URL}/aurum/users`
     )
-      .then((r) => r.json())
-      .then(setUsers);
-  }, []);
+        .then(async (r) => {
+        const data = await r.json();
+
+        if (Array.isArray(data)) {
+            setUsers(data);
+        } else {
+            setUsers([]);
+        }
+        })
+        .catch(() => {
+        setUsers([]);
+        });
+    }, []);
 
   return (
     <main className="p-8">
