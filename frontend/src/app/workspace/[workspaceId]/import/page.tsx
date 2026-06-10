@@ -304,11 +304,35 @@ export default function WorkspaceImportPage() {
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <WorkflowStage label="Import" status={workflowTradeStatus} />
             <div className="text-slate-300">→</div>
-            <WorkflowStage label="Ledger Review" status={tradeUsed > 0 ? "active" : "pending"} />
+
+            <WorkflowStage
+              label="Ledger Review"
+              status={tradeUsed > 0 ? "active" : "pending"}
+            />
             <div className="text-slate-300">→</div>
-            <WorkflowStage label="Create Claim" status="pending" />
+
+            <WorkflowStage
+              label="Create Claim"
+              status="pending"
+            />
             <div className="text-slate-300">→</div>
-            <WorkflowStage label="Verify / Publish" status="pending" />
+
+            <WorkflowStage
+              label="Verify"
+              status="pending"
+            />
+            <div className="text-slate-300">→</div>
+
+            <WorkflowStage
+              label="Publish"
+              status="pending"
+            />
+            <div className="text-slate-300">→</div>
+
+            <WorkflowStage
+              label="Lock"
+              status="pending"
+            />
           </div>
         </div>
 
