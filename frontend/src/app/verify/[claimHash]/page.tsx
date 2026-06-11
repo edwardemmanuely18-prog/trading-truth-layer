@@ -470,27 +470,58 @@ export default function PublicVerifyClaimPage() {
         }
 
         if (res.claim_schema_id) {
-          try {
-            setEvidenceLoading(true);
-            const evidence = await api.getClaimTrades(res.claim_schema_id);
-            setTradeEvidence(evidence);
-          } catch (err) {
-            setTradeEvidence(emptyTradeEvidence(res.claim_schema_id));
-            setEvidenceError(
-              err instanceof Error ? err.message : "Failed to load verified trade evidence."
-            );
-          } finally {
-            setEvidenceLoading(false);
-          }
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load public verification record.");
-      } finally {
-        setLoading(false);
-      }
-    }
+          setTradeEvidence({
+            claim_schema_id: res.claim_schema_id,
+            claim_hash: res.claim_hash,
+            name: res.name,
+            status: res.verification_status,
+            trade_count: res.trade_count,
 
-    void load();
+            trades: Array.isArray(res.trades)
+              ? res.trades
+              : [],
+
+            included_trade_count: Number(
+              res.included_trade_count ?? 0
+            ),
+
+            excluded_trade_count: Number(
+              res.excluded_trade_count ?? 0
+            ),
+
+            included_trades: Array.isArray(res.included_trades)
+              ? res.included_trades
+              : [],
+
+            excluded_trades: Array.isArray(res.excluded_trades)
+              ? res.excluded_trades
+              : [],
+
+            summary: res.summary ?? {
+              workspace_trade_count: res.trade_count ?? 0,
+              included_trade_count:
+                res.included_trade_count ??
+                res.trade_count ??
+                0,
+              excluded_trade_count:
+                res.excluded_trade_count ?? 0,
+              excluded_breakdown: {},
+            },
+          });
+  }
+
+  } catch (err) {
+    setError(
+      err instanceof Error
+        ? err.message
+        : "Failed to load public verification record."
+    );
+  } finally {
+    setLoading(false);
+  }
+  }
+
+  load();
   }, [claimHash]);
 
   if (loading) {
@@ -565,7 +596,9 @@ export default function PublicVerifyClaimPage() {
   const issuerName = resolveIssuerSafe(verifiedResult, v7Payload);
 
   const leaderboard = Array.isArray(verifiedResult.leaderboard) ? verifiedResult.leaderboard : [];
-  const integrityOk = normalizeText(verifiedResult.integrity_status) === "valid";
+  const integrityOk =
+    v7Payload?.integrity_record?.is_valid ??
+    normalizeText(result?.integrity_status) === "valid";
   const lifecycleStatus = normalizeText(verifiedResult.verification_status);
 
   const trustLevel = (() => {
@@ -577,7 +610,10 @@ export default function PublicVerifyClaimPage() {
   })();
   const verificationUrl =
     typeof window !== "undefined" ? window.location.href : `/verify/${verifiedResult.claim_hash}`;
-  const publicViewUrl = `/claim/${verifiedResult.claim_schema_id}/public`;
+  const publicViewUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/claim/${verifiedResult.claim_schema_id}/public`
+      : `/claim/${verifiedResult.claim_schema_id}/public`;
   const qrImageUrl = buildQrImageUrl(verificationUrl);
 
   const includedRows = Array.isArray(tradeEvidence?.included_trades)
@@ -586,7 +622,18 @@ export default function PublicVerifyClaimPage() {
   const excludedRows = Array.isArray(tradeEvidence?.excluded_trades)
     ? tradeEvidence.excluded_trades
     : [];
-  const evidenceSummary = tradeEvidence?.summary;
+  const evidenceSummary =
+    tradeEvidence?.summary ??
+    {
+      workspace_trade_count:
+        verifiedResult.trade_count,
+
+      included_trade_count:
+        verifiedResult.included_trade_count,
+
+      excluded_trade_count:
+        verifiedResult.excluded_trade_count,
+    };
 
   const publicCurvePoints = Array.isArray(verifiedResult.equity_curve?.curve)
     ? verifiedResult.equity_curve.curve
@@ -1040,6 +1087,7 @@ export default function PublicVerifyClaimPage() {
               <div className="mt-2 text-lg font-semibold">
                 {integrityOk ? "Integrity Confirmed" : "Integrity Alert"}
               </div>
+
               <div className="mt-2 max-w-xs text-sm text-slate-600">
                 {integrityOk
                   ? "The public record matches the recomputed integrity fingerprint for the current trade set."
@@ -1282,10 +1330,6 @@ export default function PublicVerifyClaimPage() {
           {evidenceLoading ? (
             <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
               Loading verified trade evidence...
-            </div>
-          ) : evidenceError ? (
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              {evidenceError}
             </div>
           ) : null}
 

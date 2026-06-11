@@ -3170,7 +3170,9 @@ export const api = {
     );
   },
 
-  getVerifyClaimByHash: async (claimHash: string): Promise<VerifyClaimResult> => {
+  getVerifyClaimByHash: async (
+    claimHash: string
+  ): Promise<VerifyPayloadV7> => {
     const row = await apiFetch<VerifyPayloadV7 | VerifyClaimResult>(
       `/verify/${claimHash}`,
       {
@@ -3178,7 +3180,12 @@ export const api = {
       }
     );
 
-    return normalizeVerifyPayload(row);
+    return apiFetch<VerifyPayloadV7>(
+      `/verify/${claimHash}`,
+      {
+        cache: "no-store",
+      }
+    );
   },
 
     // =========================

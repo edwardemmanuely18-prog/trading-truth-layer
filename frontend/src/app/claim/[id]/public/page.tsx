@@ -7,7 +7,7 @@ import {
   computeTrustScore,
   resolveVerificationExposureLevel,
   type ClaimSchema,
-  type ClaimIntegrityResult,
+  type VerifyPayloadV7,
   type PublicVerifyResult,
 } from "../../../../lib/api";
 import EquityCurveChart from "../../../../components/EquityCurveChart";
@@ -147,7 +147,14 @@ function StatusBadge({ status }: { status?: string | null }) {
   );
 }
 
-function IntegrityBadge({ integrity }: { integrity?: ClaimIntegrityResult | null }) {
+function IntegrityBadge({
+  integrity,
+}: {
+  integrity?: {
+    hash_match?: boolean;
+    integrity_status?: string;
+  } | null;
+}) {
   const isValid = Boolean(
     integrity &&
       integrity.hash_match &&
@@ -219,9 +226,10 @@ export default function PublicClaimPage() {
   const rawId = Array.isArray(params?.id) ? params.id[0] : params?.id;
   const claimId = useMemo(() => Number(rawId), [rawId]);
 
-  const [claim, setClaim] = useState<ClaimSchema | null>(null);
+  const [claim, setClaim] = useState<any>(null);
   const [preview, setPreview] = useState<PublicVerifyResult | null>(null);
-  const [integrity, setIntegrity] = useState<ClaimIntegrityResult | null>(null);
+  const [verifyPayload, setVerifyPayload] =
+    useState<VerifyPayloadV7 | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [linkMessage, setLinkMessage] = useState<string | null>(null);
@@ -242,10 +250,14 @@ export default function PublicClaimPage() {
         setLoading(true);
         setError(null);
 
-        const claimResult = await api.getClaimSchema(claimId);
+        const claimResult = await api.getPublicClaim(claimId);
         if (!active) return;
 
-        if (!canShowPublicSurface(claimResult.status)) {
+        const claimStatus =
+          (claimResult as any).verification_status ??
+          (claimResult as any).status;
+
+        if (!canShowPublicSurface(claimStatus)) {
           setError("This claim is not eligible for public viewing.");
           setLoading(false);
           return;
@@ -265,18 +277,19 @@ export default function PublicClaimPage() {
         setClaim(claimResult);
         setPreview(previewResult);
 
-        if (normalizeText(claimResult.status) === "locked") {
-          try {
-            const integrityResult = await api.getClaimIntegrity(claimId);
-            if (!active) return;
-            setIntegrity(integrityResult);
-          } catch {
-            if (!active) return;
-            setIntegrity(null);
-          }
-        } else {
-          setIntegrity(null);
+        try {
+          const verifyResult =
+            await api.getVerifyClaimByHash(claimHash);
+
+          if (!active) return;
+
+          setVerifyPayload(verifyResult);
+        } catch {
+          if (!active) return;
+
+          setVerifyPayload(null);
         }
+
       } catch (err) {
         if (!active) return;
         setError(err instanceof Error ? err.message : "Failed to load public claim.");
@@ -319,14 +332,31 @@ export default function PublicClaimPage() {
   }
 
   const isLocked = normalizeText(claim.status) === "locked";
+  const claimStatus =
+    claim.status ??
+    preview.verification_status ??
+    "unknown";
   const claimHash = claim.claim_hash || preview.claim_hash || "";
+  const origin =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "";
+
   const publicPath =
-    (preview as any)?.public_view_path ||
-    `/claim/${claimId}/public`;
+    origin +
+    (
+      (preview as any)?.public_view_path ||
+      `/claim/${claimId}/public`
+    );
 
   const verifyPath =
-    (preview as any)?.verify_path ||
-    (claimHash ? `/verify/${claimHash}` : null);
+    claimHash
+      ? origin +
+        (
+          (preview as any)?.verify_path ||
+          `/verify/${claimHash}`
+        )
+      : null;
   const topEntry =
     Array.isArray(preview.leaderboard) && preview.leaderboard.length > 0
       ? preview.leaderboard[0]
@@ -340,19 +370,12 @@ export default function PublicClaimPage() {
   const resolvedPeriodStart = resolvePeriodStart(claim, preview);
   const resolvedPeriodEnd = resolvePeriodEnd(claim, preview);
 
-  const trustScore = computeTrustScore({
-    ...preview,
-    verification_status: claim.status,
-    integrity_status:
-      integrity && integrity.hash_match && normalizeText(integrity.integrity_status) === "valid"
-        ? "valid"
-        : (preview as any)?.integrity_status,
-    verified_at: resolvedVerifiedAt,
-    scope: {
-      ...(preview as any)?.scope,
-      visibility: resolvedVisibility,
-    },
-  });
+  const trustScore =
+    Number(
+      (preview as any)?.trust_score ??
+      (claim as any)?.trust_score ??
+      0
+    );
 
   const trustBand = resolveTrustBand(trustScore);
   const exposureLevel = resolveVerificationExposureLevel(preview);
@@ -492,8 +515,18 @@ export default function PublicClaimPage() {
           </div>
 
           <div className="mt-5 flex flex-wrap gap-3">
-            <StatusBadge status={claim.status} />
-            <IntegrityBadge integrity={integrity} />
+            <StatusBadge status={claimStatus} />
+            <IntegrityBadge
+              integrity={{
+                hash_match:
+                  Boolean(
+                    verifyPayload?.integrity_record?.is_valid
+                  ),
+                integrity_status:
+                  verifyPayload?.integrity_record?.status ??
+                  "unknown",
+              } as any}
+            />
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto] items-center">
@@ -515,14 +548,16 @@ export default function PublicClaimPage() {
               </div>
             </div>
 
-            {integrity ? (
+            {verifyPayload ? (
               <div className="text-right">
                 <div className="text-xs uppercase tracking-wide text-slate-500">
                   Integrity Status
                 </div>
 
                 <div className="mt-1 text-lg font-semibold text-slate-900">
-                  {integrity.hash_match ? "Hash Verified" : "Mismatch Detected"}
+                  {verifyPayload?.integrity_record?.is_valid
+                    ? "Hash Verified"
+                    : "Mismatch Detected"}
                 </div>
               </div>
             ) : null}
@@ -541,14 +576,28 @@ export default function PublicClaimPage() {
                 </div>
 
                 <div>
+                  <div className="text-slate-500">
+                    trade_set_hash
+                  </div>
+
+                  <div className="break-all">
+                    {preview.trade_set_hash || "—"}
+                  </div>
+                </div>
+
+                <div>
                   <div className="text-slate-500">verification_status</div>
-                  <div>{claim.status}</div>
+                  <div>{claimStatus}</div>
                 </div>
 
                 <div>
                   <div className="text-slate-500">integrity_status</div>
                   <div>
-                    {integrity?.integrity_status || (preview as any)?.integrity_status || "—"}
+                    {
+                      verifyPayload?.integrity_record?.status ??
+                      preview?.integrity_status ??
+                      "unknown"
+                    }
                   </div>
                 </div>
 
@@ -824,7 +873,7 @@ export default function PublicClaimPage() {
               <div className="rounded-3xl border border-slate-200 bg-white p-6">
                 <div className="text-sm text-slate-500">Lifecycle State</div>
                 <div className="mt-2 text-2xl font-semibold capitalize text-slate-950">
-                  {claim.status}
+                  {claimStatus}
                 </div>
 
                 <div className="mt-4 space-y-3 text-sm text-slate-700">
@@ -843,19 +892,44 @@ export default function PublicClaimPage() {
                 </div>
               </div>
 
-              {integrity ? (
+              {verifyPayload ? (
                 <div className="rounded-3xl border border-slate-200 bg-white p-6">
-                  <div className="text-sm text-slate-500">Integrity Posture</div>
+                  <div className="text-sm text-slate-500">
+                    Integrity Posture
+                  </div>
+
                   <div className="mt-2 text-2xl font-semibold text-slate-950">
-                    {normalizeText(integrity.integrity_status) === "valid" && integrity.hash_match
+                    {verifyPayload.integrity_record?.is_valid
                       ? "Confirmed"
-                      : "Check required"}
+                      : "Check Required"}
                   </div>
 
                   <div className="mt-4 space-y-3 text-sm text-slate-700">
-                    <div>Hash match: {integrity.hash_match ? "true" : "false"}</div>
-                    <div>Stored hash: {shortHash(integrity.stored_hash)}</div>
-                    <div>Recomputed hash: {shortHash(integrity.recomputed_hash)}</div>
+                    <div>
+                      Hash Match:
+                      {" "}
+                      {verifyPayload.integrity_record?.is_valid
+                        ? "true"
+                        : "false"}
+                    </div>
+
+                    <div>
+                      Stored Hash:
+                      {shortHash(
+                        verifyPayload.integrity_record
+                          ?.stored_trade_set_hash ??
+                        preview.trade_set_hash
+                      )}
+                    </div>
+
+                    <div>
+                      Recomputed Hash:
+                      {shortHash(
+                        verifyPayload.integrity_record
+                          ?.recomputed_trade_set_hash ??
+                        preview.trade_set_hash
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : null}
