@@ -186,8 +186,8 @@ export default function SchemaPage() {
           />
           <StepCard
             step="Step 3"
-            title="Set Exposure"
-            body="Choose private, unlisted, or public exposure so later lifecycle actions align with intended verification visibility."
+            title="Draft Visibility"
+            body="All draft claims begin as private records. Visibility is automatically governed by lifecycle progression: Draft → Private, Published → Unlisted, Locked → Public."
           />
           <StepCard
             step="Step 4"
@@ -206,12 +206,12 @@ export default function SchemaPage() {
           <aside className="space-y-5">
             <StatusCard
               title="Builder Rules"
-              body="Claims should be created as drafts first. Scope and methodology should be finalized before verification because downstream lifecycle transitions depend on this definition."
+              body="Claims should be created as drafts first. Scope and methodology should be finalized before verification because downstream lifecycle transitions depend on this definition. Draft claims always begin as private records and cannot be publicly exposed until lifecycle progression occurs."
             />
 
             <StatusCard
               title="Visibility Guidance"
-              body="Private keeps the claim internal. Unlisted allows direct verification links without public directory exposure. Public makes the claim discoverable in the public registry after lifecycle progression."
+              body="Draft claims are always private. Published claims automatically become unlisted verification records. Locked claims automatically become public trust-grade records discoverable through the verification network."
             />
 
             <StatusCard

@@ -27,7 +27,7 @@ type FormErrors = {
   submit?: string;
 };
 
-type VisibilityOption = "private" | "unlisted" | "public";
+type VisibilityOption = "private";
 
 function parseNumberListStrict(value: string): number[] {
   if (!value.trim()) return [];
@@ -64,20 +64,13 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function visibilityTone(value: VisibilityOption) {
-  if (value === "public") return "border-emerald-200 bg-emerald-50 text-emerald-800";
-  if (value === "unlisted") return "border-amber-200 bg-amber-50 text-amber-800";
-  return "border-slate-200 bg-slate-50 text-slate-700";
-}
 
-function visibilitySummary(value: VisibilityOption) {
-  if (value === "public") {
-    return "Public claim directory exposure after lifecycle progression. Best for discovery and external verification.";
-  }
-  if (value === "unlisted") {
-    return "Direct verification link exposure without public directory listing. Best for controlled sharing.";
-  }
-  return "Internal-only claim visibility. Best for draft review, internal governance, and pre-public testing.";
+function visibilitySummary() {
+  return (
+    "Draft claims always begin as private records. " +
+    "Published claims become unlisted verification records. " +
+    "Locked claims become public trust-grade records."
+  );
 }
 
 function splitLines(value: string) {
@@ -141,7 +134,8 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
   const [includedSymbols, setIncludedSymbols] = useState("");
   const [excludedTradeIds, setExcludedTradeIds] = useState("");
   const [methodologyNotes, setMethodologyNotes] = useState("");
-  const [visibility, setVisibility] = useState<VisibilityOption>("private");
+  const visibility: VisibilityOption =
+    "private";
 
   const [loading, setLoading] = useState(false);
   const [usageLoading, setUsageLoading] = useState(true);
@@ -240,7 +234,6 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
     setIncludedMembers("");
     setIncludedSymbols("");
     setExcludedTradeIds("");
-    setVisibility("public");
     setMethodologyNotes(
       [
         "Trades imported from canonical ledger for March 2026 verification window.",
@@ -260,7 +253,6 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
     setIncludedMembers("");
     setIncludedSymbols("");
     setExcludedTradeIds("");
-    setVisibility("private");
     setMethodologyNotes(
       [
         "Trades imported from canonical ledger for April 2026 verification window.",
@@ -281,7 +273,6 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
     setIncludedSymbols("");
     setExcludedTradeIds("");
     setMethodologyNotes("");
-    setVisibility("private");
     setErrors({});
     setStatus(null);
   }
@@ -560,16 +551,17 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Visibility</label>
-                <select
-                  value={visibility}
-                  onChange={(e) => setVisibility(e.target.value as VisibilityOption)}
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-slate-500"
-                >
-                  <option value="private">Private</option>
-                  <option value="unlisted">Unlisted</option>
-                  <option value="public">Public</option>
-                </select>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Initial Visibility
+                </label>
+
+                <div className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-base font-medium text-slate-700">
+                  Private (Draft Default)
+                </div>
+
+                <div className="mt-2 text-sm text-slate-500">
+                  Draft claims always begin as private records. Visibility is automatically promoted through lifecycle progression.
+                </div>
               </div>
 
               <div>
@@ -627,7 +619,9 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
                   <div>
                     <div className="text-slate-500">Visibility</div>
                     <div className="mt-2">
-                      <Pill className={visibilityTone(visibility)}>{visibility}</Pill>
+                      <Pill className="border-slate-200 bg-slate-50 text-slate-700">
+                        private
+                      </Pill>
                     </div>
                   </div>
                 </div>
@@ -651,7 +645,7 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
               <div className="rounded-3xl border border-slate-200 bg-white p-5">
                 <h3 className="text-xl font-semibold text-slate-950">Visibility Guidance</h3>
                 <div className="mt-3 text-sm leading-7 text-slate-700">
-                  {visibilitySummary(visibility)}
+                  {visibilitySummary()}
                 </div>
               </div>
 

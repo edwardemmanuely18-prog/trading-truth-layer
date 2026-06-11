@@ -818,6 +818,39 @@ export default function PublicVerifyClaimPage() {
               ? "The recomputed trade-set hash matches the canonical fingerprint. This record is cryptographically consistent with its original state."
               : "The recomputed trade-set hash does NOT match the canonical fingerprint. This record is inconsistent with its original state and should not be trusted without further investigation."}
           </div>
+
+          {!integrityOk && (
+            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-5">
+              <div className="text-sm font-semibold text-amber-900">
+                Recommended Actions
+              </div>
+
+              <div className="mt-3 space-y-2 text-sm text-amber-800">
+                <div>
+                  1. Review changes made to the underlying trade set after the claim was verified or locked.
+                </div>
+
+                <div>
+                  2. Compare the current trade-set fingerprint against the stored fingerprint.
+                </div>
+
+                <div>
+                  3. If the changes are legitimate and represent a new trading record,
+                  create a new claim version instead of modifying the existing claim.
+                </div>
+
+                <div>
+                  4. If the changes are unexpected, investigate potential data corruption,
+                  import errors, or unauthorized modifications.
+                </div>
+
+                <div>
+                  5. Locked claims should remain immutable. Integrity mismatches should be
+                  reviewed rather than overwritten.
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {hasDisputes ? (
