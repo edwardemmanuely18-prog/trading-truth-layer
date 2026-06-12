@@ -2670,7 +2670,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     pdf.setFont("Helvetica", TEXT_M)
     y = draw_pdf_wrapped_text(
         pdf,
-        f"Public View Path: {public_view_path}",
+        f"Public View URL: {public_view_url}",
         PDF_MARGIN_LEFT,
         y,
         PDF_CONTENT_WIDTH,
