@@ -2002,6 +2002,19 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     verify_link_path = f"/verify/{claim_hash}"
     verify_link_short = f"/verify/{short_hash(claim_hash, 14, 8)}"
 
+    frontend_base_url = (
+        os.getenv("PUBLIC_WEBSITE_URL")
+        or "https://www.tradingtruthlayer.com"
+    ).rstrip("/")
+
+    public_view_url = (
+        f"{frontend_base_url}{public_view_path}"
+    )
+
+    verify_url = (
+        f"{frontend_base_url}{verify_link_path}"
+    )
+
     if schema.status == "draft":
         document_title = f"Draft Trading Claim Report · {schema.name}"
     elif schema.status == "published":
@@ -2215,7 +2228,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         pdf.setLineWidth(1.5 if emphasize else 1)
         draw_soft_panel(x, top_y - 16, w, h, radius=13, fill=fill, stroke=stroke)
         pdf.setFillColor(COLOR_INK)
-        pdf.setFont("Courier", 8.5)
+        pdf.setFont("Courier", 7.5)
         yy = top_y - 34
         for line in lines[:3]:
             pdf.drawString(x + 12, yy, line)
@@ -2223,7 +2236,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         return top_y - 16 - h
 
     def estimate_hash_block_height(value, w, label=None):
-        lines = wrapped_lines(value, w - 24, "Courier", 8.5)
+        lines = wrapped_lines(value, w - 24, "Courier", 7.5)
         h = max(44, 20 + (len(lines[:3]) * 10) + 10)
         if label:
             h += 16
@@ -2655,10 +2668,31 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     pdf.setFillColor(COLOR_MUTED)
     pdf.setFont("Helvetica", TEXT_M)
-    pdf.drawString(PDF_MARGIN_LEFT, y, f"Public View Path: {public_view_path}")
-    y -= 14
-    pdf.drawString(PDF_MARGIN_LEFT, y, f"Verify Link Path: {verify_link_short}")
-    y -= 14
+    y = draw_pdf_wrapped_text(
+        pdf,
+        f"Public View Path: {public_view_path}",
+        PDF_MARGIN_LEFT,
+        y,
+        PDF_CONTENT_WIDTH,
+        12,
+        "Helvetica",
+        TEXT_M,
+    )
+
+    y -= 6
+
+    y = draw_pdf_wrapped_text(
+        pdf,
+        f"Verification URL: {verify_url}",
+        PDF_MARGIN_LEFT,
+        y,
+        PDF_CONTENT_WIDTH,
+        12,
+        "Helvetica",
+        TEXT_M,
+    )
+
+    y -= 12
     pdf.drawString(PDF_MARGIN_LEFT, y, f"Workspace ID: {schema.workspace_id}")
     y -= 14
     pdf.drawString(PDF_MARGIN_LEFT, y, f"Exported At: {exported_at.strftime('%Y-%m-%d %H:%M:%S UTC')}")
@@ -3170,8 +3204,22 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
 
     y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Claim Hash", claim_hash, emphasize=False) - MINI_GAP
     y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Trade Set Hash", trade_set_hash, emphasize=False) - MINI_GAP
-    y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Public View Path", public_view_path, emphasize=False) - MINI_GAP
-    y = draw_hash_block_v2(PDF_MARGIN_LEFT, y, PDF_CONTENT_WIDTH, "Verify Link Path", verify_link_path, emphasize=True) - BLOCK_GAP
+    y = draw_hash_block_v2(
+        PDF_MARGIN_LEFT,
+        y,
+        PDF_CONTENT_WIDTH,
+        "Canonical Verification URL",
+        public_view_url,
+        emphasize=False,
+    ) - MINI_GAP
+    y = draw_hash_block_v2(
+        PDF_MARGIN_LEFT,
+        y,
+        PDF_CONTENT_WIDTH,
+        "Verification URL",
+        verify_url,
+        emphasize=True,
+    ) - BLOCK_GAP
 
     note_w = PDF_CONTENT_WIDTH - 120
     note_top_y = y
@@ -3185,7 +3233,7 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
     )
 
     try:
-        qr_code = qr.QrCodeWidget(verify_link_path)
+        qr_code = qr.QrCodeWidget(verify_url)
         bounds = qr_code.getBounds()
         qr_width = bounds[2] - bounds[0]
         qr_height = bounds[3] - bounds[1]
@@ -3197,6 +3245,14 @@ def build_claim_report_pdf_bytes(schema: ClaimSchema, db: Session) -> tuple[Byte
         )
         d.add(qr_code)
         renderPDF.draw(d, pdf, PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT - 92, note_top_y - 88)
+        pdf.setFillColor(COLOR_MUTED)
+        pdf.setFont("Helvetica", 8)
+
+        pdf.drawCentredString(
+            PDF_PAGE_WIDTH - PDF_MARGIN_RIGHT - 50,
+            note_top_y - 98,
+            "Scan for canonical verification"
+        )
     except Exception:
         pass
 
