@@ -148,26 +148,14 @@ function StatusBadge({ status }: { status?: string | null }) {
 }
 
 function IntegrityBadge({
-  integrity,
+  integrityStatus,
 }: {
-  integrity?: {
-    hash_match?: boolean;
-    integrity_status?: string;
-  } | null;
+  integrityStatus?: string | null;
 }) {
-  const isValid = Boolean(
-    integrity &&
-      integrity.hash_match &&
-      normalizeText(integrity.integrity_status) === "valid"
-  );
+  const normalized = normalizeText(integrityStatus);
 
-  if (!integrity) {
-    return (
-      <span className="inline-flex rounded-full border border-amber-200 bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-800">
-        Integrity pending
-      </span>
-    );
-  }
+  const isValid =
+    normalized === "valid";
 
   return (
     <span
@@ -177,7 +165,9 @@ function IntegrityBadge({
           : "border-red-200 bg-red-100 text-red-800"
       }`}
     >
-      {isValid ? "Verified · Hash Match" : "Integrity Mismatch"}
+      {isValid
+        ? "Integrity Valid"
+        : "Integrity Check Required"}
     </span>
   );
 }
@@ -517,15 +507,12 @@ export default function PublicClaimPage() {
           <div className="mt-5 flex flex-wrap gap-3">
             <StatusBadge status={claimStatus} />
             <IntegrityBadge
-              integrity={{
-                hash_match:
-                  Boolean(
-                    verifyPayload?.integrity_record?.is_valid
-                  ),
-                integrity_status:
-                  verifyPayload?.integrity_record?.status ??
-                  "unknown",
-              } as any}
+              integrityStatus={
+                preview.integrity_status ??
+                claim.integrity_status ??
+                verifyPayload?.integrity_record?.status ??
+                "unknown"
+              }
             />
           </div>
 
@@ -555,9 +542,12 @@ export default function PublicClaimPage() {
                 </div>
 
                 <div className="mt-1 text-lg font-semibold text-slate-900">
-                  {verifyPayload?.integrity_record?.is_valid
-                    ? "Hash Verified"
-                    : "Mismatch Detected"}
+                  {normalizeText(
+                    preview.integrity_status ??
+                    claim.integrity_status
+                  ) === "valid"
+                    ? "Integrity Valid"
+                    : "Check Required"}
                 </div>
               </div>
             ) : null}
@@ -899,7 +889,10 @@ export default function PublicClaimPage() {
                   </div>
 
                   <div className="mt-2 text-2xl font-semibold text-slate-950">
-                    {verifyPayload.integrity_record?.is_valid
+                    {normalizeText(
+                      preview.integrity_status ??
+                      claim.integrity_status
+                    ) === "valid"
                       ? "Confirmed"
                       : "Check Required"}
                   </div>
