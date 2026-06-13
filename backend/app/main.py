@@ -37,6 +37,9 @@ from app.api.routes.billing import router as billing_router
 from app.api.routes.platform import router as platform_router
 from app.api.routes.claim_disputes import router as claim_disputes_router
 from app.api.routes.dashboard import router as dashboard_router
+from app.api.routes.executive_dashboard import (
+    router as executive_dashboard_router,
+)
 from app.api.routes import workspace_members
 from app.api.routes import billing
 
@@ -309,6 +312,10 @@ app.include_router(billing_router, prefix="/api")
 app.include_router(platform_router, prefix="/api")
 app.include_router(claim_disputes_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
+app.include_router(
+    executive_dashboard_router,
+    prefix="/api",
+)
 app.include_router(public.router, prefix="/api")
 app.include_router(aurum.router)
 
