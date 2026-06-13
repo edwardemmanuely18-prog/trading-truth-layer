@@ -40,6 +40,9 @@ from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes.executive_dashboard import (
     router as executive_dashboard_router,
 )
+from app.api.routes.evidence_registry import (
+    router as evidence_registry_router,
+)
 from app.api.routes import workspace_members
 from app.api.routes import billing
 
@@ -314,6 +317,10 @@ app.include_router(claim_disputes_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(
     executive_dashboard_router,
+    prefix="/api",
+)
+app.include_router(
+    evidence_registry_router,
     prefix="/api",
 )
 app.include_router(public.router, prefix="/api")
