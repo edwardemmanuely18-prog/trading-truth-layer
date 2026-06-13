@@ -43,6 +43,9 @@ from app.services.report_service import build_claim_pdf
 from app.services.claim_forensic_service import (
     validate_claim_forensics,
 )
+from app.services.forensic_service import (
+    validate_trade_forensics,
+)
 from app.services.claim_governance_service import (
     can_access_verify_route,
     can_embed_claim,
@@ -50,6 +53,15 @@ from app.services.claim_governance_service import (
     can_show_in_profile,
     can_show_in_public_directory,
 )
+from app.services.claim_scope_service import (
+    parse_period_start,
+    parse_period_end,
+    coerce_trade_opened_at,
+    resolve_schema_trades,
+    compute_trade_set_hash,
+    resolve_claim_integrity_status,
+)
+
 
 router = APIRouter()
 
@@ -272,82 +284,6 @@ def serialize_audit_event(event: AuditEvent):
         "metadata_json": event.metadata_json,
         "created_at": event.created_at.isoformat() if event.created_at else None,
     }
-
-
-def parse_period_start(date_str: str | None):
-    if not date_str:
-        return None
-    try:
-        return datetime.fromisoformat(date_str)
-    except Exception:
-        return None
-
-
-def parse_period_end(date_str: str | None):
-    if not date_str:
-        return None
-    try:
-        return datetime.fromisoformat(date_str)
-    except Exception:
-        return None
-
-
-def coerce_trade_opened_at(value):
-    if value is None:
-        return None
-
-    if isinstance(value, datetime):
-        return value
-
-    text = str(value).strip()
-    candidates = [
-        text,
-        text.replace("Z", "+00:00"),
-        text.replace(" ", "T"),
-    ]
-
-    for candidate in candidates:
-        try:
-            return datetime.fromisoformat(candidate)
-        except ValueError:
-            continue
-
-    return None
-
-
-def resolve_schema_trades(schema: ClaimSchema, db: Session):
-    included_members = json.loads(schema.included_member_ids_json or "[]")
-    included_symbols = [s.upper() for s in json.loads(schema.included_symbols_json or "[]")]
-    excluded_trade_ids = set(json.loads(schema.excluded_trade_ids_json or "[]"))
-
-    period_start = parse_period_start(schema.period_start)
-    period_end = parse_period_end(schema.period_end)
-
-    trades = db.query(Trade).filter(Trade.workspace_id == schema.workspace_id).all()
-
-    filtered = []
-    for trade in trades:
-        trade_dt = coerce_trade_opened_at(trade.opened_at)
-
-        if period_start is not None and (trade_dt is None or trade_dt < period_start):
-            continue
-
-        if period_end is not None and (trade_dt is None or trade_dt >= period_end):
-            continue
-
-        if included_members and trade.member_id not in included_members:
-            continue
-
-        symbol = (trade.symbol or "").upper()
-        if included_symbols and symbol not in included_symbols:
-            continue
-
-        if trade.id in excluded_trade_ids:
-            continue
-
-        filtered.append(trade)
-
-    return filtered
 
 
 def build_exclusion_reason_detail(
@@ -948,52 +884,6 @@ def build_leaderboard(trades: list[Trade]):
     return leaderboard
 
 
-def compute_trade_set_hash(trades: list[Trade]) -> str:
-    normalized_rows = []
-
-    for t in sorted(trades, key=lambda x: x.id):
-        normalized_rows.append(
-            {
-                "id": t.id,
-                "workspace_id": t.workspace_id,
-                "member_id": t.member_id,
-                "symbol": t.symbol,
-                "side": t.side,
-                "opened_at": t.opened_at.isoformat() if isinstance(t.opened_at, datetime) else str(t.opened_at),
-                "entry_price": t.entry_price,
-                "quantity": t.quantity,
-                "net_pnl": t.net_pnl,
-                "currency": t.currency,
-                "strategy_tag": t.strategy_tag,
-                "source_system": t.source_system,
-            }
-        )
-
-    raw = json.dumps(normalized_rows, sort_keys=True)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-
-def resolve_claim_integrity_status(schema: ClaimSchema, trades: list[Trade]) -> str:
-    """
-    Canonical integrity resolver used across public surfaces and verify routes.
-
-    locked:
-      - valid        => stored locked hash matches recomputed hash
-      - compromised  => stored locked hash missing or mismatched
-
-    non-locked:
-      - unlocked     => claim has not reached locked finality yet
-    """
-    if schema.status != "locked":
-        return "unlocked"
-
-    if not schema.locked_trade_set_hash:
-        return "compromised"
-
-    recomputed_trade_set_hash = compute_trade_set_hash(trades)
-    return "valid" if recomputed_trade_set_hash == schema.locked_trade_set_hash else "compromised"
-
-
 def build_issuer_payload(schema: ClaimSchema, db: Session):
     workspace = get_workspace_or_404(schema.workspace_id, db)
     profile = build_public_trust_profile_for_workspace(schema.workspace_id, db)
@@ -1419,6 +1309,37 @@ def build_evidence_bundle_zip_bytes(schema: ClaimSchema, db: Session) -> tuple[B
 def require_public_claim_access(schema: ClaimSchema):
     if not is_claim_publicly_accessible(schema):
         raise HTTPException(status_code=403, detail="Claim is not publicly accessible")
+
+
+def enforce_claim_forensic_integrity(
+    schema: ClaimSchema,
+    db: Session,
+):
+    trades = resolve_schema_trades(
+        schema,
+        db,
+    )
+
+    forensic_validation = (
+        validate_claim_forensics(
+            db=db,
+            workspace_id=schema.workspace_id,
+            trades=trades,
+        )
+    )
+
+    if not forensic_validation["fully_verified"]:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": (
+                    "Claim failed forensic validation."
+                ),
+                "forensics": forensic_validation,
+            },
+        )
+
+    return forensic_validation
 
 
 # =========================
@@ -3718,6 +3639,13 @@ def verify_claim_schema(
     if schema.status != "draft":
         raise HTTPException(status_code=400, detail="Only draft claims can be verified")
 
+    forensic_validation = (
+        enforce_claim_forensic_integrity(
+            schema,
+            db,
+        )
+    )
+
     old_state = {
         "status": schema.status,
         "verified_at": schema.verified_at.isoformat() if schema.verified_at else None,
@@ -3745,6 +3673,12 @@ def verify_claim_schema(
         metadata={
             "source": "claim_schemas.verify_claim_schema",
             "actor_user_id": current_user.id,
+            "forensic_coverage":
+                forensic_validation["forensic_coverage"],
+            "verified_trades":
+                forensic_validation["verified_trades"],
+            "total_trades":
+                forensic_validation["total_trades"],
         },
     )
 
@@ -3769,6 +3703,13 @@ def publish_claim_schema(
 
     if schema.status != "verified":
         raise HTTPException(status_code=400, detail="Only verified claims can be published")
+
+    forensic_validation = (
+        enforce_claim_forensic_integrity(
+            schema,
+            db,
+        )
+    )
 
     old_state = {
         "status": schema.status,
@@ -3852,6 +3793,14 @@ def publish_claim_schema(
             "original_visibility": original_visibility,
             "effective_visibility": schema.visibility,
             "effective_plan_code": effective_plan_code,
+            "forensic_coverage":
+                forensic_validation["forensic_coverage"],
+
+            "verified_trades":
+                forensic_validation["verified_trades"],
+
+            "total_trades":
+                forensic_validation["total_trades"],
         },
     )
 
@@ -3879,6 +3828,13 @@ def lock_claim_schema(
         raise HTTPException(status_code=400, detail="Only published claims can be locked")
 
     filtered_trades = resolve_schema_trades(schema, db)
+
+    forensic_validation = (
+        enforce_claim_forensic_integrity(
+            schema,
+            db,
+        )
+    )
 
     # 🔒 Freeze the exact trade IDs used at lock time
     locked_trade_ids = [t.id for t in filtered_trades]
@@ -3928,6 +3884,18 @@ def lock_claim_schema(
             "source": "claim_schemas.lock_claim_schema",
             "trade_count": len(filtered_trades),
             "actor_user_id": current_user.id,
+
+            "forensic_coverage":
+                forensic_validation["forensic_coverage"],
+
+            "verified_trades":
+                forensic_validation["verified_trades"],
+
+            "total_trades":
+                forensic_validation["total_trades"],
+
+            "trade_set_hash":
+                schema.locked_trade_set_hash,
         },
     )
 
