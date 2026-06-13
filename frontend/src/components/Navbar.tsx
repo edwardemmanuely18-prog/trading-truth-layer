@@ -204,6 +204,130 @@ export default function Navbar({ workspaceId }: Props) {
       : "rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50";
   }
 
+  const dashboardLinks = resolvedWorkspaceId
+    ? [
+        {
+          href: dashboardHref,
+          label: "Executive Dashboard",
+          active: dashboardActive,
+        },
+      ]
+    : [];
+
+  const intakeLinks =
+    resolvedWorkspaceId && canSeeImport
+      ? [
+          {
+            href: importHref,
+            label: "Import Center",
+            active: importActive,
+          },
+        ]
+      : [];
+
+  const registryLinks = resolvedWorkspaceId
+    ? [
+        {
+          href: ledgerHref,
+          label: "Trade Ledger",
+          active: ledgerActive,
+        },
+        ...(latestClaimHref
+          ? [
+              {
+                href: latestClaimHref,
+                label: "Latest Record",
+                active: latestClaimActive,
+              },
+            ]
+          : []),
+        {
+          href: evidenceHref,
+          label: "Evidence Review",
+          active: evidenceActive,
+        },
+      ]
+    : [];
+
+  const claimLinks = resolvedWorkspaceId
+    ? [
+        {
+          href: claimBuilderHref,
+          label: "Create Claim",
+          active: schemaBuilderActive,
+        },
+        {
+          href: claimsHref,
+          label: "Claim Library",
+          active: claimsActive,
+        },
+        ...(canSeeSchema
+          ? [
+              {
+                href: workspaceSchemaHref,
+                label: "Schema Registry",
+                active: workspaceSchemaActive,
+              },
+            ]
+          : []),
+      ]
+    : [];
+
+  const trustLinks = [
+    {
+      href: leaderboardHref,
+      label: "Trust Leaderboard",
+      active: leaderboardActive,
+    },
+  ];
+
+  const publicLinks = [
+    {
+      href: publicClaimsHref,
+      label: "Public Records",
+      active: publicClaimsActive,
+    },
+    {
+      href: publicProfileHref,
+      label: "Public Profile",
+      active: publicProfileActive,
+    },
+  ];
+
+  const adminLinks = resolvedWorkspaceId
+    ? [
+        ...(canSeeMembers
+          ? [
+              {
+                href: membersHref,
+                label: "Members",
+                active: membersActive,
+              },
+            ]
+          : []),
+        {
+          href: settingsHref,
+          label: "Settings & Billing",
+          active: settingsActive,
+        },
+      ]
+    : [];
+
+  const contextualLinks =
+    activeDomain === "dashboard"
+      ? dashboardLinks
+      : activeDomain === "intake"
+        ? intakeLinks
+        : activeDomain === "registry"
+          ? registryLinks
+          : activeDomain === "claims"
+            ? claimLinks
+            : activeDomain === "trust"
+              ? trustLinks
+              : activeDomain === "public"
+                ? publicLinks
+                : adminLinks;
+
   return (
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto max-w-7xl px-6 py-4">
@@ -315,7 +439,8 @@ export default function Navbar({ workspaceId }: Props) {
 
           <div className="flex flex-wrap gap-2">
 
-            <button
+            <Link
+              href={dashboardHref}
               className={
                 activeDomain === "dashboard"
                   ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
@@ -323,9 +448,10 @@ export default function Navbar({ workspaceId }: Props) {
               }
             >
               Dashboard
-            </button>
+            </Link>
 
-            <button
+            <Link
+              href={importHref}
               className={
                 activeDomain === "intake"
                   ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
@@ -333,9 +459,10 @@ export default function Navbar({ workspaceId }: Props) {
               }
             >
               Evidence Intake
-            </button>
+            </Link>
 
-            <button
+            <Link
+              href={ledgerHref}
               className={
                 activeDomain === "registry"
                   ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
@@ -343,9 +470,10 @@ export default function Navbar({ workspaceId }: Props) {
               }
             >
               Evidence Registry
-            </button>
+            </Link>
 
-            <button
+            <Link
+              href={claimsHref}
               className={
                 activeDomain === "claims"
                   ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
@@ -353,9 +481,10 @@ export default function Navbar({ workspaceId }: Props) {
               }
             >
               Claim Operations
-            </button>
+            </Link>
 
-            <button
+            <Link
+              href={leaderboardHref}
               className={
                 activeDomain === "trust"
                   ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
@@ -363,9 +492,10 @@ export default function Navbar({ workspaceId }: Props) {
               }
             >
               Trust Intelligence
-            </button>
+            </Link>
 
-            <button
+            <Link
+              href={publicClaimsHref}
               className={
                 activeDomain === "public"
                   ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
@@ -373,9 +503,10 @@ export default function Navbar({ workspaceId }: Props) {
               }
             >
               Public Trust Layer
-            </button>
+            </Link>
 
-            <button
+            <Link
+              href={membersHref}
               className={
                 activeDomain === "admin"
                   ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
@@ -383,80 +514,22 @@ export default function Navbar({ workspaceId }: Props) {
               }
             >
               Administration
-            </button>
+            </Link>
 
           </div>
 
           <div className="mt-3 border-t border-slate-200 pt-3"></div>
 
           <nav className="flex flex-wrap items-center gap-2">
-            <Link href={publicClaimsHref} className={navClass(publicClaimsActive)}>
-              Public Records
-            </Link>
-
-            <Link href={leaderboardHref} className={navClass(leaderboardActive)}>
-              Trust Leaderboard
-            </Link>
-
-            <Link href={publicProfileHref} className={navClass(publicProfileActive)}>
-              Profile
-            </Link>
-
-            {resolvedWorkspaceId ? (
-              <Link href={claimBuilderHref} className={navClass(schemaBuilderActive)}>
-                Claim Builder
+            {contextualLinks.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={navClass(item.active)}
+              >
+                {item.label}
               </Link>
-            ) : null}
-
-            <div className="mx-1 hidden h-6 w-px bg-slate-200 md:block" />
-
-            {resolvedWorkspaceId ? (
-              <>
-                <Link href={dashboardHref} className={navClass(dashboardActive)}>
-                  Dashboard
-                </Link>
-
-                {latestClaimHref ? (
-                  <Link href={latestClaimHref} className={navClass(latestClaimActive)}>
-                    Latest Record
-                  </Link>
-                ) : null}
-
-                {canSeeImport ? (
-                  <Link href={importHref} className={navClass(importActive)}>
-                    Import
-                  </Link>
-                ) : null}
-
-                <Link href={ledgerHref} className={navClass(ledgerActive)}>
-                  Ledger
-                </Link>
-
-                {canSeeSchema ? (
-                  <Link href={workspaceSchemaHref} className={navClass(workspaceSchemaActive)}>
-                    Schema Registry
-                  </Link>
-                ) : null}
-
-                <Link href={claimsHref} className={navClass(claimsActive)}>
-                  Claim Library
-                </Link>
-
-                <Link href={evidenceHref} className={navClass(evidenceActive)}>
-                  Evidence Review
-                </Link>
-
-                {canSeeMembers ? (
-                  <Link href={membersHref} className={navClass(membersActive)}>
-                    Members
-                  </Link>
-                ) : null}
-
-                <Link href={settingsHref} className={navClass(settingsActive)}>
-                  Settings & Billing
-                </Link>
-              </>
-            ) : null}
+            ))}
           </nav>
         </div>
 
