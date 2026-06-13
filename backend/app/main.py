@@ -43,6 +43,9 @@ from app.api.routes.executive_dashboard import (
 from app.api.routes.evidence_registry import (
     router as evidence_registry_router,
 )
+from app.api.routes.integrity_monitor import (
+    router as integrity_monitor_router,
+)
 from app.api.routes import workspace_members
 from app.api.routes import billing
 
@@ -321,6 +324,10 @@ app.include_router(
 )
 app.include_router(
     evidence_registry_router,
+    prefix="/api",
+)
+app.include_router(
+    integrity_monitor_router,
     prefix="/api",
 )
 app.include_router(public.router, prefix="/api")

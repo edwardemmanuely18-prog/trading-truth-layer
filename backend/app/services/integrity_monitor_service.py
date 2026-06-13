@@ -14,6 +14,10 @@ from app.services.audit_service import (
     log_audit_event,
 )
 
+from app.services.integrity_alert_service import (
+    create_integrity_alert,
+)
+
 
 def evaluate_claim_integrity(
     db: Session,
@@ -66,6 +70,51 @@ def enforce_claim_integrity(
     previous_status = schema.status
 
     schema.status = "compromised"
+
+    from app.models.integrity_alert import (
+        IntegrityAlert,
+    )
+
+    existing_alert = (
+        db.query(IntegrityAlert)
+        .filter(
+            IntegrityAlert.workspace_id
+            == schema.workspace_id,
+            IntegrityAlert.claim_id
+            == schema.id,
+            IntegrityAlert.alert_type
+            == "claim_compromised",
+            IntegrityAlert.status
+            == "open",
+        )
+        .first()
+    )
+
+    if existing_alert is None:
+
+        create_integrity_alert(
+            db=db,
+            workspace_id=schema.workspace_id,
+            claim_id=schema.id,
+            alert_type="claim_compromised",
+            severity="critical",
+            summary=(
+                f"Claim {schema.id} failed "
+                f"forensic verification."
+            ),
+        )
+
+    create_integrity_alert(
+        db=db,
+        workspace_id=schema.workspace_id,
+        claim_id=schema.id,
+        alert_type="claim_compromised",
+        severity="critical",
+        summary=(
+            f"Claim {schema.id} failed "
+            f"forensic verification."
+        ),
+    )
 
     log_audit_event(
         db,
