@@ -9,6 +9,10 @@ from app.models.workspace_invite import WorkspaceInvite
 from app.models.claim_dispute import ClaimDispute
 from app.models.evidence_record import EvidenceRecord
 from app.models.import_provenance import ImportProvenance
+from app.models.import_preview_session import ImportPreviewSession
+from app.models.ingestion_session import IngestionSession
+from app.models.trade_tag import TradeTag
+from app.models.trade_tag_map import TradeTagMap
 
 __all__ = [
     "Workspace",
@@ -20,6 +24,13 @@ __all__ = [
     "WorkspaceMembership",
     "WorkspaceInvite",
     "ClaimDispute",
+
+    "ImportPreviewSession",
+    "IngestionSession",
+
+    "TradeTag",
+    "TradeTagMap",
+
     "EvidenceRecord",
     "ImportProvenance",
 ]

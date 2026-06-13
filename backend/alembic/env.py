@@ -19,9 +19,7 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 from app.core.db import Base
-from app.models.workspace import Workspace
-from app.models.trade import Trade
-from app.models.ingestion_session import IngestionSession
+from app.models import *
 
 target_metadata = Base.metadata
 

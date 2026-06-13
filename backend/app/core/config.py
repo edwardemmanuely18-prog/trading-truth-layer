@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from app.core.environment import ENV_FILE
 
 
 class Settings(BaseSettings):
@@ -50,7 +51,7 @@ class Settings(BaseSettings):
     MANUAL_PAYMENT_NOTES: str | None = None
 
     model_config = SettingsConfigDict(
-        env_file=".env",   # ✅ works locally
+        env_file=str(ENV_FILE),
         extra="ignore",
     )
 
