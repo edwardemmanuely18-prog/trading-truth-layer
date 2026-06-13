@@ -292,9 +292,7 @@ export default function Navbar({ workspaceId }: Props) {
 
         <div className="mt-2 flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-            <span>Public Trust Layer</span>
-            <div className="h-px w-6 bg-slate-200" />
-            <span>Workspace Operations</span>
+            <span>Institutional Workspace Architecture</span>
           </div>
 
           <nav className="flex flex-wrap items-center gap-2">
@@ -303,16 +301,16 @@ export default function Navbar({ workspaceId }: Props) {
             </Link>
 
             <Link href={leaderboardHref} className={navClass(leaderboardActive)}>
-              Trust Leaderboard
+              Trust Intelligence
             </Link>
 
             <Link href={publicProfileHref} className={navClass(publicProfileActive)}>
-              Profile
+              Public Profile
             </Link>
 
             {resolvedWorkspaceId ? (
               <Link href={claimBuilderHref} className={navClass(schemaBuilderActive)}>
-                Claim Builder
+                Create Claim
               </Link>
             ) : null}
 
@@ -321,7 +319,7 @@ export default function Navbar({ workspaceId }: Props) {
             {resolvedWorkspaceId ? (
               <>
                 <Link href={dashboardHref} className={navClass(dashboardActive)}>
-                  Dashboard
+                  Executive Dashboard
                 </Link>
 
                 {latestClaimHref ? (
@@ -332,12 +330,12 @@ export default function Navbar({ workspaceId }: Props) {
 
                 {canSeeImport ? (
                   <Link href={importHref} className={navClass(importActive)}>
-                    Import
+                    Import Center
                   </Link>
                 ) : null}
 
                 <Link href={ledgerHref} className={navClass(ledgerActive)}>
-                  Ledger
+                  Trade Ledger
                 </Link>
 
                 {canSeeSchema ? (
