@@ -232,6 +232,7 @@ export default function Navbar({ workspaceId }: Props) {
           label: "Trade Ledger",
           active: ledgerActive,
         },
+
         ...(latestClaimHref
           ? [
               {
@@ -241,10 +242,39 @@ export default function Navbar({ workspaceId }: Props) {
               },
             ]
           : []),
+
         {
           href: evidenceHref,
           label: "Evidence Review",
           active: evidenceActive,
+        },
+
+        {
+          href: "#",
+          label: "Evidence Records",
+          active: false,
+          disabled: true,
+        },
+
+        {
+          href: "#",
+          label: "Import Batches",
+          active: false,
+          disabled: true,
+        },
+
+        {
+          href: "#",
+          label: "Integrity Registry",
+          active: false,
+          disabled: true,
+        },
+
+        {
+          href: "#",
+          label: "Audit Timeline",
+          active: false,
+          disabled: true,
         },
       ]
     : [];
@@ -521,15 +551,34 @@ export default function Navbar({ workspaceId }: Props) {
           <div className="mt-3 border-t border-slate-200 pt-3"></div>
 
           <nav className="flex flex-wrap items-center gap-2">
-            {contextualLinks.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={navClass(item.active)}
-              >
-                {item.label}
-              </Link>
-            ))}
+            {contextualLinks.map((item) =>
+              (item as any).disabled ? (
+                <span
+                  key={item.label}
+                  className="
+                    rounded-xl
+                    border
+                    border-dashed
+                    border-slate-300
+                    bg-slate-50
+                    px-4
+                    py-2
+                    text-sm
+                    text-slate-400
+                  "
+                >
+                  {item.label}
+                </span>
+              ) : (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={navClass(item.active)}
+                >
+                  {item.label}
+                </Link>
+              )
+            )}
           </nav>
         </div>
 
