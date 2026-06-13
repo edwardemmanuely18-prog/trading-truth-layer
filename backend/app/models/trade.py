@@ -24,3 +24,21 @@ class Trade(Base):
     )
     source_system = Column(String, nullable=True)
     trade_fingerprint = Column(String, nullable=True, index=True)
+
+    import_batch_id = Column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    ingestion_session_id = Column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    preview_session_id = Column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
