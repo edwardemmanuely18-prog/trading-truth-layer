@@ -175,6 +175,22 @@ export default function Navbar({ workspaceId }: Props) {
     : false;
   const membersActive = resolvedWorkspaceId ? startsWithPath(currentPath, membersHref) : false;
   const settingsActive = resolvedWorkspaceId ? startsWithPath(currentPath, settingsHref) : false;
+  const activeDomain =
+    dashboardActive
+      ? "dashboard"
+      : importActive
+        ? "intake"
+        : ledgerActive || evidenceActive || latestClaimActive
+          ? "registry"
+          : claimsActive || workspaceSchemaActive || schemaBuilderActive
+            ? "claims"
+            : leaderboardActive
+              ? "trust"
+              : publicClaimsActive || publicProfileActive
+                ? "public"
+                : membersActive || settingsActive
+                  ? "admin"
+                  : "dashboard";
 
   function navClass(active: boolean) {
     return active
@@ -297,33 +313,75 @@ export default function Navbar({ workspaceId }: Props) {
             <span>Workspace Operations</span>
           </div>
 
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2">
 
-            <button className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
+            <button
+              className={
+                activeDomain === "dashboard"
+                  ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                  : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
+              }
+            >
               Dashboard
             </button>
 
-            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium">
+            <button
+              className={
+                activeDomain === "intake"
+                  ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                  : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
+              }
+            >
               Evidence Intake
             </button>
 
-            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium">
+            <button
+              className={
+                activeDomain === "registry"
+                  ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                  : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
+              }
+            >
               Evidence Registry
             </button>
 
-            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium">
+            <button
+              className={
+                activeDomain === "claims"
+                  ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                  : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
+              }
+            >
               Claim Operations
             </button>
 
-            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium">
+            <button
+              className={
+                activeDomain === "trust"
+                  ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                  : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
+              }
+            >
               Trust Intelligence
             </button>
 
-            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium">
+            <button
+              className={
+                activeDomain === "public"
+                  ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                  : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
+              }
+            >
               Public Trust Layer
             </button>
 
-            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium">
+            <button
+              className={
+                activeDomain === "admin"
+                  ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+                  : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
+              }
+            >
               Administration
             </button>
 
