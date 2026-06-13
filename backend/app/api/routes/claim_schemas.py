@@ -40,6 +40,9 @@ from app.services.claim_service import compute_claim_hash
 from app.services.entitlements import enforce_claim_creation_allowed
 from app.services.evidence_pack_service import build_evidence_zip
 from app.services.report_service import build_claim_pdf
+from app.services.claim_forensic_service import (
+    validate_claim_forensics,
+)
 from app.services.claim_governance_service import (
     can_access_verify_route,
     can_embed_claim,
@@ -594,6 +597,7 @@ def compute_backend_trust_score(
     metrics: dict,
     integrity_status: str,
     dispute_ctx: dict,
+    forensic_validation: dict | None = None
 ):
     score = 0.0
 
@@ -625,6 +629,17 @@ def compute_backend_trust_score(
 
     penalty_factor = float(dispute_ctx.get("dispute_penalty_factor", 1.0) or 1.0)
     score = score * penalty_factor
+
+    if forensic_validation:
+
+        coverage = float(
+            forensic_validation.get(
+                "forensic_coverage",
+                0.0,
+            )
+        )
+
+        score = score * coverage
 
     return round(min(score, 100.0), 2)
 
@@ -1019,6 +1034,11 @@ def build_public_trust_profile_for_workspace(workspace_id: int, db: Session):
 
     for schema in locked_claims:
         filtered_trades = resolve_schema_trades(schema, db)
+        forensic_validation = validate_claim_forensics(
+            db=db,
+            workspace_id=schema.workspace_id,
+            trades=filtered_trades,
+        )
         metrics = compute_trade_metrics(filtered_trades)
         dispute_ctx = resolve_claim_dispute_context(schema, db)
         integrity_status = resolve_claim_integrity_status(schema, filtered_trades)
@@ -1057,6 +1077,12 @@ def build_public_trust_profile_for_workspace(workspace_id: int, db: Session):
         "average_network_score": average_network_score,
         "total_net_pnl": round(total_net_pnl, 4),
         "trust_profile_band": resolve_profile_trust_band(average_trust_score),
+        "forensic_validation": {
+            "fully_verified": forensic_validation["fully_verified"],
+            "forensic_coverage": forensic_validation["forensic_coverage"],
+            "verified_trades": forensic_validation["verified_trades"],
+            "total_trades": forensic_validation["total_trades"],
+        },
     }
 
 
@@ -1087,6 +1113,11 @@ def build_public_profile_response(workspace_id: int, db: Session):
 
 def build_claim_list_row(schema: ClaimSchema, db: Session):
     filtered_trades = resolve_schema_trades(schema, db)
+    forensic_validation = validate_claim_forensics(
+        db=db,
+        workspace_id=schema.workspace_id,
+        trades=filtered_trades,
+    )
     metrics = compute_trade_metrics(filtered_trades)
     leaderboard = build_leaderboard(filtered_trades)
     integrity_status = resolve_claim_integrity_status(schema, filtered_trades)
@@ -1158,6 +1189,7 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
     },
 
     "is_publicly_accessible": is_claim_publicly_accessible(schema),
+    "forensics": forensic_validation,
 }
 
 
