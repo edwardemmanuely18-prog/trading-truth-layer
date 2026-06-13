@@ -292,8 +292,44 @@ export default function Navbar({ workspaceId }: Props) {
 
         <div className="mt-2 flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-            <span>Institutional Workspace Architecture</span>
+            <span>Public Trust Layer</span>
+            <div className="h-px w-6 bg-slate-200" />
+            <span>Workspace Operations</span>
           </div>
+
+          <div className="mt-2 flex flex-wrap gap-2">
+
+            <button className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
+              Dashboard
+            </button>
+
+            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium">
+              Evidence Intake
+            </button>
+
+            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium">
+              Evidence Registry
+            </button>
+
+            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium">
+              Claim Operations
+            </button>
+
+            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium">
+              Trust Intelligence
+            </button>
+
+            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium">
+              Public Trust Layer
+            </button>
+
+            <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium">
+              Administration
+            </button>
+
+          </div>
+
+          <div className="mt-3 border-t border-slate-200 pt-3"></div>
 
           <nav className="flex flex-wrap items-center gap-2">
             <Link href={publicClaimsHref} className={navClass(publicClaimsActive)}>
@@ -301,16 +337,16 @@ export default function Navbar({ workspaceId }: Props) {
             </Link>
 
             <Link href={leaderboardHref} className={navClass(leaderboardActive)}>
-              Trust Intelligence
+              Trust Leaderboard
             </Link>
 
             <Link href={publicProfileHref} className={navClass(publicProfileActive)}>
-              Public Profile
+              Profile
             </Link>
 
             {resolvedWorkspaceId ? (
               <Link href={claimBuilderHref} className={navClass(schemaBuilderActive)}>
-                Create Claim
+                Claim Builder
               </Link>
             ) : null}
 
@@ -319,7 +355,7 @@ export default function Navbar({ workspaceId }: Props) {
             {resolvedWorkspaceId ? (
               <>
                 <Link href={dashboardHref} className={navClass(dashboardActive)}>
-                  Executive Dashboard
+                  Dashboard
                 </Link>
 
                 {latestClaimHref ? (
@@ -330,12 +366,12 @@ export default function Navbar({ workspaceId }: Props) {
 
                 {canSeeImport ? (
                   <Link href={importHref} className={navClass(importActive)}>
-                    Import Center
+                    Import
                   </Link>
                 ) : null}
 
                 <Link href={ledgerHref} className={navClass(ledgerActive)}>
-                  Trade Ledger
+                  Ledger
                 </Link>
 
                 {canSeeSchema ? (

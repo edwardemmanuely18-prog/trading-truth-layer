@@ -615,9 +615,9 @@ function DashboardStatusPanel({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-            Workspace status
+            Executive overview
           </div>
-          <h2 className="mt-2 text-2xl font-semibold text-slate-950">System state overview</h2>
+          <h2 className="mt-2 text-2xl font-semibold text-slate-950">Portfolio Overview</h2>
           <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
             This workspace status panel highlights current ingestion posture, claim workflow
             readiness, verification output, and billing or capacity signals that may affect
@@ -682,10 +682,10 @@ function WorkflowProgressPanel({
   return (
     <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-        Workflow progress
+        Verification Lifecycle
       </div>
       <h2 className="mt-2 text-2xl font-semibold text-slate-950">
-        Import → Ledger → Claim → Verify → Publish → Lock
+        Verification Chain
       </h2>
       <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
         Trading Truth Layer operates as a governed workflow. This strip shows where the workspace
@@ -1134,13 +1134,16 @@ export default function WorkspaceDashboardPage() {
         <main className="mx-auto max-w-[1400px] px-6 py-10">
           <div className="mb-8">
             <div className="text-sm text-slate-500">
-              Trading Truth Layer · Workspace Operations
+              Trading Truth Layer · Executive Dashboard
             </div>
-            <h1 className="mt-2 text-4xl font-bold">Workspace Operations Center</h1>
+            <h1 className="mt-2 text-4xl font-bold">
+              Executive Dashboard
+            </h1>
             <p className="mt-3 max-w-3xl text-slate-600">
-              Govern trading activity, verification workflows, evidence production, plan posture,
-              and public trust distribution from a unified operational surface for workspace{" "}
-              {workspaceId}.
+              Executive command center for evidence governance,
+              claim operations, trust intelligence,
+              verification coverage, and institutional oversight
+              for workspace {workspaceId}.
             </p>
           </div>
 
@@ -1359,21 +1362,21 @@ export default function WorkspaceDashboardPage() {
               )} · ${formatPercent(membersUsage.ratio)}`}
             />
             <SummaryCard
-              label="Total Trades"
+              label="Evidence Records"
               value={formatNumber(tradesUsage.used)}
               hint={`${formatNumber(tradesUsage.used)} / ${formatNumber(
                 tradesUsage.limit
               )} · ${formatPercent(tradesUsage.ratio)}`}
             />
             <SummaryCard
-              label="Total Claims"
+              label="Governed Claims"
               value={formatNumber(dashboard.claim_count)}
               hint={`${formatNumber(claimsUsage.used)} / ${formatNumber(
                 claimsUsage.limit
               )} · ${formatPercent(claimsUsage.ratio)}`}
             />
             <SummaryCard
-              label="Locked / Public"
+              label="Public Trust Records"
               value={`${lockedClaims} / ${publishedClaims}`}
               hint={`Configured: ${configuredPlanName} · Effective: ${effectivePlanName}`}
             />
@@ -1558,9 +1561,9 @@ export default function WorkspaceDashboardPage() {
 
               <div className="rounded-2xl border bg-white p-6 shadow-sm">
                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Operational guidance
+                  Executive Actions
                 </div>
-                <h2 className="mt-2 text-2xl font-semibold">Next Actions</h2>
+                <h2 className="mt-2 text-2xl font-semibold">Priority Actions</h2>
 
                 <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-5">
                   <div className="text-sm font-semibold text-blue-900">{nextAction.title}</div>
