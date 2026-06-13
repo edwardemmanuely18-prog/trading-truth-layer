@@ -21,6 +21,20 @@ from app.services.trade_import import (
 from app.services.strategy_classifier import (
     classify_symbol,
 )
+from app.services.evidence_service import (
+    create_evidence_record,
+)
+
+from app.services.integrity_service import (
+    create_integrity_registry_entry,
+)
+
+from app.services.provenance_service import (
+    create_import_provenance,
+)
+from app.services.forensic_service import (
+    register_trade_forensics,
+)
 
 
 def build_trade_fingerprint_from_trade(trade: Trade) -> str:
@@ -241,6 +255,7 @@ def persist_runtime_trade_rows(
     rejected_preview: list[dict] = []
     duplicate_preview: list[dict] = []
     accepted_preview: list[dict] = []
+    persisted_trades: list[Trade] = []
 
     locked_trade_lookup = build_locked_trade_lookup(db, workspace_id)
     seen_persisted_fingerprints: set[str] = set()
@@ -392,6 +407,8 @@ def persist_runtime_trade_rows(
 
             rows_imported += 1
 
+            persisted_trades.append(trade)
+
             seen_persisted_fingerprints.add(
                 fingerprint
             )
@@ -446,6 +463,48 @@ def persist_runtime_trade_rows(
     db.add(batch)
 
     print("COMMITTING DATABASE SESSION", flush=True)
+
+    db.flush()
+
+    db.refresh(batch)
+
+    for trade in persisted_trades:
+
+        evidence_payload = {
+            "workspace_id": workspace_id,
+            "trade_id": trade.id,
+            "member_id": trade.member_id,
+
+            "symbol": trade.symbol,
+            "side": trade.side,
+
+            "quantity": trade.quantity,
+
+            "entry_price": trade.entry_price,
+            "exit_price": trade.exit_price,
+
+            "currency": trade.currency,
+            "strategy_tag": trade.strategy_tag,
+
+            "opened_at": trade.opened_at,
+            "closed_at": trade.closed_at,
+
+            "source_system": trade.source_system,
+
+            "trade_fingerprint": trade.trade_fingerprint,
+
+            "import_batch_id": batch.id,
+
+            "provenance_hash": provenance.provenance_hash,
+        }
+
+        register_trade_forensics(
+            db=db,
+            workspace_id=workspace_id,
+            trade=trade,
+            import_batch_id=batch.id,
+            ingestion_session_id=None,
+        )
 
     db.commit()
 
