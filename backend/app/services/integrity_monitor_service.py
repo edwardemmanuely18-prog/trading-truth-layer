@@ -10,6 +10,10 @@ from app.services.claim_forensic_service import (
     validate_claim_forensics,
 )
 
+from app.services.audit_service import (
+    log_audit_event,
+)
+
 
 def evaluate_claim_integrity(
     db: Session,
@@ -44,6 +48,53 @@ def evaluate_claim_integrity(
     }
 
 
+def enforce_claim_integrity(
+    db: Session,
+    schema: ClaimSchema,
+):
+    integrity = evaluate_claim_integrity(
+        db=db,
+        schema=schema,
+    )
+
+    if schema.status != "locked":
+        return integrity
+
+    if integrity["fully_verified"]:
+        return integrity
+
+    previous_status = schema.status
+
+    schema.status = "compromised"
+
+    log_audit_event(
+        db,
+        event_type="claim_compromised",
+        entity_type="claim_schema",
+        entity_id=schema.id,
+        workspace_id=schema.workspace_id,
+        old_state={
+            "status": previous_status,
+        },
+        new_state={
+            "status": schema.status,
+        },
+        metadata={
+            "forensic_coverage":
+                integrity["forensic_coverage"],
+            "verified_trades":
+                integrity["verified_trades"],
+            "total_trades":
+                integrity["total_trades"],
+        },
+    )
+
+    db.commit()
+    db.refresh(schema)
+
+    return integrity
+
+
 def scan_workspace_claims(
     db: Session,
     workspace_id: int,
@@ -56,10 +107,15 @@ def scan_workspace_claims(
         .all()
     )
 
-    return [
-        evaluate_claim_integrity(
+    results = []
+
+    for claim in claims:
+
+        result = enforce_claim_integrity(
             db=db,
             schema=claim,
         )
-        for claim in claims
-    ]
+
+        results.append(result)
+
+    return results
