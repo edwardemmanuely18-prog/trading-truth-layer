@@ -13,6 +13,7 @@ from app.models.import_preview_session import ImportPreviewSession
 from app.models.ingestion_session import IngestionSession
 from app.models.trade_tag import TradeTag
 from app.models.trade_tag_map import TradeTagMap
+from app.models.integrity_registry import IntegrityRegistry
 
 __all__ = [
     "Workspace",
@@ -33,4 +34,5 @@ __all__ = [
 
     "EvidenceRecord",
     "ImportProvenance",
+    "IntegrityRegistry",
 ]
