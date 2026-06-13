@@ -645,6 +645,55 @@ function DashboardStatusPanel({
   );
 }
 
+function TrustOverviewPanel({
+  lockedClaims,
+  publishedClaims,
+  verifiedClaims,
+}: {
+  lockedClaims: number;
+  publishedClaims: number;
+  verifiedClaims: number;
+}) {
+  const trustCoverage =
+    verifiedClaims === 0
+      ? 0
+      : Math.round((lockedClaims / verifiedClaims) * 100);
+
+  return (
+    <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+        Trust Overview
+      </div>
+
+      <h2 className="mt-2 text-2xl font-semibold">
+        Verification Coverage
+      </h2>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-4">
+        <SummaryCard
+          label="Verified Claims"
+          value={verifiedClaims}
+        />
+
+        <SummaryCard
+          label="Published Claims"
+          value={publishedClaims}
+        />
+
+        <SummaryCard
+          label="Locked Claims"
+          value={lockedClaims}
+        />
+
+        <SummaryCard
+          label="Trust Coverage"
+          value={`${trustCoverage}%`}
+        />
+      </div>
+    </div>
+  );
+}
+
 function WorkflowProgressPanel({
   tradeCount,
   claimCount,
@@ -1343,6 +1392,12 @@ export default function WorkspaceDashboardPage() {
 
             </div>
           ) : null}
+
+          <TrustOverviewPanel
+            lockedClaims={lockedClaims}
+            publishedClaims={publishedClaims}
+            verifiedClaims={verifiedClaims}
+          />
 
           <WorkflowProgressPanel
             tradeCount={tradeCount}
