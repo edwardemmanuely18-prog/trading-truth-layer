@@ -61,6 +61,13 @@ from app.services.claim_scope_service import (
     compute_trade_set_hash,
     resolve_claim_integrity_status,
 )
+from app.services.verification_timeline_service import (
+    build_claim_timeline,
+)
+
+from app.services.due_diligence_service import (
+    build_due_diligence_report,
+)
 
 
 router = APIRouter()
@@ -4131,6 +4138,40 @@ def get_public_claim_schema(claim_schema_id: int, db: Session = Depends(get_db))
     return build_public_claim_payload(schema, db)
 
 
+@router.get(
+    "/claim-schemas/{claim_schema_id}/timeline"
+)
+def claim_timeline(
+    claim_schema_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    schema = (
+        db.query(ClaimSchema)
+        .filter(
+            ClaimSchema.id == claim_schema_id
+        )
+        .first()
+    )
+
+    if not schema:
+        raise HTTPException(
+            status_code=404,
+            detail="Claim schema not found",
+        )
+
+    require_workspace_member(
+        schema.workspace_id,
+        current_user,
+        db,
+    )
+
+    return build_claim_timeline(
+        db=db,
+        claim_id=schema.id,
+    )
+
+
 @router.get("/public/claims")
 def list_public_claims(db: Session = Depends(get_db)):
     rows = (
@@ -4392,4 +4433,38 @@ def download_claim_pdf(claim_id: int, db: Session = Depends(get_db)):
         buffer,
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=claim_{claim_id}.pdf"},
-    )            
+    )    
+
+
+@router.get(
+    "/claim-schemas/{claim_schema_id}/due-diligence"
+)
+def due_diligence_report(
+    claim_schema_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    schema = (
+        db.query(ClaimSchema)
+        .filter(
+            ClaimSchema.id == claim_schema_id
+        )
+        .first()
+    )
+
+    if not schema:
+        raise HTTPException(
+            status_code=404,
+            detail="Claim schema not found",
+        )
+
+    require_workspace_member(
+        schema.workspace_id,
+        current_user,
+        db,
+    )
+
+    return build_due_diligence_report(
+        db=db,
+        schema=schema,
+    )        
