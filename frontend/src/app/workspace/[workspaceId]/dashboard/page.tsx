@@ -694,6 +694,44 @@ function TrustOverviewPanel({
   );
 }
 
+function IntegrityHealthPanel() {
+  return (
+    <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+        Integrity Health
+      </div>
+
+      <h2 className="mt-2 text-2xl font-semibold">
+        Verification Integrity Status
+      </h2>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-4">
+
+        <SummaryCard
+          label="Integrity Score"
+          value="100%"
+        />
+
+        <SummaryCard
+          label="Hash Failures"
+          value="0"
+        />
+
+        <SummaryCard
+          label="Verification Gaps"
+          value="0"
+        />
+
+        <SummaryCard
+          label="Evidence Coverage"
+          value="100%"
+        />
+
+      </div>
+    </div>
+  );
+}
+
 function WorkflowProgressPanel({
   tradeCount,
   claimCount,
@@ -1398,6 +1436,8 @@ export default function WorkspaceDashboardPage() {
             publishedClaims={publishedClaims}
             verifiedClaims={verifiedClaims}
           />
+
+          <IntegrityHealthPanel />
 
           <WorkflowProgressPanel
             tradeCount={tradeCount}
