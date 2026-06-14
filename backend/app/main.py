@@ -21,6 +21,7 @@ from app.models import (
     WorkspaceMembership,
     WorkspaceInvite,
     ClaimDispute,
+    BrokerConnection,
 )
 
 # Routers

@@ -7,6 +7,7 @@ from app.models.user import User
 from app.models.workspace_membership import WorkspaceMembership
 from app.models.workspace_invite import WorkspaceInvite
 from app.models.claim_dispute import ClaimDispute
+from app.models.broker_connection import BrokerConnection
 
 __all__ = [
     "Workspace",
@@ -18,4 +19,5 @@ __all__ = [
     "WorkspaceMembership",
     "WorkspaceInvite",
     "ClaimDispute",
+    "BrokerConnection",
 ]
