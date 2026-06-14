@@ -218,9 +218,24 @@ export default function Navbar({ workspaceId }: Props) {
     resolvedWorkspaceId && canSeeImport
       ? [
           {
-            href: importHref,
+            href: `${base}/broker-connections`,
+            label: "Broker Connections",
+            active: startsWithPath(currentPath, `${base}/broker-connections`),
+          },
+          {
+            href: `${base}/import`,
             label: "Import Center",
-            active: importActive,
+            active: startsWithPath(currentPath, `${base}/import`),
+          },
+          {
+            href: `${base}/sync-jobs`,
+            label: "Sync Jobs",
+            active: startsWithPath(currentPath, `${base}/sync-jobs`),
+          },
+          {
+            href: `${base}/adapter-registry`,
+            label: "Adapter Registry",
+            active: startsWithPath(currentPath, `${base}/adapter-registry`),
           },
         ]
       : [];
@@ -228,23 +243,29 @@ export default function Navbar({ workspaceId }: Props) {
   const registryLinks = resolvedWorkspaceId
     ? [
         {
-          href: ledgerHref,
+          href: `${base}/ledger`,
           label: "Trade Ledger",
-          active: ledgerActive,
+          active: startsWithPath(currentPath, `${base}/ledger`),
         },
-        ...(latestClaimHref
-          ? [
-              {
-                href: latestClaimHref,
-                label: "Latest Record",
-                active: latestClaimActive,
-              },
-            ]
-          : []),
         {
-          href: evidenceHref,
-          label: "Evidence Review",
-          active: evidenceActive,
+          href: `${base}/evidence-records`,
+          label: "Evidence Records",
+          active: startsWithPath(currentPath, `${base}/evidence-records`),
+        },
+        {
+          href: `${base}/import-batches`,
+          label: "Import Batches",
+          active: startsWithPath(currentPath, `${base}/import-batches`),
+        },
+        {
+          href: `${base}/audit-timeline`,
+          label: "Audit Timeline",
+          active: startsWithPath(currentPath, `${base}/audit-timeline`),
+        },
+        {
+          href: `${base}/integrity-registry`,
+          label: "Integrity Registry",
+          active: startsWithPath(currentPath, `${base}/integrity-registry`),
         },
       ]
     : [];
@@ -252,63 +273,129 @@ export default function Navbar({ workspaceId }: Props) {
   const claimLinks = resolvedWorkspaceId
     ? [
         {
-          href: claimBuilderHref,
+          href: `${base}/schema`,
           label: "Create Claim",
-          active: schemaBuilderActive,
+          active: startsWithPath(currentPath, `${base}/schema`),
         },
         {
-          href: claimsHref,
-          label: "Claim Library",
-          active: claimsActive,
+          href: `${base}/draft-claims`,
+          label: "Draft Claims",
+          active: startsWithPath(currentPath, `${base}/draft-claims`),
         },
-        ...(canSeeSchema
-          ? [
-              {
-                href: workspaceSchemaHref,
-                label: "Schema Registry",
-                active: workspaceSchemaActive,
-              },
-            ]
-          : []),
+        {
+          href: `${base}/verified-claims`,
+          label: "Verified Claims",
+          active: startsWithPath(currentPath, `${base}/verified-claims`),
+        },
+        {
+          href: `${base}/published-claims`,
+          label: "Published Claims",
+          active: startsWithPath(currentPath, `${base}/published-claims`),
+        },
+        {
+          href: `${base}/locked-claims`,
+          label: "Locked Claims",
+          active: startsWithPath(currentPath, `${base}/locked-claims`),
+        },
+        {
+          href: `${base}/claim-templates`,
+          label: "Templates",
+          active: startsWithPath(currentPath, `${base}/claim-templates`),
+        },
       ]
     : [];
 
-  const trustLinks = [
-    {
-      href: leaderboardHref,
-      label: "Trust Leaderboard",
-      active: leaderboardActive,
-    },
-  ];
+  const trustLinks = resolvedWorkspaceId
+    ? [
+        {
+          href: `${base}/trust-scores`,
+          label: "Trust Scores",
+          active: startsWithPath(currentPath, `${base}/trust-scores`),
+        },
+        {
+          href: `${base}/leaderboard`,
+          label: "Leaderboards",
+          active: startsWithPath(currentPath, `${base}/leaderboard`),
+        },
+        {
+          href: `${base}/verification-analytics`,
+          label: "Verification Analytics",
+          active: startsWithPath(currentPath, `${base}/verification-analytics`),
+        },
+        {
+          href: `${base}/integrity-analytics`,
+          label: "Integrity Analytics",
+          active: startsWithPath(currentPath, `${base}/integrity-analytics`),
+        },
+        {
+          href: `${base}/risk-analytics`,
+          label: "Risk Analytics",
+          active: startsWithPath(currentPath, `${base}/risk-analytics`),
+        },
+        {
+          href: `${base}/due-diligence`,
+          label: "Due Diligence Reports",
+          active: startsWithPath(currentPath, `${base}/due-diligence`),
+        },
+      ]
+    : [];
 
-  const publicLinks = [
-    {
-      href: publicClaimsHref,
-      label: "Public Records",
-      active: publicClaimsActive,
-    },
-    {
-      href: publicProfileHref,
-      label: "Public Profile",
-      active: publicProfileActive,
-    },
-  ];
+  const publicLinks = resolvedWorkspaceId
+    ? [
+        {
+          href: `${base}/public-records`,
+          label: "Public Records",
+          active: startsWithPath(currentPath, `${base}/public-records`),
+        },
+        {
+          href: `${base}/verification-routes`,
+          label: "Verification Routes",
+          active: startsWithPath(currentPath, `${base}/verification-routes`),
+        },
+        {
+          href: `${base}/trust-directory`,
+          label: "Trust Directory",
+          active: startsWithPath(currentPath, `${base}/trust-directory`),
+        },
+        {
+          href: `${base}/public-profiles`,
+          label: "Public Profiles",
+          active: startsWithPath(currentPath, `${base}/public-profiles`),
+        },
+        {
+          href: `${base}/search`,
+          label: "Search",
+          active: startsWithPath(currentPath, `${base}/search`),
+        },
+      ]
+    : [];
 
   const adminLinks = resolvedWorkspaceId
     ? [
-        ...(canSeeMembers
-          ? [
-              {
-                href: membersHref,
-                label: "Members",
-                active: membersActive,
-              },
-            ]
-          : []),
         {
-          href: settingsHref,
-          label: "Settings & Billing",
-          active: settingsActive,
+          href: `${base}/members`,
+          label: "Members",
+          active: startsWithPath(currentPath, `${base}/members`),
+        },
+        {
+          href: `${base}/roles`,
+          label: "Roles",
+          active: startsWithPath(currentPath, `${base}/roles`),
+        },
+        {
+          href: `${base}/billing`,
+          label: "Billing",
+          active: startsWithPath(currentPath, `${base}/billing`),
+        },
+        {
+          href: `${base}/settings`,
+          label: "Settings",
+          active: startsWithPath(currentPath, `${base}/settings`),
+        },
+        {
+          href: `${base}/audit-logs`,
+          label: "Audit Logs",
+          active: startsWithPath(currentPath, `${base}/audit-logs`),
         },
       ]
     : [];
