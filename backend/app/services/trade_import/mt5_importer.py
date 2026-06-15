@@ -7,6 +7,13 @@ from app.models.trade import Trade
 from app.services.trade_import.trade_normalizer import (
     generate_trade_hash,
 )
+from app.models.account_snapshot import (
+    AccountSnapshot,
+)
+
+from app.models.open_position import (
+    OpenPosition,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -341,6 +348,197 @@ class MT5Importer:
             return {
                 "success": False,
                 "error": str(exc),
+            }
+
+        finally:
+
+            mt5.shutdown()
+
+    def sync_account_state(
+        self,
+        db,
+        connection,
+        credential,
+        sync_job,
+    ):
+
+        if not mt5.initialize(
+            path=r"C:\Program Files\MetaTrader 5\terminal64.exe"
+        ):
+            raise Exception(
+                str(mt5.last_error())
+            )
+
+        try:
+
+            authorized = mt5.login(
+                login=int(
+                    credential.username
+                ),
+                password=
+                    credential.password_encrypted,
+                server=
+                    credential.server_name,
+            )
+
+            if not authorized:
+                raise Exception(
+                    str(mt5.last_error())
+                )
+
+            account = mt5.account_info()
+
+            if not account:
+                raise Exception(
+                    "Unable to load account"
+                )
+
+            snapshot = AccountSnapshot(
+                workspace_id=
+                    connection.workspace_id,
+
+                broker_connection_id=
+                    connection.id,
+
+                balance=float(
+                    account.balance
+                ),
+
+                equity=float(
+                    account.equity
+                ),
+
+                margin=float(
+                    account.margin
+                ),
+
+                free_margin=float(
+                    account.margin_free
+                ),
+
+                leverage=int(
+                    account.leverage
+                ),
+
+                currency=
+                    account.currency,
+            )
+
+            db.add(snapshot)
+
+            db.commit()
+
+            return {
+                "success": True,
+                "records_imported": 1,
+                "records_skipped": 0,
+            }
+
+        finally:
+
+            mt5.shutdown()
+
+
+    def sync_positions(
+        self,
+        db,
+        connection,
+        credential,
+    ):
+
+        if not mt5.initialize(
+            path=r"C:\Program Files\MetaTrader 5\terminal64.exe"
+        ):
+            raise Exception(
+                str(mt5.last_error())
+            )
+
+        try:
+
+            authorized = mt5.login(
+                login=int(
+                    credential.username
+                ),
+                password=
+                    credential.password_encrypted,
+                server=
+                    credential.server_name,
+            )
+
+            if not authorized:
+                raise Exception(
+                    str(mt5.last_error())
+                )
+
+            positions = mt5.positions_get()
+
+            if positions is None:
+                positions = []
+
+            (
+                db.query(OpenPosition)
+                .filter(
+                    OpenPosition.broker_connection_id
+                    == connection.id
+                )
+                .delete()
+            )
+
+            imported = 0
+
+            for position in positions:
+
+                side = "buy"
+
+                if (
+                    position.type
+                    == mt5.POSITION_TYPE_SELL
+                ):
+                    side = "sell"
+
+                record = OpenPosition(
+                    workspace_id=
+                        connection.workspace_id,
+
+                    broker_connection_id=
+                        connection.id,
+
+                    position_id=
+                        str(position.ticket),
+
+                    symbol=
+                        position.symbol,
+
+                    side=
+                        side,
+
+                    volume=
+                        float(position.volume),
+
+                    open_price=
+                        float(position.price_open),
+
+                    current_price=
+                        float(position.price_current),
+
+                    floating_pnl=
+                        float(position.profit),
+
+                    opened_at=
+                        datetime.utcfromtimestamp(
+                            position.time
+                        ),
+                )
+
+                db.add(record)
+
+                imported += 1
+
+            db.commit()
+
+            return {
+                "success": True,
+                "records_imported": imported,
             }
 
         finally:

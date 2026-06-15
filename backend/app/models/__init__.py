@@ -11,6 +11,14 @@ from app.models.broker_connection import BrokerConnection
 from app.models.broker_adapter import BrokerAdapter
 from app.models.import_job import ImportJob
 from app.models.sync_job import SyncJob
+from app.models.account_snapshot import (
+    AccountSnapshot,
+)
+
+from app.models.open_position import (
+    OpenPosition,
+)
+
 
 __all__ = [
     "Workspace",
@@ -23,4 +31,9 @@ __all__ = [
     "WorkspaceInvite",
     "ClaimDispute",
     "BrokerConnection",
+    "BrokerAdapter",
+    "ImportJob",
+    "SyncJob",
+    "AccountSnapshot",
+    "OpenPosition",
 ]

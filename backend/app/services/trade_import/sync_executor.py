@@ -69,12 +69,42 @@ def execute_sync_job(
 
     try:
 
-        result = importer.import_trades(
-            db,
-            connection,
-            credential,
-            sync_job,
-        )
+        if sync_job.sync_type in [
+            "historical",
+            "incremental",
+        ]:
+
+            result = importer.import_trades(
+                db,
+                connection,
+                credential,
+                sync_job,
+            )
+
+        elif sync_job.sync_type == "account_state":
+
+            result = importer.sync_account_state(
+                db,
+                connection,
+                credential,
+                sync_job,
+            )
+
+        elif sync_job.sync_type == "positions":
+
+            result = importer.sync_positions(
+                db,
+                connection,
+                credential,
+                sync_job,
+            )
+
+        else:
+
+            raise Exception(
+                f"Unsupported sync type: "
+                f"{sync_job.sync_type}"
+            )
 
         sync_job.records_skipped = (
             result.get(

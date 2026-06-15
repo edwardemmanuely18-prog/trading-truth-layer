@@ -1019,7 +1019,10 @@ class CreateSyncJobRequest(
     BaseModel
 ):
     connection_id: int
-    sync_type: str = "incremental"
+
+    sync_type: str = (
+        "incremental"
+    )
 
 
 @router.post(
@@ -1056,6 +1059,20 @@ def create_sync_job(
         raise HTTPException(
             status_code=400,
             detail="Broker connection not verified",
+        )
+
+    allowed_sync_types = [
+        "historical",
+        "incremental",
+        "positions",
+        "account_state",
+        "reconciliation",
+    ]
+
+    if payload.sync_type not in allowed_sync_types:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid sync type",
         )
 
     job = SyncJob(
