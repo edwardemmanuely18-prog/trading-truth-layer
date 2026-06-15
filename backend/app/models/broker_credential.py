@@ -33,6 +33,16 @@ class BrokerCredential(Base):
 
     server_name = Column(String)
 
+    host = Column(String)
+
+    port = Column(Integer)
+
+    client_id = Column(Integer)
+
+    account_id = Column(String)
+
+    gateway_mode = Column(String)
+
     created_at = Column(
         DateTime,
         server_default=func.now(),
