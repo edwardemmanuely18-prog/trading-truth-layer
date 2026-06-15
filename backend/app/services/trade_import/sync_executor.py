@@ -76,6 +76,13 @@ def execute_sync_job(
             sync_job,
         )
 
+        sync_job.records_skipped = (
+            result.get(
+                "records_skipped",
+                0,
+            )
+        )
+
         records_imported = int(
             result.get(
                 "records_imported",
