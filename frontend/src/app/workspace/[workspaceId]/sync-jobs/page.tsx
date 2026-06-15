@@ -43,6 +43,9 @@ export default function SyncJobsPage() {
     SyncJob[]
   >([]);
 
+  const [executingJobId, setExecutingJobId] =
+    useState<number | null>(null);
+
   const [connections, setConnections] =
     useState<BrokerConnection[]>([]);
 
@@ -142,17 +145,27 @@ export default function SyncJobsPage() {
     jobId: number
   ) {
     try {
+
+      setExecutingJobId(jobId);
+
       await executeSyncJob(
         workspaceId,
         jobId
       );
 
       await load();
+
     } catch (err: any) {
+
       alert(
         err?.message ??
-          "Sync execution failed"
+        "Sync execution failed"
       );
+
+    } finally {
+
+      setExecutingJobId(null);
+
     }
   }
 
@@ -357,13 +370,20 @@ export default function SyncJobsPage() {
                       <td className="px-6 py-4">
                         <button
                           onClick={() =>
-                            handleExecute(
-                              job.id
-                            )
+                            handleExecute(job.id)
                           }
-                          className="rounded-lg border px-3 py-2"
+                          disabled={
+                            executingJobId === job.id
+                          }
+                          className={
+                            executingJobId === job.id
+                              ? "rounded-lg bg-black px-3 py-2 text-white opacity-75"
+                              : "rounded-lg border px-3 py-2"
+                          }
                         >
-                          Sync Now
+                          {executingJobId === job.id
+                            ? "Synchronizing..."
+                            : "Sync Now"}
                         </button>
                       </td>
                     </tr>
