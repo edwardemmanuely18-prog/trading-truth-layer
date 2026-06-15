@@ -98,7 +98,16 @@ class MT5Connector(BaseBrokerConnector):
         import MetaTrader5 as mt5
 
         if not mt5.initialize():
-            return []
+            return {}
+
+        authorized = mt5.login(
+            login=int(self.credential.username),
+            password=self.credential.password_encrypted,
+            server=self.credential.server_name,
+        )
+
+        if not authorized:
+            return {}
 
         try:
 
@@ -149,6 +158,15 @@ class MT5Connector(BaseBrokerConnector):
         import MetaTrader5 as mt5
 
         if not mt5.initialize():
+            return {}
+
+        authorized = mt5.login(
+            login=int(self.credential.username),
+            password=self.credential.password_encrypted,
+            server=self.credential.server_name,
+        )
+
+        if not authorized:
             return {}
 
         try:
