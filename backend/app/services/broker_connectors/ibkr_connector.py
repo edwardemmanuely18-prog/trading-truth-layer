@@ -1,6 +1,9 @@
 from app.services.broker_connectors.base_connector import (
     BaseBrokerConnector,
 )
+from app.services.broker_connectors.account_models import (
+    BrokerAccount,
+)
 
 
 class IBKRConnector(BaseBrokerConnector):
@@ -72,16 +75,40 @@ class IBKRConnector(BaseBrokerConnector):
 
             client.disconnect()
 
-    def discover_accounts(self):
-        
+    def discover_accounts(
+        self,
+    ) -> list[BrokerAccount]:
+
         from app.services.broker_connectors.ibkr_gateway_client import (
             IBKRGatewayClient,
         )
 
+        host = getattr(
+            self.credential,
+            "host",
+            "127.0.0.1",
+        )
+
+        port = int(
+            getattr(
+                self.credential,
+                "port",
+                7497,
+            )
+        )
+
+        client_id = int(
+            getattr(
+                self.credential,
+                "client_id",
+                1,
+            )
+        )
+
         client = IBKRGatewayClient(
-            host="127.0.0.1",
-            port=7497,
-            client_id=1,
+            host=host,
+            port=port,
+            client_id=client_id,
         )
 
         client.connect()
