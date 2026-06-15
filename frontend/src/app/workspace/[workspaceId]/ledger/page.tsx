@@ -160,6 +160,15 @@ export default function WorkspaceLedgerPage() {
   const tradeUtilization =
     consumedTrades / Math.max(1, tradeLimit);
 
+  const removedTrades = Number(
+    metrics?.metrics?.removed_trades ??
+    metrics?.removed_trades ??
+    Math.max(
+      consumedTrades - activeLedgerTrades,
+      0
+    )
+  );
+
   const [usageLoading, setUsageLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [strategyStats, setStrategyStats] = useState<Record<string, any>[]>([]);
@@ -461,10 +470,7 @@ export default function WorkspaceLedgerPage() {
 
         const [
           tradesRes,
-          latestAuditRes,
-          workspaceAuditRes,
-          metricsRes,
-          strategyRes
+          metricsRes
         ] = await Promise.all([
           api.getTrades(resolvedWorkspaceId, {
             tag: selectedTag || undefined,
@@ -474,13 +480,7 @@ export default function WorkspaceLedgerPage() {
             limit: PAGE_SIZE,
             offset: page * PAGE_SIZE,
           }),
-          api.getLatestAuditEvents(20),
-          api.getAuditEventsForWorkspace(resolvedWorkspaceId, 50),
           api.getWorkspaceTradeMetrics(resolvedWorkspaceId),
-          api.getStrategyPerformance(
-            resolvedWorkspaceId,
-            selectedStrategy || undefined
-          ),
         ]);
 
         if (!active) return;
@@ -512,9 +512,6 @@ export default function WorkspaceLedgerPage() {
         });
 
         setTags(Array.from(uniqueTags).sort());
-        setLatestAuditEvents(Array.isArray(latestAuditRes) ? latestAuditRes : []);
-        setWorkspaceAuditEvents(Array.isArray(workspaceAuditRes) ? workspaceAuditRes : []);
-        setStrategyStats(Array.isArray(strategyRes) ? strategyRes : []);
         setMetrics(
           metricsRes ?? {
             metrics: {
@@ -525,6 +522,48 @@ export default function WorkspaceLedgerPage() {
             },
           }
         );
+
+        void (async () => {
+          try {
+            const [
+              latestAuditRes,
+              workspaceAuditRes,
+              strategyRes
+            ] = await Promise.all([
+              api.getLatestAuditEvents(20),
+              api.getAuditEventsForWorkspace(
+                resolvedWorkspaceId,
+                50
+              ),
+              api.getStrategyPerformance(
+                resolvedWorkspaceId,
+                selectedStrategy || undefined
+              ),
+            ]);
+
+            if (!active) return;
+
+            setLatestAuditEvents(
+              Array.isArray(latestAuditRes)
+                ? latestAuditRes
+                : []
+            );
+
+            setWorkspaceAuditEvents(
+              Array.isArray(workspaceAuditRes)
+                ? workspaceAuditRes
+                : []
+            );
+
+            setStrategyStats(
+              Array.isArray(strategyRes)
+                ? strategyRes
+                : []
+            );
+          } catch {
+            // background loading failure
+          }
+        })();
         setUsageLoading(false); // ✅ THIS FIXES YOUR STUCK UI
 
       } catch (err) {
@@ -718,6 +757,40 @@ export default function WorkspaceLedgerPage() {
                 <div className="text-sm text-slate-500">Utilization</div>
                 <div className="mt-1 text-2xl font-semibold">{formatPercent(tradeUtilization)}</div>
               </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+
+              <div className="rounded-xl bg-white/70 p-4">
+                <div className="text-sm text-slate-500">
+                  Trades Currently In Ledger
+                </div>
+
+                <div className="mt-1 text-2xl font-semibold">
+                  {activeLedgerTrades.toLocaleString()}
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-white/70 p-4">
+                <div className="text-sm text-slate-500">
+                  Trades Imported Lifetime
+                </div>
+
+                <div className="mt-1 text-2xl font-semibold">
+                  {consumedTrades.toLocaleString()}
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-white/70 p-4">
+                <div className="text-sm text-slate-500">
+                  Trades Removed
+                </div>
+
+                <div className="mt-1 text-2xl font-semibold">
+                  {removedTrades.toLocaleString()}
+                </div>
+              </div>
+
             </div>
 
             {tradeLimitReached && (

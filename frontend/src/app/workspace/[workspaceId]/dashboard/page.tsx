@@ -929,18 +929,28 @@ export default function WorkspaceDashboardPage() {
         setError(null);
 
         const [
-          dashboardRes,
+          institutionalRes,
           claimsRes,
           usageRes,
-          institutionalRes,
         ] = await Promise.all([
-          api.getDashboard(workspaceId),
+          api.getInstitutionalDashboard(workspaceId),
           api.getWorkspaceClaims(workspaceId),
           api.getWorkspaceUsage(workspaceId),
-          api.getInstitutionalDashboard(workspaceId),
         ]);
 
-        setDashboard(dashboardRes ?? null);
+        setInstitutionalDashboard(institutionalRes);
+
+        setDashboard({
+          workspace_id: institutionalRes?.workspace_id ?? Number(workspaceId),
+          workspace_name: "",
+          member_count:
+            institutionalRes?.workspace?.member_count ?? 0,
+          trade_count:
+            institutionalRes?.workspace?.trade_count ?? 0,
+          claim_count:
+            institutionalRes?.workspace?.claim_count ?? 0,
+        });
+
         setClaims(Array.isArray(claimsRes) ? claimsRes : []);
         setUsage(usageRes ?? null);
         setInstitutionalDashboard(
@@ -1451,10 +1461,14 @@ export default function WorkspaceDashboardPage() {
           <div className="mb-8 grid gap-4 md:grid-cols-4">
             <SummaryCard
               label="Workspace Members"
-              value={formatNumber(dashboard.member_count)}
-              hint={`${formatNumber(membersUsage.used)} / ${formatNumber(
-                membersUsage.limit
-              )} · ${formatPercent(membersUsage.ratio)}`}
+              value={formatNumber(governanceUsage.members)}
+              hint={`${formatNumber(governanceUsage.members)} / ${formatNumber(
+                governanceLimits.members
+              )} · ${formatPercent(
+                governanceLimits.members > 0
+                  ? governanceUsage.members / governanceLimits.members
+                  : 0
+              )}`}
             />
             <SummaryCard
               label="Evidence Records"
@@ -1465,10 +1479,14 @@ export default function WorkspaceDashboardPage() {
             />
             <SummaryCard
               label="Governed Claims"
-              value={formatNumber(dashboard.claim_count)}
-              hint={`${formatNumber(claimsUsage.used)} / ${formatNumber(
-                claimsUsage.limit
-              )} · ${formatPercent(claimsUsage.ratio)}`}
+              value={formatNumber(governanceUsage.claims)}
+              hint={`${formatNumber(governanceUsage.claims)} / ${formatNumber(
+                governanceLimits.claims
+              )} · ${formatPercent(
+                governanceLimits.claims > 0
+                  ? governanceUsage.claims / governanceLimits.claims
+                  : 0
+              )}`}
             />
             <SummaryCard
               label="Public Trust Records"

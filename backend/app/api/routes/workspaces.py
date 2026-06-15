@@ -4,12 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.models.import_job import ImportJob
+from app.models.sync_job import SyncJob
+
 from app.api.deps import get_current_user
 from app.core.db import get_db
 from app.models.claim_schema import ClaimSchema
 from app.models.trade import Trade
 from app.models.user import User
 from app.models.workspace import Workspace
+from app.models.broker_connection import BrokerConnection
+from app.models.broker_adapter import BrokerAdapter
 from app.models.workspace_membership import WorkspaceMembership
 from app.services.audit_service import log_audit_event
 from app.services.entitlements import (
@@ -24,14 +29,47 @@ from app.services.metrics_service import (
     get_workspace_trade_metrics,
 )
 
+from app.models.broker_credential import (
+    BrokerCredential,
+)
+
+from app.services.broker_verification_service import (
+    verify_connection,
+)
+
+
 from secrets import token_urlsafe
 
 from app.models.workspace_invite import WorkspaceInvite
 
+from fastapi import UploadFile, File
 
-from fastapi import HTTPException
 
 router = APIRouter()
+
+
+
+
+class CreateBrokerConnectionRequest(BaseModel):
+    provider: str
+    connection_name: str
+
+
+class VerifyBrokerConnectionRequest(
+    BaseModel
+):
+    connection_id: int
+
+    login: str | None = None
+    password: str | None = None
+    server: str | None = None
+
+    api_key: str | None = None
+    api_secret: str | None = None
+
+
+class ExecuteSyncRequest(BaseModel):
+    sync_job_id: int
 
 
 class CreateWorkspacePayload(BaseModel):
@@ -46,6 +84,8 @@ class UpdateWorkspaceSettingsPayload(BaseModel):
 
 class UpdateWorkspaceMemberRolePayload(BaseModel):
     role: str = Field(min_length=1, max_length=50)
+
+
 
 
 def require_workspace_member(workspace_id: int, current_user: User, db: Session):
@@ -154,39 +194,6 @@ def serialize_workspace_settings(workspace: Workspace):
             if workspace.updated_at
             else None
         ),
-    }
-    plan = get_plan_definition(plan_code)
-
-    limit_key_map = {
-        "members": "member_limit",
-        "trades": "trade_limit",
-        "active_trades": "trade_limit",
-        "claims": "claim_limit",
-        "storage_mb": "storage_limit_mb",
-    }
-
-    limit_key = limit_key_map[dimension]
-    limit = plan["limits"][limit_key]
-
-    if not limit or limit <= 0:
-        ratio = None
-        status = "unlimited"
-    else:
-        ratio = round(used / limit, 4)
-        if used > limit:
-            status = "over_limit"
-        elif used == limit:
-            status = "at_limit"
-        elif used / limit >= 0.8:
-            status = "near_limit"
-        else:
-            status = "ok"
-
-    return {
-        "used": used,
-        "limit": limit,
-        "ratio": ratio,
-        "status": status,
     }
 
 
@@ -537,6 +544,631 @@ def get_workspace_usage(
     entitlement["trade_metrics"] = trade_metrics
 
     return entitlement
+
+
+@router.get("/workspaces/{workspace_id}/broker-connections")
+def list_broker_connections(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    enforce_internal_workspace_access(
+        workspace,
+        current_user,
+        db,
+    )
+
+    connections = (
+        db.query(BrokerConnection)
+        .filter(
+            BrokerConnection.workspace_id == workspace_id
+        )
+        .order_by(BrokerConnection.id.desc())
+        .all()
+    )
+
+    return [
+        {
+            "id": row.id,
+            "workspace_id": row.workspace_id,
+            "provider": row.provider,
+            "connection_name": row.connection_name,
+            "account_id": row.account_id,
+            "account_name": row.account_name,
+            "adapter_type": row.adapter_type,
+            "sync_mode": row.sync_mode,
+            "connection_status": row.connection_status,
+            "sync_status": row.sync_status,
+            "verification_status": row.verification_status,
+            "trust_tier": row.trust_tier,
+            "last_sync_error": row.last_sync_error,
+            "last_sync_at": (
+                row.last_sync_at.isoformat()
+                if row.last_sync_at
+                else None
+            ),
+            "verified_at": (
+                row.verified_at.isoformat()
+                if row.verified_at
+                else None
+            ),
+            "created_at": (
+                row.created_at.isoformat()
+                if row.created_at
+                else None
+            ),
+            "account_environment":
+                row.account_environment,
+        }
+        for row in connections
+    ]
+
+
+@router.post(
+    "/workspaces/{workspace_id}/broker-connections"
+)
+def create_broker_connection(
+    workspace_id: int,
+    payload: CreateBrokerConnectionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    print("PROVIDER RECEIVED:", payload.provider)
+
+    adapter = (
+        db.query(BrokerAdapter)
+        .filter(
+            BrokerAdapter.provider == payload.provider
+        )
+        .first()
+    )
+
+    if not adapter:
+        raise HTTPException(
+            status_code=404,
+            detail="Adapter not found",
+        )
+
+    connection = BrokerConnection(
+        workspace_id=workspace_id,
+        provider=payload.provider,
+        connection_name=payload.connection_name,
+        adapter_type=adapter.adapter_type,
+        trust_tier=adapter.trust_tier,
+        connection_status="pending",
+        sync_status="idle",
+        verification_status="pending",
+        account_environment="unknown",
+    )
+
+    db.add(connection)
+    db.commit()
+    db.refresh(connection)
+
+    return {
+        "id": connection.id,
+        "provider": connection.provider,
+        "connection_name": connection.connection_name,
+        "connection_status": connection.connection_status,
+        "verification_status": connection.verification_status,
+        "trust_tier": connection.trust_tier,
+    }
+
+
+@router.post(
+    "/workspaces/{workspace_id}/broker-connections/verify"
+)
+def verify_broker_connection(
+    workspace_id: int,
+    payload: VerifyBrokerConnectionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    connection = (
+        db.query(BrokerConnection)
+        .filter(
+            BrokerConnection.id
+            == payload.connection_id
+        )
+        .first()
+    )
+
+    if not connection:
+        raise HTTPException(
+            status_code=404,
+            detail="Connection not found",
+        )
+
+    result = verify_connection(
+        connection.provider,
+        payload.model_dump(),
+    )
+
+    if not result["success"]:
+
+        connection.connection_status = (
+            "verification_failed"
+        )
+
+        db.commit()
+
+        raise HTTPException(
+            status_code=400,
+            detail=result["error"],
+        )
+
+    existing_credential = (
+        db.query(BrokerCredential)
+        .filter(
+            BrokerCredential.connection_id
+            == connection.id
+        )
+        .first()
+    )
+
+    if existing_credential:
+
+        existing_credential.username = (
+            payload.login
+        )
+
+        existing_credential.password_encrypted = (
+            payload.password
+        )
+
+        existing_credential.server_name = (
+            payload.server
+        )
+
+    else:
+
+        credential = BrokerCredential(
+            connection_id=connection.id,
+            credential_type="broker_login",
+            username=payload.login,
+            password_encrypted=payload.password,
+            server_name=payload.server,
+        )
+
+        db.add(credential)
+
+    connection.account_id = (
+        result["account_id"]
+    )
+
+    connection.account_name = (
+        result["account_name"]
+    )
+
+    connection.account_environment = (
+        result["account_environment"]
+    )
+
+    connection.broker_account_id = (
+        result.get("broker_account_id")
+    )
+
+    connection.broker_server = (
+        result.get("broker_server")
+    )
+
+    connection.broker_currency = (
+        result.get("currency")
+    )
+
+    connection.broker_leverage = (
+        result.get("leverage")
+    )
+
+    connection.account_balance = (
+        result.get("balance")
+    )
+
+    connection.account_equity = (
+        result.get("equity")
+    )
+
+    connection.connection_status = (
+        "connected"
+    )
+
+    connection.verification_status = (
+        "verified"
+    )
+
+    connection.verified_at = datetime.utcnow()
+
+    db.commit()
+
+    return {
+        "success": True,
+        "connection_id":
+            connection.id,
+
+        "account_id":
+            connection.account_id,
+
+        "account_name":
+            connection.account_name,
+
+        "environment":
+            connection.account_environment,
+
+        "broker_account_id":
+            connection.broker_account_id,
+
+        "broker_server":
+            connection.broker_server,
+
+        "currency":
+            connection.broker_currency,
+
+        "balance":
+            connection.account_balance,
+
+        "equity":
+            connection.account_equity,
+    }
+
+
+@router.get(
+    "/workspaces/{workspace_id}/broker-adapters"
+)
+def list_broker_adapters(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    adapters = (
+        db.query(BrokerAdapter)
+        .order_by(BrokerAdapter.display_name)
+        .all()
+    )
+
+    return [
+        {
+            "id": adapter.id,
+            "provider": adapter.provider,
+            "display_name": adapter.display_name,
+            "adapter_type": adapter.adapter_type,
+            "trust_tier": adapter.trust_tier,
+            "supports_live_sync": adapter.supports_live_sync,
+            "supports_historical_import": adapter.supports_historical_import,
+            "status": adapter.status,
+        }
+        for adapter in adapters
+    ]
+
+
+@router.get(
+    "/workspaces/{workspace_id}/import-jobs"
+)
+def list_import_jobs(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(
+            Workspace.id == workspace_id
+        )
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    jobs = (
+        db.query(ImportJob)
+        .filter(
+            ImportJob.workspace_id
+            == workspace_id
+        )
+        .order_by(
+            ImportJob.id.desc()
+        )
+        .all()
+    )
+
+    return [
+        {
+            "id": job.id,
+            "adapter_provider":
+                job.adapter_provider,
+            "filename":
+                job.filename,
+            "file_type":
+                job.file_type,
+            "status":
+                job.status,
+            "records_detected":
+                job.records_detected,
+            "imported_records":
+                job.imported_records,
+            "created_at":
+                job.created_at.isoformat(),
+        }
+        for job in jobs
+    ]
+
+
+@router.get(
+    "/workspaces/{workspace_id}/sync-jobs"
+)
+def list_sync_jobs(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    jobs = (
+        db.query(SyncJob)
+        .filter(
+            SyncJob.workspace_id
+            == workspace_id
+        )
+        .order_by(
+            SyncJob.id.desc()
+        )
+        .all()
+    )
+
+    return [
+        {
+            "id": job.id,
+            "provider": job.provider,
+            "sync_type": job.sync_type,
+            "status": job.status,
+            "records_processed":
+                job.records_processed,
+            "records_imported":
+                job.records_imported,
+            "error_message":
+                job.error_message,
+            "started_at":
+                job.started_at.isoformat()
+                if job.started_at
+                else None,
+            "completed_at":
+                job.completed_at.isoformat()
+                if job.completed_at
+                else None,
+            "created_at":
+                job.created_at.isoformat(),
+        }
+        for job in jobs
+    ]
+
+
+class CreateSyncJobRequest(
+    BaseModel
+):
+    connection_id: int
+    sync_type: str = "incremental"
+
+
+@router.post(
+    "/workspaces/{workspace_id}/sync-jobs"
+)
+def create_sync_job(
+    workspace_id: int,
+    payload: CreateSyncJobRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    connection = (
+        db.query(BrokerConnection)
+        .filter(
+            BrokerConnection.id
+            == payload.connection_id
+        )
+        .first()
+    )
+
+    if not connection:
+        raise HTTPException(
+            status_code=404,
+            detail="Connection not found",
+        )
+
+    if connection.connection_status != "connected":
+        raise HTTPException(
+            status_code=400,
+            detail="Broker connection not verified",
+        )
+
+    job = SyncJob(
+        workspace_id=workspace_id,
+        connection_id=
+            payload.connection_id,
+        provider=
+            connection.provider,
+        sync_type=
+            payload.sync_type,
+        status="queued",
+    )
+
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    from app.services.trade_import.sync_executor import (
+        execute_sync_job,
+    )
+
+    execute_sync_job(
+        db,
+        job.id,
+    )
+
+    return {
+        "success": True,
+        "job_id": job.id,
+    }
+
+
+@router.post(
+    "/workspaces/{workspace_id}/sync-jobs/{job_id}/execute"
+)
+def execute_sync_job_route(
+    workspace_id: int,
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    from app.services.trade_import.sync_executor import (
+        execute_sync_job,
+    )
+
+    result = execute_sync_job(
+        db,
+        job_id,
+    )
+
+    return {
+        "success": True,
+        "result": result,
+    }
+
+
+@router.post(
+    "/workspaces/{workspace_id}/import-jobs"
+)
+async def create_import_job(
+    workspace_id: int,
+    adapter_provider: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(
+            Workspace.id == workspace_id
+        )
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    job = ImportJob(
+        workspace_id=workspace_id,
+        adapter_provider=
+            adapter_provider,
+        filename=file.filename,
+        file_type=file.content_type
+            or "unknown",
+        status="uploaded",
+        records_detected=0,
+        imported_records=0,
+    )
+
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    return {
+        "success": True,
+        "job_id": job.id,
+    }
 
 
 @router.get("/workspaces/{workspace_id}/members")

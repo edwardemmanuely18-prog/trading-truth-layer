@@ -24,3 +24,62 @@ class Trade(Base):
     )
     source_system = Column(String, nullable=True)
     trade_fingerprint = Column(String, nullable=True, index=True)
+
+    broker_ticket = Column(
+        String,
+        nullable=True,
+        index=True,
+    )
+
+    broker_order_id = Column(
+        String,
+        nullable=True,
+    )
+
+    broker_position_id = Column(
+        String,
+        nullable=True,
+    )
+
+    broker_connection_id = Column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    broker_trade_id = Column(
+        String,
+        nullable=True,
+        index=True,
+    )
+
+    broker_execution_id = Column(
+        String,
+        nullable=True,
+    )
+
+    broker_account_id = Column(
+        String,
+        nullable=True,
+    )
+
+    broker_server = Column(
+        String,
+        nullable=True,
+    )
+
+    import_source = Column(
+        String,
+        nullable=True,
+    )
+
+    import_job_id = Column(
+        Integer,
+        nullable=True,
+    )
+
+    raw_trade_hash = Column(
+        String,
+        nullable=True,
+        index=True,
+    )

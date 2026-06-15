@@ -379,6 +379,12 @@ def build_entitlement_snapshot(workspace_id: int, db: Session) -> dict[str, Any]
 
             "ledger_count": live_trade_count,
 
+            "removed_trades": max(
+                immutable_trade_usage
+                - live_trade_count,
+                0,
+            ),
+
             "limit": limits["trades"],
 
             "utilization": (

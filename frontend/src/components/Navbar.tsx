@@ -36,7 +36,6 @@ function isPublicTrustPath(currentPath: string) {
 
 export default function Navbar({ workspaceId }: Props) {
   const pathname = usePathname();
-  const [latestClaimId, setLatestClaimId] = useState<number | null>(null);
   const { user, logout, getWorkspaceRole, loading, workspaces } = useAuth();
 
   const resolvedWorkspaceId = useMemo(() => {
@@ -54,38 +53,7 @@ export default function Navbar({ workspaceId }: Props) {
   const currentPath = normalizePath(pathname);
   const publicTrustActive = isPublicTrustPath(currentPath);
 
-  useEffect(() => {
-    if (resolvedWorkspaceId == null) {
-      setLatestClaimId(null);
-      return;
-    }
-
-    const workspaceIdForFetch = resolvedWorkspaceId;
-    let active = true;
-
-    async function loadLatestWorkspaceClaim() {
-      try {
-        const rows = await api.getWorkspaceClaims(workspaceIdForFetch);
-        if (!active) return;
-
-        const latest =
-          Array.isArray(rows) && rows.length > 0
-            ? [...rows].sort((a, b) => b.claim_schema_id - a.claim_schema_id)[0]
-            : null;
-
-        setLatestClaimId(latest?.claim_schema_id ?? null);
-      } catch {
-        if (!active) return;
-        setLatestClaimId(null);
-      }
-    }
-
-    void loadLatestWorkspaceClaim();
-
-    return () => {
-      active = false;
-    };
-  }, [resolvedWorkspaceId]);
+   [resolvedWorkspaceId]
 
   const workspaceRole = useMemo(() => {
     if (resolvedWorkspaceId == null) return null;
@@ -122,18 +90,18 @@ export default function Navbar({ workspaceId }: Props) {
 
   const claimBuilderHref = resolvedWorkspaceId ? `${base}/schema` : "/claims";
   const dashboardHref = resolvedWorkspaceId ? `${base}/dashboard` : "/";
-  const importHref = resolvedWorkspaceId ? `${base}/import` : "/";
+  const importHref =
+    resolvedWorkspaceId
+      ? `${base}/import-center`
+      : "/";
   const ledgerHref = resolvedWorkspaceId ? `${base}/ledger` : "/";
   const workspaceSchemaHref = resolvedWorkspaceId ? `${base}/schema` : "/";
   const claimsHref = resolvedWorkspaceId ? `${base}/claims` : "/";
-  const latestClaimHref =
-    resolvedWorkspaceId && latestClaimId ? `${base}/claim/${latestClaimId}` : null;
+  const latestClaimHref = null;
   const evidenceHref =
-    resolvedWorkspaceId && latestClaimId
-      ? `${base}/evidence?claimId=${latestClaimId}`
-      : resolvedWorkspaceId
-        ? `${base}/evidence`
-        : "/";
+    resolvedWorkspaceId
+      ? `${base}/evidence`
+      : "/";
   const membersHref = resolvedWorkspaceId ? `${base}/members` : "/";
   const settingsHref = resolvedWorkspaceId ? `${base}/settings` : "/";
 
@@ -175,20 +143,66 @@ export default function Navbar({ workspaceId }: Props) {
     : false;
   const membersActive = resolvedWorkspaceId ? startsWithPath(currentPath, membersHref) : false;
   const settingsActive = resolvedWorkspaceId ? startsWithPath(currentPath, settingsHref) : false;
+  const intakeActive =
+    startsWithPath(currentPath, `${base}/broker-connections`) ||
+    startsWithPath(currentPath, `${base}/import`) ||
+    startsWithPath(currentPath, `${base}/import-center`) ||
+    startsWithPath(currentPath, `${base}/sync-jobs`) ||
+    startsWithPath(currentPath, `${base}/adapter-registry`);
+
+  const registryActive =
+    startsWithPath(currentPath, `${base}/ledger`) ||
+    startsWithPath(currentPath, `${base}/evidence-records`) ||
+    startsWithPath(currentPath, `${base}/import-batches`) ||
+    startsWithPath(currentPath, `${base}/audit-timeline`) ||
+    startsWithPath(currentPath, `${base}/integrity-registry`);
+
+  const claimOperationsActive =
+    startsWithPath(currentPath, `${base}/schema`) ||
+    startsWithPath(currentPath, `${base}/draft-claims`) ||
+    startsWithPath(currentPath, `${base}/verified-claims`) ||
+    startsWithPath(currentPath, `${base}/published-claims`) ||
+    startsWithPath(currentPath, `${base}/locked-claims`) ||
+    startsWithPath(currentPath, `${base}/claim-templates`) ||
+    startsWithPath(currentPath, `${base}/claims`) ||
+    startsWithPath(currentPath, `${base}/claim`);
+
+  const trustActive =
+    startsWithPath(currentPath, `${base}/trust-scores`) ||
+    startsWithPath(currentPath, `${base}/leaderboard`) ||
+    startsWithPath(currentPath, `${base}/verification-analytics`) ||
+    startsWithPath(currentPath, `${base}/integrity-analytics`) ||
+    startsWithPath(currentPath, `${base}/risk-analytics`) ||
+    startsWithPath(currentPath, `${base}/due-diligence`);
+
+  const publicActive =
+    startsWithPath(currentPath, `${base}/public-records`) ||
+    startsWithPath(currentPath, `${base}/verification-routes`) ||
+    startsWithPath(currentPath, `${base}/trust-directory`) ||
+    startsWithPath(currentPath, `${base}/public-profiles`) ||
+    startsWithPath(currentPath, `${base}/search`);
+
+  const administrationActive =
+    startsWithPath(currentPath, `${base}/members`) ||
+    startsWithPath(currentPath, `${base}/roles`) ||
+    startsWithPath(currentPath, `${base}/billing`) ||
+    startsWithPath(currentPath, `${base}/settings`) ||
+    startsWithPath(currentPath, `${base}/audit-logs`);
+
   const activeDomain =
     dashboardActive
       ? "dashboard"
-      : importActive
+      : intakeActive
         ? "intake"
-        : ledgerActive || evidenceActive || latestClaimActive
+        : registryActive
           ? "registry"
-          : claimsActive || workspaceSchemaActive || schemaBuilderActive
+          : claimOperationsActive
             ? "claims"
-            : leaderboardActive
+            : trustActive
               ? "trust"
-              : publicClaimsActive || publicProfileActive
+              : publicActive
                 ? "public"
-                : membersActive || settingsActive
+                : administrationActive
                   ? "admin"
                   : "dashboard";
 
@@ -223,9 +237,17 @@ export default function Navbar({ workspaceId }: Props) {
             active: startsWithPath(currentPath, `${base}/broker-connections`),
           },
           {
-            href: `${base}/import`,
+            href: `${base}/import-center`,
             label: "Import Center",
-            active: startsWithPath(currentPath, `${base}/import`),
+            active:
+              startsWithPath(
+                currentPath,
+                `${base}/import-center`
+              ) ||
+              startsWithPath(
+                currentPath,
+                `${base}/import`
+              ),
           },
           {
             href: `${base}/sync-jobs`,

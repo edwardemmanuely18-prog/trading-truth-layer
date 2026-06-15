@@ -7,6 +7,11 @@ const DEV_USER_ID: number | null = null;
 const TOKEN_STORAGE_KEY = "ttl_access_token";
 const ACTIVE_WORKSPACE_STORAGE_KEY = "ttl_active_workspace_id";
 
+const inflightRequests = new Map<
+  string,
+  Promise<any>
+>();
+
 export function getStoredAccessToken(): string | null {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem(TOKEN_STORAGE_KEY);
@@ -215,6 +220,86 @@ export type VerifyPayloadV7 = {
   public_view_path: string;
   verify_path: string;
 };
+
+export interface BrokerConnection {
+  id: number;
+
+  provider: string;
+
+  connection_name: string;
+
+  connection_status: string;
+
+  verification_status: string;
+
+  account_environment: string;
+
+  sync_status: string;
+
+  trust_tier: string;
+
+  account_id?: string;
+
+  account_name?: string;
+
+  last_sync_at?: string;
+
+  verified_at?: string;
+}
+
+export interface BrokerAdapter {
+  id: number;
+  provider: string;
+  display_name: string;
+  adapter_type: string;
+  trust_tier: string;
+  supports_live_sync: boolean;
+  supports_historical_import: boolean;
+  status: string;
+}
+
+export interface VerifyBrokerConnectionPayload {
+  connection_id: number;
+
+  login?: string;
+  password?: string;
+  server?: string;
+
+  api_key?: string;
+  api_secret?: string;
+}
+
+
+export interface ImportJob {
+  id: number;
+
+  adapter_provider: string;
+
+  filename: string;
+
+  file_type: string;
+
+  status: string;
+
+  records_detected: number;
+
+  imported_records: number;
+
+  created_at: string;
+}
+
+export interface SyncJob {
+  id: number;
+  provider: string;
+  sync_type: string;
+  status: string;
+  records_processed: number;
+  records_imported: number;
+  error_message?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  created_at: string;
+}
 
 export type ImportBatch = {
   id: number;
@@ -1338,6 +1423,154 @@ function getApiBaseUrl() {
   );
 }
 
+export async function getBrokerConnections(
+  workspaceId: number
+): Promise<BrokerConnection[]> {
+  return apiFetch<BrokerConnection[]>(
+    withDevUser(
+      `/workspaces/${workspaceId}/broker-connections`
+    ),
+    {
+      cache: "no-store",
+    }
+  );
+}
+
+export async function getBrokerAdapters(
+  workspaceId: number
+): Promise<BrokerAdapter[]> {
+  return apiFetch(
+    `/workspaces/${workspaceId}/broker-adapters`
+  );
+}
+
+export async function createBrokerConnection(
+  workspaceId: number,
+  payload: {
+    provider: string;
+    connection_name: string;
+  }
+) {
+  return apiFetch(
+    `/workspaces/${workspaceId}/broker-connections`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }
+  );
+}
+
+export async function verifyBrokerConnection(
+  workspaceId: number,
+  payload: VerifyBrokerConnectionPayload
+) {
+  return apiFetch(
+    `/api/workspaces/${workspaceId}/broker-connections/verify`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function getImportJobs(
+  workspaceId: number
+): Promise<ImportJob[]> {
+  return apiFetch(
+    `/workspaces/${workspaceId}/import-jobs`
+  );
+}
+
+export async function uploadImportJob(
+  workspaceId: number,
+  adapterProvider: string,
+  file: File
+) {
+  const formData = new FormData();
+
+  formData.append(
+    "adapter_provider",
+    adapterProvider
+  );
+
+  formData.append(
+    "file",
+    file
+  );
+
+  const token =
+    getStoredAccessToken();
+
+  const res = await fetch(
+    `${getApiBaseUrl()}/api/workspaces/${workspaceId}/import-jobs`,
+    {
+      method: "POST",
+
+      headers: token
+        ? {
+            Authorization:
+              `Bearer ${token}`,
+          }
+        : undefined,
+
+      body: formData,
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error(
+      "Upload failed"
+    );
+  }
+
+  return res.json();
+}
+
+export async function getSyncJobs(
+  workspaceId: number
+): Promise<SyncJob[]> {
+  return apiFetch<SyncJob[]>(
+    `/workspaces/${workspaceId}/sync-jobs`
+  );
+}
+
+export async function createSyncJob(
+  workspaceId: number,
+  payload: {
+    connection_id: number;
+    sync_type: string;
+  }
+) {
+  return apiFetch(
+    `/workspaces/${workspaceId}/sync-jobs`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/json",
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export async function executeSyncJob(
+  workspaceId: number,
+  jobId: number
+) {
+  const response = await apiFetch(
+    `/workspaces/${workspaceId}/sync-jobs/${jobId}/execute`,
+    {
+      method: "POST",
+    }
+  );
+
+  return response;
+}
+
 export const getInstitutionalDashboard =
   async (
     workspaceId: number
@@ -1387,76 +1620,99 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const baseUrl = getApiBaseUrl();
   const finalPath = withApiPrefix(path);
 
-  console.log("API CALL:", `${baseUrl}${finalPath}`, {
-    token: getStoredAccessToken(),
-  });
+  const requestKey =
+    `${options?.method || "GET"}:${finalPath}`;
+
+  if (
+    !options?.method ||
+    options.method === "GET"
+  ) {
+    const existing =
+      inflightRequests.get(requestKey);
+
+    if (existing) {
+      return existing as Promise<T>;
+    }
+  }
+
+  if (
+    process.env.NODE_ENV ===
+    "development"
+  ) {
+    console.log(
+      "API CALL:",
+      `${baseUrl}${finalPath}`
+    );
+  }
 
   if (!(options?.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
 
-  const res = await fetch(`${baseUrl}${finalPath}`, {
-    ...options,
-    headers,
-  });
+  const requestPromise = (async () => {
 
-  if (!res.ok) {
+    const res = await fetch(`${baseUrl}${finalPath}`, {
+      ...options,
+      headers,
+    });
 
-    if (
-      res.status === 401 ||
-      res.status === 403
-    ) {
-      clearStoredAccessToken();
-      clearStoredActiveWorkspaceId();
-    }
+    if (!res.ok) {
 
-    const rawText = await res.text();
-    const payload = parseApiErrorPayload(rawText);
+      if (
+        res.status === 401 ||
+        res.status === 403
+      ) {
+        clearStoredAccessToken();
+        clearStoredActiveWorkspaceId();
+      }
 
-    const isLimitError =
-      payload?.code === "LIMIT_EXCEEDED" ||
-      payload?.code === "PLAN_LIMIT_REACHED" ||
-      payload?.upgrade_required === true ||
-      payload?.recommended_action === "upgrade";
+      const rawText = await res.text();
+      const payload = parseApiErrorPayload(rawText);
 
-    if (isLimitError) {
-      const workspaceId = payload?.workspace_id;
+      const isLimitError =
+        payload?.code === "LIMIT_EXCEEDED" ||
+        payload?.code === "PLAN_LIMIT_REACHED" ||
+        payload?.upgrade_required === true ||
+        payload?.recommended_action === "upgrade";
 
-      if (typeof window !== "undefined" && workspaceId) {
+      if (isLimitError) {
+        const workspaceId = payload?.workspace_id;
+
+        if (typeof window !== "undefined" && workspaceId) {
+          throw new ApiError(
+            payload?.message || "Workspace limit reached",
+            res.status,
+            payload,
+            rawText,
+            {
+              redirectTo: workspaceId
+                ? `/workspace/${workspaceId}/settings?upgrade=true`
+                : undefined,
+            }
+          );
+        }
+
         throw new ApiError(
           payload?.message || "Workspace limit reached",
           res.status,
           payload,
-          rawText,
-          {
-            redirectTo: workspaceId
-              ? `/workspace/${workspaceId}/settings?upgrade=true`
-              : undefined,
-          }
+          rawText
         );
       }
 
-      throw new ApiError(
-        payload?.message || "Workspace limit reached",
-        res.status,
-        payload,
-        rawText
-      );
+      const message =
+        payload?.message ||
+        payload?.detail ||
+        rawText ||
+        `API request failed with status ${res.status}`;
+
+      throw new ApiError(message, res.status, payload, rawText);
     }
 
-    const message =
-      payload?.message ||
-      payload?.detail ||
-      rawText ||
-      `API request failed with status ${res.status}`;
+    const text = await res.text();
 
-    throw new ApiError(message, res.status, payload, rawText);
-  }
-
-  const text = await res.text();
-
-  try {
+      try {
     return JSON.parse(text) as T;
   } catch {
     throw new ApiError(
@@ -1466,6 +1722,26 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
       text
     );
   }
+
+})();
+
+if (
+  !options?.method ||
+  options.method === "GET"
+) {
+  inflightRequests.set(
+    requestKey,
+    requestPromise
+  );
+
+  requestPromise.finally(() => {
+    inflightRequests.delete(
+      requestKey
+    );
+  });
+}
+
+return requestPromise;
 }
 
 async function apiDownload(path: string, filename: string): Promise<void> {

@@ -1,6 +1,14 @@
 from sqlalchemy import Column, Integer, String, DateTime
 from sqlalchemy.sql import func
 
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    DateTime,
+    Numeric,
+)
+
 from app.core.db import Base
 
 
@@ -26,10 +34,38 @@ class BrokerConnection(Base):
         nullable=False,
     )
 
+    account_id = Column(
+        String,
+        nullable=True,
+    )
+
+    account_name = Column(
+        String,
+        nullable=True,
+    )
+
+    adapter_type = Column(
+        String,
+        nullable=False,
+        default="broker_api",
+    )
+
+    sync_mode = Column(
+        String,
+        nullable=False,
+        default="manual",
+    )
+
     connection_status = Column(
         String,
         nullable=False,
         default="not_connected",
+    )
+
+    sync_status = Column(
+        String,
+        nullable=False,
+        default="idle",
     )
 
     verification_status = Column(
@@ -38,7 +74,29 @@ class BrokerConnection(Base):
         default="pending",
     )
 
+    trust_tier = Column(
+        String,
+        nullable=False,
+        default="tier_1",
+    )
+
+    account_environment = Column(
+        String,
+        nullable=False,
+        default="unknown",
+    )
+
     last_sync_at = Column(
+        DateTime,
+        nullable=True,
+    )
+
+    last_sync_error = Column(
+        String,
+        nullable=True,
+    )
+
+    verified_at = Column(
         DateTime,
         nullable=True,
     )
@@ -54,4 +112,34 @@ class BrokerConnection(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+    broker_account_id = Column(
+        String,
+        nullable=True,
+    )
+
+    broker_server = Column(
+        String,
+        nullable=True,
+    )
+
+    broker_currency = Column(
+        String,
+        nullable=True,
+    )
+
+    broker_leverage = Column(
+        Integer,
+        nullable=True,
+    )
+
+    account_balance = Column(
+        Numeric(20, 4),
+        nullable=True,
+    )
+
+    account_equity = Column(
+        Numeric(20, 4),
+        nullable=True,
     )

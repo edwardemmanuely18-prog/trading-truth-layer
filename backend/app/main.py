@@ -23,6 +23,7 @@ from app.models import (
     ClaimDispute,
     BrokerConnection,
 )
+from app.models.import_job import ImportJob
 
 # Routers
 from app.api.routes import verify
