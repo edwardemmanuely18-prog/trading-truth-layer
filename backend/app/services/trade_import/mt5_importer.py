@@ -44,11 +44,39 @@ class MT5Importer:
                     "error": str(mt5.last_error()),
                 }
 
+            account_info = mt5.account_info()
+
+            if account_info:
+
+                connection.account_balance = (
+                    float(account_info.balance)
+                )
+
+                connection.account_equity = (
+                    float(account_info.equity)
+                )
+
+                connection.broker_currency = (
+                    account_info.currency
+                )
+
+                connection.broker_leverage = (
+                    int(account_info.leverage)
+                )
+
             to_date = datetime.utcnow()
 
-            from_date = (
-                to_date - timedelta(days=3650)
-            )
+            if connection.last_sync_at:
+
+                from_date = (
+                    connection.last_sync_at
+                )
+
+            else:
+
+                from_date = (
+                    to_date - timedelta(days=3650)
+                )
 
             deals = mt5.history_deals_get(
                 from_date,
@@ -250,6 +278,10 @@ class MT5Importer:
                 "completed"
             )
 
+            connection.last_sync_at = (
+                datetime.utcnow()
+            )
+
             try:
 
                 db.commit()
@@ -285,9 +317,16 @@ class MT5Importer:
                 "success": True,
                 "records_detected": detected,
                 "records_imported": imported,
+                "records_skipped": (
+                    detected - imported
+                ),
             }
 
         except Exception as exc:
+
+            logger.exception(
+                "MT5 import failed"
+            )
 
             db.rollback()
 
