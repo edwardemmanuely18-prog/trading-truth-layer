@@ -13,10 +13,20 @@ def get_connector(
 ):
     provider = provider.lower()
 
-    if provider == "mt5":
+    if provider in [
+        "mt4",
+        "mt5",
+        "metatrader 4",
+        "metatrader 5",
+    ]:
         return MT5Connector(credential)
+        
 
-    if provider == "interactive_brokers":
+    if provider in [
+        "interactive_brokers",
+        "interactive brokers",
+        "ibkr",
+    ]:
         return IBKRConnector(credential)
 
     raise ValueError(
