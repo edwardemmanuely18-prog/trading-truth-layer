@@ -998,6 +998,12 @@ def list_sync_jobs(
                 job.records_processed,
             "records_imported":
                 job.records_imported,
+            "records_skipped":
+                getattr(
+                    job,
+                    "records_skipped",
+                    0,
+                ),
             "error_message":
                 job.error_message,
             "started_at":
@@ -1089,15 +1095,6 @@ def create_sync_job(
     db.add(job)
     db.commit()
     db.refresh(job)
-
-    from app.services.trade_import.sync_executor import (
-        execute_sync_job,
-    )
-
-    execute_sync_job(
-        db,
-        job.id,
-    )
 
     return {
         "success": True,

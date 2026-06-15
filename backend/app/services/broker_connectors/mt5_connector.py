@@ -150,7 +150,32 @@ class MT5Connector(BaseBrokerConnector):
     def sync_positions(
         self,
     ):
-        return []
+        import MetaTrader5 as mt5
+
+        if not mt5.initialize():
+            return []
+
+        authorized = mt5.login(
+            login=int(self.credential.username),
+            password=self.credential.password_encrypted,
+            server=self.credential.server_name,
+        )
+
+        if not authorized:
+            return []
+
+        try:
+
+            positions = mt5.positions_get()
+
+            if positions is None:
+                return []
+
+            return positions
+
+        finally:
+
+            mt5.shutdown()
 
     def sync_account_state(
         self,

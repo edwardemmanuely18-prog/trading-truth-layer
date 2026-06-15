@@ -19,6 +19,7 @@ def get_importer(provider: str):
 
     if provider in [
         "interactive_brokers",
+        "interactive brokers",
         "ibkr",
     ]:
         return IBKRImporter()

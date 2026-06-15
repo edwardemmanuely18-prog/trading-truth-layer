@@ -14,12 +14,11 @@ from app.models.workspace import Workspace
 from app.services.trade_import.importer_registry import (
     get_importer,
 )
-
-from app.models.workspace import Workspace
-
-from app.api.routes.trades import (
-    increment_workspace_trades_consumed,
+from app.services.trade_import.mt5_state_sync import (
+    sync_mt5_positions,
+    sync_mt5_account_state,
 )
+
 
 
 def execute_sync_job(
@@ -83,20 +82,18 @@ def execute_sync_job(
 
         elif sync_job.sync_type == "account_state":
 
-            result = importer.sync_account_state(
+            result = sync_mt5_account_state(
                 db,
                 connection,
                 credential,
-                sync_job,
             )
 
         elif sync_job.sync_type == "positions":
 
-            result = importer.sync_positions(
+            result = sync_mt5_positions(
                 db,
                 connection,
                 credential,
-                sync_job,
             )
 
         else:

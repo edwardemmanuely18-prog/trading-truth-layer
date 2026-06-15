@@ -62,6 +62,12 @@ class SyncJob(Base):
         default=0,
     )
 
+    records_skipped = Column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
     error_message = Column(
         String,
         nullable=True,

@@ -71,18 +71,73 @@ def verify_ibkr_connection(
     api_key: str,
     api_secret: str,
 ):
-    return {
-        "success": False,
-        "error":
-            (
-                "Interactive Brokers gateway "
-                "integration pending. "
-                "Use MT5 connection for "
-                "live verification."
-            ),
-        "provider": "ibkr",
-        "status": "beta",
-    }
+
+    from app.services.broker_connectors.ibkr_gateway_client import (
+        IBKRGatewayClient,
+    )
+
+    client = IBKRGatewayClient(
+        host="127.0.0.1",
+        port=7497,
+        client_id=1,
+    )
+
+    connected = client.connect()
+
+    if not connected:
+        return {
+            "success": False,
+            "error":
+                "Unable to connect to IBKR Gateway",
+        }
+
+    try:
+
+        accounts = client.list_accounts()
+
+        if not accounts:
+            return {
+                "success": False,
+                "error":
+                    "No IBKR accounts discovered",
+            }
+
+        account = accounts[0]
+
+        return {
+            "success": True,
+
+            "account_id":
+                account["account_id"],
+
+            "account_name":
+                account["account_name"],
+
+            "account_environment":
+                account["environment"],
+
+            "broker_account_id":
+                account["account_id"],
+
+            "broker_server":
+                "IBKR Gateway",
+
+            "currency":
+                account["currency"],
+
+            "leverage":
+                None,
+
+            "balance":
+                None,
+
+            "equity":
+                None,
+        }
+
+    finally:
+
+        client.disconnect()
 
 
 def verify_connection(
@@ -109,8 +164,14 @@ def verify_connection(
         "ibkr",
     ]:
         return verify_ibkr_connection(
-            payload["api_key"],
-            payload["api_secret"],
+            payload.get(
+                "api_key",
+                "",
+            ),
+            payload.get(
+                "api_secret",
+                "",
+            ),
         )
 
     return {

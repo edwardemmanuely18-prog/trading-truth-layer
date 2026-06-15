@@ -131,11 +131,77 @@ class IBKRConnector(BaseBrokerConnector):
 
             client.disconnect()
 
-    def sync_trades(self):
-        pass
+    def sync_trades(
+        self,
+    ):
 
-    def sync_positions(self):
-        pass
+        from app.services.broker_connectors.ibkr_gateway_client import (
+            IBKRGatewayClient,
+        )
 
-    def sync_account_state(self):
-        pass
+        client = IBKRGatewayClient(
+            host="127.0.0.1",
+            port=7497,
+            client_id=1,
+        )
+
+        if not client.connect():
+            return []
+
+        try:
+
+            return client.get_trades()
+
+        finally:
+
+            client.disconnect()
+
+    def sync_positions(
+        self,
+    ):
+
+        from app.services.broker_connectors.ibkr_gateway_client import (
+            IBKRGatewayClient,
+        )
+
+        client = IBKRGatewayClient(
+            host="127.0.0.1",
+            port=7497,
+            client_id=1,
+        )
+
+        if not client.connect():
+            return []
+
+        try:
+
+            return client.get_positions()
+
+        finally:
+
+            client.disconnect()
+
+    def sync_account_state(
+        self,
+    ):
+
+        from app.services.broker_connectors.ibkr_gateway_client import (
+            IBKRGatewayClient,
+        )
+
+        client = IBKRGatewayClient(
+            host="127.0.0.1",
+            port=7497,
+            client_id=1,
+        )
+
+        if not client.connect():
+            return {}
+
+        try:
+
+            return client.get_account_summary()
+
+        finally:
+
+            client.disconnect()
