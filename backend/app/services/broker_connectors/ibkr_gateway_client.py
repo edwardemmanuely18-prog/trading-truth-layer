@@ -115,3 +115,41 @@ class IBKRGatewayClient:
                     "2026-06-15T10:00:00",
             }
         ]
+
+
+    def get_account_state(
+        self,
+    ):
+
+        if not self.connected:
+            return None
+
+        return {
+            "account_id": "DU123456",
+            "balance": 100000.0,
+            "equity": 102500.0,
+            "margin": 12000.0,
+            "free_margin": 90500.0,
+            "currency": "USD",
+            "leverage": 30,
+        }
+
+
+    def list_positions(
+        self,
+    ):
+
+        if not self.connected:
+            return []
+
+        return [
+            {
+                "position_id": "POS001",
+                "symbol": "AAPL",
+                "side": "long",
+                "quantity": 100,
+                "average_price": 210.50,
+                "market_price": 214.00,
+                "unrealized_pnl": 350.00,
+            }
+        ]

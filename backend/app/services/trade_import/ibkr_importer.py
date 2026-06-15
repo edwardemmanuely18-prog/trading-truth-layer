@@ -14,6 +14,12 @@ from app.services.broker_connectors.ibkr_gateway_client import (
     IBKRGatewayClient,
 )
 
+from app.services.trade_import.ibkr_state_sync import (
+    sync_ibkr_account_state,
+    sync_ibkr_positions,
+)
+
+
 
 class IBKRImporter(BaseTradeImporter):
 
@@ -165,3 +171,31 @@ class IBKRImporter(BaseTradeImporter):
         finally:
 
             client.disconnect()
+
+
+    def sync_account_state(
+        self,
+        db,
+        connection,
+        credential,
+        sync_job,
+    ):
+        return sync_ibkr_account_state(
+            db,
+            connection,
+        )
+
+
+    def sync_positions(
+        self,
+        db,
+        connection,
+        credential,
+        sync_job,
+    ):
+        return sync_ibkr_positions(
+            db,
+            connection,
+        )
+
+        
