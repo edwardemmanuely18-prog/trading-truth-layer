@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import logging
 
 import MetaTrader5 as mt5
 
@@ -6,6 +7,9 @@ from app.models.trade import Trade
 from app.services.trade_import.trade_normalizer import (
     generate_trade_hash,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class MT5Importer:
@@ -17,9 +21,6 @@ class MT5Importer:
         credential,
         sync_job,
     ):
-        import logging
-
-        logger = logging.getLogger(__name__)
 
         if not mt5.initialize(
             path=r"C:\Program Files\MetaTrader 5\terminal64.exe"
