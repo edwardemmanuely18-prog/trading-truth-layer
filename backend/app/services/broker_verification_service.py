@@ -68,8 +68,9 @@ def verify_mt5_connection(
 
 
 def verify_ibkr_connection(
-    api_key: str,
-    api_secret: str,
+    host: str,
+    port: int,
+    client_id: int,
 ):
 
     from app.services.broker_connectors.ibkr_gateway_client import (
@@ -77,9 +78,9 @@ def verify_ibkr_connection(
     )
 
     client = IBKRGatewayClient(
-        host="127.0.0.1",
-        port=7497,
-        client_id=1,
+        host=host,
+        port=port,
+        client_id=client_id,
     )
 
     connected = client.connect()
@@ -165,12 +166,20 @@ def verify_connection(
     ]:
         return verify_ibkr_connection(
             payload.get(
-                "api_key",
-                "",
+                "host",
+                "127.0.0.1",
             ),
-            payload.get(
-                "api_secret",
-                "",
+            int(
+                payload.get(
+                    "port",
+                    4002,
+                )
+            ),
+            int(
+                payload.get(
+                    "client_id",
+                    1,
+                )
             ),
         )
 

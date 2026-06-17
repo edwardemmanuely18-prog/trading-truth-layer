@@ -267,6 +267,13 @@ export interface VerifyBrokerConnectionPayload {
 
   api_key?: string;
   api_secret?: string;
+
+  host?: string;
+  port?: number;
+  client_id?: number;
+
+  flex_query_id?: string;
+  flex_token?: string;
 }
 
 

@@ -15,6 +15,11 @@ from app.models.open_position import (
     OpenPosition,
 )
 
+from app.services.trade_import.mt5_state_sync import (
+    sync_mt5_account_state,
+    sync_mt5_positions,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -544,3 +549,30 @@ class MT5Importer:
         finally:
 
             mt5.shutdown()
+
+    def sync_account_state(
+        self,
+        db,
+        connection,
+        credential,
+        sync_job,
+    ):
+        return sync_mt5_account_state(
+            db,
+            connection,
+            credential,
+        )
+
+    
+    def sync_positions(
+        self,
+        db,
+        connection,
+        credential,
+        sync_job,
+    ):
+        return sync_mt5_positions(
+            db,
+            connection,
+            credential,
+        )

@@ -1,4 +1,174 @@
+import threading
+import time
+
+from ibapi.client import EClient
+from ibapi.wrapper import EWrapper
+
+from ibapi.execution import (
+    ExecutionFilter,
+)
+
+
+
+class IBKRApp(
+    EWrapper,
+    EClient,
+):
+
+    def __init__(self):
+
+        EClient.__init__(
+            self,
+            self,
+        )
+
+        self.accounts = []
+
+        self.connected_event = (
+            threading.Event()
+        )
+
+        self.account_summary = {}
+
+        self.positions = []
+
+        self.summary_event = (
+            threading.Event()
+        )
+
+        self.positions_event = (
+            threading.Event()
+        )
+
+        self.executions = []
+
+        self.executions_event = (
+            threading.Event()
+        )
+
+    def nextValidId(
+        self,
+        orderId,
+    ):
+
+        self.connected_event.set()
+
+    def managedAccounts(
+        self,
+        accountsList,
+    ):
+
+        self.accounts = [
+            account.strip()
+            for account in accountsList.split(
+                ","
+            )
+            if account.strip()
+        ]
+
+    def accountSummary(
+        self,
+        reqId,
+        account,
+        tag,
+        value,
+        currency,
+    ):
+
+        self.account_summary[tag] = value
+
+
+    def accountSummaryEnd(
+        self,
+        reqId,
+    ):
+
+        self.summary_event.set()
+
+    def position(
+        self,
+        account,
+        contract,
+        position,
+        avgCost,
+    ):
+
+        self.positions.append(
+            {
+                "account": account,
+                "symbol": contract.symbol,
+                "quantity": position,
+                "avg_cost": avgCost,
+            }
+        )
+
+
+    def positionEnd(
+        self,
+    ):
+
+        self.positions_event.set()
+
+    def execDetails(
+        self,
+        reqId,
+        contract,
+        execution,
+    ):
+
+        self.executions.append(
+            {
+                "execution_id":
+                    execution.execId,
+
+                "account_id":
+                    execution.acctNumber,
+
+                "symbol":
+                    contract.symbol,
+
+                "side":
+                    execution.side,
+
+                "quantity":
+                    execution.shares,
+
+                "price":
+                    execution.price,
+
+                "executed_at":
+                    execution.time,
+            }
+        )
+
+    def execDetailsEnd(
+        self,
+        reqId,
+    ):
+
+        self.executions_event.set()
+
+    def error(
+        self,
+        reqId,
+        errorCode,
+        errorString,
+        advancedOrderRejectJson="",
+    ):
+
+        print(
+            "IBKR ERROR",
+            reqId,
+            errorCode,
+            errorString,
+        )
+
+
 class IBKRGatewayClient:
+
+    from ibapi.execution import (
+        ExecutionFilter,
+    )
 
     def __init__(
         self,
@@ -6,150 +176,134 @@ class IBKRGatewayClient:
         port,
         client_id,
     ):
+
         self.host = host
         self.port = port
         self.client_id = client_id
 
-        self.connected = False
+        self.app = None
+
+        self.thread = None
 
     def connect(self):
 
-        self.connected = True
+        self.app = IBKRApp()
 
-        return True
+        self.app.connect(
+            self.host,
+            self.port,
+            self.client_id,
+        )
+
+        self.thread = threading.Thread(
+            target=self.app.run,
+            daemon=True,
+        )
+
+        self.thread.start()
+
+        connected = (
+            self.app.connected_event.wait(
+                timeout=10
+            )
+        )
+
+        return connected
 
     def disconnect(self):
 
-        self.connected = False
+        if self.app:
+
+            self.app.disconnect()
 
     def list_accounts(self):
 
-        if not self.connected:
-            return []
+        self.app.reqManagedAccts()
+
+        time.sleep(2)
 
         return [
             {
-                "account_id": "DU123456",
-                "account_name": "IBKR Demo",
+                "account_id": account,
+                "account_name": account,
                 "environment": "paper",
                 "currency": "USD",
             }
+            for account in self.app.accounts
         ]
 
-    def get_account_summary(self):
+    def get_account_summary(
+        self,
+    ):
 
-        if not self.connected:
-            return {}
+        self.app.account_summary = {}
 
-        return {
+        self.app.summary_event.clear()
 
-            "account_id": "DU123456",
+        self.app.reqAccountSummary(
+            1,
+            "All",
+            "NetLiquidation,"
+            "AvailableFunds,"
+            "CashBalance",
+        )
 
-            "balance": 100000.00,
+        self.app.summary_event.wait(
+            timeout=10
+        )
 
-            "equity": 100000.00,
+        return (
+            self.app.account_summary
+        )
 
-            "net_liquidation": 100000.00,
+    def get_positions(
+        self,
+    ):
 
-            "buying_power": 400000.00,
+        self.app.positions = []
 
-            "currency": "USD",
-        }
+        self.app.positions_event.clear()
 
+        self.app.reqPositions()
 
-    def get_positions(self):
+        self.app.positions_event.wait(
+            timeout=10
+        )
 
-        if not self.connected:
-            return []
-
-        return []
-
-
-    def get_executions(self):
-
-        if not self.connected:
-            return []
-
-        return []
-
-
-    def get_trades(self):
-
-        return self.get_executions()
-
+        return self.app.positions
 
     def list_executions(
         self,
     ):
-        """
-        Temporary execution feed.
 
-        Will later be replaced
-        by real IBKR Gateway API.
-        """
+        self.app.executions = []
 
-        if not self.connected:
-            return []
+        self.app.executions_event.clear()
 
-        return [
-            {
-                "execution_id":
-                    "EXEC001",
+        self.app.reqManagedAccts()
 
-                "account_id":
-                    "DU123456",
+        time.sleep(2)
 
-                "symbol":
-                    "AAPL",
+        print(
+            "accounts:",
+            self.app.accounts,
+        )
 
-                "side":
-                    "BUY",
+        execution_filter = ExecutionFilter()
 
-                "quantity":
-                    100,
+        if self.app.accounts:
 
-                "price":
-                    210.50,
+            execution_filter.acctCode = (
+                self.app.accounts[0]
+            )
 
-                "executed_at":
-                    "2026-06-15T10:00:00",
-            }
-        ]
+        self.app.reqExecutions(
+            1,
+            execution_filter,
+        )
 
+        self.app.executions_event.wait(
+            timeout=15
+        )
 
-    def get_account_state(
-        self,
-    ):
-
-        if not self.connected:
-            return None
-
-        return {
-            "account_id": "DU123456",
-            "balance": 100000.0,
-            "equity": 102500.0,
-            "margin": 12000.0,
-            "free_margin": 90500.0,
-            "currency": "USD",
-            "leverage": 30,
-        }
-
-
-    def list_positions(
-        self,
-    ):
-
-        if not self.connected:
-            return []
-
-        return [
-            {
-                "position_id": "POS001",
-                "symbol": "AAPL",
-                "side": "long",
-                "quantity": 100,
-                "average_price": 210.50,
-                "market_price": 214.00,
-                "unrealized_pnl": 350.00,
-            }
-        ]
+        return self.app.executions

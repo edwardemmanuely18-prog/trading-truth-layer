@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="Trading Truth Layer Activity" type="AF">
+    <FlexStatements count="1">
+        <FlexStatement
+            accountId="DUP986794"
+            fromDate="20250616"
+            toDate="20260615"
+            period="Last365CalendarDays">
+
+            <OpenPositions>
+
+                <OpenPosition
+                    currency="USD"
+                    fifoPnlUnrealized="-17.330012"
+                    markPrice="754.83"
+                    positionValue="3019.32"
+                    costBasisPrice="759.162503"
+                    position="4"
+                    symbol="SPY"
+                    description="SPDR S&amp;P 500 ETF TRUST"
+                    assetCategory="STK"
+                    accountId="DUP986794"
+                />
+
+                <OpenPosition
+                    currency="USD"
+                    fifoPnlUnrealized="45.993951"
+                    markPrice="396.55"
+                    positionValue="-1189.65"
+                    costBasisPrice="411.881317"
+                    position="-3"
+                    symbol="GLD"
+                    description="SPDR GOLD SHARES"
+                    assetCategory="STK"
+                    accountId="DUP986794"
+                />
+
+            </OpenPositions>
+
+            <Trades>
+
+                <Trade
+                    isin="US78463V1070"
+                    listingExchange="ARCA"
+                    conid="51529211"
+                    orderType="MKT"
+                    fxRateToBase="1"
+                    currency="USD"
+                    proceeds="-463.19"
+                    netCash="-464.19"
+                    exchange="BYX"
+                    buySell="BUY"
+                    tradeDate="20260220"
+                    tradeID="1656407740"
+                    dateTime="20260220;042509"
+                    assetCategory="STK"
+                    description="SPDR GOLD SHARES"
+                    symbol="GLD"
+                    accountId="DUP986794"
+                />
+
+                <Trade
+                    isin="US78463V1070"
+                    listingExchange="ARCA"
+                    conid="51529211"
+                    orderType="MKT"
+                    fxRateToBase="1"
+                    currency="USD"
+                    proceeds="952.42"
+                    netCash="951.41961"
+                    exchange="BYX"
+                    buySell="SELL"
+                    tradeDate="20260225"
+                    tradeID="1661037164"
+                    dateTime="20260225;155546"
+                    assetCategory="STK"
+                    description="SPDR GOLD SHARES"
+                    symbol="GLD"
+                    accountId="DUP986794"
+                />
+
+            </Trades>
+
+        </FlexStatement>
+    </FlexStatements>
+</FlexQueryResponse>

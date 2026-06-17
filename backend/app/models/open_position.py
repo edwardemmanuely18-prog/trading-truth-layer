@@ -67,6 +67,26 @@ class OpenPosition(Base):
         nullable=True,
     )
 
+    mark_price = Column(
+        Float,
+        nullable=True,
+    )
+
+    unrealized_pnl = Column(
+        Float,
+        nullable=True,
+    )
+
+    position_value = Column(
+        Float,
+        nullable=True,
+    )
+
+    broker_account_id = Column(
+        String,
+        nullable=True,
+    )
+
     opened_at = Column(
         DateTime,
         nullable=True,

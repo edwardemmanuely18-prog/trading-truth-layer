@@ -37,6 +37,10 @@ from app.services.broker_verification_service import (
     verify_connection,
 )
 
+from app.models.broker_account import (
+    BrokerAccount,
+)
+
 
 from secrets import token_urlsafe
 
@@ -64,8 +68,12 @@ class VerifyBrokerConnectionRequest(
     password: str | None = None
     server: str | None = None
 
-    api_key: str | None = None
-    api_secret: str | None = None
+    host: str | None = None
+    port: int | None = None
+    client_id: int | None = None
+
+    flex_query_id: str | None = None
+    flex_token: str | None = None
 
 
 class ExecuteSyncRequest(BaseModel):
@@ -748,31 +756,88 @@ def verify_broker_connection(
         .first()
     )
 
-    if existing_credential:
+    if connection.provider in [
+        "interactive_brokers",
+        "ibkr",
+    ]:
 
-        existing_credential.username = (
-            payload.login
-        )
+        if existing_credential:
 
-        existing_credential.password_encrypted = (
-            payload.password
-        )
+            existing_credential.host = payload.host
 
-        existing_credential.server_name = (
-            payload.server
-        )
+            existing_credential.port = payload.port
+
+            existing_credential.client_id = payload.client_id
+
+            existing_credential.flex_enabled = bool(
+                payload.flex_query_id
+                and payload.flex_token
+            )
+
+            existing_credential.flex_query_id = (
+                payload.flex_query_id
+            )
+
+            existing_credential.flex_token_encrypted = (
+                payload.flex_token
+            )
+
+        else:
+
+            credential = BrokerCredential(
+                connection_id=connection.id,
+                credential_type="ibkr_gateway",
+
+                host=payload.host,
+
+                port=payload.port,
+
+                client_id=payload.client_id,
+
+                flex_enabled=bool(
+                    payload.flex_query_id
+                    and payload.flex_token
+                ),
+
+                flex_query_id=payload.flex_query_id,
+
+                flex_token_encrypted=(
+                    payload.flex_token
+                ),
+            )
+
+            db.add(credential)
 
     else:
 
-        credential = BrokerCredential(
-            connection_id=connection.id,
-            credential_type="broker_login",
-            username=payload.login,
-            password_encrypted=payload.password,
-            server_name=payload.server,
-        )
+        if existing_credential:
 
-        db.add(credential)
+            existing_credential.username = (
+                payload.login
+            )
+
+            existing_credential.password_encrypted = (
+                payload.password
+            )
+
+            existing_credential.server_name = (
+                payload.server
+            )
+
+        else:
+
+            credential = BrokerCredential(
+                connection_id=connection.id,
+                credential_type="broker_login",
+
+                username=payload.login,
+
+                password_encrypted=payload.password,
+
+                server_name=payload.server,
+            )
+
+            db.add(credential)
 
     connection.account_id = (
         result["account_id"]
@@ -851,6 +916,149 @@ def verify_broker_connection(
         "equity":
             connection.account_equity,
     }
+
+
+@router.post(
+    "/workspaces/{workspace_id}/broker-connections/{connection_id}/discover-accounts"
+)
+def discover_broker_accounts(
+    workspace_id: int,
+    connection_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    connection = (
+        db.query(BrokerConnection)
+        .filter(
+            BrokerConnection.id
+            == connection_id
+        )
+        .first()
+    )
+
+    if not connection:
+        raise HTTPException(
+            status_code=404,
+            detail="Connection not found",
+        )
+
+    credential = (
+        db.query(BrokerCredential)
+        .filter(
+            BrokerCredential.connection_id
+            == connection.id
+        )
+        .first()
+    )
+
+    if not credential:
+        raise HTTPException(
+            status_code=400,
+            detail="Credential missing",
+        )
+
+    from app.services.broker_connector_factory import (
+        get_connector,
+    )
+
+    connector = get_connector(
+        connection.provider,
+        credential,
+    )
+
+    accounts = (
+        connector.discover_accounts()
+    )
+
+    db.query(BrokerAccount).filter(
+        BrokerAccount.connection_id
+        == connection.id
+    ).delete()
+
+    db.flush()
+
+    created = []
+
+    for account in accounts:
+
+        row = BrokerAccount(
+            connection_id=
+                connection.id,
+
+            broker_account_id=
+                account.account_id,
+
+            account_name=
+                account.account_name,
+
+            environment=
+                account.environment,
+
+            currency=
+                account.currency,
+        )
+
+        db.add(row)
+
+        created.append(
+            account.account_id
+        )
+
+    db.commit()
+
+    return {
+        "success": True,
+        "accounts_discovered":
+            len(created),
+    }
+
+
+@router.get(
+    "/workspaces/{workspace_id}/broker-connections/{connection_id}/accounts"
+)
+def list_discovered_accounts(
+    workspace_id: int,
+    connection_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    rows = (
+        db.query(BrokerAccount)
+        .filter(
+            BrokerAccount.connection_id
+            == connection_id
+        )
+        .all()
+    )
+
+    return [
+        {
+            "id": row.id,
+            "broker_account_id":
+                row.broker_account_id,
+            "account_name":
+                row.account_name,
+            "environment":
+                row.environment,
+            "currency":
+                row.currency,
+        }
+        for row in rows
+    ]
 
 
 @router.get(

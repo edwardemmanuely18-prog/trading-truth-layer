@@ -19,6 +19,10 @@ from app.models.open_position import (
     OpenPosition,
 )
 
+from app.models.broker_account import (
+    BrokerAccount,
+)
+
 
 __all__ = [
     "Workspace",
@@ -36,4 +40,5 @@ __all__ = [
     "SyncJob",
     "AccountSnapshot",
     "OpenPosition",
+    "BrokerAccount",
 ]

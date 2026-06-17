@@ -255,11 +255,19 @@ export default function SyncJobsPage() {
               className="rounded-lg border p-3"
             >
               <option value="historical">
-                Historical Sync
+                Historical Trades
               </option>
 
               <option value="incremental">
-                Incremental Sync
+                Incremental Trades
+              </option>
+
+              <option value="positions">
+                Open Positions
+              </option>
+
+              <option value="account_state">
+                Account State Snapshot
               </option>
             </select>
 

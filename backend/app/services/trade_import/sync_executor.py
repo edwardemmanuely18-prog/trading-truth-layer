@@ -18,6 +18,10 @@ from app.services.trade_import.mt5_state_sync import (
     sync_mt5_positions,
     sync_mt5_account_state,
 )
+from app.services.trade_import.ibkr_state_sync import (
+    sync_ibkr_positions,
+    sync_ibkr_account_state,
+)
 
 
 
@@ -82,19 +86,41 @@ def execute_sync_job(
 
         elif sync_job.sync_type == "account_state":
 
-            result = sync_mt5_account_state(
-                db,
-                connection,
-                credential,
-            )
+            if connection.provider == "ibkr":
+
+                result = sync_ibkr_account_state(
+                    db,
+                    connection,
+                    credential,
+                )
+
+            else:
+
+                result = importer.sync_account_state(
+                    db,
+                    connection,
+                    credential,
+                    sync_job,
+                )
 
         elif sync_job.sync_type == "positions":
 
-            result = sync_mt5_positions(
-                db,
-                connection,
-                credential,
-            )
+            if connection.provider == "ibkr":
+
+                result = sync_ibkr_positions(
+                    db,
+                    connection,
+                    credential,
+                )
+
+            else:
+
+                result = importer.sync_positions(
+                    db,
+                    connection,
+                    credential,
+                    sync_job,
+                )
 
         else:
 
@@ -110,12 +136,24 @@ def execute_sync_job(
             )
         )
 
-        records_imported = int(
+        sync_job.records_processed = int(
+            result.get(
+                "records_detected",
+                0,
+            )
+            or 0
+        )
+
+        sync_job.records_imported = int(
             result.get(
                 "records_imported",
                 0,
             )
             or 0
+        )
+
+        records_imported = (
+            sync_job.records_imported
         )
 
         if records_imported > 0:

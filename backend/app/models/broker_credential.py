@@ -3,6 +3,7 @@ from sqlalchemy import (
     Integer,
     String,
     DateTime,
+    Boolean,
 )
 from sqlalchemy.sql import func
 
@@ -42,6 +43,14 @@ class BrokerCredential(Base):
     account_id = Column(String)
 
     gateway_mode = Column(String)
+
+    flex_enabled = Column(Boolean, default=False)
+
+    flex_query_id = Column(String)
+
+    flex_query_name = Column(String)
+
+    flex_token_encrypted = Column(String)
 
     created_at = Column(
         DateTime,

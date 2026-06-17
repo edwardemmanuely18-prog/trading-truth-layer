@@ -45,6 +45,21 @@ export default function BrokerConnectionsPage() {
   const [server, setServer] =
     useState("");
 
+  const [host, setHost] =
+    useState("127.0.0.1");
+
+  const [port, setPort] =
+    useState("7497");
+
+  const [clientId, setClientId] =
+    useState("1");
+
+  const [flexQueryId, setFlexQueryId] =
+    useState("");
+
+  const [flexToken, setFlexToken] =
+    useState("");
+
   const [verifying, setVerifying] =
     useState(false);
 
@@ -106,6 +121,12 @@ export default function BrokerConnectionsPage() {
     }
   }
 
+  const selectedConnection =
+    connections.find(
+      (c) =>
+        c.id === selectedConnectionId
+    );
+
   async function handleVerifyConnection() {
     if (!selectedConnectionId) {
       return;
@@ -123,6 +144,17 @@ export default function BrokerConnectionsPage() {
           login,
           password,
           server,
+
+          host,
+
+          port: Number(port),
+
+          client_id:
+            Number(clientId),
+
+          flex_query_id: flexQueryId,
+
+          flex_token: flexToken,
         }
       );
 
@@ -368,33 +400,84 @@ export default function BrokerConnectionsPage() {
 
             <div className="grid gap-4 md:grid-cols-4">
 
-              <input
-                value={login}
-                onChange={(e) =>
-                  setLogin(e.target.value)
-                }
-                placeholder="Login"
-                className="rounded border p-3"
-              />
+              {selectedConnection?.provider ===
+              "interactive_brokers" ? (
+                <>
+                  <input
+                    value={host}
+                    onChange={(e) =>
+                      setHost(e.target.value)
+                    }
+                    placeholder="Host"
+                    className="rounded border p-3"
+                  />
 
-              <input
-                type="password"
-                value={password}
-                onChange={(e) =>
-                  setPassword(e.target.value)
-                }
-                placeholder="Password"
-                className="rounded border p-3"
-              />
+                  <input
+                    value={port}
+                    onChange={(e) =>
+                      setPort(e.target.value)
+                    }
+                    placeholder="Port"
+                    className="rounded border p-3"
+                  />
 
-              <input
-                value={server}
-                onChange={(e) =>
-                  setServer(e.target.value)
-                }
-                placeholder="Server"
-                className="rounded border p-3"
-              />
+                  <input
+                    value={clientId}
+                    onChange={(e) =>
+                      setClientId(e.target.value)
+                    }
+                    placeholder="Client ID"
+                    className="rounded border p-3"
+                  />
+                  <input
+                    value={flexQueryId}
+                    onChange={(e) =>
+                      setFlexQueryId(e.target.value)
+                    }
+                    placeholder="Flex Query ID"
+                    className="rounded border p-3"
+                  />
+
+                  <input
+                    value={flexToken}
+                    onChange={(e) =>
+                      setFlexToken(e.target.value)
+                    }
+                    placeholder="Flex Token"
+                    className="rounded border p-3"
+                  />
+                </>
+              ) : (
+                <>
+                  <input
+                    value={login}
+                    onChange={(e) =>
+                      setLogin(e.target.value)
+                    }
+                    placeholder="Login"
+                    className="rounded border p-3"
+                  />
+
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) =>
+                      setPassword(e.target.value)
+                    }
+                    placeholder="Password"
+                    className="rounded border p-3"
+                  />
+
+                  <input
+                    value={server}
+                    onChange={(e) =>
+                      setServer(e.target.value)
+                    }
+                    placeholder="Server"
+                    className="rounded border p-3"
+                  />
+                </>
+              )}
 
               <button
                 onClick={

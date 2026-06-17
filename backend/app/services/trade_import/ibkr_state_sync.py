@@ -14,12 +14,22 @@ from app.services.broker_connectors.ibkr_gateway_client import (
 def sync_ibkr_account_state(
     db,
     connection,
+    credential,
 ):
 
     client = IBKRGatewayClient(
-        host="127.0.0.1",
-        port=7497,
-        client_id=1,
+        host=(
+            credential.host
+            or "127.0.0.1"
+        ),
+        port=int(
+            credential.port
+            or 4002
+        ),
+        client_id=int(
+            credential.client_id
+            or 1
+        ),
     )
 
     if not client.connect():
@@ -32,7 +42,7 @@ def sync_ibkr_account_state(
 
     try:
 
-        state = client.get_account_state()
+        state = client.get_account_summary()
 
         if not state:
 
@@ -43,65 +53,54 @@ def sync_ibkr_account_state(
             }
 
         snapshot = AccountSnapshot(
+            workspace_id=connection.workspace_id,
+            broker_connection_id=connection.id,
 
-            workspace_id=
-                connection.workspace_id,
+            balance=float(
+                state.get(
+                    "CashBalance",
+                    0,
+                )
+            ),
 
-            broker_connection_id=
-                connection.id,
+            equity=float(
+                state.get(
+                    "NetLiquidation",
+                    0,
+                )
+            ),
 
-            balance=
-                float(
-                    state["balance"]
-                ),
+            margin=None,
 
-            equity=
-                float(
-                    state["equity"]
-                ),
+            free_margin=float(
+                state.get(
+                    "AvailableFunds",
+                    0,
+                )
+            ),
 
-            margin=
-                float(
-                    state["margin"]
-                ),
+            leverage=None,
 
-            free_margin=
-                float(
-                    state["free_margin"]
-                ),
-
-            leverage=
-                int(
-                    state["leverage"]
-                ),
-
-            currency=
-                state["currency"],
+            currency="USD",
         )
 
         db.add(snapshot)
 
-        connection.account_balance = (
-            float(
-                state["balance"]
+        connection.account_balance = float(
+            state.get(
+                "CashBalance",
+                0,
             )
         )
 
-        connection.account_equity = (
-            float(
-                state["equity"]
+        connection.account_equity = float(
+            state.get(
+                "NetLiquidation",
+                0,
             )
         )
 
-        connection.broker_currency = (
-            state["currency"]
-        )
-
-        connection.broker_leverage = (
-            int(
-                state["leverage"]
-            )
-        )
+        connection.broker_currency = "USD"
 
         db.commit()
 
@@ -120,12 +119,22 @@ def sync_ibkr_account_state(
 def sync_ibkr_positions(
     db,
     connection,
+    credential,
 ):
 
     client = IBKRGatewayClient(
-        host="127.0.0.1",
-        port=7497,
-        client_id=1,
+        host=(
+            credential.host
+            or "127.0.0.1"
+        ),
+        port=int(
+            credential.port
+            or 4002
+        ),
+        client_id=int(
+            credential.client_id
+            or 1
+        ),
     )
 
     if not client.connect():
@@ -138,9 +147,7 @@ def sync_ibkr_positions(
 
     try:
 
-        positions = (
-            client.list_positions()
-        )
+        positions = client.get_positions()
 
         detected = len(
             positions
@@ -157,6 +164,10 @@ def sync_ibkr_positions(
 
         for position in positions:
 
+            quantity = float(
+                position["quantity"]
+            )
+
             row = OpenPosition(
 
                 workspace_id=
@@ -166,43 +177,35 @@ def sync_ibkr_positions(
                     connection.id,
 
                 position_id=
-                    position[
-                        "position_id"
-                    ],
+                    (
+                        f"{position['account']}"
+                        f"-"
+                        f"{position['symbol']}"
+                    ),
 
                 symbol=
-                    position[
-                        "symbol"
-                    ],
+                    position["symbol"],
 
                 side=
-                    position[
-                        "side"
-                    ],
+                    (
+                        "buy"
+                        if quantity >= 0
+                        else "sell"
+                    ),
 
-                volume=float(
-                    position[
-                        "quantity"
-                    ]
-                ),
+                volume=
+                    abs(quantity),
 
-                open_price=float(
-                    position[
-                        "average_price"
-                    ]
-                ),
+                open_price=
+                    float(
+                        position["avg_cost"]
+                    ),
 
-                current_price=float(
-                    position[
-                        "market_price"
-                    ]
-                ),
+                current_price=0,
 
-                floating_pnl=float(
-                    position[
-                        "unrealized_pnl"
-                    ]
-                ),
+                floating_pnl=0,
+
+                opened_at=None,
             )
 
             db.add(row)

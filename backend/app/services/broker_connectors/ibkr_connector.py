@@ -28,7 +28,7 @@ class IBKRConnector(BaseBrokerConnector):
             port=int(
                 payload.get(
                     "port",
-                    7497,
+                    4002,
                 )
             ),
             client_id=int(
@@ -77,32 +77,25 @@ class IBKRConnector(BaseBrokerConnector):
 
     def discover_accounts(
         self,
-    ) -> list[BrokerAccount]:
+    ):
 
         from app.services.broker_connectors.ibkr_gateway_client import (
             IBKRGatewayClient,
         )
 
-        host = getattr(
-            self.credential,
-            "host",
-            "127.0.0.1",
+        host = (
+            self.credential.host
+            or "127.0.0.1"
         )
 
-        port = int(
-            getattr(
-                self.credential,
-                "port",
-                7497,
-            )
+        port = (
+            self.credential.port
+            or 7497
         )
 
-        client_id = int(
-            getattr(
-                self.credential,
-                "client_id",
-                1,
-            )
+        client_id = (
+            self.credential.client_id
+            or 1
         )
 
         client = IBKRGatewayClient(
@@ -111,20 +104,38 @@ class IBKRConnector(BaseBrokerConnector):
             client_id=client_id,
         )
 
-        client.connect()
+        if not client.connect():
+            return []
 
         try:
 
-            accounts = client.list_accounts()
+            accounts = (
+                client.list_accounts()
+            )
 
             return [
                 BrokerAccount(
-                    account_id=a["account_id"],
-                    account_name=a["account_name"],
-                    environment=a["environment"],
-                    currency=a["currency"],
+                    account_id=
+                        account[
+                            "account_id"
+                        ],
+
+                    account_name=
+                        account[
+                            "account_name"
+                        ],
+
+                    environment=
+                        account[
+                            "environment"
+                        ],
+
+                    currency=
+                        account[
+                            "currency"
+                        ],
                 )
-                for a in accounts
+                for account in accounts
             ]
 
         finally:
@@ -139,10 +150,25 @@ class IBKRConnector(BaseBrokerConnector):
             IBKRGatewayClient,
         )
 
+        host = (
+            self.credential.host
+            or "127.0.0.1"
+        )
+
+        port = int(
+            self.credential.port
+            or 4002
+        )
+
+        client_id = int(
+            self.credential.client_id
+            or 1
+        )
+
         client = IBKRGatewayClient(
-            host="127.0.0.1",
-            port=7497,
-            client_id=1,
+            host=host,
+            port=port,
+            client_id=client_id,
         )
 
         if not client.connect():
@@ -164,10 +190,25 @@ class IBKRConnector(BaseBrokerConnector):
             IBKRGatewayClient,
         )
 
+        host = (
+            self.credential.host
+            or "127.0.0.1"
+        )
+
+        port = int(
+            self.credential.port
+            or 4002
+        )
+
+        client_id = int(
+            self.credential.client_id
+            or 1
+        )
+
         client = IBKRGatewayClient(
-            host="127.0.0.1",
-            port=7497,
-            client_id=1,
+            host=host,
+            port=port,
+            client_id=client_id,
         )
 
         if not client.connect():
@@ -189,10 +230,25 @@ class IBKRConnector(BaseBrokerConnector):
             IBKRGatewayClient,
         )
 
+        host = (
+            self.credential.host
+            or "127.0.0.1"
+        )
+
+        port = int(
+            self.credential.port
+            or 4002
+        )
+
+        client_id = int(
+            self.credential.client_id
+            or 1
+        )
+
         client = IBKRGatewayClient(
-            host="127.0.0.1",
-            port=7497,
-            client_id=1,
+            host=host,
+            port=port,
+            client_id=client_id,
         )
 
         if not client.connect():
