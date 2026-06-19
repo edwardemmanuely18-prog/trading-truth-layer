@@ -109,9 +109,22 @@ export default function WorkspaceSchemaPage() {
 
   const workspaceRole = workspaceMembership?.workspace_role ?? null;
   const canCreateClaimRole = workspaceRole === "owner" || workspaceRole === "operator";
-  const claimUsage = usage?.usage?.claims ?? 0;
-  const paidAccessActive = Boolean(usage?.governance?.paid_access_active);
-  const effectivePlanCode = usage?.effective_plan_code || usage?.plan_code || "starter";
+  const claimUsage =
+    usage?.usage?.claims ?? null;
+
+  const paidAccessActive =
+    Boolean(
+      usage?.governance?.paid_access_active
+    );
+
+  const effectivePlanCode =
+    usageLoading
+      ? "Loading..."
+      : (
+          usage?.effective_plan_code ||
+          usage?.plan_code ||
+          "Unknown"
+        );
 
   const claimLimit = Number(usage?.limits?.claims ?? 0);
 
@@ -173,12 +186,39 @@ export default function WorkspaceSchemaPage() {
     );
   }
 
-  const claimsUsed = Number(claimUsage ?? 0);
-  const claimsLimit = Number(usage?.limits?.claims ?? 0);
+  const claimsUsed =
+    usageLoading
+      ? "..."
+      : Number(
+          usage?.usage?.claims ?? 0
+        );
+
+  const claimsLimit =
+    usageLoading
+      ? "..."
+      : Number(
+          usage?.limits?.claims ?? 0
+        );
+
   const usageRatio =
-    claimsLimit > 0
-      ? `${Math.round((claimsUsed / claimsLimit) * 100)}%`
-      : "0%";
+    usageLoading
+      ? "..."
+      : (
+          Number(
+            usage?.limits?.claims ?? 0
+          ) > 0
+            ? `${Math.round(
+                (
+                  Number(
+                    usage?.usage?.claims ?? 0
+                  ) /
+                  Number(
+                    usage?.limits?.claims ?? 0
+                  )
+                ) * 100
+              )}%`
+            : "0%"
+        );
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">

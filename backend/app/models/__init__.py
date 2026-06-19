@@ -23,11 +23,16 @@ from app.models.broker_account import (
     BrokerAccount,
 )
 
+from app.models.claim_schema_preset import (
+    ClaimSchemaPreset,
+)
+
 
 __all__ = [
     "Workspace",
     "Trade",
     "ClaimSchema",
+    "ClaimSchemaPreset",
     "ImportBatch",
     "AuditEvent",
     "User",

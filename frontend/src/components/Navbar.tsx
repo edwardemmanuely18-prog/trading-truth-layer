@@ -53,8 +53,6 @@ export default function Navbar({ workspaceId }: Props) {
   const currentPath = normalizePath(pathname);
   const publicTrustActive = isPublicTrustPath(currentPath);
 
-   [resolvedWorkspaceId]
-
   const workspaceRole = useMemo(() => {
     if (resolvedWorkspaceId == null) return null;
     return getWorkspaceRole(resolvedWorkspaceId);
@@ -88,14 +86,19 @@ export default function Navbar({ workspaceId }: Props) {
     ? `/profile/${resolvedWorkspaceId}`
     : "/profile";
 
-  const claimBuilderHref = resolvedWorkspaceId ? `${base}/schema` : "/claims";
+  const claimBuilderHref = resolvedWorkspaceId
+    ? `${base}/claims`
+    : "/claims";
   const dashboardHref = resolvedWorkspaceId ? `${base}/dashboard` : "/";
   const importHref =
     resolvedWorkspaceId
       ? `${base}/import-center`
       : "/";
   const ledgerHref = resolvedWorkspaceId ? `${base}/ledger` : "/";
-  const workspaceSchemaHref = resolvedWorkspaceId ? `${base}/schema` : "/";
+  const workspaceSchemaHref =
+    resolvedWorkspaceId
+      ? `${base}/claims`
+      : "/";
   const claimsHref = resolvedWorkspaceId ? `${base}/claims` : "/";
   const latestClaimHref = null;
   const evidenceHref =
@@ -117,7 +120,7 @@ export default function Navbar({ workspaceId }: Props) {
     : currentPath === "/leaderboard";
 
   const schemaBuilderActive = resolvedWorkspaceId
-    ? startsWithPath(currentPath, claimBuilderHref)
+    ? startsWithPath(currentPath, `${base}/claims`)
     : false;
 
   const publicProfileActive = startsWithPath(currentPath, "/profile");
@@ -158,14 +161,11 @@ export default function Navbar({ workspaceId }: Props) {
     startsWithPath(currentPath, `${base}/integrity-registry`);
 
   const claimOperationsActive =
-    startsWithPath(currentPath, `${base}/schema`) ||
-    startsWithPath(currentPath, `${base}/draft-claims`) ||
-    startsWithPath(currentPath, `${base}/verified-claims`) ||
-    startsWithPath(currentPath, `${base}/published-claims`) ||
-    startsWithPath(currentPath, `${base}/locked-claims`) ||
-    startsWithPath(currentPath, `${base}/claim-templates`) ||
+    currentPath === "/schema" ||
     startsWithPath(currentPath, `${base}/claims`) ||
-    startsWithPath(currentPath, `${base}/claim`);
+    startsWithPath(currentPath, `${base}/evidence`) ||
+    startsWithPath(currentPath, `${base}/schema`) ||
+    startsWithPath(currentPath, `${base}/claim-templates`);
 
   const trustActive =
     startsWithPath(currentPath, `${base}/trust-scores`) ||
@@ -180,7 +180,9 @@ export default function Navbar({ workspaceId }: Props) {
     startsWithPath(currentPath, `${base}/verification-routes`) ||
     startsWithPath(currentPath, `${base}/trust-directory`) ||
     startsWithPath(currentPath, `${base}/public-profiles`) ||
-    startsWithPath(currentPath, `${base}/search`);
+    startsWithPath(currentPath, `${base}/search`) ||
+    startsWithPath(currentPath, "/claim") ||
+    startsWithPath(currentPath, "/verify");
 
   const administrationActive =
     startsWithPath(currentPath, `${base}/members`) ||
@@ -295,30 +297,29 @@ export default function Navbar({ workspaceId }: Props) {
   const claimLinks = resolvedWorkspaceId
     ? [
         {
+          href: "/schema",
+          label: "Claim Builder",
+          active: currentPath === "/schema",
+        },
+
+        {
+          href: `${base}/claims`,
+          label: "Claim Library",
+          active: startsWithPath(currentPath, `${base}/claims`),
+        },
+
+        {
+          href: `${base}/evidence`,
+          label: "Evidence Review",
+          active: startsWithPath(currentPath, `${base}/evidence`),
+        },
+
+        {
           href: `${base}/schema`,
-          label: "Create Claim",
+          label: "Schema Registry",
           active: startsWithPath(currentPath, `${base}/schema`),
         },
-        {
-          href: `${base}/draft-claims`,
-          label: "Draft Claims",
-          active: startsWithPath(currentPath, `${base}/draft-claims`),
-        },
-        {
-          href: `${base}/verified-claims`,
-          label: "Verified Claims",
-          active: startsWithPath(currentPath, `${base}/verified-claims`),
-        },
-        {
-          href: `${base}/published-claims`,
-          label: "Published Claims",
-          active: startsWithPath(currentPath, `${base}/published-claims`),
-        },
-        {
-          href: `${base}/locked-claims`,
-          label: "Locked Claims",
-          active: startsWithPath(currentPath, `${base}/locked-claims`),
-        },
+
         {
           href: `${base}/claim-templates`,
           label: "Templates",
@@ -369,21 +370,25 @@ export default function Navbar({ workspaceId }: Props) {
           label: "Public Records",
           active: startsWithPath(currentPath, `${base}/public-records`),
         },
+
         {
           href: `${base}/verification-routes`,
           label: "Verification Routes",
           active: startsWithPath(currentPath, `${base}/verification-routes`),
         },
+
         {
           href: `${base}/trust-directory`,
           label: "Trust Directory",
           active: startsWithPath(currentPath, `${base}/trust-directory`),
         },
+
         {
           href: `${base}/public-profiles`,
           label: "Public Profiles",
           active: startsWithPath(currentPath, `${base}/public-profiles`),
         },
+
         {
           href: `${base}/search`,
           label: "Search",
@@ -630,9 +635,9 @@ export default function Navbar({ workspaceId }: Props) {
           <div className="mt-3 border-t border-slate-200 pt-3"></div>
 
           <nav className="flex flex-wrap items-center gap-2">
-            {contextualLinks.map((item) => (
+            {contextualLinks.map((item, index) => (
               <Link
-                key={item.href}
+                key={`${item.href}-${index}`}
                 href={item.href}
                 className={navClass(item.active)}
               >

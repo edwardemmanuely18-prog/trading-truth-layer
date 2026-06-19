@@ -911,6 +911,46 @@ export type ClaimSchemaPreview = {
   };
 };
 
+export type ClaimTemplate = {
+  id: number;
+
+  workspace_id: number;
+
+  name: string;
+
+  description: string;
+
+  template_type: string;
+
+  included_member_ids_json: number[];
+
+  included_symbols_json: string[];
+
+  excluded_trade_ids_json: number[];
+
+  methodology_notes: string;
+
+  visibility: string;
+
+  active: boolean;
+};
+
+export type ClaimTemplateCreatePayload = {
+  workspace_id: number;
+  name: string;
+  description: string;
+  template_type: string;
+  included_member_ids_json: number[];
+  included_symbols_json: string[];
+  excluded_trade_ids_json: number[];
+  methodology_notes: string;
+  visibility: string;
+  active: boolean;
+};
+
+export type ClaimTemplateUpdatePayload =
+  ClaimTemplateCreatePayload;
+
 export type EquityCurvePoint = {
   index: number;
   trade_id: number;
@@ -2794,6 +2834,66 @@ export const api = {
       {
         cache: "no-store",
       }
+    );
+  },
+
+  async getClaimTemplates(
+    workspaceId: number
+  ): Promise<ClaimTemplate[]> {
+    return apiFetch(
+      `/workspaces/${workspaceId}/claim-templates`
+    );
+  },
+
+  async getClaimTemplate(
+    templateId: number
+  ): Promise<ClaimTemplate> {
+    return apiFetch(
+      `/claim-templates/${templateId}`
+    );
+  },
+
+  async createClaimTemplate(
+    payload: any
+  ): Promise<ClaimTemplate> {
+    return apiFetch(
+      `/claim-templates`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }
+    );
+  },
+
+  async updateClaimTemplate(
+    templateId: number,
+    payload: any
+  ): Promise<ClaimTemplate> {
+    return apiFetch(
+      `/claim-templates/${templateId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      }
+    );
+  },
+
+  async deleteClaimTemplate(
+    templateId: number
+  ): Promise<void> {
+    return apiFetch(
+      `/claim-templates/${templateId}`,
+      {
+        method: "DELETE",
+      }
+    );
+  },
+
+  async getClaimPresets(
+    workspaceId: number
+  ): Promise<any[]> {
+    return apiFetch<any[]>(
+      `/workspaces/${workspaceId}/claim-presets`
     );
   },
 

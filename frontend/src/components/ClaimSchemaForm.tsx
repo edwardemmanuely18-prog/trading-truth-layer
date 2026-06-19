@@ -1,6 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import {
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   api,
@@ -125,6 +128,23 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
   }
 
   const router = useRouter();
+  const searchParams =
+    useSearchParams();
+
+  const template =
+    searchParams.get("template");
+
+  const templateId =
+    searchParams.get("templateId");
+
+  const presetId =
+    searchParams.get("presetId");
+
+  const mode =
+    searchParams.get("mode");
+
+  const isTemplateMode =
+    mode === "create-template";
   const { paywallState, closePaywall, openPaywall, gateAndExecute } = useWorkspaceGate();
 
   const [name, setName] = useState("");
@@ -142,6 +162,22 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+
+    if (template === "monthly") {
+      applyMonthlyTemplate();
+    }
+
+    if (template === "quarterly") {
+      applyQuarterlyTemplate();
+    }
+
+    if (template === "annual") {
+      applyAnnualTemplate();
+    }
+
+  }, [template]);
 
   useEffect(() => {
     let active = true;
@@ -167,6 +203,102 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
       active = false;
     };
   }, [workspaceId]);
+
+  useEffect(() => {
+
+    if (!templateId) return;
+
+    async function loadTemplate() {
+
+      try {
+
+        const tpl =
+          await api.getClaimTemplate(
+            Number(templateId)
+          );
+
+        setName(
+          tpl.name || ""
+        );
+
+        setIncludedMembers(
+          tpl.included_member_ids_json
+            ?.join(", ") || ""
+        );
+
+        setIncludedSymbols(
+          tpl.included_symbols_json
+            ?.join(", ") || ""
+        );
+
+        setExcludedTradeIds(
+          tpl.excluded_trade_ids_json
+            ?.join(", ") || ""
+        );
+
+        setMethodologyNotes(
+          tpl.methodology_notes || ""
+        );
+
+      } catch (err) {
+
+        console.error(
+          "Failed to load template",
+          err
+        );
+
+      }
+
+    }
+
+    loadTemplate();
+
+  }, [templateId]);
+
+  useEffect(() => {
+
+    if (!presetId) return;
+
+    async function loadPreset() {
+
+      try {
+
+        const presets =
+          await api.getClaimPresets(
+            workspaceId
+          ) as any[];
+
+        const preset =
+          presets.find(
+            (p: any) =>
+              String(p.id) ===
+              presetId
+          );
+
+        if (!preset) return;
+
+        setName(
+          preset.name || ""
+        );
+
+        setMethodologyNotes(
+          preset.methodology_notes || ""
+        );
+
+      } catch (err) {
+
+        console.error(err);
+
+      }
+
+    }
+
+    loadPreset();
+
+  }, [
+    presetId,
+    workspaceId,
+  ]);
 
   const configuredPlanName = getPlanName(
     usage,
@@ -265,6 +397,134 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
     setStatus(null);
   }
 
+  function applyMonthlyTemplate() {
+
+    const now = new Date();
+
+    const year =
+      now.getFullYear();
+
+    const month =
+      now.getMonth();
+
+    const start =
+      new Date(year, month, 1);
+
+    const end =
+      new Date(year, month + 1, 0);
+
+    setName(
+      `${start.toLocaleString("default", {
+        month: "long",
+      })} Verification Window`
+    );
+
+    setPeriodStart(
+      start.toISOString().slice(0,10)
+    );
+
+    setPeriodEnd(
+      end.toISOString().slice(0,10)
+    );
+
+    setIncludedSymbols("");
+
+    setIncludedMembers("");
+
+    setExcludedTradeIds("");
+
+    setMethodologyNotes(
+  `Monthly performance verification.
+
+  All symbols included.
+
+  Canonical ledger source.
+
+  Workspace verification workflow.`
+    );
+  }
+
+  function applyQuarterlyTemplate() {
+
+    const now =
+      new Date();
+
+    const quarter =
+      Math.floor(now.getMonth()/3);
+
+    const start =
+      new Date(
+        now.getFullYear(),
+        quarter * 3,
+        1
+      );
+
+    const end =
+      new Date(
+        now.getFullYear(),
+        quarter * 3 + 3,
+        0
+      );
+
+    setName(
+      `Q${quarter + 1} Verification`
+    );
+
+    setPeriodStart(
+      start.toISOString().slice(0,10)
+    );
+
+    setPeriodEnd(
+      end.toISOString().slice(0,10)
+    );
+
+    setIncludedSymbols("");
+
+    setIncludedMembers("");
+
+    setExcludedTradeIds("");
+
+    setMethodologyNotes(
+  `Quarterly institutional review.
+
+  Governance checkpoint.
+
+  Verification workflow enabled.`
+    );
+  }
+
+  function applyAnnualTemplate() {
+
+    const year =
+      new Date().getFullYear();
+
+    setName(
+      `${year} Annual Verification`
+    );
+
+    setPeriodStart(
+      `${year}-01-01`
+    );
+
+    setPeriodEnd(
+      `${year}-12-31`
+    );
+
+    setIncludedSymbols("");
+
+    setIncludedMembers("");
+
+    setExcludedTradeIds("");
+
+    setMethodologyNotes(
+  `Annual trust-grade verification.
+
+  Institutional governance review.
+
+  Full-year performance scope.`
+    );
+  }
+
   function applyBlankTemplate() {
     setName("");
     setPeriodStart("");
@@ -338,6 +598,52 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
     router.refresh();
   }
 
+  async function submitCreateTemplate() {
+
+    await api.createClaimTemplate({
+
+      workspace_id: workspaceId,
+
+      name: name.trim(),
+
+      description: methodologyNotes.trim(),
+
+      template_type: "custom",
+
+      included_member_ids_json:
+        parseNumberListStrict(
+          includedMembers
+        ),
+
+      included_symbols_json:
+        parseStringList(
+          includedSymbols
+        ),
+
+      excluded_trade_ids_json:
+        parseNumberListStrict(
+          excludedTradeIds
+        ),
+
+      methodology_notes:
+        methodologyNotes.trim(),
+
+      visibility: "private",
+
+      active: true,
+
+    });
+
+    setStatus(
+      "Template saved successfully."
+    );
+
+    router.push(
+      `/workspace/${workspaceId}/claim-templates`
+    );
+
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus(null);
@@ -357,7 +663,15 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
           workspaceRole: "owner",
         },
         async () => {
-          await submitCreateClaim();
+          if (isTemplateMode) {
+
+            await submitCreateTemplate();
+
+          } else {
+
+            await submitCreateClaim();
+
+          }
         },
       );
     } catch (err) {
@@ -401,12 +715,25 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
       <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm md:p-7">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
-            <h3 className="text-3xl font-bold tracking-tight text-slate-950 md:text-[2.1rem]">
-              Create Draft Claim
+            <h3
+              className="text-3xl font-bold tracking-tight text-slate-950 md:text-[2.1rem]"
+            >
+              {
+                isTemplateMode
+                  ? "Create Claim Template"
+                  : "Create Draft Claim"
+              }
             </h3>
             <p className="mt-3 max-w-4xl text-base leading-8 text-slate-700">
-              Define the scope of a verification-ready performance claim. After creation, the draft
-              opens in the internal claim view for review, verification, publishing, and locking.
+              {
+                isTemplateMode
+                  ? (
+                    "Create a reusable template that can be applied repeatedly to generate standardized claim drafts."
+                  )
+                  : (
+                    "Define the scope of a verification-ready performance claim. After creation, the draft opens in the internal claim view for review, verification, publishing, and locking."
+                  )
+              }
             </p>
           </div>
 
@@ -704,7 +1031,17 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-              <div className="text-xl font-semibold text-slate-950">Creation Outcome</div>
+              <div className="text-xl font-semibold text-slate-950">
+                {
+                  isTemplateMode
+                    ? (
+                      "The template is stored in the workspace template registry and can be reused to generate future claim drafts."
+                    )
+                    : (
+                      "The created record opens immediately in the internal claim page, where you can inspect evidence, verify integrity, review audit events, and progress lifecycle state."
+                    )
+                }
+              </div>
               <div className="mt-3 text-sm leading-7 text-slate-700">
                 The created record opens immediately in the internal claim page, where you can
                 inspect evidence, verify integrity, review audit events, and progress lifecycle
@@ -731,7 +1068,15 @@ export default function ClaimSchemaForm({ workspaceId }: Props) {
               disabled={loading || usageLoading}
               className="rounded-2xl bg-slate-900 px-6 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "Creating Draft..." : "Create Draft Claim"}
+              {
+                loading
+                  ? "Creating Draft..."
+                  : (
+                      isTemplateMode
+                        ? "Save Template"
+                        : "Create Draft Claim"
+                    )
+              }
             </button>
 
             <button

@@ -46,6 +46,12 @@ from app.api.routes import (
 )
 from app.api.routes import evidence_records
 from app.api.routes import import_batches
+from app.api.routes import (
+    claim_schema_presets,
+)
+from app.api.routes import (
+    claim_templates,
+)
 
 from app.api.routes import aurum
 
@@ -342,6 +348,17 @@ app.include_router(
     prefix="/api",
     tags=["Import Batches"],
 )
+app.include_router(
+    claim_schema_presets.router,
+    prefix="/api",
+    tags=["Claim Presets"],
+)
+app.include_router(
+    claim_templates.router,
+    prefix="/api",
+    tags=["Claim Templates"],
+)
+
 
 # IMPORTANT: prefix for API routes
 app.include_router(workspace_members.router, prefix="/api")
