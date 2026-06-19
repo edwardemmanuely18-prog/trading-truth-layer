@@ -135,6 +135,4 @@ def get_strategy_performance(
             "expectancy": round(expectancy, 2),
         })
 
-    print("STRATEGY PERFORMANCE FINAL:", result)
-
     return result

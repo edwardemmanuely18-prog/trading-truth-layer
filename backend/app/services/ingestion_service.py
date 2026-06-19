@@ -381,6 +381,9 @@ def persist_runtime_trade_rows(
             currency=runtime_trade["currency"],
             strategy_tag=runtime_trade["strategy_tag"],
             source_system=runtime_trade["source_system"],
+            import_source=normalized_source,
+            verification_state="verified",
+            evidence_trust_tier="tier_2",
             trade_fingerprint=fingerprint,
         )
         print("ADDING TRADE TO DB SESSION", flush=True)
@@ -588,6 +591,9 @@ def import_csv_trades(
                 currency=row.currency,
                 strategy_tag=row.strategy_tag,
                 source_system=row.source_system,
+                import_source=normalized_source,
+                verification_state="verified",
+                evidence_trust_tier="tier_2",
                 trade_fingerprint=fingerprint,
             )
             db.add(trade)

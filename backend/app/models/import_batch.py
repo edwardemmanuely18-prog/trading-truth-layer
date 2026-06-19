@@ -14,3 +14,20 @@ class ImportBatch(Base):
     rows_rejected = Column(Integer, nullable=False, default=0)
     rows_skipped_duplicates = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    adapter_name = Column(
+        String,
+        nullable=True,
+    )
+
+    ingestion_session_id = Column(
+        Integer,
+        nullable=True,
+        index=True,
+    )
+
+    batch_hash = Column(
+        String,
+        nullable=True,
+        index=True,
+    )

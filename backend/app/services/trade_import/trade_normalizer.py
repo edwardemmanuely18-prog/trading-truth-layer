@@ -118,24 +118,65 @@ def generate_trade_hash(
 
 
 def parse_rows_by_source(
-    rows,
     source_type,
+    file_bytes,
 ):
-    return rows
+    import importlib.util
+    from pathlib import Path
+
+    legacy_path = (
+        Path(__file__)
+        .resolve()
+        .parent.parent
+        / "trade_import.py"
+    )
+
+    spec = importlib.util.spec_from_file_location(
+        "ttl_trade_import_legacy",
+        legacy_path,
+    )
+
+    module = importlib.util.module_from_spec(
+        spec)
+
+    spec.loader.exec_module(module)
+
+    return module.parse_rows_by_source(
+        source_type=source_type,
+        file_bytes=file_bytes,
+    )
 
 
 def process_import_rows(
     rows,
     source_type,
+    existing_fingerprints=None,
 ):
+    import importlib.util
+    from pathlib import Path
 
-    return {
-        "normalized": rows,
-        "rejected": [],
-        "duplicates": [],
-        "stats": {
-            "received": len(rows),
-            "rejected": 0,
-            "duplicates": 0,
-        },
-    }
+    legacy_path = (
+        Path(__file__)
+        .resolve()
+        .parent.parent
+        / "trade_import.py"
+    )
+
+    spec = importlib.util.spec_from_file_location(
+        "ttl_trade_import_legacy",
+        legacy_path,
+    )
+
+    module = importlib.util.module_from_spec(
+        spec)
+
+    spec.loader.exec_module(module)
+
+    return module.process_import_rows(
+        rows,
+        source_type=source_type,
+        existing_fingerprints=(
+            existing_fingerprints
+            or set()
+        ),
+    )

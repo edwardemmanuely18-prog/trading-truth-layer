@@ -1,4 +1,10 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Float,
+    DateTime,
+)
 from app.core.db import Base
 
 
@@ -82,4 +88,22 @@ class Trade(Base):
         String,
         nullable=True,
         index=True,
+    )
+
+    verification_state = Column(
+        String,
+        nullable=False,
+        default="verified",
+        index=True,
+    )
+
+    evidence_trust_tier = Column(
+        String,
+        nullable=False,
+        default="tier_2",
+    )
+
+    ingestion_timestamp = Column(
+        DateTime,
+        nullable=True,
     )

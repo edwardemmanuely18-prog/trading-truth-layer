@@ -308,6 +308,70 @@ export interface SyncJob {
   created_at: string;
 }
 
+export interface EvidenceRecord {
+  trade_id: number;
+
+  symbol: string;
+
+  side: string;
+
+  source_system?: string;
+
+  import_source?: string;
+
+  import_job_id?: number;
+
+  broker_connection_id?: number;
+
+  broker_account_id?: string;
+
+  verification_state?: string;
+
+  evidence_trust_tier?: string;
+
+  raw_trade_hash?: string;
+
+  ingestion_timestamp?: string;
+}
+
+export interface IntegrityRecord {
+  trade_id: number;
+
+  symbol: string;
+
+  verification_state: string | null;
+
+  evidence_trust_tier: string | null;
+
+  integrity_type?: string;
+
+  import_source: string | null;
+
+  import_job_id: number | null;
+
+  broker_connection_id: number | null;
+
+  broker_account_id: string | null;
+
+  broker_trade_id: string | null;
+
+  raw_trade_hash: string | null;
+
+  trade_fingerprint: string | null;
+
+  ingestion_timestamp: string | null;
+}
+
+export async function getIntegrityRegistry(
+  workspaceId: number
+): Promise<IntegrityRecord[]> {
+
+  return apiFetch(
+    `/api/workspaces/${workspaceId}/evidence-registry`
+  );
+
+}
+
 export type ImportBatch = {
   id: number;
   workspace_id: number;
@@ -1576,6 +1640,79 @@ export async function executeSyncJob(
   );
 
   return response;
+}
+
+export async function createImportPreview(
+  workspaceId: number,
+  sourceType: string,
+  file: File
+) {
+  const formData = new FormData();
+
+  formData.append(
+    "source_type",
+    sourceType
+  );
+
+  formData.append(
+    "file",
+    file
+  );
+
+  return apiFetch(
+    `/workspaces/${workspaceId}/imports/preview`,
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+}
+
+export async function confirmImportPreview(
+  workspaceId: number,
+  previewSessionId: number
+) {
+  return apiFetch(
+    `/workspaces/${workspaceId}/imports/preview/${previewSessionId}/confirm`,
+    {
+      method: "POST",
+    }
+  );
+}
+
+export async function getImportBatches(
+  workspaceId: number
+): Promise<ImportBatch[]> {
+  return apiFetch<ImportBatch[]>(
+    `/workspaces/${workspaceId}/import-batches`
+  );
+}
+
+export async function getEvidenceRegistry(
+  workspaceId: number
+): Promise<EvidenceRecord[]> {
+
+  return apiFetch(
+    `/workspaces/${workspaceId}/evidence-registry`
+  );
+}
+
+export async function getEvidenceRecords(
+  workspaceId: number
+): Promise<EvidenceRecord[]> {
+  return apiFetch<EvidenceRecord[]>(
+    `/workspaces/${workspaceId}/evidence-records`
+  );
+}
+
+export async function getAuditEvents(
+  workspaceId: number
+): Promise<AuditEvent[]> {
+
+  return apiFetch<AuditEvent[]>(
+    `/workspaces/${workspaceId}/audit-events`
+  );
+
 }
 
 export const getInstitutionalDashboard =

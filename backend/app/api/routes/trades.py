@@ -506,18 +506,34 @@ def create_trade(
     trade = Trade(
         workspace_id=workspace_id,
         member_id=payload.member_id,
+
         symbol=normalized_symbol,
         side=normalized_side,
+
         opened_at=payload.opened_at,
         closed_at=payload.closed_at,
+
         entry_price=payload.entry_price,
         exit_price=payload.exit_price,
+
         quantity=payload.quantity,
         net_pnl=computed_net_pnl,
+
         currency=normalized_currency,
-        source_system=normalized_source_system,
+
+        strategy_tag=normalize_optional_text(
+            payload.strategy_tag
+        ),
+
+        source_system="MANUAL",
+
+        import_source="manual_trade",
+
+        verification_state="self_reported",
+
+        evidence_trust_tier="tier_3",
+
         trade_fingerprint=fingerprint,
-        strategy_tag=normalize_optional_text(payload.strategy_tag),
     )
 
     print("CREATING TRADE:", {
@@ -676,6 +692,18 @@ def update_trade(
             db.flush()
 
         db.add(TradeTagMap(trade_id=trade.id, tag_id=tag.id))
+
+    trade.verification_state = (
+        "edited_self_reported"
+    )
+
+    trade.evidence_trust_tier = (
+        "tier_3"
+    )
+
+    trade.import_source = (
+        "manual_edit"
+    )
 
     db.commit()
     db.refresh(trade)

@@ -126,9 +126,20 @@ def normalize_side(value: Any) -> str:
 
     v = normalize_text(value).lower()
 
-    if v in ["buy", "long", "b"]:
+    if v in [
+        "buy",
+        "long",
+        "b",
+        "bot",
+    ]:
         return "buy"
-    if v in ["sell", "short", "s"]:
+
+    if v in [
+        "sell",
+        "short",
+        "s",
+        "sold",
+    ]:
         return "sell"
 
     return "unknown"
@@ -172,7 +183,11 @@ def map_mt5_row(row: Dict[str, Any]) -> Dict[str, Any]:
 def map_ibkr_row(row: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "symbol": row.get("Symbol"),
-        "side": row.get("Buy/Sell"),
+        "side": (
+            row.get("Buy/Sell")
+            or row.get("Action")
+            or row.get("Side")
+        ),
         "quantity": row.get("Quantity"),
         "entry_price": (
             row.get("TradePrice")

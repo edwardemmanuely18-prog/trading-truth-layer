@@ -41,6 +41,11 @@ from app.api.routes.claim_disputes import router as claim_disputes_router
 from app.api.routes.dashboard import router as dashboard_router
 from app.api.routes import workspace_members
 from app.api.routes import billing
+from app.api.routes import (
+    evidence_registry,
+)
+from app.api.routes import evidence_records
+from app.api.routes import import_batches
 
 from app.api.routes import aurum
 
@@ -120,7 +125,7 @@ app.add_middleware(
 
 from app.api.routes import public
 
-app.include_router(trades_router, prefix="/api")
+
 
 # =========================
 # SAFE STARTUP (CRITICAL)
@@ -171,6 +176,15 @@ def on_startup():
 
             "strategy_tag":
                 "ALTER TABLE trades ADD COLUMN strategy_tag VARCHAR",
+
+            "verification_state":
+                "ALTER TABLE trades ADD COLUMN verification_state VARCHAR DEFAULT 'verified'",
+
+            "evidence_trust_tier":
+                "ALTER TABLE trades ADD COLUMN evidence_trust_tier VARCHAR DEFAULT 'tier_2'",
+
+            "ingestion_timestamp":
+                "ALTER TABLE trades ADD COLUMN ingestion_timestamp TIMESTAMP",
         }
 
         for column_name, sql in trade_patches.items():
@@ -313,6 +327,21 @@ app.include_router(claim_disputes_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(public.router, prefix="/api")
 app.include_router(aurum.router)
+app.include_router(
+    evidence_registry.router,
+    prefix="/api",
+    tags=["Evidence Registry"],
+)
+app.include_router(
+    evidence_records.router,
+    prefix="/api",
+    tags=["Evidence Records"],
+)
+app.include_router(
+    import_batches.router,
+    prefix="/api",
+    tags=["Import Batches"],
+)
 
 # IMPORTANT: prefix for API routes
 app.include_router(workspace_members.router, prefix="/api")

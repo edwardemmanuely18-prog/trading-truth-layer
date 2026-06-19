@@ -46,7 +46,7 @@ from secrets import token_urlsafe
 
 from app.models.workspace_invite import WorkspaceInvite
 
-from fastapi import UploadFile, File
+from fastapi import UploadFile, File, Form
 
 
 router = APIRouter()
@@ -1346,7 +1346,7 @@ def execute_sync_job_route(
 )
 async def create_import_job(
     workspace_id: int,
-    adapter_provider: str,
+    adapter_provider: str = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

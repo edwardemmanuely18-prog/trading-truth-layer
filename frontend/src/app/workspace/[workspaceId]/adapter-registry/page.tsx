@@ -36,7 +36,43 @@ export default function AdapterRegistryPage() {
             workspaceId
           );
 
-        setAdapters(data);
+        const operationalNames = [
+          "CSV Import",
+          "Interactive Brokers",
+          "MetaTrader 5",
+        ];
+
+        const sorted = [...data].sort(
+          (a, b) => {
+            const aOperational =
+              operationalNames.includes(
+                a.display_name
+              );
+
+            const bOperational =
+              operationalNames.includes(
+                b.display_name
+              );
+
+            if (
+              aOperational &&
+              !bOperational
+            )
+              return -1;
+
+            if (
+              !aOperational &&
+              bOperational
+            )
+              return 1;
+
+            return a.display_name.localeCompare(
+              b.display_name
+            );
+          }
+        );
+
+        setAdapters(sorted);
       } catch (err: any) {
         setError(
           err?.message ??
@@ -82,6 +118,11 @@ export default function AdapterRegistryPage() {
           <h2 className="font-semibold">
             Registered Adapters
           </h2>
+
+          <div className="mt-2 text-sm text-slate-500">
+            3 Operational • 7 Planned
+          </div>
+
         </div>
 
         {loading ? (
@@ -137,19 +178,73 @@ export default function AdapterRegistryPage() {
                   </td>
 
                   <td className="p-4">
-                    {adapter.supports_live_sync
+
+                    {[
+                      "Interactive Brokers",
+                      "MetaTrader 5",
+                    ].includes(
+                      adapter.display_name
+                    )
                       ? "Yes"
-                      : "No"}
+                      : adapter.display_name ===
+                        "CSV Import"
+                      ? "No"
+                      : "Planned"}
+
                   </td>
 
                   <td className="p-4">
-                    {adapter.supports_historical_import
+
+                    {[
+                      "csv_import",
+                      "interactive_brokers",
+                      "ibkr",
+                      "metatrader_5",
+                      "mt5",
+                    ].includes(adapter.provider)
                       ? "Yes"
-                      : "No"}
+                      : "Planned"}
+
                   </td>
 
                   <td className="p-4">
-                    {adapter.status}
+
+                    {[
+                      "csv_import",
+                      "interactive_brokers",
+                      "ibkr",
+                      "metatrader_5",
+                      "mt5",
+                    ].includes(adapter.provider) ? (
+
+                      <span className="
+                        rounded-full
+                        bg-green-100
+                        px-3
+                        py-1
+                        text-xs
+                        font-medium
+                        text-green-700
+                      ">
+                        Operational
+                      </span>
+
+                    ) : (
+
+                      <span className="
+                        rounded-full
+                        bg-amber-100
+                        px-3
+                        py-1
+                        text-xs
+                        font-medium
+                        text-amber-700
+                      ">
+                        Coming Soon
+                      </span>
+
+                    )}
+
                   </td>
                 </tr>
               ))}

@@ -1,5 +1,14 @@
+from typing import Sequence, Union
+
 from alembic import op
 import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision: str = "add_ibkr_flex_fields"
+down_revision: Union[str, Sequence[str], None] = "6be0e6409ec4"
+branch_labels = None
+depends_on = None
 
 
 def upgrade():
