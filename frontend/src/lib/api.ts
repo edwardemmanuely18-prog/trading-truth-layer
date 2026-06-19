@@ -1405,6 +1405,45 @@ export type ApiErrorPayload = {
   upgrade_required?: boolean;
 };
 
+export type VerificationAnalytics = {
+  total_claims: number;
+
+  draft_claims: number;
+  verified_claims: number;
+  published_claims: number;
+  locked_claims: number;
+
+  verification_coverage_pct: number;
+  publication_coverage_pct: number;
+  lock_coverage_pct: number;
+
+  visibility_distribution: {
+    private: number;
+    unlisted: number;
+    public: number;
+  };
+
+  lifecycle_distribution: {
+    draft: number;
+    verified: number;
+    published: number;
+    locked: number;
+  };
+
+  claims: {
+    id: number;
+    name: string;
+    status: string;
+    visibility: string;
+
+    verified_at?: string | null;
+    published_at?: string | null;
+    locked_at?: string | null;
+
+    claim_hash?: string | null;
+  }[];
+};
+
 export class ApiError extends Error {
   status: number;
   payload: ApiErrorPayload | null;
@@ -1735,6 +1774,16 @@ export async function getEvidenceRegistry(
   return apiFetch(
     `/workspaces/${workspaceId}/evidence-registry`
   );
+}
+
+export async function getVerificationAnalytics(
+  workspaceId: number
+): Promise<VerificationAnalytics> {
+
+  return apiFetch<VerificationAnalytics>(
+    `/workspaces/${workspaceId}/verification-analytics`
+  );
+
 }
 
 export async function getEvidenceRecords(

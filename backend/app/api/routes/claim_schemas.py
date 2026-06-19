@@ -4393,3 +4393,124 @@ def download_claim_pdf(claim_id: int, db: Session = Depends(get_db)):
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=claim_{claim_id}.pdf"},
     )            
+
+
+@router.get(
+    "/workspaces/{workspace_id}/verification-analytics"
+)
+def get_verification_analytics(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    schemas = (
+        db.query(ClaimSchema)
+        .filter(
+            ClaimSchema.workspace_id
+            == workspace_id
+        )
+        .all()
+    )
+
+    total = len(schemas)
+
+    draft = 0
+    verified = 0
+    published = 0
+    locked = 0
+
+    public_claims = 0
+    private_claims = 0
+
+    recent = []
+
+    for schema in schemas:
+
+        status = (
+            schema.status or ""
+        ).lower()
+
+        if status == "draft":
+            draft += 1
+
+        elif status == "verified":
+            verified += 1
+
+        elif status == "published":
+            published += 1
+
+        elif status == "locked":
+            locked += 1
+
+        visibility = (
+            schema.visibility or ""
+        ).lower()
+
+        if visibility == "public":
+            public_claims += 1
+        else:
+            private_claims += 1
+
+        recent.append(
+            {
+                "id": schema.id,
+                "name": schema.name,
+                "status": schema.status,
+                "visibility":
+                    schema.visibility,
+                "verified_at":
+                    schema.verified_at,
+                "published_at":
+                    schema.published_at,
+                "locked_at":
+                    schema.locked_at,
+            }
+        )
+
+    recent.sort(
+        key=lambda x:
+        x["locked_at"]
+        or x["published_at"]
+        or x["verified_at"]
+        or datetime.min,
+        reverse=True,
+    )
+
+    return {
+        "total_claims": total,
+
+        "draft_claims": draft,
+
+        "verified_claims":
+            verified,
+
+        "published_claims":
+            published,
+
+        "locked_claims":
+            locked,
+
+        "public_claims":
+            public_claims,
+
+        "private_claims":
+            private_claims,
+
+        "verification_coverage":
+            round(
+                (
+                    (
+                        verified
+                        + published
+                        + locked
+                    )
+                    / total
+                )
+                * 100,
+                2,
+            )
+            if total > 0
+            else 0,
+
+        "recent_events":
+            recent[:20],
+    }
