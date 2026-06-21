@@ -6,12 +6,22 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.models.claim_schema import ClaimSchema
 from app.api.routes.claim_schemas import (
-    compute_claim_hash,
-    compute_trade_set_hash,
     resolve_schema_trade_scope,
     resolve_claim_integrity_status,
+)
+
+from app.services.claim_integrity_engine import (
     coerce_trade_opened_at,
 )
+
+from app.services.claim_service import (
+    compute_claim_hash,
+)
+
+from app.services.claim_integrity_engine import (
+    compute_trade_set_hash,
+)
+
 from app.models.trade import Trade
 import json
 

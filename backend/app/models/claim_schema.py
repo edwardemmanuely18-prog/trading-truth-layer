@@ -38,4 +38,27 @@ class ClaimSchema(Base):
         index=True,
     )
 
+    integrity_snapshot_json = Column(
+        Text,
+        nullable=True,
+    )
+
+    scope_hash = Column(
+        String,
+        nullable=True,
+        index=True,
+    )
+
+    lifecycle_hash = Column(
+        String,
+        nullable=True,
+        index=True,
+    )
+
+    integrity_snapshot_json = Column(
+        Text,
+        nullable=False,
+        default="{}",
+    )
+
     locked_trade_ids_json = Column(Text, nullable=False, default="[]")

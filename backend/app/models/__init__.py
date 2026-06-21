@@ -26,6 +26,27 @@ from app.models.broker_account import (
 from app.models.claim_schema_preset import (
     ClaimSchemaPreset,
 )
+from app.models.integrity_scan import IntegrityScan
+from app.models.integrity_alert import IntegrityAlert
+from app.models.broker_credential import (
+    BrokerCredential,
+)
+
+from app.models.import_preview_session import (
+    ImportPreviewSession,
+)
+
+from app.models.ingestion_session import (
+    IngestionSession,
+)
+
+from app.models.trade_tag import (
+    TradeTag,
+)
+
+from app.models.trade_tag_map import (
+    TradeTagMap,
+)
 
 
 __all__ = [
@@ -46,4 +67,11 @@ __all__ = [
     "AccountSnapshot",
     "OpenPosition",
     "BrokerAccount",
+    "IntegrityScan",
+    "IntegrityAlert",
+    "BrokerCredential",
+    "ImportPreviewSession",
+    "IngestionSession",
+    "TradeTag",
+    "TradeTagMap",
 ]

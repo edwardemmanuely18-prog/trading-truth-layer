@@ -10,10 +10,12 @@ import {
   type DashboardResponse,
   type PublicClaimDirectoryItem,
   type WorkspaceUsageSummary,
-  type InstitutionalDashboardResponse,
+  type DashboardSummary,
 } from "../../../../lib/api";
 import PaywallModal from "../../../../components/PaywallModal";
 import { useWorkspaceGate } from "../../../../hooks/useWorkspaceGate";
+
+
 
 function formatNumber(value?: number | null) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
@@ -655,9 +657,13 @@ function TrustOverviewPanel({
   verifiedClaims: number;
 }) {
   const trustCoverage =
-    verifiedClaims === 0
-      ? 0
-      : Math.round((lockedClaims / verifiedClaims) * 100);
+    publishedClaims + lockedClaims > 0
+      ? Math.round(
+          (lockedClaims /
+            (publishedClaims + lockedClaims)) *
+            100
+        )
+      : 0;
 
   return (
     <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -694,7 +700,13 @@ function TrustOverviewPanel({
   );
 }
 
-function IntegrityHealthPanel() {
+function IntegrityHealthPanel({
+  activeAlerts,
+  verificationCoverage,
+}: {
+  activeAlerts: number;
+  verificationCoverage: number;
+}) {
   return (
     <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -709,12 +721,16 @@ function IntegrityHealthPanel() {
 
         <SummaryCard
           label="Integrity Score"
-          value="100%"
+          value={
+            activeAlerts === 0
+              ? "100%"
+              : "WARNING"
+          }
         />
 
         <SummaryCard
           label="Hash Failures"
-          value="0"
+          value={activeAlerts}
         />
 
         <SummaryCard
@@ -724,7 +740,7 @@ function IntegrityHealthPanel() {
 
         <SummaryCard
           label="Evidence Coverage"
-          value="100%"
+          value={`${verificationCoverage.toFixed(0)}%`}
         />
 
       </div>
@@ -911,11 +927,10 @@ export default function WorkspaceDashboardPage() {
   const [claims, setClaims] = useState<PublicClaimDirectoryItem[]>([]);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
   const [
-    institutionalDashboard,
-    setInstitutionalDashboard,
-  ] = useState<
-    InstitutionalDashboardResponse | null
-  >(null);
+    dashboardSummary,
+    setDashboardSummary,
+  ] = useState<DashboardSummary | null>(null);
+  
   const [loading, setLoading] = useState(true);
   const [createChecking, setCreateChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -929,33 +944,30 @@ export default function WorkspaceDashboardPage() {
         setError(null);
 
         const [
-          institutionalRes,
-          claimsRes,
+          dashboardSummary,
           usageRes,
         ] = await Promise.all([
-          api.getInstitutionalDashboard(workspaceId),
-          api.getWorkspaceClaims(workspaceId),
+          api.getDashboardSummary(workspaceId),
           api.getWorkspaceUsage(workspaceId),
         ]);
 
-        setInstitutionalDashboard(institutionalRes);
+        setDashboardSummary(dashboardSummary);
 
         setDashboard({
-          workspace_id: institutionalRes?.workspace_id ?? Number(workspaceId),
+          workspace_id:
+            Number(workspaceId),
           workspace_name: "",
           member_count:
-            institutionalRes?.workspace?.member_count ?? 0,
+            dashboardSummary.member_count,
+
           trade_count:
-            institutionalRes?.workspace?.trade_count ?? 0,
+            dashboardSummary.trade_count,
+
           claim_count:
-            institutionalRes?.workspace?.claim_count ?? 0,
+            dashboardSummary.claim_count,
         });
 
-        setClaims(Array.isArray(claimsRes) ? claimsRes : []);
         setUsage(usageRes ?? null);
-        setInstitutionalDashboard(
-          institutionalRes ?? null
-        );
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load workspace dashboard.");
       } finally {
@@ -1039,33 +1051,17 @@ export default function WorkspaceDashboardPage() {
     );
   }
 
-  const lockedClaims = claims.filter((c) => normalizeText(c?.verification_status) === "locked").length;
-  const verifiedClaims = claims.filter((c) =>
-    ["verified", "published", "locked"].includes(normalizeText(c?.verification_status))
-  ).length;
-  const publishedClaims = claims.filter(
-    (c) =>
-      normalizeText(c?.scope?.visibility) === "public" &&
-      ["published", "locked"].includes(normalizeText(c?.verification_status))
-  ).length;
-  const draftClaims = claims.filter((c) => normalizeText(c?.verification_status) === "draft");
+ const lockedClaims =
+    dashboardSummary?.locked_claims ?? 0;
 
-  const recentClaims = [...claims]
-    .sort((a, b) => {
-      const rankDiff =
-        getLifecyclePriorityRank(b?.verification_status) - getLifecyclePriorityRank(a?.verification_status);
-      if (rankDiff !== 0) return rankDiff;
-      return (b?.claim_schema_id ?? 0) - (a?.claim_schema_id ?? 0);
-    })
-    .slice(0, 6);
+  const verifiedClaims =
+    dashboardSummary?.verified_claims ?? 0;
 
-  const activeDraft = [...draftClaims].sort(
-    (a, b) => (b?.claim_schema_id ?? 0) - (a?.claim_schema_id ?? 0)
-  )[0];
+  const publishedClaims =
+    dashboardSummary?.published_claims ?? 0;
 
-  const latestLockedClaim = [...claims]
-    .filter((c) => normalizeText(c?.verification_status) === "locked")
-    .sort((a, b) => (b?.claim_schema_id ?? 0) - (a?.claim_schema_id ?? 0))[0];
+  const draftClaimsCount =
+    dashboardSummary?.draft_claims ?? 0;
 
   const membersUsage: {
     used: number;
@@ -1148,19 +1144,6 @@ export default function WorkspaceDashboardPage() {
           }
         : null,
 
-      activeDraft
-        ? {
-            priority: 90,
-            title: "Continue active draft claim",
-            description:
-              "A governed draft claim is awaiting completion. Finalize scope, methodology, and evidence posture so the record can move into verification.",
-            primaryLabel: "Open Draft Claim",
-            primaryHref: `/workspace/${workspaceId}/claim/${activeDraft.claim_schema_id}`,
-            secondaryLabel: "Open Evidence",
-            secondaryHref: `/workspace/${workspaceId}/evidence?claimId=${activeDraft.claim_schema_id}`,
-          }
-        : null,
-
       tradeCount > 0 && claimCount === 0
         ? {
             priority: 80,
@@ -1190,11 +1173,7 @@ export default function WorkspaceDashboardPage() {
           "The workspace is already producing governed records. Review claims, evidence, and public proof surfaces to maintain operational confidence.",
         primaryLabel: "Open Claim Library",
         primaryHref: `/workspace/${workspaceId}/claims`,
-        secondaryLabel: "Open Latest Record",
-        secondaryHref: latestLockedClaim
-          ? `/workspace/${workspaceId}/claim/${latestLockedClaim.claim_schema_id}`
-          : undefined,
-      },
+      }
     ].filter(Boolean) as Array<{
       priority: number;
       title: string;
@@ -1259,200 +1238,27 @@ export default function WorkspaceDashboardPage() {
             canImportTrades={canImportTrades}
           />
 
-          {false ? (
-            <div className="mb-8 grid gap-6 lg:grid-cols-3">
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Strategy Intelligence
-                </div>
-
-                <h3 className="mt-2 text-xl font-semibold text-slate-950">
-                  Institutional Strategy Analytics
-                </h3>
-
-                <div className="mt-5 space-y-4">
-
-                  <div>
-                    <div className="text-sm text-slate-500">
-                      Strategy Count
-                    </div>
-
-                    <div className="mt-1 text-3xl font-bold">
-                      {
-                        Number(
-                          institutionalDashboard?.strategy_analytics?.strategy_count ?? 0
-                        )
-                      }
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-sm text-slate-500">
-                      Best Performing Strategy
-                    </div>
-
-                    <div className="mt-1 text-lg font-semibold">
-                      {
-                        institutionalDashboard?.strategy_analytics?.best_strategy?.tag
-                          ?? "unclassified"
-                      }
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-sm text-slate-500">
-                      Strategy Expectancy
-                    </div>
-
-                    <div className="mt-1 text-2xl font-bold">
-                      {
-                        institutionalDashboard?.strategy_analytics?.best_strategy?.expectancy
-                          ?? 0
-                      }
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Import Governance
-                </div>
-
-                <h3 className="mt-2 text-xl font-semibold text-slate-950">
-                  Import Integrity Health
-                </h3>
-
-                <div className="mt-5 space-y-4">
-
-                  <div>
-                    <div className="text-sm text-slate-500">
-                      Rows Imported
-                    </div>
-
-                    <div className="mt-1 text-3xl font-bold">
-                      {
-                        Number(
-                          institutionalDashboard?.import_health?.rows_imported ?? 0
-                        )
-                      }
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-sm text-slate-500">
-                      Duplicate Ratio
-                    </div>
-
-                    <div className="mt-1 text-2xl font-bold">
-                      {
-                        (
-                          Number(
-                            institutionalDashboard
-                              ?.import_health
-                              ?.duplicate_ratio ?? 0
-                          ) * 100
-                        ).toFixed(2)
-                      }%
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-sm text-slate-500">
-                      Rejection Ratio
-                    </div>
-
-                    <div className="mt-1 text-2xl font-bold">
-                      {
-                        (
-                          Number(
-                            institutionalDashboard
-                              ?.import_health
-                              ?.rejection_ratio ?? 0
-                          ) * 100
-                        ).toFixed(2)
-                      }%
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-
-                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Governance Posture
-                </div>
-
-                <h3 className="mt-2 text-xl font-semibold text-slate-950">
-                  Operational Governance
-                </h3>
-
-                <div className="mt-5 space-y-4">
-
-                  <div>
-                    <div className="text-sm text-slate-500">
-                      Utilization
-                    </div>
-
-                    <div className="mt-1 text-3xl font-bold">
-                      {
-                        Number(
-                          institutionalDashboard?.governance?.utilization ?? 0
-                        )
-                      }%
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-sm text-slate-500">
-                      Governance Status
-                    </div>
-
-                    <div className="mt-1 text-xl font-semibold capitalize">
-                      {
-                        institutionalDashboard
-                          ?.governance
-                          ?.status ?? "healthy"
-                      }
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-sm text-slate-500">
-                      Effective Plan
-                    </div>
-
-                    <div className="mt-1 text-xl font-semibold">
-                      {
-                        institutionalDashboard
-                          ?.governance
-                          ?.effective_plan_code ?? "sandbox"
-                      }
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-
-            </div>
-          ) : null}
-
           <TrustOverviewPanel
             lockedClaims={lockedClaims}
             publishedClaims={publishedClaims}
             verifiedClaims={verifiedClaims}
           />
 
-          <IntegrityHealthPanel />
+          <IntegrityHealthPanel
+            activeAlerts={
+              dashboardSummary?.active_alerts ?? 0
+            }
+            verificationCoverage={
+              claimCount > 0
+                ? ((publishedClaims + lockedClaims) / claimCount) * 100
+                : 0
+            }
+          />
 
           <WorkflowProgressPanel
             tradeCount={tradeCount}
             claimCount={claimCount}
-            draftCount={draftClaims.length}
+            draftCount={draftClaimsCount}
             verifiedCount={verifiedClaims}
             publishedCount={publishedClaims}
             lockedCount={lockedClaims}
@@ -1576,100 +1382,14 @@ export default function WorkspaceDashboardPage() {
                   </Link>
                 </div>
 
-                {activeDraft ? (
-                  <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5">
-                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">
-                      Active claim · needs action
-                    </div>
-                    <div className="mt-2 text-lg font-semibold text-amber-950">
-                      {activeDraft.name || "Unnamed draft claim"}
-                    </div>
-                    <div className="mt-2 text-sm text-amber-800">
-                      claim #{activeDraft.claim_schema_id} · status:{" "}
-                      {activeDraft.verification_status || "draft"} · visibility:{" "}
-                      {activeDraft.scope?.visibility || "private"}
-                    </div>
+      
 
-                    <div className="mt-4 flex flex-wrap gap-3">
-                      <Link
-                        href={`/workspace/${workspaceId}/claim/${activeDraft.claim_schema_id}`}
-                        className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-                      >
-                        Continue Draft
-                      </Link>
-                      <Link
-                        href={`/workspace/${workspaceId}/evidence?claimId=${activeDraft.claim_schema_id}`}
-                        className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100"
-                      >
-                        Open Evidence
-                      </Link>
-                    </div>
-                  </div>
-                ) : null}
 
-                {latestLockedClaim ? (
-                  <div className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-5">
-                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-green-700">
-                      Latest finalized record
-                    </div>
-                    <div className="mt-2 text-lg font-semibold text-green-950">
-                      {latestLockedClaim.name || "Unnamed locked claim"}
-                    </div>
-                    <div className="mt-2 text-sm text-green-800">
-                      claim #{latestLockedClaim.claim_schema_id} · locked · visibility:{" "}
-                      {latestLockedClaim.scope?.visibility || "private"}
-                    </div>
-                  </div>
-                ) : null}
-
-                {recentClaims.length === 0 ? (
-                  <div className="mt-4 text-slate-500">No claims available yet.</div>
-                ) : (
-                  <div className="mt-5 space-y-3">
-                    {recentClaims.map((claim) => (
-                      <div
-                        key={claim?.claim_schema_id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4"
-                      >
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <div className="font-medium">
-                              {claim?.name || "Unnamed claim"}
-                            </div>
-                            <span
-                              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getClaimStatusBadgeClass(
-                                claim?.verification_status
-                              )}`}
-                            >
-                              {String(claim?.verification_status || "unknown").toUpperCase()}
-                            </span>
-                          </div>
-
-                          <div className="mt-1 text-sm text-slate-500">
-                            claim #{claim?.claim_schema_id} · visibility:{" "}
-                            {claim?.scope?.visibility || "private"}
-                          </div>
-                        </div>
-
-                        <div className="flex gap-2">
-                          <Link
-                            href={`/workspace/${workspaceId}/claim/${claim?.claim_schema_id}`}
-                            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-                          >
-                            Open
-                          </Link>
-
-                          <Link
-                            href={`/workspace/${workspaceId}/evidence?claimId=${claim?.claim_schema_id}`}
-                            className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-                          >
-                            Evidence
-                          </Link>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <div className="mt-4 text-slate-500">
+                  Claim activity is now summarized at executive level.
+                  Open Claim Library to review individual records.
+                </div>
+                  
               </div>
 
               <div className="rounded-2xl border bg-white p-6 shadow-sm">

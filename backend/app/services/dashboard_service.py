@@ -6,12 +6,20 @@ from app.models.claim_schema import ClaimSchema
 from app.models.workspace_membership import WorkspaceMembership
 from app.models.import_batch import ImportBatch
 
+from app.models.integrity_alert import (
+    IntegrityAlert,
+)
+
 from app.services.metrics_service import (
     get_workspace_trade_metrics,
 )
 
 from app.services.analytics_service import (
     get_strategy_performance,
+)
+
+from app.services.integrity_score_service import (
+    calculate_integrity_score,
 )
 
 
@@ -202,6 +210,56 @@ def get_dashboard_overview(
     elif utilization >= 80:
         governance_status = "warning"
 
+    active_alerts = (
+        db.query(IntegrityAlert)
+        .filter(
+            IntegrityAlert.workspace_id
+            == workspace_id,
+
+            IntegrityAlert.status
+            == "open",
+        )
+        .count()
+    )
+
+    open_alerts = (
+        db.query(IntegrityAlert)
+        .filter(
+            IntegrityAlert.workspace_id
+            == workspace_id,
+
+            IntegrityAlert.status
+            == "open",
+        )
+        .all()
+    )
+
+    fatal_alerts = len([
+        a for a in open_alerts
+        if str(a.severity).upper() == "FATAL"
+    ])
+
+    critical_alerts = len([
+        a for a in open_alerts
+        if str(a.severity).upper() == "CRITICAL"
+    ])
+
+    high_alerts = len([
+        a for a in open_alerts
+        if str(a.severity).upper() == "HIGH"
+    ])
+
+    warning_alerts = len([
+        a for a in open_alerts
+        if str(a.severity).upper() == "WARNING"
+    ])
+
+    integrity_score = (
+        calculate_integrity_score(
+            open_alerts
+        )
+    )
+
     # =====================================================
     # FINAL PAYLOAD
     # =====================================================
@@ -255,5 +313,46 @@ def get_dashboard_overview(
             "strategy_count": len(strategies),
             "best_strategy": best_strategy,
             "strategies": strategies,
+        },
+
+        "executive": {
+
+            "active_alerts":
+                active_alerts,
+
+            "integrity_health":
+                (
+                    "healthy"
+                    if active_alerts == 0
+                    else "warning"
+                ),
+
+            "integrity_score":
+                integrity_score,
+
+            "verification_coverage":
+                round(
+                    (
+                        locked_claims
+                        / claim_count
+                    ) * 100,
+                    2,
+                )
+                if claim_count
+                else 0,
+        },
+
+        "integrity": {
+            "score": integrity_score,
+
+            "total_alerts": active_alerts,
+
+            "fatal_alerts": fatal_alerts,
+
+            "critical_alerts": critical_alerts,
+
+            "high_alerts": high_alerts,
+
+            "warning_alerts": warning_alerts,
         },
     }

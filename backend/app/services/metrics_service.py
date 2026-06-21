@@ -7,6 +7,11 @@ from app.services.entitlements import (
     resolve_workspace_plan_code,
     get_workspace_plan_limits,
 )
+from app.services.trade_metrics_service import (
+    compute_trade_metrics,
+    build_equity_curve,
+    compute_drawdown_stats,
+)
 
 
 def get_workspace_trade_metrics(
@@ -17,6 +22,18 @@ def get_workspace_trade_metrics(
     trades = db.query(Trade).filter(
         Trade.workspace_id == workspace_id
     ).all()
+
+    metrics = compute_trade_metrics(
+        trades
+    )
+
+    equity_curve = build_equity_curve(
+        trades
+    )
+
+    drawdown = compute_drawdown_stats(
+        equity_curve["curve"]
+    )
 
     total = len(trades)
 
@@ -129,4 +146,23 @@ def get_workspace_trade_metrics(
 
         "wins": wins,
         "losses": losses,
-    }
+
+        "trade_count": metrics["trade_count"],
+
+        "profit_factor":
+            metrics["profit_factor"],
+
+        "expectancy":
+            round(
+                (
+                    metrics["net_pnl"]
+                    / metrics["trade_count"]
+                )
+                if metrics["trade_count"]
+                else 0,
+                2,
+            ),
+
+        "max_drawdown":
+            drawdown["max_drawdown"],
+            }

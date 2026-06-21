@@ -7,11 +7,11 @@ from app.models.workspace import Workspace
 
 # ✅ IMPORT REAL TRUST ENGINE
 from app.api.routes.claim_schemas import (
-    compute_backend_trust_score,
-    resolve_schema_trades,
-    compute_trade_metrics,
-    resolve_claim_dispute_context,
     resolve_claim_integrity_status,
+)
+
+from app.services.claim_integrity_engine import (
+    resolve_schema_trades,
 )
 
 router = APIRouter()

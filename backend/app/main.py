@@ -52,6 +52,18 @@ from app.api.routes import (
 from app.api.routes import (
     claim_templates,
 )
+from app.api.routes import integrity
+from app.api.routes import (
+    integrity_alerts,
+)
+from app.api.routes import (
+    integrity_alert_feed,
+)
+from app.api.routes.dashboard_summary import (
+    router as dashboard_summary_router
+)
+from app.api.routes import dashboard_executive
+from app.api.routes import dashboard_summary
 
 from app.api.routes import aurum
 
@@ -319,6 +331,9 @@ def on_startup():
 app.include_router(verify.router)
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(
+    dashboard_summary_router
+)
 
 # ALL WORKSPACE APIs MUST BE UNDER /api
 app.include_router(workspaces_router, prefix="/api")
@@ -357,6 +372,26 @@ app.include_router(
     claim_templates.router,
     prefix="/api",
     tags=["Claim Templates"],
+)
+app.include_router(
+    integrity.router,
+    prefix="/api",
+)
+app.include_router(
+    integrity_alerts.router,
+    prefix="/api",
+)
+app.include_router(
+    integrity_alert_feed.router,
+    prefix="/api",
+)
+app.include_router(
+    dashboard_executive.router,
+    prefix="/api",
+)
+app.include_router(
+    dashboard_summary.router,
+    prefix="/api",
 )
 
 

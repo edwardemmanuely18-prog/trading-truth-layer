@@ -1,534 +1,365 @@
-import Link from "next/link";
+"use client";
+
+import { use } from "react";
+import { useEffect, useState } from "react";
+
 import Navbar from "../../../../components/Navbar";
-import { api, type PublicClaimDirectoryItem } from "../../../../lib/api";
+
+import {
+  getLeaderboardAnalytics,
+} from "../../../../lib/api";
 
 type Props = {
   params: Promise<{
     workspaceId: string;
   }>;
-  searchParams?: Promise<{
-    q?: string;
-    sort?: string;
-    visibility?: string;
-    minTrades?: string;
-  }>;
 };
 
-function formatNumber(value?: number | null, digits = 2) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
-  return Number(value).toFixed(digits);
-}
+type ClaimRanking = {
+  claim_schema_id: number;
+  name: string;
+  status: string;
+  trade_count: number;
+  net_pnl: number;
+  profit_factor: number;
+  win_rate: number;
+};
 
-function formatPercent(value?: number | null, digits = 2) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
-  return `${(Number(value) * 100).toFixed(digits)}%`;
-}
+type MemberRanking = {
+  member: string;
+  net_pnl: number;
+};
 
-function normalizeText(value: unknown) {
-  return String(value ?? "").toLowerCase().trim();
-}
+export default function Page(
+  { params }: Props
+) {
 
-function safeScope(claim: PublicClaimDirectoryItem) {
-  return claim?.scope ?? {
-    period_start: "",
-    period_end: "",
-    included_members: [],
-    included_symbols: [],
-    methodology_notes: "",
-    visibility: "",
-  };
-}
+  const resolvedParams =
+    use(params);
 
-function safeLifecycle(claim: PublicClaimDirectoryItem) {
-  return claim?.lifecycle ?? {
-    status: "",
-    verified_at: null,
-    published_at: null,
-    locked_at: null,
-    locked_trade_set_hash: null,
-  };
-}
-
-function safeLeaderboardRows(claim: PublicClaimDirectoryItem) {
-  return Array.isArray(claim?.leaderboard) ? claim.leaderboard : [];
-}
-
-function parsePositiveInt(value?: string) {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num < 0) return 0;
-  return Math.floor(num);
-}
-
-function resolveExposureLevelFromClaim(claim: PublicClaimDirectoryItem): string {
-  const visibility = normalizeText(claim?.scope?.visibility);
-  const status = normalizeText(claim?.verification_status);
-
-  if (visibility === "public") return "public";
-  if (visibility === "unlisted") return "unlisted";
-  if (status === "locked") return "external_distribution";
-
-  return "internal";
-}
-
-function buildClaimRankRows(claims: PublicClaimDirectoryItem[]) {
-  return claims.map((claim) => {
-    const scope = safeScope(claim);
-    const lifecycle = safeLifecycle(claim);
-
-    const has_active_dispute = Boolean((claim as any)?.has_active_dispute ?? false);
-    const trust_score = Number((claim as any)?.trust_score ?? 0);
-    const trust_weighted_pnl = Number(
-      (claim as any)?.trust_weighted_pnl ??
-        (Number(claim.net_pnl ?? 0) * trust_score) / 100
+  const workspaceId =
+    Number(
+      resolvedParams.workspaceId
     );
 
-    return {
-      claim_schema_id: claim.claim_schema_id,
-      claim_hash: claim.claim_hash,
-      issuer: claim.issuer ?? null,
-      profile: (claim as any)?.profile ?? null,
-      has_active_dispute,
-      exposure_level: resolveExposureLevelFromClaim(claim),
-      name: claim.name,
-      verification_status: claim.verification_status,
-      visibility: scope.visibility || "—",
-      trade_count: claim.trade_count ?? 0,
-      net_pnl: claim.net_pnl ?? 0,
-      profit_factor: claim.profit_factor ?? 0,
-      win_rate: claim.win_rate ?? 0,
-      trust_score,
-      trust_weighted_pnl,
-      period_start: scope.period_start || "—",
-      period_end: scope.period_end || "—",
-      methodology_notes: scope.methodology_notes || "",
-      locked_at: lifecycle.locked_at || null,
-      short_hash: claim.claim_hash
-        ? `${claim.claim_hash.slice(0, 16)}...${claim.claim_hash.slice(-10)}`
-        : "—",
-    };
-  });
-}
+  const [loading, setLoading] =
+    useState(true);
 
-function sortClaimRows(rows: ReturnType<typeof buildClaimRankRows>, sort: string) {
-  const items = [...rows];
+  const [data, setData] =
+    useState<any>(null);
 
-  switch (sort) {
-    case "profit_factor_desc":
-      return items.sort(
-        (a, b) => b.profit_factor - a.profit_factor || b.claim_schema_id - a.claim_schema_id
-      );
-    case "win_rate_desc":
-      return items.sort(
-        (a, b) => b.win_rate - a.win_rate || b.claim_schema_id - a.claim_schema_id
-      );
-    case "trade_count_desc":
-      return items.sort(
-        (a, b) => b.trade_count - a.trade_count || b.claim_schema_id - a.claim_schema_id
-      );
-    case "best_trust_score":
-      return items.sort(
-        (a, b) => b.trust_score - a.trust_score || b.net_pnl - a.net_pnl
-      );
-    case "best_trust_weighted_pnl":
-      return items.sort(
-        (a, b) =>
-          b.trust_weighted_pnl - a.trust_weighted_pnl || b.trust_score - a.trust_score
-      );
-    case "name_asc":
-      return items.sort(
-        (a, b) => a.name.localeCompare(b.name) || b.claim_schema_id - a.claim_schema_id
-      );
-    case "newest":
-      return items.sort((a, b) => b.claim_schema_id - a.claim_schema_id);
-    case "net_pnl_desc":
-    default:
-      return items.sort((a, b) => b.net_pnl - a.net_pnl || b.claim_schema_id - a.claim_schema_id);
-  }
-}
+  useEffect(() => {
 
-function filterClaimRows(
-  rows: ReturnType<typeof buildClaimRankRows>,
-  q: string,
-  visibility: string,
-  minTrades: number
-) {
-  const query = normalizeText(q);
+    async function load() {
 
-  return rows.filter((row) => {
-    const matchesQuery =
-      !query ||
-      normalizeText(row.name).includes(query) ||
-      normalizeText(row.claim_hash).includes(query) ||
-      normalizeText(row.claim_schema_id).includes(query) ||
-      normalizeText(row.methodology_notes).includes(query) ||
-      normalizeText(row.period_start).includes(query) ||
-      normalizeText(row.period_end).includes(query);
+      try {
 
-    const matchesVisibility =
-      visibility === "all" || normalizeText(row.visibility) === normalizeText(visibility);
+        const response =
+          await getLeaderboardAnalytics(
+            workspaceId
+          );
 
-    const matchesMinTrades = row.trade_count >= minTrades;
+        setData(response);
 
-    return matchesQuery && matchesVisibility && matchesMinTrades;
-  });
-}
+      } catch (err) {
 
-function buildMemberRows(claims: PublicClaimDirectoryItem[]) {
-  const bucket = new Map<
-    string,
-    {
-      member: string;
-      claim_count: number;
-      total_net_pnl: number;
-      avg_win_rate: number;
-      avg_profit_factor: number;
-      appearance_count: number;
+        console.error(err);
+
+      } finally {
+
+        setLoading(false);
+
+      }
+
     }
-  >();
 
-  for (const claim of claims) {
-    const rows = safeLeaderboardRows(claim);
+    load();
 
-    for (const row of rows) {
-      const key = String(row.member);
-      const existing = bucket.get(key) ?? {
-        member: row.member,
-        claim_count: 0,
-        total_net_pnl: 0,
-        avg_win_rate: 0,
-        avg_profit_factor: 0,
-        appearance_count: 0,
-      };
+  }, [workspaceId]);
 
-      existing.total_net_pnl += Number(row.net_pnl ?? 0);
-      existing.avg_win_rate += Number(row.win_rate ?? 0);
-      existing.avg_profit_factor += Number(row.profit_factor ?? 0);
-      existing.appearance_count += 1;
-      existing.claim_count += 1;
+  const claims =
+    data?.claim_rankings ?? [];
 
-      bucket.set(key, existing);
-    }
-  }
+  const members =
+    data?.member_rankings ?? [];
 
-  return Array.from(bucket.values()).map((row) => ({
-    ...row,
-    avg_win_rate: row.appearance_count ? row.avg_win_rate / row.appearance_count : 0,
-    avg_profit_factor: row.appearance_count ? row.avg_profit_factor / row.appearance_count : 0,
-  }));
-}
-
-function sortMemberRows(rows: ReturnType<typeof buildMemberRows>) {
-  return [...rows].sort((a, b) => b.total_net_pnl - a.total_net_pnl);
-}
-
-function FilterChip({
-  href,
-  label,
-  active,
-}: {
-  href: string;
-  label: string;
-  active: boolean;
-}) {
   return (
-    <Link
-      href={href}
-      className={`inline-flex rounded-full border px-4 py-2 text-sm transition ${
-        active
-          ? "border-slate-900 bg-slate-900 text-white"
-          : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
-      }`}
-    >
-      {label}
-    </Link>
-  );
-}
+    <div className="min-h-screen bg-slate-50">
 
-function SummaryCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: React.ReactNode;
-  hint: string;
-}) {
-  return (
-    <div className="rounded-2xl border bg-white p-5 shadow-sm">
-      <div className="text-sm text-slate-500">{label}</div>
-      <div className="mt-2 text-[24px] font-bold leading-none tabular-nums text-slate-950">
-        {value}
+      <Navbar />
+
+      <div className="mx-auto max-w-7xl px-6 py-10">
+
+        <div className="mb-8">
+
+          <div className="text-xs uppercase tracking-widest text-slate-500">
+            Trust Intelligence
+          </div>
+
+          <h1 className="mt-2 text-4xl font-bold">
+            Leaderboard
+          </h1>
+
+          <p className="mt-3 text-slate-600">
+            Institutional ranking
+            analytics across claims
+            and workspace members.
+          </p>
+
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-4 mb-8">
+
+          <MetricCard
+            title="Claims"
+            value={
+              data?.summary?.claims ?? 0
+            }
+          />
+
+          <MetricCard
+            title="Members"
+            value={
+              data?.summary?.members ?? 0
+            }
+          />
+
+          <MetricCard
+            title="Top Claim PnL"
+            value={
+              claims.length > 0
+                ? claims[0].net_pnl.toFixed(2)
+                : "0"
+            }
+          />
+
+          <MetricCard
+            title="Top Member PnL"
+            value={
+              members.length > 0
+                ? members[0].net_pnl.toFixed(2)
+                : "0"
+            }
+          />
+
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+
+          <div className="rounded-xl border bg-white overflow-hidden">
+
+            <div className="border-b px-6 py-4 font-semibold">
+              Claim Rankings
+            </div>
+
+            <table className="w-full">
+
+              <thead className="bg-slate-100">
+
+                <tr>
+
+                  <th className="p-4 text-left">
+                    Rank
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Claim
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Trades
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Net PnL
+                  </th>
+
+                  <th className="p-4 text-left">
+                    PF
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Win Rate
+                  </th>
+
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                {loading && (
+
+                  <tr>
+
+                    <td
+                      colSpan={6}
+                      className="p-6"
+                    >
+                      Loading...
+                    </td>
+
+                  </tr>
+
+                )}
+
+                {!loading &&
+                  claims.map(
+                    (
+                      row: ClaimRanking,
+                      index: number
+                    ) => (
+
+                      <tr
+                        key={
+                          row.claim_schema_id
+                        }
+                        className="border-t"
+                      >
+
+                        <td className="p-4">
+                          {index + 1}
+                        </td>
+
+                        <td className="p-4">
+                          {row.name}
+                        </td>
+
+                        <td className="p-4">
+                          {row.trade_count}
+                        </td>
+
+                        <td className="p-4">
+                          {row.net_pnl.toFixed(2)}
+                        </td>
+
+                        <td className="p-4">
+                          {row.profit_factor.toFixed(2)}
+                        </td>
+
+                        <td className="p-4">
+                          {(row.win_rate * 100)
+                            .toFixed(2)}%
+                        </td>
+
+                      </tr>
+
+                    )
+                  )}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+          <div className="rounded-xl border bg-white overflow-hidden">
+
+            <div className="border-b px-6 py-4 font-semibold">
+              Member Rankings
+            </div>
+
+            <table className="w-full">
+
+              <thead className="bg-slate-100">
+
+                <tr>
+
+                  <th className="p-4 text-left">
+                    Rank
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Member
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Net PnL
+                  </th>
+
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                {loading && (
+
+                  <tr>
+
+                    <td
+                      colSpan={3}
+                      className="p-6"
+                    >
+                      Loading...
+                    </td>
+
+                  </tr>
+
+                )}
+
+                {!loading &&
+                  members.map(
+                    (
+                      row: MemberRanking,
+                      index: number
+                    ) => (
+
+                      <tr
+                        key={row.member}
+                        className="border-t"
+                      >
+
+                        <td className="p-4">
+                          {index + 1}
+                        </td>
+
+                        <td className="p-4">
+                          {row.member}
+                        </td>
+
+                        <td className="p-4">
+                          {row.net_pnl.toFixed(2)}
+                        </td>
+
+                      </tr>
+
+                    )
+                  )}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        </div>
+
       </div>
-      <div className="mt-3 text-sm leading-6 text-slate-500">{hint}</div>
+
     </div>
   );
 }
 
-export default async function WorkspaceLeaderboardPage({ params, searchParams }: Props) {
-  const resolvedParams = await params;
-  const resolvedSearch = (await searchParams) || {};
-  const workspaceId = Number(resolvedParams.workspaceId);
-
-  const q = resolvedSearch.q || "";
-  const sort = resolvedSearch.sort || "net_pnl_desc";
-  const visibility = resolvedSearch.visibility || "all";
-  const minTrades = parsePositiveInt(resolvedSearch.minTrades);
-
-  let allClaims: PublicClaimDirectoryItem[] = [];
-  let loadError: string | null = null;
-
-  try {
-    allClaims = await api.getPublicClaims();
-  } catch (error) {
-    loadError =
-      error instanceof Error
-        ? error.message
-        : "Failed to load public claims for leaderboard.";
-  }
-
-  const claims = allClaims.filter((claim) => {
-    const lifecycle = safeLifecycle(claim);
-    const scope = safeScope(claim);
-
-    const resolvedWorkspaceId = Number(
-      (claim as any)?.workspace_id ??
-      (claim as any)?.profile?.workspace_id ??
-      (claim as any)?.issuer?.id ??
-      0
-    );
-
-    const resolvedStatus = normalizeText(
-      lifecycle.status ??
-      (claim as any)?.verification_status ??
-      ""
-    );
-
-    const resolvedVisibility = normalizeText(
-      scope.visibility ??
-      (claim as any)?.visibility ??
-      ""
-    );
-
-    const belongsToWorkspace =
-      resolvedWorkspaceId === workspaceId;
-
-    const externallyVisible =
-      resolvedVisibility === "public" ||
-      resolvedVisibility === "unlisted";
-
-    return (
-      belongsToWorkspace &&
-      resolvedStatus === "locked" &&
-      externallyVisible
-    );
-  });
-
-  const claimRows = sortClaimRows(
-    filterClaimRows(buildClaimRankRows(claims), q, visibility, minTrades),
-    sort
-  );
-
-  const memberRows = sortMemberRows(buildMemberRows(claims));
-
-  const qs = (next: {
-    q?: string;
-    sort?: string;
-    visibility?: string;
-    minTrades?: string;
-  }) => {
-    const params = new URLSearchParams({
-      q: next.q ?? q,
-      sort: next.sort ?? sort,
-      visibility: next.visibility ?? visibility,
-      minTrades: next.minTrades ?? String(minTrades),
-    });
-
-    return `/workspace/${workspaceId}/leaderboard?${params.toString()}`;
-  };
+function MetricCard({
+  title,
+  value,
+}: {
+  title: string;
+  value: string | number;
+}) {
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <Navbar workspaceId={workspaceId} />
+    <div className="rounded-xl border bg-white p-5">
 
-      <main className="mx-auto max-w-[1400px] px-6 py-10">
-        <div className="mb-8">
-          <div className="text-sm text-slate-500">
-            Trading Truth Layer · Workspace Trust Leaderboard
-          </div>
-          <h1 className="mt-2 text-4xl font-bold">Leaderboard</h1>
-          <p className="mt-3 max-w-4xl text-slate-600">
-            Workspace-scoped ranking surface for locked public claims belonging to this workspace.
-          </p>
-        </div>
+      <div className="text-sm text-slate-500">
+        {title}
+      </div>
 
-        {loadError ? (
-          <div className="mb-8 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {loadError}
-          </div>
-        ) : null}
+      <div className="mt-2 text-3xl font-bold">
+        {value}
+      </div>
 
-        <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
-          <form method="get" className="space-y-4">
-            <div className="grid gap-4 lg:grid-cols-4">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Search</label>
-                <input
-                  type="text"
-                  name="q"
-                  defaultValue={q}
-                  placeholder="Search by claim name, hash, notes..."
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Sort By</label>
-                <select
-                  name="sort"
-                  defaultValue={sort}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                >
-                  <option value="net_pnl_desc">Best Net PnL</option>
-                  <option value="profit_factor_desc">Best Profit Factor</option>
-                  <option value="win_rate_desc">Best Win Rate</option>
-                  <option value="best_trust_score">Best Trust Score</option>
-                  <option value="best_trust_weighted_pnl">Trust-Weighted PnL</option>
-                  <option value="trade_count_desc">Most Trades</option>
-                  <option value="newest">Newest Claims</option>
-                  <option value="name_asc">Name A → Z</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Visibility</label>
-                <select
-                  name="visibility"
-                  defaultValue={visibility}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                >
-                  <option value="all">Public ranking set</option>
-                  <option value="public">Public</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Minimum Trades
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  name="minTrades"
-                  defaultValue={String(minTrades)}
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="submit"
-                className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
-              >
-                Apply Filters
-              </button>
-
-              <Link
-                href={qs({ q: "", sort: "net_pnl_desc", visibility: "all", minTrades: "0" })}
-                className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
-              >
-                Reset
-              </Link>
-
-              <div className="text-sm text-slate-500">
-                Showing {claimRows.length} ranked claim{claimRows.length === 1 ? "" : "s"}.
-              </div>
-            </div>
-          </form>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            <FilterChip href={qs({ sort: "net_pnl_desc" })} label="Best Net PnL" active={sort === "net_pnl_desc"} />
-            <FilterChip href={qs({ sort: "profit_factor_desc" })} label="Best Profit Factor" active={sort === "profit_factor_desc"} />
-            <FilterChip href={qs({ sort: "win_rate_desc" })} label="Best Win Rate" active={sort === "win_rate_desc"} />
-            <FilterChip href={qs({ sort: "best_trust_score" })} label="Best Trust Score" active={sort === "best_trust_score"} />
-            <FilterChip href={qs({ sort: "best_trust_weighted_pnl" })} label="Trust-Weighted PnL" active={sort === "best_trust_weighted_pnl"} />
-            <FilterChip href={qs({ sort: "trade_count_desc" })} label="Most Trades" active={sort === "trade_count_desc"} />
-            <FilterChip href={qs({ visibility: "public" })} label="Public Only" active={visibility === "public"} />
-          </div>
-        </div>
-
-        <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <SummaryCard label="Public Claims" value={claims.length} hint="Locked public claims in this workspace" />
-          <SummaryCard label="Ranked Claims" value={claimRows.length} hint="Claims matching the current filter set" />
-          <SummaryCard label="Distinct Members" value={memberRows.length} hint="Unique members across workspace public claims" />
-          <SummaryCard
-            label="Top Ranked Signal"
-            value={claimRows.length ? formatNumber(claimRows[0].net_pnl) : "—"}
-            hint="Top current value for the active ranking mode"
-          />
-          <SummaryCard
-            label="Avg Trust Score"
-            value={
-              claimRows.length
-                ? formatNumber(
-                    claimRows.reduce((acc, r) => acc + r.trust_score, 0) / claimRows.length
-                  )
-                : "—"
-            }
-            hint="Average claim trust across this workspace leaderboard"
-          />
-        </div>
-
-        <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="text-2xl font-semibold">Claim Rankings</h2>
-          <div className="mt-2 text-sm text-slate-500">
-            Locked public claims belonging to workspace #{workspaceId}.
-          </div>
-
-          {claimRows.length === 0 ? (
-            <div className="mt-4 text-slate-600">No public claims found for this workspace.</div>
-          ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-slate-500">
-                    <th className="px-3 py-3">Rank</th>
-                    <th className="px-3 py-3">Claim</th>
-                    <th className="px-3 py-3">Period</th>
-                    <th className="px-3 py-3">Trades</th>
-                    <th className="px-3 py-3">Net PnL</th>
-                    <th className="px-3 py-3">Trust</th>
-                    <th className="px-3 py-3">Profit Factor</th>
-                    <th className="px-3 py-3">Win Rate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {claimRows.map((row, index) => (
-                    <tr key={`${row.claim_schema_id}-${row.claim_hash}`} className="border-b last:border-0">
-                      <td className="px-3 py-3 font-semibold tabular-nums">{index + 1}</td>
-                      <td className="px-3 py-3">
-                        <div className="font-medium text-slate-950">{row.name}</div>
-                        <div className="mt-1 text-xs text-slate-500">claim #{row.claim_schema_id}</div>
-                        <div className="mt-1 font-mono text-xs text-slate-500">{row.short_hash}</div>
-                      </td>
-                      <td className="px-3 py-3">
-                        {row.period_start} → {row.period_end}
-                      </td>
-                      <td className="px-3 py-3 tabular-nums">{row.trade_count}</td>
-                      <td className="px-3 py-3 tabular-nums font-semibold">
-                        {formatNumber(row.net_pnl)}
-                      </td>
-                      <td className="px-3 py-3 tabular-nums">{formatNumber(row.trust_score)}</td>
-                      <td className="px-3 py-3 tabular-nums">{formatNumber(row.profit_factor, 4)}</td>
-                      <td className="px-3 py-3 tabular-nums">{formatPercent(row.win_rate, 2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </main>
     </div>
   );
 }

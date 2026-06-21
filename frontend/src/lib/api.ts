@@ -467,6 +467,12 @@ export type InstitutionalDashboardResponse = {
   };
 
   trading_metrics: any;
+
+  executive: {
+    active_alerts: number;
+    integrity_health: string;
+    verification_coverage: number;
+  };
 };
 
 export type PlanBilling = {
@@ -1444,6 +1450,112 @@ export type VerificationAnalytics = {
   }[];
 };
 
+export type TrustScoresAnalytics = {
+  average_trust_score: number;
+  average_network_score: number;
+
+  claims_count: number;
+  locked_claims_count: number;
+  contested_claims_count: number;
+
+  total_net_pnl: number;
+
+  trust_profile_band: string;
+
+  workspace_id: number;
+  profile_id: string;
+
+  type: string;
+  network: string;
+};
+
+export type LeaderboardAnalytics = {
+  summary: {
+    claims: number;
+    members: number;
+  };
+
+  claim_rankings: any[];
+
+  member_rankings: any[];
+};
+
+export type DueDiligenceResponse = {
+  overview: {
+    claims: number;
+    published_claims: number;
+    locked_claims: number;
+    evidence_records: number;
+  };
+
+  trust: {
+    trust_score: number;
+    network_score: number;
+    trust_band: string;
+  };
+
+  verification: {
+    coverage: number;
+    verified_claims: number;
+  };
+
+  integrity: {
+    integrity_score: number;
+    compromised_claims: number;
+  };
+
+  risk: {
+    profit_factor: number;
+    win_rate: number;
+    max_drawdown: number;
+  };
+
+  assessment: {
+    grade: string;
+    status: string;
+  };
+};
+
+export async function getDueDiligence(
+  workspaceId: number
+): Promise<DueDiligenceResponse> {
+
+  return apiFetch<DueDiligenceResponse>(
+    `/workspace/${workspaceId}/due-diligence`
+  );
+}
+
+export type RiskAnalytics = {
+  overview: {
+    trades: number;
+    net_pnl: number;
+    wins: number;
+    losses: number;
+    win_rate: number;
+    profit_factor: number;
+    max_drawdown: number;
+  };
+
+  recent_claims: {
+    claim_schema_id: number;
+    name: string;
+    status: string;
+    trade_count: number;
+    net_pnl: number;
+    profit_factor: number;
+    max_drawdown: number;
+  }[];
+};
+
+export async function getRiskAnalytics(
+  workspaceId: number
+): Promise<RiskAnalytics> {
+
+  return apiFetch<RiskAnalytics>(
+    `/workspace/${workspaceId}/risk-analytics`
+  );
+}
+
 export class ApiError extends Error {
   status: number;
   payload: ApiErrorPayload | null;
@@ -1804,6 +1916,58 @@ export async function getAuditEvents(
 
 }
 
+export async function getTrustScores(
+  workspaceId: number
+): Promise<TrustScoresAnalytics> {
+
+  return apiFetch<TrustScoresAnalytics>(
+    `/workspaces/${workspaceId}/trust-scores`
+  );
+}
+
+export async function
+getLeaderboardAnalytics(
+  workspaceId: number
+): Promise<LeaderboardAnalytics> {
+
+  return apiFetch(
+    `/workspace/${workspaceId}/leaderboard-analytics`
+  );
+}
+
+export async function acknowledgeAlert(
+  alertId: number
+) {
+  return apiFetch(
+    `/api/integrity-alerts/${alertId}/acknowledge`,
+    {
+      method: "POST",
+    }
+  );
+}
+
+export async function investigateAlert(
+  alertId: number
+) {
+  return apiFetch(
+    `/api/integrity-alerts/${alertId}/investigate`,
+    {
+      method: "POST",
+    }
+  );
+}
+
+export async function resolveAlert(
+  alertId: number
+) {
+  return apiFetch(
+    `/api/integrity-alerts/${alertId}/resolve`,
+    {
+      method: "POST",
+    }
+  );
+}
+
 export const getInstitutionalDashboard =
   async (
     workspaceId: number
@@ -1820,6 +1984,193 @@ export const getInstitutionalDashboard =
       }
     );
   };
+
+export type DashboardSummary = {
+  trade_count: number;
+
+  member_count: number;
+
+  claim_count: number;
+
+  draft_claims: number;
+
+  verified_claims: number;
+
+  published_claims: number;
+
+  locked_claims: number;
+
+  active_alerts: number;
+};
+
+export type IntegrityDashboardResponse = {
+  integrity_score: number;
+
+  claims_scanned: number;
+
+  total_alerts: number;
+
+  open_findings: number;
+
+  resolved_findings: number;
+
+  severity: {
+    warning: number;
+    high: number;
+    critical: number;
+    fatal: number;
+  };
+
+  scanner_status: Record<
+    string,
+    {
+      status: string;
+      findings: number;
+    }
+  >;
+
+  alert_distribution: Record<
+    string,
+    number
+  >;
+
+  recent_findings: {
+    id: number;
+    severity: string;
+    type: string;
+    status: string;
+    message: string;
+    created_at: string;
+  }[];
+};
+
+export type IntegrityDashboard = {
+  integrity_score: number;
+
+  claims_scanned: number;
+
+  total_alerts: number;
+
+  healthy: boolean;
+
+  severity: {
+    warning: number;
+    high: number;
+    critical: number;
+    fatal: number;
+  };
+};
+
+export type IntegrityAlertFeedItem = {
+  id: number;
+
+  severity: string;
+
+  alert_type: string;
+
+  status: string;
+
+  message: string;
+
+  created_at: string | null;
+
+  acknowledged_at: string | null;
+
+  resolved_at: string | null;
+
+  acknowledged_by: string | null;
+
+  resolved_by: string | null;
+};
+
+export async function getIntegrityDashboard(
+  workspaceId: number
+): Promise<IntegrityDashboardResponse> {
+
+  return apiFetch(
+    `/integrity/dashboard/${workspaceId}`
+  );
+
+}
+
+export type DashboardExecutive = {
+  workspace: {
+    members: number;
+    trades: number;
+    claims: number;
+  };
+
+  integrity: {
+    alerts: number;
+  };
+};
+
+export async function getDashboardExecutive(
+  workspaceId: number
+): Promise<DashboardExecutive> {
+
+  return apiFetch(
+    `/dashboard-executive/${workspaceId}`
+  );
+
+}
+
+export type IntegrityScanHistoryItem = {
+  id: number;
+
+  status: string;
+
+  claims_scanned: number;
+
+  alerts_found: number;
+
+  started_at: string;
+
+  completed_at: string;
+};
+
+export async function getIntegrityScanHistory(
+  workspaceId: number
+): Promise<
+  IntegrityScanHistoryItem[]
+> {
+  return apiFetch(
+    `/integrity/history/${workspaceId}`
+  );
+}
+
+export async function getDashboardSummary(
+  workspaceId: number
+): Promise<DashboardSummary> {
+
+  return apiFetch(
+    `/dashboard-summary/${workspaceId}`
+  );
+
+}
+
+export async function getIntegrityAlertFeed(
+  workspaceId: number
+): Promise<IntegrityAlertFeedItem[]> {
+
+  return apiFetch(
+    `/integrity-alert-feed/${workspaceId}`
+  );
+
+}
+
+export async function runIntegrityScan(
+  workspaceId: number
+) {
+
+  return apiFetch(
+    `/integrity/scan/${workspaceId}`,
+    {
+      method: "POST",
+    }
+  );
+
+}
 
 export const getStrategyPerformance = async (
   workspaceId: number,
@@ -2886,6 +3237,34 @@ export const api = {
     );
   },
 
+  async getDashboardSummary(
+    workspaceId: number
+  ): Promise<DashboardSummary> {
+    return apiFetch<DashboardSummary>(
+      `/dashboard-summary/${workspaceId}`
+    );
+  },
+
+  async getIntegrityDashboard(
+    workspaceId: number
+  ): Promise<
+    IntegrityDashboardResponse
+  > {
+    return apiFetch(
+      `/integrity/dashboard/${workspaceId}`
+    );
+  },
+
+  async getIntegrityAlerts(
+    workspaceId: number
+  ): Promise<
+    IntegrityAlertFeedItem[]
+  > {
+    return apiFetch(
+      `/integrity-alert-feed/${workspaceId}`
+    );
+  },
+
   async getClaimTemplates(
     workspaceId: number
   ): Promise<ClaimTemplate[]> {
@@ -3547,7 +3926,7 @@ export const api = {
   ): Promise<PublicProfileResponse> => {
 
     const row = await apiFetch<any>(
-      `/public/profile/${workspaceId}`,
+      `/profiles/${workspaceId}`,
       {
         cache: "no-store",
       }

@@ -48,6 +48,41 @@ from app.services.claim_governance_service import (
     can_show_in_public_directory,
 )
 
+from app.services.integrity_service import (
+    verify_claim_integrity,
+)
+
+from app.models.integrity_scan import (
+    IntegrityScan,
+)
+
+from app.models.integrity_alert import (
+    IntegrityAlert,
+)
+
+from app.services.integrity_monitor_service import (
+    scan_locked_claims,
+)
+
+from app.services.claim_integrity_engine import (
+    resolve_schema_trades,
+    parse_period_start,
+    parse_period_end,
+    coerce_trade_opened_at,
+    compute_trade_set_hash,
+    compute_integrity_snapshot,
+)
+from app.services.integrity_score_service import (
+    calculate_integrity_score,
+    get_integrity_band,
+)
+from app.services.trade_metrics_service import (
+    compute_trade_metrics,
+    build_equity_curve,
+    compute_drawdown_stats,
+)
+
+
 router = APIRouter()
 
 EXCLUSION_REASON_OUTSIDE_PERIOD = "OUTSIDE_PERIOD"
@@ -271,82 +306,6 @@ def serialize_audit_event(event: AuditEvent):
     }
 
 
-def parse_period_start(date_str: str | None):
-    if not date_str:
-        return None
-    try:
-        return datetime.fromisoformat(date_str)
-    except Exception:
-        return None
-
-
-def parse_period_end(date_str: str | None):
-    if not date_str:
-        return None
-    try:
-        return datetime.fromisoformat(date_str)
-    except Exception:
-        return None
-
-
-def coerce_trade_opened_at(value):
-    if value is None:
-        return None
-
-    if isinstance(value, datetime):
-        return value
-
-    text = str(value).strip()
-    candidates = [
-        text,
-        text.replace("Z", "+00:00"),
-        text.replace(" ", "T"),
-    ]
-
-    for candidate in candidates:
-        try:
-            return datetime.fromisoformat(candidate)
-        except ValueError:
-            continue
-
-    return None
-
-
-def resolve_schema_trades(schema: ClaimSchema, db: Session):
-    included_members = json.loads(schema.included_member_ids_json or "[]")
-    included_symbols = [s.upper() for s in json.loads(schema.included_symbols_json or "[]")]
-    excluded_trade_ids = set(json.loads(schema.excluded_trade_ids_json or "[]"))
-
-    period_start = parse_period_start(schema.period_start)
-    period_end = parse_period_end(schema.period_end)
-
-    trades = db.query(Trade).filter(Trade.workspace_id == schema.workspace_id).all()
-
-    filtered = []
-    for trade in trades:
-        trade_dt = coerce_trade_opened_at(trade.opened_at)
-
-        if period_start is not None and (trade_dt is None or trade_dt < period_start):
-            continue
-
-        if period_end is not None and (trade_dt is None or trade_dt >= period_end):
-            continue
-
-        if included_members and trade.member_id not in included_members:
-            continue
-
-        symbol = (trade.symbol or "").upper()
-        if included_symbols and symbol not in included_symbols:
-            continue
-
-        if trade.id in excluded_trade_ids:
-            continue
-
-        filtered.append(trade)
-
-    return filtered
-
-
 def build_exclusion_reason_detail(
     reason: str,
     trade: Trade,
@@ -524,43 +483,6 @@ def resolve_schema_trade_scope(schema: ClaimSchema, db: Session):
     }
 
 
-def compute_trade_metrics(trades: list[Trade]):
-    trade_count = len(trades)
-    pnl_values = [t.net_pnl for t in trades if t.net_pnl is not None]
-
-    if not pnl_values:
-        return {
-            "trade_count": trade_count,
-            "net_pnl": 0.0,
-            "win_rate": 0.0,
-            "profit_factor": 0.0,
-            "best_trade": 0.0,
-            "worst_trade": 0.0,
-        }
-
-    wins = [x for x in pnl_values if x > 0]
-    losses = [x for x in pnl_values if x < 0]
-
-    gross_profit = sum(wins)
-    gross_loss_abs = abs(sum(losses))
-    net_pnl = sum(pnl_values)
-    win_rate = len(wins) / len(pnl_values) if pnl_values else 0.0
-
-    if gross_loss_abs == 0:
-        profit_factor = gross_profit if gross_profit > 0 else 0.0
-    else:
-        profit_factor = gross_profit / gross_loss_abs
-
-    return {
-        "trade_count": trade_count,
-        "net_pnl": round(net_pnl, 4),
-        "win_rate": round(win_rate, 4),
-        "profit_factor": round(profit_factor, 4),
-        "best_trade": round(max(pnl_values), 4),
-        "worst_trade": round(min(pnl_values), 4),
-    }
-
-
 def resolve_claim_dispute_context(schema: ClaimSchema, db: Session):
     disputes = (
         db.query(ClaimDispute)
@@ -695,49 +617,6 @@ def resolve_profile_trust_band(score: float):
     if score >= 55:
         return "developing"
     return "fragile"
-
-
-def build_equity_curve(trades: list[Trade]):
-    ordered = sorted(
-        trades,
-        key=lambda t: (
-            coerce_trade_opened_at(t.opened_at) or datetime.min,
-            t.id,
-        ),
-    )
-
-    cumulative = 0.0
-    points = []
-
-    for index, trade in enumerate(ordered, start=1):
-        pnl = float(trade.net_pnl) if trade.net_pnl is not None else 0.0
-        cumulative += pnl
-
-        opened_at_value = coerce_trade_opened_at(trade.opened_at)
-        opened_at_iso = (
-            opened_at_value.isoformat()
-            if isinstance(opened_at_value, datetime)
-            else str(trade.opened_at)
-        )
-
-        points.append(
-            {
-                "index": index,
-                "trade_id": trade.id,
-                "member_id": trade.member_id,
-                "symbol": trade.symbol,
-                "opened_at": opened_at_iso,
-                "net_pnl": round(pnl, 4),
-                "cumulative_pnl": round(cumulative, 4),
-            }
-        )
-
-    return {
-        "point_count": len(points),
-        "starting_equity": 0.0 if not points else points[0]["cumulative_pnl"],
-        "ending_equity": round(cumulative, 4),
-        "curve": points,
-    }
 
 
 def build_trade_evidence(trades: list[Trade]):
@@ -931,31 +810,6 @@ def build_leaderboard(trades: list[Trade]):
         row["rank"] = idx
 
     return leaderboard
-
-
-def compute_trade_set_hash(trades: list[Trade]) -> str:
-    normalized_rows = []
-
-    for t in sorted(trades, key=lambda x: x.id):
-        normalized_rows.append(
-            {
-                "id": t.id,
-                "workspace_id": t.workspace_id,
-                "member_id": t.member_id,
-                "symbol": t.symbol,
-                "side": t.side,
-                "opened_at": t.opened_at.isoformat() if isinstance(t.opened_at, datetime) else str(t.opened_at),
-                "entry_price": t.entry_price,
-                "quantity": t.quantity,
-                "net_pnl": t.net_pnl,
-                "currency": t.currency,
-                "strategy_tag": t.strategy_tag,
-                "source_system": t.source_system,
-            }
-        )
-
-    raw = json.dumps(normalized_rows, sort_keys=True)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def resolve_claim_integrity_status(schema: ClaimSchema, trades: list[Trade]) -> str:
@@ -1657,59 +1511,6 @@ def draw_hash_block(pdf: canvas.Canvas, x: float, y_top: float, width: float, la
         pdf.drawString(x + 10, current_y, line)
         current_y -= 10
     pdf.setFillColor(colors.black)
-
-
-def compute_drawdown_stats(points: list[dict]):
-    if not points:
-        return {
-            "max_drawdown": 0.0,
-            "peak_cumulative": 0.0,
-            "trough_cumulative": 0.0,
-            "peak_point": None,
-            "trough_point": None,
-            "drawdown_peak_point": None,
-            "drawdown_trough_point": None,
-            "has_drawdown": False,
-            "net_change": 0.0,
-            "peak_equals_trough": False,
-        }
-
-    peak_point = max(points, key=lambda p: float(p.get("cumulative_pnl", 0.0)))
-    trough_point = min(points, key=lambda p: float(p.get("cumulative_pnl", 0.0)))
-
-    running_peak = float("-inf")
-    max_drawdown = 0.0
-    drawdown_peak_point = None
-    drawdown_trough_point = None
-    current_peak_point = None
-
-    for point in points:
-        current = float(point.get("cumulative_pnl", 0.0))
-        if current > running_peak:
-            running_peak = current
-            current_peak_point = point
-
-        drawdown = running_peak - current
-        if drawdown > max_drawdown:
-            max_drawdown = drawdown
-            drawdown_peak_point = current_peak_point
-            drawdown_trough_point = point
-
-    start_value = float(points[0].get("cumulative_pnl", 0.0))
-    end_value = float(points[-1].get("cumulative_pnl", 0.0))
-
-    return {
-        "max_drawdown": round(max_drawdown, 4),
-        "peak_cumulative": round(float(peak_point.get("cumulative_pnl", 0.0)), 4),
-        "trough_cumulative": round(float(trough_point.get("cumulative_pnl", 0.0)), 4),
-        "peak_point": peak_point,
-        "trough_point": trough_point,
-        "drawdown_peak_point": drawdown_peak_point,
-        "drawdown_trough_point": drawdown_trough_point,
-        "has_drawdown": max_drawdown > 0,
-        "net_change": round(end_value - start_value, 4),
-        "peak_equals_trough": peak_point.get("index") == trough_point.get("index"),
-    }
 
 
 def draw_equity_curve_preview(
@@ -3848,6 +3649,38 @@ def lock_claim_schema(
 
     filtered_trades = resolve_schema_trades(schema, db)
 
+    integrity_result = verify_claim_integrity(
+        schema,
+        db,
+    )
+
+    if not integrity_result["valid"]:
+
+        alert = IntegrityAlert(
+            workspace_id=schema.workspace_id,
+            severity="critical",
+            alert_type="LOCK_BLOCKED",
+            entity_type="claim_schema",
+            entity_id=str(schema.id),
+            message=(
+                integrity_result.get(
+                    "message",
+                    "Integrity validation failed.",
+                )
+            ),
+        )
+
+        db.add(alert)
+        db.commit()
+
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Claim cannot be locked because "
+                "integrity validation failed."
+            ),
+        )
+
     # 🔒 Freeze the exact trade IDs used at lock time
     locked_trade_ids = [t.id for t in filtered_trades]
 
@@ -3862,7 +3695,18 @@ def lock_claim_schema(
     # CANONICAL LOCK GOVERNANCE
     # =========================================
 
-    schema.locked_trade_set_hash = compute_trade_set_hash(filtered_trades)
+    snapshot = compute_integrity_snapshot(
+        schema,
+        filtered_trades,
+    )
+
+    schema.locked_trade_set_hash = (
+        snapshot["trade_hash"]
+    )
+
+    schema.integrity_snapshot_json = (
+        json.dumps(snapshot)
+    )
 
     schema.locked_trade_ids_json = json.dumps(locked_trade_ids)
 
@@ -3877,6 +3721,15 @@ def lock_claim_schema(
 
     db.commit()
     db.refresh(schema)
+
+    from app.services.integrity_monitor_service import (
+        scan_locked_claims,
+    )
+
+    scan_locked_claims(
+        db,
+        schema.workspace_id,
+    )
 
     log_audit_event(
         db,
@@ -4513,4 +4366,890 @@ def get_verification_analytics(
 
         "recent_events":
             recent[:20],
+    }
+
+
+@router.get(
+    "/workspaces/{workspace_id}/trust-scores"
+)
+def get_trust_scores(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    profile = (
+        build_public_trust_profile_for_workspace(
+            workspace_id,
+            db,
+        )
+    )
+
+    return {
+        "average_trust_score":
+            profile["average_trust_score"],
+
+        "average_network_score":
+            profile["average_network_score"],
+
+        "claims_count":
+            profile["claims_count"],
+
+        "locked_claims_count":
+            profile["locked_claims_count"],
+
+        "contested_claims_count":
+            profile["contested_claims_count"],
+
+        "total_net_pnl":
+            profile["total_net_pnl"],
+
+        "trust_profile_band":
+            profile["trust_profile_band"],
+
+        "workspace_id":
+            profile["workspace_id"],
+
+        "profile_id":
+            profile["profile_id"],
+
+        "type":
+            profile["type"],
+
+        "network":
+            profile["network"],
+    }
+
+
+@router.get(
+    "/workspace/{workspace_id}/leaderboard-analytics"
+)
+def get_leaderboard_analytics(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    schemas = (
+        db.query(ClaimSchema)
+        .filter(
+            ClaimSchema.workspace_id
+            == workspace_id
+        )
+        .all()
+    )
+
+    claim_rankings = []
+    member_totals = {}
+
+    for schema in schemas:
+
+        trades = resolve_schema_trades(
+            schema,
+            db,
+        )
+
+        metrics = compute_trade_metrics(
+            trades
+        )
+
+        claim_rankings.append(
+            {
+                "claim_schema_id":
+                    schema.id,
+                "name":
+                    schema.name,
+                "status":
+                    schema.status,
+                "trade_count":
+                    metrics["trade_count"],
+                "net_pnl":
+                    metrics["net_pnl"],
+                "profit_factor":
+                    metrics["profit_factor"],
+                "win_rate":
+                    metrics["win_rate"],
+            }
+        )
+
+        leaderboard = build_leaderboard(
+            trades
+        )
+
+        for row in leaderboard:
+
+            member = row["member"]
+
+            if member not in member_totals:
+
+                member_totals[member] = {
+                    "member": member,
+                    "net_pnl": 0,
+                }
+
+            member_totals[member][
+                "net_pnl"
+            ] += row["net_pnl"]
+
+    claim_rankings.sort(
+        key=lambda x: x["net_pnl"],
+        reverse=True,
+    )
+
+    member_rankings = sorted(
+        member_totals.values(),
+        key=lambda x: x["net_pnl"],
+        reverse=True,
+    )
+
+    return {
+        "summary": {
+            "claims":
+                len(claim_rankings),
+            "members":
+                len(member_rankings),
+        },
+        "claim_rankings":
+            claim_rankings,
+        "member_rankings":
+            member_rankings,
+    }
+
+
+@router.get(
+    "/workspace/{workspace_id}/risk-analytics"
+)
+def get_risk_analytics(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    schemas = (
+        db.query(ClaimSchema)
+        .filter(
+            ClaimSchema.workspace_id
+            == workspace_id
+        )
+        .all()
+    )
+
+    total_trades = 0
+    total_net_pnl = 0
+
+    total_wins = 0
+    total_losses = 0
+
+    profit_factors = []
+    drawdowns = []
+
+    recent_claims = []
+
+    for schema in schemas:
+
+        trades = resolve_schema_trades(
+            schema,
+            db,
+        )
+
+        metrics = compute_trade_metrics(
+            trades
+        )
+
+        equity_curve = build_equity_curve(
+            trades
+        )
+
+        drawdown_stats = (
+            compute_drawdown_stats(
+                equity_curve["curve"]
+            )
+        )
+
+        total_trades += (
+            metrics["trade_count"]
+        )
+
+        total_net_pnl += (
+            metrics["net_pnl"]
+        )
+
+        profit_factors.append(
+            metrics["profit_factor"]
+        )
+
+        drawdowns.append(
+            drawdown_stats[
+                "max_drawdown"
+            ]
+        )
+
+        for trade in trades:
+
+            pnl = (
+                trade.net_pnl or 0
+            )
+
+            if pnl > 0:
+                total_wins += 1
+
+            elif pnl < 0:
+                total_losses += 1
+
+        recent_claims.append(
+            {
+                "claim_schema_id":
+                    schema.id,
+
+                "name":
+                    schema.name,
+
+                "status":
+                    schema.status,
+
+                "trade_count":
+                    metrics["trade_count"],
+
+                "net_pnl":
+                    metrics["net_pnl"],
+
+                "profit_factor":
+                    metrics[
+                        "profit_factor"
+                    ],
+
+                "max_drawdown":
+                    drawdown_stats[
+                        "max_drawdown"
+                    ],
+            }
+        )
+
+    recent_claims.sort(
+        key=lambda x:
+        x["net_pnl"],
+        reverse=True,
+    )
+
+    total_closed = (
+        total_wins +
+        total_losses
+    )
+
+    win_rate = (
+        round(
+            (
+                total_wins /
+                total_closed
+            ) * 100,
+            2,
+        )
+        if total_closed
+        else 0
+    )
+
+    average_pf = (
+        round(
+            sum(
+                profit_factors
+            )
+            /
+            len(
+                profit_factors
+            ),
+            2,
+        )
+        if profit_factors
+        else 0
+    )
+
+    max_drawdown = (
+        max(drawdowns)
+        if drawdowns
+        else 0
+    )
+
+    return {
+        "overview": {
+            "trades":
+                total_trades,
+
+            "net_pnl":
+                round(
+                    total_net_pnl,
+                    2,
+                ),
+
+            "wins":
+                total_wins,
+
+            "losses":
+                total_losses,
+
+            "win_rate":
+                win_rate,
+
+            "profit_factor":
+                average_pf,
+
+            "max_drawdown":
+                round(
+                    max_drawdown,
+                    2,
+                ),
+        },
+
+        "recent_claims":
+            recent_claims[:20],
+    }
+
+
+@router.get(
+    "/workspace/{workspace_id}/due-diligence"
+)
+def get_due_diligence(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(
+            Workspace.id == workspace_id
+        )
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    profile = (
+        build_public_trust_profile_for_workspace(
+            workspace_id,
+            db,
+        )
+    )
+
+    claims = (
+        db.query(ClaimSchema)
+        .filter(
+            ClaimSchema.workspace_id
+            == workspace_id
+        )
+        .all()
+    )
+
+    evidence_records = (
+        db.query(func.count(Trade.id))
+        .filter(
+            Trade.workspace_id
+            == workspace_id
+        )
+        .scalar()
+        or 0
+    )
+
+    published_claims = 0
+    locked_claims = 0
+    verified_claims = 0
+
+    max_profit_factor = 0.0
+    max_win_rate = 0.0
+    max_drawdown = 0.0
+
+    compromised_claims = 0
+
+    for schema in claims:
+
+        if schema.status == "published":
+            published_claims += 1
+
+        if schema.status == "locked":
+            locked_claims += 1
+
+        if schema.status in [
+            "verified",
+            "published",
+            "locked",
+        ]:
+            verified_claims += 1
+
+        trades = resolve_schema_trades(
+            schema,
+            db,
+        )
+
+        metrics = compute_trade_metrics(
+            trades
+        )
+
+        max_profit_factor = max(
+            max_profit_factor,
+            metrics["profit_factor"],
+        )
+
+        max_win_rate = max(
+            max_win_rate,
+            metrics["win_rate"],
+        )
+
+        curve = build_equity_curve(
+            trades
+        )
+
+        dd_stats = (
+            compute_drawdown_stats(
+                curve["curve"]
+            )
+        )
+
+        max_drawdown = max(
+            max_drawdown,
+            dd_stats["max_drawdown"],
+        )
+
+        if (
+            schema.status == "locked"
+            and schema.locked_trade_set_hash
+        ):
+            current_hash = (
+                compute_trade_set_hash(
+                    trades
+                )
+            )
+
+            if (
+                current_hash
+                != schema.locked_trade_set_hash
+            ):
+                compromised_claims += 1
+
+    claim_count = len(claims)
+
+    coverage = (
+        round(
+            (
+                verified_claims
+                / claim_count
+            )
+            * 100,
+            2,
+        )
+        if claim_count > 0
+        else 0
+    )
+
+    integrity_score = (
+        100
+        if compromised_claims == 0
+        else max(
+            0,
+            100
+            - (
+                compromised_claims
+                * 10
+            ),
+        )
+    )
+
+    trust_score = (
+        profile.get(
+            "average_trust_score",
+            0,
+        )
+    )
+
+    if trust_score >= 85:
+        grade = "A"
+
+    elif trust_score >= 70:
+        grade = "B"
+
+    elif trust_score >= 55:
+        grade = "C"
+
+    else:
+        grade = "D"
+
+    return {
+        "overview": {
+            "claims": claim_count,
+            "published_claims":
+                published_claims,
+            "locked_claims":
+                locked_claims,
+            "evidence_records":
+                evidence_records,
+        },
+
+        "trust": {
+            "trust_score":
+                profile.get(
+                    "average_trust_score",
+                    0,
+                ),
+
+            "network_score":
+                profile.get(
+                    "average_network_score",
+                    0,
+                ),
+
+            "trust_band":
+                profile.get(
+                    "trust_profile_band",
+                    "unknown",
+                ),
+        },
+
+        "verification": {
+            "coverage": coverage,
+
+            "verified_claims":
+                verified_claims,
+        },
+
+        "integrity": {
+            "integrity_score":
+                integrity_score,
+
+            "compromised_claims":
+                compromised_claims,
+        },
+
+        "risk": {
+            "profit_factor":
+                round(
+                    max_profit_factor,
+                    2,
+                ),
+
+            "win_rate":
+                round(
+                    max_win_rate,
+                    2,
+                ),
+
+            "max_drawdown":
+                round(
+                    max_drawdown,
+                    2,
+                ),
+        },
+
+        "assessment": {
+            "grade": grade,
+
+            "status":
+                profile.get(
+                    "trust_profile_band",
+                    "unknown",
+                ),
+        },
+    }
+
+
+@router.get(
+    "/workspace/{workspace_id}/integrity-alerts"
+)
+def get_integrity_alerts(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    scan_locked_claims(
+        db,
+        workspace_id,
+    )
+
+    alerts = (
+        db.query(
+            IntegrityAlert
+        )
+        .filter(
+            IntegrityAlert.workspace_id
+            == workspace_id
+        )
+        .order_by(
+            IntegrityAlert.id.desc()
+        )
+        .all()
+    )
+
+    return {
+        "critical":
+            len(
+                [
+                    a for a in alerts
+                    if a.severity
+                    == "critical"
+                ]
+            ),
+
+        "warning":
+            len(
+                [
+                    a for a in alerts
+                    if a.severity
+                    == "warning"
+                ]
+            ),
+
+        "alerts": [
+            {
+                "id": a.id,
+                "severity":
+                    a.severity,
+                "alert_type":
+                    a.alert_type,
+                "message":
+                    a.message,
+                "status":
+                    a.status,
+                "created_at":
+                    a.created_at,
+            }
+            for a in alerts
+        ],
+    }
+
+
+@router.post(
+    "/workspace/{workspace_id}/integrity-scan"
+)
+def run_integrity_scan(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    scanned_claims = (
+        db.query(ClaimSchema)
+        .filter(
+            ClaimSchema.workspace_id
+            == workspace_id
+        )
+        .count()
+    )
+
+    scan_locked_claims(
+        db,
+        workspace_id,
+    )
+
+    open_alerts = (
+        db.query(
+            IntegrityAlert
+        )
+        .filter(
+            IntegrityAlert.workspace_id
+            == workspace_id,
+
+            IntegrityAlert.status
+            == "open",
+        )
+        .all()
+    )
+
+    fatal = len([
+        a for a in open_alerts
+        if str(a.severity).upper()
+        == "FATAL"
+    ])
+
+    critical = len([
+        a for a in open_alerts
+        if str(a.severity).upper()
+        == "CRITICAL"
+    ])
+
+    high = len([
+        a for a in open_alerts
+        if str(a.severity).upper()
+        == "HIGH"
+    ])
+
+    warning = len([
+        a for a in open_alerts
+        if str(a.severity).upper()
+        == "WARNING"
+    ])
+
+    score = (
+        calculate_integrity_score(
+            open_alerts
+        )
+    )
+
+    band = (
+        get_integrity_band(
+            score
+        )
+    )
+
+    healthy = (
+        fatal == 0
+        and critical == 0
+        and high == 0
+    )
+
+    scan = IntegrityScan(
+        workspace_id=workspace_id,
+
+        status=band.lower(),
+
+        claims_scanned=scanned_claims,
+
+        alerts_found=len(
+            open_alerts
+        ),
+
+        summary_json=json.dumps({
+            "integrity_score": score,
+            "health_band": band,
+            "fatal": fatal,
+            "critical": critical,
+            "high": high,
+            "warning": warning,
+            "open_alerts": len(
+                open_alerts
+            ),
+        }),
+
+        completed_at=datetime.utcnow(),
+    )
+
+    db.add(scan)
+    db.commit()
+
+    return {
+        "workspace_id":
+            workspace_id,
+
+        "healthy":
+            healthy,
+
+        "integrity_score":
+            score,
+
+        "health_band":
+            band,
+
+        "open_alerts":
+            len(open_alerts),
+
+        "fatal":
+            fatal,
+
+        "critical":
+            critical,
+
+        "high":
+            high,
+
+        "warning":
+            warning,
+    }
+
+
+@router.get(
+    "/workspace/{workspace_id}/integrity-scan-history"
+)
+def get_integrity_scan_history(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    scans = (
+        db.query(
+            IntegrityScan
+        )
+        .filter(
+            IntegrityScan.workspace_id
+            == workspace_id
+        )
+        .order_by(
+            IntegrityScan.id.desc()
+        )
+        .limit(100)
+        .all()
+    )
+
+    history = []
+
+    for scan in scans:
+
+        try:
+            summary = json.loads(
+                scan.summary_json
+                or "{}"
+            )
+
+        except Exception:
+            summary = {}
+
+        history.append(
+            {
+                "id":
+                    scan.id,
+
+                "healthy":
+                    (
+                        summary.get(
+                            "health_band"
+                        )
+                        == "HEALTHY"
+                    ),
+
+                "status":
+                    scan.status,
+
+                "integrity_score":
+                    summary.get(
+                        "integrity_score",
+                        0,
+                    ),
+
+                "health_band":
+                    summary.get(
+                        "health_band",
+                        "UNKNOWN",
+                    ),
+
+                "open_alerts":
+                    summary.get(
+                        "open_alerts",
+                        0,
+                    ),
+
+                "fatal":
+                    summary.get(
+                        "fatal",
+                        0,
+                    ),
+
+                "critical":
+                    summary.get(
+                        "critical",
+                        0,
+                    ),
+
+                "high":
+                    summary.get(
+                        "high",
+                        0,
+                    ),
+
+                "warning":
+                    summary.get(
+                        "warning",
+                        0,
+                    ),
+
+                "claims_scanned":
+                    scan.claims_scanned,
+
+                "started_at":
+                    scan.started_at,
+
+                "completed_at":
+                    scan.completed_at,
+            }
+        )
+
+    return {
+        "history":
+            history
     }

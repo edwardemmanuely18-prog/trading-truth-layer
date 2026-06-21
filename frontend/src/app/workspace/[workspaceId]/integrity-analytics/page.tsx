@@ -7,7 +7,18 @@ import Navbar from "../../../../components/Navbar";
 
 import {
   IntegrityRecord,
+  IntegrityDashboardResponse,
+  IntegrityAlertFeedItem,
   getIntegrityRegistry,
+  getIntegrityDashboard,
+  getIntegrityAlertFeed,
+  acknowledgeAlert,
+  investigateAlert,
+  resolveAlert,
+  runIntegrityScan,
+  IntegrityScanHistoryItem,
+  getIntegrityScanHistory,
+  api,
 } from "../../../../lib/api";
 
 type Props = {
@@ -31,35 +42,131 @@ export default function Page(
   const [records, setRecords] =
     useState<IntegrityRecord[]>([]);
 
+  const [
+    dashboard,
+    setDashboard,
+  ] =
+    useState<
+      IntegrityDashboardResponse | null
+    >(null);
+
+  const [
+    alerts,
+    setAlerts,
+  ] = useState<
+    IntegrityAlertFeedItem[]
+  >([]);
+
+  const [
+    alertFilter,
+    setAlertFilter,
+  ] = useState("all");
+
+  const [
+    searchTerm,
+    setSearchTerm,
+  ] = useState("");
+
+  const [
+    severityFilter,
+    setSeverityFilter,
+  ] = useState("all");
+
+  const [
+    alertLimit,
+    setAlertLimit,
+  ] = useState(20);
+
+  const [
+    feedLimit,
+    setFeedLimit,
+  ] = useState(20);
+
+  const [
+    scanLimit,
+    setScanLimit,
+  ] = useState(20);
+
+  const [
+    scanHistory,
+    setScanHistory,
+  ] = useState<
+    IntegrityScanHistoryItem[]
+  >([]);
+
+  const [actionMessage, setActionMessage] =
+    useState("");
+
   const [loading, setLoading] =
     useState(true);
 
-  useEffect(() => {
+  const load = async () => {
 
-    async function load() {
+    try {
 
-      try {
+      const [
+        registry,
+        dashboardData,
+        alertFeed,
+        history,
+      ] = await Promise.all([
+        getIntegrityRegistry(
+          workspaceId
+        ),
+        getIntegrityDashboard(
+          workspaceId
+        ),
+        getIntegrityAlertFeed(
+          workspaceId
+        ),
+        getIntegrityScanHistory(
+          workspaceId
+        ),
+      ]);
 
-        const data =
-          await getIntegrityRegistry(
-            workspaceId
-          );
+      setRecords(registry);
 
-        setRecords(data);
+      setDashboard(
+        dashboardData
+      );
 
-      } catch (err) {
+      setAlerts(
+        alertFeed
+      );
 
-        console.error(err);
+      setScanHistory(
+        history
+      );
 
-      } finally {
+    } catch (err) {
 
-        setLoading(false);
+      console.error(err);
 
-      }
+    } finally {
+
+      setLoading(false);
 
     }
 
+  };
+
+  useEffect(() => {
+
     load();
+
+  }, [workspaceId]);
+
+  useEffect(() => {
+
+    const interval =
+      setInterval(() => {
+
+        load();
+
+      }, 30000);
+
+    return () =>
+      clearInterval(interval);
 
   }, [workspaceId]);
 
@@ -174,6 +281,37 @@ export default function Page(
         "verified"
     ).length;
 
+  const filteredAlerts =
+    alerts.filter(alert => {
+
+      const statusMatch =
+        alertFilter === "all" ||
+        alert.status === alertFilter;
+
+      const severityMatch =
+        severityFilter === "all" ||
+        alert.severity === severityFilter;
+
+      const searchMatch =
+        alert.alert_type
+          .toLowerCase()
+          .includes(
+            searchTerm.toLowerCase()
+          ) ||
+        alert.message
+          .toLowerCase()
+          .includes(
+            searchTerm.toLowerCase()
+          );
+
+      return (
+        statusMatch &&
+        severityMatch &&
+        searchMatch
+      );
+
+    });
+
   return (
     <div className="min-h-screen bg-slate-50">
 
@@ -191,6 +329,26 @@ export default function Page(
             Integrity Analytics
           </h1>
 
+          {
+            actionMessage && (
+              <div
+                className="
+                  mt-4
+                  rounded-lg
+                  border
+                  bg-blue-50
+                  border-blue-200
+                  px-4
+                  py-3
+                  text-sm
+                  text-blue-700
+                "
+              >
+                {actionMessage}
+              </div>
+            )
+          }
+
           <p className="mt-3 text-slate-600">
             Institutional integrity
             monitoring, evidence
@@ -201,104 +359,714 @@ export default function Page(
 
         </div>
 
-        <div className="mb-8 grid gap-4 md:grid-cols-5">
+        <div className="mb-8">
 
-          <MetricCard
-            title="Integrity Records"
-            value={totalRecords}
-          />
+          <div className="mb-4 text-xs uppercase tracking-widest text-slate-500">
+            Scanner Command Center
+          </div>
 
-          <MetricCard
-            title="Hash Protected"
-            value={hashProtected}
-          />
+          <div className="mt-4 mb-6 flex gap-3">
 
-          <MetricCard
-            title="Fingerprinted"
-            value={fingerprinted}
-          />
+            <button
+              onClick={() => {
 
-          <MetricCard
-            title="Coverage"
-            value={`${integrityCoverage}%`}
-          />
+                setActionMessage(
+                  "Integrity scan submitted."
+                );
 
-          <MetricCard
-            title="Integrity Health"
-            value={`${integrityHealth}%`}
-          />
+                runIntegrityScan(
+                  workspaceId
+                )
+                  .then(() => {
+
+                    setTimeout(
+                      () => load(),
+                      5000
+                    );
+
+                  })
+                  .catch(console.error);
+
+                setTimeout(() => {
+                  setActionMessage("");
+                }, 3000);
+
+              }}
+              className="
+                rounded-lg
+                border
+                px-4
+                py-2
+                font-medium
+                bg-white
+                hover:bg-slate-50
+              "
+            >
+              Run Integrity Scan
+            </button>
+
+          </div>
+
+          
+
+          <div className="grid gap-4 md:grid-cols-4">
+
+            {dashboard &&
+              Object.entries(
+                dashboard.scanner_status
+              ).map(
+                ([
+                  name,
+                  scanner,
+                ]) => (
+
+                  <div
+                    key={name}
+                    className="rounded-xl border bg-white p-5"
+                  >
+
+                    <div className="text-sm text-slate-500">
+                      {name}
+                    </div>
+
+                    <div
+                      className={`mt-2 text-xl font-bold ${
+                        scanner.status ===
+                        "healthy"
+                          ? "text-green-600"
+                          : "text-amber-600"
+                      }`}
+                    >
+                      {scanner.status}
+                    </div>
+
+                    <div className="mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-semibold">
+                      {scanner.findings} findings
+                    </div>
+
+                  </div>
+
+                )
+              )}
+
+          </div>
 
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="mb-8 grid gap-4 md:grid-cols-5">
 
-          <AnalyticsCard
-            title="Verification Distribution"
-            items={[
-              {
-                label: "Verified",
-                value: verifiedCount,
-              },
-              {
-                label: "Pending",
-                value: pendingCount,
-              },
-              {
-                label: "Unverified",
-                value: unverifiedCount,
-              },
-            ]}
+          <MetricCard
+            title="Integrity Score"
+            value={
+              dashboard?.integrity_score ?? 0
+            }
           />
 
-          <AnalyticsCard
-            title="Evidence Trust Distribution"
-            items={[
-              {
-                label: "Broker Verified",
-                value: brokerVerified,
-              },
-              {
-                label: "Broker Export",
-                value: exportEvidence,
-              },
-              {
-                label: "Manual Entry",
-                value: manualEvidence,
-              },
-            ]}
+          <MetricCard
+            title="Open Findings"
+            value={
+              dashboard?.open_findings ?? 0
+            }
           />
 
-          <AnalyticsCard
-            title="Protection Distribution"
-            items={[
-              {
-                label: "Dual Protected",
-                value: dualProtected,
-              },
-              {
-                label: "Hash Only",
-                value: hashOnly,
-              },
-              {
-                label: "Fingerprint Only",
-                value: fingerprintOnly,
-              },
-              {
-                label: "Unprotected",
-                value: unprotected,
-              },
-            ]}
+          <MetricCard
+            title="Resolved Findings"
+            value={
+              dashboard?.resolved_findings ?? 0
+            }
+          />
+
+          <MetricCard
+            title="Claims Scanned"
+            value={
+              dashboard?.claims_scanned ?? 0
+            }
+          />
+
+          <MetricCard
+            title="Total Alerts"
+            value={
+              dashboard?.total_alerts ?? 0
+            }
           />
 
         </div>
 
         <div className="mt-8 rounded-xl border bg-white overflow-hidden">
 
-          <div className="border-b px-6 py-4 font-semibold">
-            Integrity Monitoring Feed
+          <div className="mb-8 rounded-xl border bg-white">
+
+            <div className="mt-8 grid gap-4 md:grid-cols-4">
+
+              <MetricCard
+                title="Critical"
+                value={
+                  alerts.filter(
+                    a => a.severity === "CRITICAL"
+                  ).length
+                }
+              />
+
+              <MetricCard
+                title="High"
+                value={
+                  alerts.filter(
+                    a => a.severity === "HIGH"
+                  ).length
+                }
+              />
+
+              <MetricCard
+                title="Investigating"
+                value={
+                  alerts.filter(
+                    a =>
+                      a.status ===
+                      "investigating"
+                  ).length
+                }
+              />
+
+              <MetricCard
+                title="Resolved"
+                value={
+                  alerts.filter(
+                    a =>
+                      a.status ===
+                      "resolved"
+                  ).length
+                }
+              />
+
+            </div>
+
+            <div
+              className="
+                divide-y
+                max-h-[700px]
+                overflow-y-auto
+              "
+            >
+
+              {dashboard?.recent_findings.map(
+                finding => (
+
+                  <div
+                    key={finding.id}
+                    className="p-5"
+                  >
+
+                    <div className="font-semibold">
+                      {finding.type}
+                    </div>
+
+                    <div className="text-sm text-slate-600">
+                      {finding.message}
+                    </div>
+
+                    <div className="mt-2 text-xs text-slate-500">
+                      {finding.severity}
+                      {" • "}
+                      {finding.status}
+                    </div>
+
+                  </div>
+
+                )
+              )}
+
+            </div>
+
           </div>
 
-          <table className="w-full">
+          <div className="mb-8 rounded-xl border bg-white">
+
+            <div className="border-b px-6 py-4">
+
+              <h2 className="font-semibold">
+                Integrity Alert Operations Center
+              </h2>
+
+            </div>
+
+            <div
+              className="
+                flex
+                flex-wrap
+                items-center
+                gap-3
+                p-4
+                border-b
+              "
+            >
+
+              {[
+                "all",
+                "open",
+                "acknowledged",
+                "investigating",
+                "resolved",
+              ].map(filter => (
+
+                <button
+                  key={filter}
+                  onClick={() =>
+                    setAlertFilter(filter)
+                  }
+                  className="
+                    rounded-lg
+                    border
+                    px-3
+                    py-1
+                    text-sm
+                  "
+                >
+                  {filter}
+                </button>
+
+              ))}
+
+              <div className="flex-1 min-w-[300px]">
+
+                <input
+                  value={searchTerm}
+                  onChange={(e)=>
+                    setSearchTerm(
+                      e.target.value
+                    )
+                  }
+                  placeholder="
+                    Search by type,
+                    message,
+                    claim id...
+                  "
+                  className="
+                    w-full
+                    rounded-lg
+                    border
+                    px-4
+                    py-2
+                    text-sm
+                  "
+                />
+
+              </div>
+
+              <select
+                value={severityFilter}
+                onChange={(e) =>
+                  setSeverityFilter(
+                    e.target.value
+                  )
+                }
+                className="
+                  rounded-lg
+                  border
+                  px-3
+                  py-1
+                  text-sm
+                "
+              >
+                <option value="all">
+                  All Severity
+                </option>
+
+                <option value="WARNING">
+                  Warning
+                </option>
+
+                <option value="HIGH">
+                  High
+                </option>
+
+                <option value="CRITICAL">
+                  Critical
+                </option>
+
+              </select>
+
+            </div>
+
+            <div
+              className="
+                divide-y
+                max-h-[700px]
+                overflow-y-auto
+              "
+            >
+
+              {filteredAlerts
+                .slice(0, alertLimit)
+                .map(alert => (
+
+                <div
+                  key={alert.id}
+                  className="
+                    px-5
+                    py-3
+                  "
+                >
+
+                  <div className="
+                    grid
+                    lg:grid-cols-[2fr_1.4fr_1.5fr_1fr_0.8fr]
+                    gap-6
+                    items-center
+                  ">
+
+                    <div className="min-w-0">
+
+                      <div className="font-semibold">
+                        {alert.alert_type}
+                      </div>
+
+                      <div className="text-sm text-slate-600">
+                        {alert.message}
+                      </div>
+
+                    </div>
+
+                    <div className="
+                      flex
+                      gap-2
+                      whitespace-nowrap
+                    ">
+
+                      <button
+                        onClick={async () => {
+
+                          setActionMessage(
+                            "Acknowledging alert..."
+                          );
+
+                          await acknowledgeAlert(
+                            alert.id
+                          );
+
+                          await load();
+
+                          setActionMessage(
+                            "Alert acknowledged."
+                          );
+
+                          setTimeout(() => {
+                            setActionMessage("");
+                          }, 3000);
+
+                        }}
+                        className="
+                          rounded-lg
+                          border
+                          px-4
+                          py-2
+                          text-sm
+                          font-medium
+                          transition
+                          hover:bg-slate-50
+                        "
+                      >
+                        Acknowledge
+                      </button>
+
+                      <button
+                        onClick={async () => {
+
+                          setActionMessage(
+                            "Starting investigation..."
+                          );
+
+                          await investigateAlert(
+                            alert.id
+                          );
+
+                          await load();
+
+                          setActionMessage(
+                            "Investigation started."
+                          );
+
+                          setTimeout(() => {
+                            setActionMessage("");
+                          }, 3000);
+
+                        }}
+                        className="
+                          rounded-lg
+                          border
+                          px-4
+                          py-2
+                          text-sm
+                          font-medium
+                          transition
+                          hover:bg-slate-50
+                        "
+                      >
+                        Investigate
+                      </button>
+
+                      <button
+                        onClick={async () => {
+
+                          setActionMessage(
+                            "Resolving alert..."
+                          );
+
+                          await resolveAlert(
+                            alert.id
+                          );
+
+                          await load();
+
+                          setActionMessage(
+                            "Alert resolved."
+                          );
+
+                          setTimeout(() => {
+                            setActionMessage("");
+                          }, 3000);
+
+                        }}
+                        className="
+                          rounded-lg
+                          border
+                          px-4
+                          py-2
+                          text-sm
+                          font-medium
+                          transition
+                          hover:bg-slate-50
+                        "
+                      >
+                        Resolve
+                      </button>
+
+                    </div>
+
+                    <div className="
+                      text-xs
+                      text-slate-500
+                      space-y-1
+                    ">
+
+                      <div>
+                        Created:
+                        {" "}
+                        {alert.created_at || "-"}
+                      </div>
+
+                      <div>
+                        Acknowledged:
+                        {" "}
+                        {alert.acknowledged_at || "-"}
+                      </div>
+
+                      <div>
+                        Resolved:
+                        {" "}
+                        {alert.resolved_at || "-"}
+                      </div>
+
+                    </div>
+
+                    <div className="
+                      text-xs
+                      text-slate-500
+                      space-y-1
+                    ">
+
+                      <div>
+                        Owner:
+                        {" "}
+                        {alert.acknowledged_by || "-"}
+                      </div>
+
+                      <div>
+                        Resolver:
+                        {" "}
+                        {alert.resolved_by || "-"}
+                      </div>
+
+                    </div>
+
+                    <div className="
+                      flex
+                      flex-col
+                      gap-2
+                      items-end
+                    ">
+
+                      <div
+                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                          alert.severity === "HIGH"
+                            ? "bg-red-100 text-red-700"
+                            : alert.severity === "WARNING"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-slate-100 text-slate-700"
+                        }`}
+                      >
+                        {alert.severity}
+                      </div>
+
+                      <div
+                        className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                          alert.status === "resolved"
+                            ? "bg-green-100 text-green-700"
+                            : alert.status === "investigating"
+                            ? "bg-blue-100 text-blue-700"
+                            : alert.status === "acknowledged"
+                            ? "bg-purple-100 text-purple-700"
+                            : "bg-red-100 text-red-700"
+                        }`}
+                      >
+                        {alert.status}
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+              ))}
+
+            </div>
+
+            {filteredAlerts.length >
+              alertLimit && (
+
+              <div className="p-4">
+
+                <button
+                  onClick={() =>
+                    setAlertLimit(
+                      prev =>
+                        prev + 20
+                    )
+                  }
+                  className="
+                    rounded-lg
+                    border
+                    px-4
+                    py-2
+                  "
+                >
+                  Load More Alerts
+                </button>
+
+              </div>
+
+            )}
+
+          </div>
+
+          <div
+            className="
+              flex
+              items-center
+              justify-between
+              border-b
+              px-6
+              py-4
+            "
+          >
+
+            <div className="grid gap-6 md:grid-cols-3">
+
+              <AnalyticsCard
+                title="Verification Distribution"
+                items={[
+                  {
+                    label: "Verified",
+                    value: verifiedCount,
+                  },
+                  {
+                    label: "Pending",
+                    value: pendingCount,
+                  },
+                  {
+                    label: "Unverified",
+                    value: unverifiedCount,
+                  },
+                ]}
+              />
+
+              <AnalyticsCard
+                title="Evidence Trust Distribution"
+                items={[
+                  {
+                    label: "Broker Verified",
+                    value: brokerVerified,
+                  },
+                  {
+                    label: "Broker Export",
+                    value: exportEvidence,
+                  },
+                  {
+                    label: "Manual Entry",
+                    value: manualEvidence,
+                  },
+                ]}
+              />
+
+              <AnalyticsCard
+                title="Protection Distribution"
+                items={[
+                  {
+                    label: "Dual Protected",
+                    value: dualProtected,
+                  },
+                  {
+                    label: "Hash Only",
+                    value: hashOnly,
+                  },
+                  {
+                    label: "Fingerprint Only",
+                    value: fingerprintOnly,
+                  },
+                  {
+                    label: "Unprotected",
+                    value: unprotected,
+                  },
+                ]}
+              />
+
+            </div>
+
+            <div className="font-semibold">
+              Integrity Monitoring Feed
+            </div>
+
+            <div className="text-sm text-slate-500">
+
+              Showing
+
+              {" "}
+
+              {Math.min(
+                records.length,
+                20
+              )}
+
+              of
+
+              {" "}
+
+              {records.length}
+
+              trades
+
+            </div>
+
+          </div>
+
+          <div
+            className="
+              max-h-[700px]
+              overflow-y-auto
+            "
+          >
+
+            <table className="w-full">
 
             <thead className="bg-slate-100">
 
@@ -346,7 +1114,9 @@ export default function Page(
               )}
 
               {!loading &&
-                records.map(record => (
+                records
+                  .slice(0, feedLimit)
+                  .map(record => (
 
                   <tr
                     key={record.trade_id}
@@ -387,6 +1157,118 @@ export default function Page(
             </tbody>
 
           </table>
+          </div>
+
+          <div className="mb-8 rounded-xl border bg-white">
+
+            <div className="border-b px-6 py-4 font-semibold">
+              Scan History
+            </div>
+
+            <div
+              className="
+                max-h-[600px]
+                overflow-y-auto
+              "
+            >
+
+              <table className="w-full">
+
+              <thead className="bg-slate-100">
+
+                <tr>
+
+                  <th className="p-4 text-left">
+                    Scan ID
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Status
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Claims
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Alerts
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Started
+                  </th>
+
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                {scanHistory
+                  .slice(0, scanLimit)
+                  .map(scan => (
+
+                    <tr
+                      key={scan.id}
+                      className="border-t"
+                    >
+
+                      <td className="p-4">
+                        #{scan.id}
+                      </td>
+
+                      <td className="p-4">
+                        {scan.status}
+                      </td>
+
+                      <td className="p-4">
+                        {scan.claims_scanned}
+                      </td>
+
+                      <td className="p-4">
+                        {scan.alerts_found}
+                      </td>
+
+                      <td className="p-4">
+                        {new Date(
+                          scan.started_at
+                        ).toLocaleString()}
+                      </td>
+
+                    </tr>
+
+                  ))}
+
+              </tbody>
+
+            </table>
+            </div>
+
+            {scanHistory.length > scanLimit && (
+
+              <div className="p-4">
+
+                <button
+                  onClick={() =>
+                    setScanLimit(
+                      prev => prev + 20
+                    )
+                  }
+                  className="
+                    rounded-lg
+                    border
+                    px-4
+                    py-2
+                  "
+                >
+                  Load More Scans
+                </button>
+
+              </div>
+
+            )}
+
+          </div>
 
         </div>
 
