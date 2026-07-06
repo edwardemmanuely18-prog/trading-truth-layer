@@ -62,9 +62,13 @@ def get_workspace_trade_metrics(
         elif pnl < 0:
             losses += 1
 
+    decisive_trades = (
+        wins + losses
+    )
+
     win_rate = (
-        (wins / total) * 100
-        if total > 0
+        (wins / decisive_trades) * 100
+        if decisive_trades > 0
         else 0
     )
 
@@ -152,17 +156,69 @@ def get_workspace_trade_metrics(
         "profit_factor":
             metrics["profit_factor"],
 
+        "gross_profit":
+            metrics["gross_profit"],
+
+        "gross_loss":
+            metrics["gross_loss"],
+
+        "average_win":
+            metrics["average_win"],
+
+        "average_loss":
+            metrics["average_loss"],
+
+        "payoff_ratio":
+            metrics["payoff_ratio"],
+
         "expectancy":
             round(
-                (
-                    metrics["net_pnl"]
-                    / metrics["trade_count"]
-                )
-                if metrics["trade_count"]
-                else 0,
+                metrics["net_pnl"]
+                / metrics["trade_count"],
+                2,
+            )
+            if metrics["trade_count"]
+            else 0,
+
+        # DRAWDOWN
+
+        "max_drawdown":
+            round(
+                drawdown.get(
+                    "max_drawdown",
+                    0,
+                ),
                 2,
             ),
 
-        "max_drawdown":
-            drawdown["max_drawdown"],
+        "peak_to_trough_drawdown_units":
+            round(
+                drawdown.get(
+                    "max_drawdown",
+                    0,
+                ),
+                2,
+            ),
+
+        "drawdown_peak":
+            drawdown.get(
+                "peak_cumulative",
+                0,
+            ),
+
+        "drawdown_trough":
+            drawdown.get(
+                "trough_cumulative",
+                0,
+            ),
+
+        "has_drawdown":
+            drawdown.get(
+                "has_drawdown",
+                False,
+            ),
+
+        "decisive_trades": decisive_trades,
+        
+        "scratch_trades": total - decisive_trades,
             }

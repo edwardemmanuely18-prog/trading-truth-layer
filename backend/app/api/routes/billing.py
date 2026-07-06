@@ -296,12 +296,41 @@ def get_paddle_price_catalog() -> dict[str, str]:
 
 
 def get_public_plan_catalog() -> dict:
-    public_codes = get_public_plan_codes()
 
-    return {
-        code: PLAN_DEFAULTS[code]
-        for code in public_codes
-    }    
+    catalog = {}
+
+    for code in get_public_plan_codes():
+
+        defaults = PLAN_DEFAULTS[code]
+
+        catalog[code] = {
+
+            **defaults,
+
+            "monthly_price_usd": defaults["pricing"]["monthly"],
+
+            "annual_price_usd": defaults["pricing"]["annual"],
+
+            "commercial_services":
+                defaults.get(
+                    "commercial_services",
+                    [],
+                ),
+
+            "infrastructure":
+                defaults.get(
+                    "infrastructure",
+                    [],
+                ),
+
+            "capacity_summary":
+                defaults.get(
+                    "capacity_summary",
+                    {},
+                ),
+        }
+
+    return catalog
 
 
 def get_paddle_price_id(plan_code: str, billing_cycle: str) -> str | None:
@@ -785,7 +814,7 @@ def lemon_verify_signature(raw_body: bytes, signature: str | None) -> bool:
     return hmac.compare_digest(expected, signature)        
 
 
-@router.get("/workspaces/{workspace_id}/billing-foundation")
+@router.get("/foundation/{workspace_id}")
 def get_workspace_billing_foundation(
     workspace_id: int,
     checkout_session_id: str | None = None,
@@ -834,9 +863,20 @@ def get_workspace_billing_foundation(
 
     return {
         "workspace_id": workspace.id,
+
+        # ------------------------------------------------------------------
+        # Existing fields
+        # ------------------------------------------------------------------
         "plan_code": configured_plan_code,
         "plan_name": resolved_plan_code.title(),
         "effective_plan_code": effective_plan_code,
+
+        # ------------------------------------------------------------------
+        # Frontend compatibility aliases (Billing Console)
+        # ------------------------------------------------------------------
+        "public_plans": get_public_plan_catalog(),
+        "configured_plan": configured_plan_code,
+        "effective_plan": effective_plan_code,
         "billing_status": billing_status,
         "billing_status_is_paid": is_paid_billing_status(billing_status),
         "plan_mismatch": configured_plan_code != effective_plan_code,
@@ -850,6 +890,15 @@ def get_workspace_billing_foundation(
         "billing_provider": workspace.billing_provider,
         "active_billing_provider": active_provider,
         "billing_provider_label": provider_label,
+        # ------------------------------------------------------------------
+        # Frontend compatibility aliases
+        # ------------------------------------------------------------------
+        "provider_label": provider_label,
+        "environment": (
+            get_paddle_environment()
+            if active_provider == "paddle"
+            else "live"
+        ),
         "provider_customer_id": get_provider_customer_id(workspace, active_provider),
         "provider_subscription_id": get_provider_subscription_id(workspace, active_provider),
         "provider_environment": (
@@ -896,8 +945,22 @@ def get_workspace_billing_foundation(
         "manual_payment_details": manual_payment_details if manual_visible else None,
         "checkout_state": {
             "can_start_checkout": True,
+
+            # Frontend compatibility
+            "can_upgrade": True,
+
             "mode": checkout_mode,
-            "portal_available": bool(workspace.paddle_subscription_id or workspace.stripe_customer_id),
+
+            "portal_available": bool(
+                workspace.paddle_subscription_id
+                or workspace.stripe_customer_id
+            ),
+
+            # Frontend compatibility
+            "portal_enabled": bool(
+                workspace.paddle_subscription_id
+                or workspace.stripe_customer_id
+            ),
         },
     }
 
@@ -1327,15 +1390,26 @@ def create_billing_portal_session(
 
 
     if paddle_is_ready():
+
         return {
-            "mode": "paddle_portal_pending",
+
+            "mode": "paddle_support",
+
             "portal_url": None,
+
             "url": None,
+
             "workspace_id": workspace.id,
+
+            "provider": "Paddle",
+
+            "support_email": "support@tradingtruthlayer.com",
+
             "message": (
-                "Paddle checkout automation is active. Customer self-serve portal is not wired yet "
-                "in this build. Use support/admin workflow for subscription changes for now."
+                "Customer self-service portal is not enabled for this deployment. "
+                "Contact Trading Truth Layer Billing."
             ),
+
         }
 
     if stripe_is_ready():
@@ -1402,6 +1476,45 @@ def create_billing_portal_session(
         "url": None,
         "workspace_id": workspace.id,
         "message": "Billing portal foundation is ready, but no active portal flow is configured.",
+    }
+
+
+@router.get("/workspaces/{workspace_id}/invoice/latest")
+def get_latest_invoice(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    workspace, access_error = get_workspace_for_owner_access(
+        workspace_id,
+        db,
+        current_user,
+    )
+
+    if not workspace:
+
+        return {
+
+            "invoice_available": False,
+
+            "invoice_url": None,
+
+            "message": access_error,
+
+        }
+
+    return {
+
+        "invoice_available": False,
+
+        "invoice_url": None,
+
+        "provider": workspace.billing_provider,
+
+        "message":
+            "No invoice has been generated for this workspace yet.",
+
     }
 
 
@@ -1708,4 +1821,236 @@ def get_workspace_usage(
         "billing_status": snapshot["billing_status"],
         "usage": snapshot["usage"],
         "limits": snapshot["limits"],
+    }
+
+
+@router.get("/workspaces/{workspace_id}/diagnostics")
+def get_billing_diagnostics(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    return {
+        "provider_ready": True,
+        "checkout_ready": paddle_is_ready()
+            or stripe_is_ready()
+            or manual_billing_is_ready(),
+        "portal_ready": bool(
+            workspace.stripe_customer_id
+            or workspace.paddle_customer_id
+        ),
+        "webhookConfigured": bool(
+            getattr(settings, "PADDLE_WEBHOOK_SECRET", None)
+            or getattr(settings, "STRIPE_WEBHOOK_SECRET", None)
+        ),
+    }
+
+
+@router.get("/workspaces/{workspace_id}/commercial-summary")
+def get_commercial_summary(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    snapshot = build_entitlement_snapshot(
+        workspace_id=workspace.id,
+        db=db,
+    )
+
+    provider = get_active_billing_provider()
+
+    return {
+        "workspace_id": workspace.id,
+        "workspace_name": workspace.name,
+        "configured_plan": normalize_plan_code(workspace.plan_code),
+        "effective_plan": snapshot["plan_code"],
+        "billing_status": snapshot["billing_status"],
+        "provider": provider,
+        "provider_label": get_billing_provider_label(provider),
+        "environment": (
+            get_paddle_environment()
+            if provider == "paddle"
+            else "live"
+        ),
+        "renewal_date": (
+            workspace.subscription_current_period_end.isoformat()
+            if workspace.subscription_current_period_end
+            else None
+        ),
+        "workspace_health": (
+            "Healthy"
+            if snapshot["billing_status"] == "active"
+            else "Attention Required"
+        ),
+        "recommendation": (
+            "Workspace billing operating normally."
+            if snapshot["billing_status"] == "active"
+            else "Activate commercial subscription."
+        ),
+    }
+
+
+@router.get("/workspaces/{workspace_id}/commercial-services")
+def get_commercial_services(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    snapshot = build_entitlement_snapshot(
+        workspace_id=workspace.id,
+        db=db,
+    )
+
+    plan = snapshot["plan_code"]
+
+    catalog = PLAN_DEFAULTS.get(
+        plan,
+        PLAN_DEFAULTS["starter"],
+    )
+
+    return {
+        "workspace_id": workspace.id,
+        "plan": plan,
+        "commercial_services": catalog.get(
+            "commercial_services",
+            []
+        ),
+    }
+
+
+@router.get("/workspaces/{workspace_id}/commercial-capabilities")
+def get_commercial_capabilities(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    snapshot = build_entitlement_snapshot(
+        workspace_id=workspace.id,
+        db=db,
+    )
+
+    limits = snapshot["limits"]
+
+    return {
+        "claims": limits["claims"] > 0,
+        "members": limits["members"] > 1,
+        "broker_sync": snapshot["plan_code"] in [
+            "pro",
+            "growth",
+            "business",
+        ],
+        "verification": True,
+        "audit": True,
+        "governance": True,
+        "public_profiles": snapshot["plan_code"] != "sandbox",
+        "automation": snapshot["plan_code"] in [
+            "growth",
+            "business",
+        ],
+        "api_access": snapshot["plan_code"] in [
+            "growth",
+            "business",
+        ],
+    }
+
+
+@router.get("/workspaces/{workspace_id}/commercial-actions")
+def get_commercial_actions(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    return {
+        "can_upgrade": True,
+        "can_downgrade": normalize_plan_code(
+            workspace.plan_code
+        ) != "sandbox",
+        "can_cancel": bool(
+            workspace.stripe_subscription_id
+            or workspace.paddle_subscription_id
+        ),
+        "can_open_portal": bool(
+            workspace.stripe_customer_id
+            or workspace.paddle_customer_id
+        ),
+        "can_contact_support": True,
+    }
+
+
+@router.get("/workspaces/{workspace_id}/invoice-history")
+def get_invoice_history(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    return {
+        "workspace_id": workspace.id,
+        "provider": workspace.billing_provider,
+        "invoices": [],
     }

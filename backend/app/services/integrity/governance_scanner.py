@@ -2,6 +2,7 @@ from app.models.claim_schema import ClaimSchema
 
 from app.services.integrity.common import (
     create_alert,
+    resolve_alert,
     SEVERITY_CRITICAL,
 )
 
@@ -34,6 +35,13 @@ def scan_governance_integrity(
                 entity_id=schema.id,
                 message=f"Claim {schema.id} missing canonical hash.",
             )
+        else:
+            resolve_alert(
+                db,
+                "CANONICAL_HASH_MISSING",
+                "claim_schema",
+                schema.id,
+            )
 
         if (
             schema.status == "locked"
@@ -47,6 +55,13 @@ def scan_governance_integrity(
                 entity_type="claim_schema",
                 entity_id=schema.id,
                 message=f"Claim {schema.id} missing locked trade hash.",
+            )
+        else:
+            resolve_alert(
+                db,
+                "LOCK_HASH_MISSING",
+                "claim_schema",
+                schema.id,
             )
 
         if (
@@ -65,4 +80,11 @@ def scan_governance_integrity(
                 entity_type="claim_schema",
                 entity_id=schema.id,
                 message=f"Claim {schema.id} missing integrity snapshot.",
+            )
+        else:
+            resolve_alert(
+                db,
+                "INTEGRITY_SNAPSHOT_MISSING",
+                "claim_schema",
+                schema.id,
             )

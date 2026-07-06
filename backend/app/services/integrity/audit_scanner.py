@@ -3,10 +3,12 @@ from app.models.audit_event import AuditEvent
 
 from app.services.integrity.common import (
     create_alert,
+    resolve_alert,
     SEVERITY_WARNING,
     SEVERITY_HIGH,
     SEVERITY_CRITICAL,
 )
+
 
 
 def scan_audit_integrity(
@@ -57,9 +59,27 @@ def scan_audit_integrity(
 
             continue
 
+        else:
+
+            resolve_alert(
+                db,
+                "AUDIT_TRAIL_MISSING",
+                "claim_schema",
+                schema.id,
+            )
+
         # ====================================
         # VERIFY EVENT
         # ====================================
+
+        has_verify_event = any(
+            (
+                "verify" in str(e.event_type).lower()
+                or
+                "verified" in str(e.event_type).lower()
+            )
+            for e in events
+        )
 
         if (
             schema.status in [
@@ -67,13 +87,7 @@ def scan_audit_integrity(
                 "published",
                 "locked",
             ]
-            and not any(
-                "verify"
-                in str(
-                    e.event_type
-                ).lower()
-                for e in events
-            )
+            and not has_verify_event
         ):
             create_alert(
                 db=db,
@@ -85,22 +99,34 @@ def scan_audit_integrity(
                 message=f"Claim {schema.id} missing verify audit event.",
             )
 
+        else:
+
+            resolve_alert(
+                db,
+                "VERIFY_AUDIT_MISSING",
+                "claim_schema",
+                schema.id,
+            )
+
         # ====================================
         # PUBLISH EVENT
         # ====================================
+
+        has_publish_event = any(
+            (
+                "publish" in str(e.event_type).lower()
+                or
+                "published" in str(e.event_type).lower()
+            )
+            for e in events
+        )
 
         if (
             schema.status in [
                 "published",
                 "locked",
             ]
-            and not any(
-                "publish"
-                in str(
-                    e.event_type
-                ).lower()
-                for e in events
-            )
+            and not has_publish_event
         ):
             create_alert(
                 db=db,
@@ -112,19 +138,31 @@ def scan_audit_integrity(
                 message=f"Claim {schema.id} missing publish audit event.",
             )
 
+        else:
+
+            resolve_alert(
+                db,
+                "PUBLISH_AUDIT_MISSING",
+                "claim_schema",
+                schema.id,
+            )
+
         # ====================================
         # LOCK EVENT
         # ====================================
 
+        has_lock_event = any(
+            (
+                "lock" in str(e.event_type).lower()
+                or
+                "locked" in str(e.event_type).lower()
+            )
+            for e in events
+        )
+
         if (
             schema.status == "locked"
-            and not any(
-                "lock"
-                in str(
-                    e.event_type
-                ).lower()
-                for e in events
-            )
+            and not has_lock_event
         ):
             create_alert(
                 db=db,
@@ -136,13 +174,39 @@ def scan_audit_integrity(
                 message=f"Claim {schema.id} missing lock audit event.",
             )
 
+        else:
+
+            resolve_alert(
+                db,
+                "LOCK_AUDIT_MISSING",
+                "claim_schema",
+                schema.id,
+            )
+
         # ====================================
         # ACTOR CHECK
         # ====================================
 
         for event in events:
 
-            if not event.actor_id:
+            #
+            # Actor attribution is optional for
+            # legacy and system-generated events.
+            #
+
+            requires_actor = (
+                event.event_type
+                in [
+                    "login_success",
+                    "login_failed",
+                    "workspace_membership_role_updated",
+                ]
+            )
+
+            if (
+                requires_actor
+                and not event.actor_id
+            ):
 
                 create_alert(
                     db=db,
@@ -152,6 +216,15 @@ def scan_audit_integrity(
                     entity_type="audit_event",
                     entity_id=event.id,
                     message=f"Audit event {event.id} missing actor.",
+                )
+
+            else:
+
+                resolve_alert(
+                    db,
+                    "AUDIT_ACTOR_MISSING",
+                    "audit_event",
+                    event.id,
                 )
 
             if not event.created_at:
@@ -166,10 +239,20 @@ def scan_audit_integrity(
                     message=f"Audit event {event.id} missing timestamp.",
                 )
 
+            else:
+
+                resolve_alert(
+                    db,
+                    "AUDIT_TIMESTAMP_INVALID",
+                    "audit_event",
+                    event.id,
+                )
+
             if (
                 not event.old_state
                 and not event.new_state
             ):
+
                 create_alert(
                     db=db,
                     workspace_id=workspace_id,
@@ -178,4 +261,13 @@ def scan_audit_integrity(
                     entity_type="audit_event",
                     entity_id=event.id,
                     message=f"Audit event {event.id} missing state.",
+                )
+
+            else:
+
+                resolve_alert(
+                    db,
+                    "AUDIT_STATE_MISSING",
+                    "audit_event",
+                    event.id,
                 )

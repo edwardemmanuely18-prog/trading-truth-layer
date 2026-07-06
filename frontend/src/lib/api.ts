@@ -523,6 +523,21 @@ export type WorkspaceSettings = {
     member_limit: number;
     storage_limit_mb: number;
   };
+  preferences?: {
+
+      timezone: string;
+
+      language: string;
+
+      currency: string;
+
+      date_format: string;
+
+      auto_refresh: boolean;
+
+      auto_save: boolean;
+
+  };
   plan_detail?: WorkspacePlanDetail;
   effective_plan_code: string;
   effective_plan_detail?: PlanDetail;
@@ -546,9 +561,25 @@ export type WorkspaceSettings = {
 };
 
 export type WorkspaceSettingsUpdatePayload = {
-  name: string;
-  description?: string | null;
-  billing_email?: string | null;
+
+    name: string;
+
+    description?: string | null;
+
+    billing_email?: string | null;
+
+    timezone: string;
+
+    language: string;
+
+    currency: string;
+
+    date_format: string;
+
+    auto_refresh: boolean;
+
+    auto_save: boolean;
+
 };
 
 export type UsageDimension = {
@@ -684,15 +715,41 @@ export type WorkspaceUsageSummary = {
 };
 
 export type BillingDiagnostics = {
-  stripe_package_installed?: boolean;
-  stripe_billing_enabled?: boolean;
-  billing_enabled?: boolean;
-  secret_key_configured?: boolean;
-  price_lookup_key?: string;
-  paddle_enabled?: boolean;
-  api_key_configured?: boolean;
-  paddle_price_id?: string;
-  manual_billing_enabled?: boolean;
+    stripe_package_installed?: boolean;
+    stripe_billing_enabled?: boolean;
+    billing_enabled?: boolean;
+    secret_key_configured?: boolean;
+
+    paddle_enabled?: boolean;
+    api_key_configured?: boolean;
+    paddle_price_id?: string;
+
+    manual_billing_enabled?: boolean;
+
+    price_lookup_key?: string;
+
+    provider_ready?: boolean;
+
+    checkout_ready?: boolean;
+
+    portal_ready?: boolean;
+
+    webhookConfigured?: boolean;
+
+    enabled_features?: Record<string, boolean>;
+
+    available_plans?: {
+        code: string;
+        name: string;
+        description: string;
+        pricing: {
+            monthly: number;
+            annual: number;
+        };
+        recommended_for: string[];
+        commercial_services: string[];
+        features: Record<string, boolean>;
+    }[];
 };
 
 export type ManualPaymentDetails = {
@@ -727,12 +784,38 @@ export type BillingCheckoutResponse = {
 
 export type BillingPortalResponse = {
   workspace_id: number;
+
   mode?: string;
+
+  provider?: string;
+
   url?: string | null;
+
   portal_url?: string | null;
-  message?: string | null;
+
+  support_email?: string;
+
+  message?: string |null;
+
   created_at?: string | null;
+
   manual_payment_details?: ManualPaymentDetails;
+};
+
+export type BillingInvoiceResponse = {
+
+    invoice_available: boolean;
+
+    invoice_url: string | null;
+
+    provider?: string;
+
+    invoice_number?: string;
+
+    issued_at?: string;
+
+    message?: string;
+
 };
 
 export type WorkspaceBillingFoundation = {
@@ -786,7 +869,7 @@ export type WorkspaceBillingFoundation = {
     payment_method?: string | null;
   };
   manual_payment_details?: ManualPaymentDetails;
-  public_plans?: PlanCatalogItem[];
+  public_plans?: Record<string, any>;
   checkout_state: {
     can_start_checkout: boolean;
     mode: string;
@@ -1392,6 +1475,169 @@ export type PublicTrustProfile = {
   trust_profile_band: string;
 };
 
+/* ===========================================================
+   TVS CANONICAL VERIFICATION CERTIFICATE
+   =========================================================== */
+
+export type VerificationTier =
+    | "tier_1"
+    | "tier_2"
+    | "tier_3";
+
+export type VerificationCertificateIdentity = {
+
+    claim_id: number;
+
+    workspace_id: number;
+
+    claim_hash: string;
+
+    verify_path: string;
+
+    public_view_path: string;
+
+    exposure_level: VerificationExposureLevel;
+
+};
+
+export type VerificationCertificateIssuer = {
+
+    id?: number;
+
+    name: string;
+
+    type: string;
+
+    network: string;
+
+};
+
+export type VerificationCertificateVerification = {
+
+    status: string;
+
+    visibility: string;
+
+    canonical: boolean;
+
+    portable: boolean;
+
+    api_addressable: boolean;
+
+};
+
+export type VerificationCertificateLifecycle = {
+
+    verified_at?: string | null;
+
+    published_at?: string |null;
+
+    locked_at?: string | null;
+
+};
+
+export type VerificationCertificateLineage = {
+
+    version_number?: number | null;
+
+    parent_claim_id?: number | null;
+
+    root_claim_id?: number | null;
+
+};
+
+export type VerificationCertificateIntegrity = {
+
+    status: string;
+
+    valid: boolean;
+
+    stored_trade_set_hash?: string | null;
+
+    recomputed_trade_set_hash?: string | null;
+
+};
+
+export type VerificationCertificateScope = {
+
+    period_start?: string | null;
+
+    period_end?: string | null;
+
+    included_trade_count: number;
+
+    excluded_trade_count: number;
+
+    included_member_ids: number[];
+
+    included_symbols: string[];
+
+};
+
+export type VerificationCertificatePerformance = {
+
+    trade_count: number;
+
+    net_pnl: number;
+
+    profit_factor: number;
+
+    win_rate: number;
+
+};
+
+export type VerificationCertificateTrust = {
+
+    score: number;
+
+    band: string;
+
+    tier: VerificationTier;
+
+};
+
+export type VerificationCertificateEvidence = {
+
+    primary_tier: VerificationTier;
+
+    primary_source: string;
+
+    trade_set_hash?: string | null;
+
+};
+
+export type VerificationCertificate = {
+
+    payload_version: string;
+
+    identity: VerificationCertificateIdentity;
+
+    issuer: VerificationCertificateIssuer;
+
+    verification: VerificationCertificateVerification;
+
+    lifecycle: VerificationCertificateLifecycle;
+
+    lineage: VerificationCertificateLineage;
+
+    integrity: VerificationCertificateIntegrity;
+
+    scope: VerificationCertificateScope;
+
+    performance: VerificationCertificatePerformance;
+
+    trust: VerificationCertificateTrust;
+
+    evidence: VerificationCertificateEvidence;
+
+    leaderboard?: PublicClaim["leaderboard"];
+
+    profile?: PublicTrustProfile | null;
+
+    equity_curve?: ClaimEquityCurve;
+
+};
+
 export type PublicProfileResponse = {
   profile: PublicTrustProfile;
   claims: PublicClaimDirectoryItem[];
@@ -1412,43 +1658,162 @@ export type ApiErrorPayload = {
 };
 
 export type VerificationAnalytics = {
-  total_claims: number;
 
-  draft_claims: number;
-  verified_claims: number;
-  published_claims: number;
-  locked_claims: number;
+    executive: {
 
-  verification_coverage_pct: number;
-  publication_coverage_pct: number;
-  lock_coverage_pct: number;
+        workspace_trust_score: number;
 
-  visibility_distribution: {
-    private: number;
-    unlisted: number;
-    public: number;
-  };
+        allocator_ready: boolean;
 
-  lifecycle_distribution: {
-    draft: number;
-    verified: number;
-    published: number;
-    locked: number;
-  };
+        network_health: string;
 
-  claims: {
-    id: number;
-    name: string;
-    status: string;
-    visibility: string;
+        verification_band: string;
 
-    verified_at?: string | null;
-    published_at?: string | null;
-    locked_at?: string | null;
+    };
 
-    claim_hash?: string | null;
-  }[];
+    coverage: {
+
+        verification: number;
+
+        publication: number;
+
+        lock: number;
+
+    };
+
+    lifecycle: {
+
+        draft: number;
+
+        verified: number;
+
+        published: number;
+
+        locked: number;
+
+    };
+
+    visibility: {
+
+        private?: number;
+
+        unlisted?: number;
+
+        public?: number;
+
+    };
+
+    broker_network: {
+
+        total_accounts: number;
+
+        verified: number;
+
+        live: number;
+
+        providers: string[];
+
+    };
+
+    integrity: {
+
+        total_alerts: number;
+
+        critical: number;
+
+        resolved: number;
+
+    };
+
+    claims: {
+
+        id: number;
+
+        name: string;
+
+        status: string;
+
+        visibility: string;
+
+        network_state: string;
+
+        claim_hash?: string | null;
+
+        verified_at?: string | null;
+
+        published_at?: string | null;
+
+        locked_at?: string | null;
+
+    }[];
+
 };
+
+export type ExternalReview = {
+  id: number;
+
+  claim_schema_id: number;
+
+  reviewer_name: string;
+
+  reviewer_organization?: string | null;
+
+  reviewer_role: string;
+
+  observation_type: string;
+
+  statement: string;
+
+  rating?: number | null;
+
+  review_direction: string;
+
+  status: string;
+
+  created_at?: string | null;
+};
+
+export type ExternalReviewResponse = {
+  count: number;
+  reviews: ExternalReview[];
+};
+
+export type ExternalReviewAnalytics = {
+  total_reviews: number;
+
+  roles: Record<string, number>;
+
+  observation_types: Record<string, number>;
+};
+
+export type CreateReviewPayload = {
+  claim_schema_id: number;
+
+  reviewer_name: string;
+
+  reviewer_organization?: string;
+
+  reviewer_role: string;
+
+  observation_type: string;
+
+  statement: string;
+
+  review_finding?: string;
+};
+
+export async function createExternalReview(
+  workspaceId: number,
+  payload: CreateReviewPayload
+) {
+  return apiFetch(
+    `/external-reviews/workspace/${workspaceId}`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
+}
 
 export type TrustScoresAnalytics = {
   average_trust_score: number;
@@ -1469,6 +1834,28 @@ export type TrustScoresAnalytics = {
   network: string;
 };
 
+export type TrustScore = {
+  claim_id: number;
+
+  claim_name: string;
+
+  status: string;
+
+  trust_score: number;
+
+  review_count: number;
+
+  average_rating: number;
+
+  tier: string;
+};
+
+export type TrustScoreResponse = {
+  count: number;
+
+  scores: TrustScore[];
+};
+
 export type LeaderboardAnalytics = {
   summary: {
     claims: number;
@@ -1479,51 +1866,6 @@ export type LeaderboardAnalytics = {
 
   member_rankings: any[];
 };
-
-export type DueDiligenceResponse = {
-  overview: {
-    claims: number;
-    published_claims: number;
-    locked_claims: number;
-    evidence_records: number;
-  };
-
-  trust: {
-    trust_score: number;
-    network_score: number;
-    trust_band: string;
-  };
-
-  verification: {
-    coverage: number;
-    verified_claims: number;
-  };
-
-  integrity: {
-    integrity_score: number;
-    compromised_claims: number;
-  };
-
-  risk: {
-    profit_factor: number;
-    win_rate: number;
-    max_drawdown: number;
-  };
-
-  assessment: {
-    grade: string;
-    status: string;
-  };
-};
-
-export async function getDueDiligence(
-  workspaceId: number
-): Promise<DueDiligenceResponse> {
-
-  return apiFetch<DueDiligenceResponse>(
-    `/workspace/${workspaceId}/due-diligence`
-  );
-}
 
 export type RiskAnalytics = {
   overview: {
@@ -1898,6 +2240,26 @@ export async function getVerificationAnalytics(
 
 }
 
+export async function getExternalReviews(
+  workspaceId: number
+): Promise<ExternalReviewResponse> {
+
+  return apiFetch<ExternalReviewResponse>(
+    `/external-reviews/workspace/${workspaceId}`
+  );
+
+}
+
+export async function getExternalReviewAnalytics(
+  workspaceId: number
+): Promise<ExternalReviewAnalytics> {
+
+  return apiFetch<ExternalReviewAnalytics>(
+    `/external-reviews/workspace/${workspaceId}/analytics`
+  );
+
+}
+
 export async function getEvidenceRecords(
   workspaceId: number
 ): Promise<EvidenceRecord[]> {
@@ -1918,11 +2280,82 @@ export async function getAuditEvents(
 
 export async function getTrustScores(
   workspaceId: number
-): Promise<TrustScoresAnalytics> {
+): Promise<TrustScoreResponse> {
 
-  return apiFetch<TrustScoresAnalytics>(
-    `/workspaces/${workspaceId}/trust-scores`
+  return apiFetch<TrustScoreResponse>(
+    `/trust-scores/workspace/${workspaceId}`
   );
+}
+
+import type {
+
+    EvidenceGraphNode,
+
+    EvidenceGraphEdge,
+
+    EvidenceGraphResponse,
+
+} from "./evidence-graph/types";
+
+export async function getEvidenceGraph(
+    workspaceId:number,
+    claimId?:number,
+): Promise<EvidenceGraphResponse> {
+
+  if (claimId) {
+
+      return apiFetch<EvidenceGraphResponse>(
+          `/evidence-graph/claim/${claimId}`
+      );
+
+  }
+
+  return apiFetch<EvidenceGraphResponse>(
+      `/evidence-graph/workspace/${workspaceId}`
+  );
+
+}
+
+export async function getCriticalPath(
+
+    claimId:number,
+
+){
+
+    return apiFetch(
+
+        `/evidence-graph/claim/${claimId}/critical-path`
+
+    );
+
+}
+
+export async function getRiskGraph(
+
+    claimId:number,
+
+){
+
+    return apiFetch(
+
+        `/evidence-graph/claim/${claimId}/risk`
+
+    );
+
+}
+
+export async function getFullGraph(
+
+    claimId:number,
+
+){
+
+    return apiFetch(
+
+        `/evidence-graph/claim/${claimId}/full`
+
+    );
+
 }
 
 export async function
@@ -2139,6 +2572,167 @@ export async function getIntegrityScanHistory(
   );
 }
 
+export interface EvidenceAnalyticsResponse {
+  overview: {
+    records: number;
+    coverage: number;
+    reliability: number;
+    protection: number;
+    quality_score: number;
+    quality_band: string;
+  };
+
+  verification: {
+    broker_verified: number;
+    verified: number;
+    self_reported: number;
+  };
+
+  tiers: {
+    tier_1: number;
+    tier_2: number;
+    tier_3: number;
+  };
+
+  protection: {
+    fingerprinted: number;
+    hash_protected: number;
+    unprotected: number;
+  };
+
+  feed: {
+    trade_id: number;
+    symbol: string;
+    verification_state: string;
+    trust_tier: string;
+    integrity_type: string;
+  }[];
+
+  exceptions: {
+    trade_id: number;
+    symbol: string;
+    issues: string[];
+  }[];
+
+  quality: {
+
+    verification_quality: number;
+
+    protection_quality: number;
+
+    completeness_quality: number;
+
+    import_quality: number;
+
+    score: number;
+
+    band: string;
+  };
+}
+
+export interface DueDiligenceResponse {
+
+  overview: {
+    claims: number;
+    published_claims: number;
+    locked_claims: number;
+    evidence_records: number;
+  };
+
+  trust: {
+    trust_score: number;
+    network_score: number;
+    trust_band: string;
+  };
+
+  verification: {
+    coverage: number;
+    verified_claims: number;
+    status: string;
+  };
+
+  integrity: {
+    integrity_score: number;
+    compromised_claims: number;
+    open_findings: number;
+    resolved_findings: number;
+  };
+
+  evidence: {
+    quality_score: number;
+    quality_band: string;
+    coverage: number;
+  };
+
+  governance: {
+    compliance: number;
+  };
+
+  risk: {
+    risk_score: number;
+    profit_factor: number;
+    win_rate: number;
+    max_drawdown: number;
+  };
+
+  assessment: {
+    grade: string;
+    status: string;
+    confidence: number;
+    recommendation: string;
+  };
+}
+
+export async function getDueDiligence(
+  workspaceId: number
+): Promise<DueDiligenceResponse> {
+
+  return apiFetch(
+    `/workspace/${workspaceId}/due-diligence`
+  );
+}
+
+export async function getDueDiligenceReport(
+  workspaceId: number
+) {
+  return apiFetch(
+    `/reports/workspace/${workspaceId}/due-diligence`
+  );
+}
+
+export async function getVerificationReport(
+  workspaceId: number
+) {
+  return apiFetch(
+    `/reports/workspace/${workspaceId}/verification`
+  );
+}
+
+export async function getAuditReport(
+  workspaceId: number
+) {
+  return apiFetch(
+    `/reports/workspace/${workspaceId}/audit`
+  );
+}
+
+export async function getAllocatorReport(
+  workspaceId: number
+) {
+  return apiFetch(
+    `/reports/workspace/${workspaceId}/allocator`
+  );
+}
+
+export async function getEvidenceAnalytics(
+  workspaceId: number
+): Promise<EvidenceAnalyticsResponse> {
+
+  return apiFetch(
+    `/evidence-analytics/${workspaceId}`
+  );
+}
+
 export async function getDashboardSummary(
   workspaceId: number
 ): Promise<DashboardSummary> {
@@ -2189,6 +2783,105 @@ export const getStrategyPerformance = async (
     { cache: "no-store" }
   )
 }
+
+/* ===========================================================
+   BILLING API
+=========================================================== */
+
+export async function getWorkspaceBillingFoundation(
+    workspaceId: number,
+): Promise<WorkspaceBillingFoundation> {
+
+    return ensureWorkspaceBillingFoundation(
+        await apiFetch<WorkspaceBillingFoundation>(
+            `/billing/foundation/${workspaceId}`
+        )
+    );
+
+}
+
+export async function getWorkspaceUsage(
+    workspaceId: number,
+): Promise<WorkspaceUsageSummary> {
+
+    return ensureWorkspaceUsageSummary(
+        await apiFetch<WorkspaceUsageSummary>(
+            `/workspaces/${workspaceId}/usage`
+        )
+    );
+
+}
+
+export async function getWorkspaceGovernance(
+    workspaceId: number,
+): Promise<WorkspaceGovernance> {
+
+    return apiFetch<WorkspaceGovernance>(
+        `/workspaces/${workspaceId}/governance`
+    );
+
+}
+
+export async function getWorkspaceSettings(
+    workspaceId: number,
+): Promise<WorkspaceSettings> {
+
+    return ensureWorkspaceSettings(
+        await apiFetch<WorkspaceSettings>(
+            `/workspaces/${workspaceId}/settings`
+        )
+    );
+
+}
+
+export async function getBillingDiagnostics(
+    workspaceId: number,
+): Promise<BillingDiagnostics> {
+
+    return apiFetch<BillingDiagnostics>(
+        `/billing/workspaces/${workspaceId}/diagnostics`
+    );
+
+}
+
+export async function createBillingCheckout(
+    workspaceId: number,
+    payload: {
+        plan_code: string;
+        billing_cycle: "monthly" | "annual";
+    },
+): Promise<BillingCheckoutResponse> {
+
+    return apiFetch<BillingCheckoutResponse>(
+        `/billing/workspaces/${workspaceId}/checkout`,
+        {
+            method: "POST",
+            body: JSON.stringify(payload),
+        }
+    );
+
+}
+
+export async function openBillingPortal(
+    workspaceId: number,
+): Promise<BillingPortalResponse> {
+
+    return apiFetch<BillingPortalResponse>(
+        `/billing/workspaces/${workspaceId}/portal`
+    );
+
+}
+
+export async function downloadLatestInvoice(
+    workspaceId: number,
+): Promise<BillingInvoiceResponse> {
+
+    return apiFetch<BillingInvoiceResponse>(
+        `/billing/workspaces/${workspaceId}/invoice/latest`
+    );
+
+}
+
 
 function withApiPrefix(path: string) {
     // auth routes should NOT be prefixed
@@ -2434,6 +3127,242 @@ function ensureClaimLineage(row?: {
   };
 }
 
+function ensureVerificationCertificate(
+    row: any,
+): VerificationCertificate {
+
+    return {
+
+        payload_version:
+            row?.payload_version ?? "v8",
+
+        identity: {
+
+            claim_id:
+                Number(
+                    row?.identity?.claim_id ??
+                    row?.claim_id ??
+                    0
+                ),
+
+            workspace_id:
+                Number(
+                    row?.identity?.workspace_id ??
+                    row?.workspace_id ??
+                    0
+                ),
+
+            claim_hash:
+                row?.identity?.claim_hash ??
+                row?.claim_hash ??
+                "",
+
+            verify_path:
+                row?.identity?.verify_path ??
+                row?.verify_path ??
+                "",
+
+            public_view_path:
+                row?.identity?.public_view_path ??
+                row?.public_view_path ??
+                "",
+
+            exposure_level:
+                row?.identity?.exposure_level ??
+                "public",
+
+        },
+
+        issuer:
+            ensureClaimIssuer(row?.issuer)!,
+
+        verification: {
+
+            status:
+                row?.verification?.status ??
+                row?.status ??
+                "",
+
+            visibility:
+                row?.verification?.visibility ??
+                row?.visibility ??
+                "",
+
+            canonical:
+                Boolean(
+                    row?.verification?.canonical ?? true
+                ),
+
+            portable:
+                Boolean(
+                    row?.verification?.portable ?? true
+                ),
+
+            api_addressable:
+                Boolean(
+                    row?.verification?.api_addressable ?? true
+                ),
+
+        },
+
+        lifecycle: {
+
+            verified_at:
+                row?.lifecycle?.verified_at ??
+                row?.verified_at,
+
+            published_at:
+                row?.lifecycle?.published_at ??
+                row?.published_at,
+
+            locked_at:
+                row?.lifecycle?.locked_at ??
+                row?.locked_at,
+
+        },
+
+        lineage:
+            ensureClaimLineage(row?.lineage) ?? {},
+
+        integrity: {
+
+            status:
+                row?.integrity?.status ??
+                row?.integrity_status ??
+                "",
+
+            valid:
+                Boolean(
+                    row?.integrity?.valid ??
+                    row?.integrity_valid ??
+                    true
+                ),
+
+            stored_trade_set_hash:
+                row?.integrity?.stored_trade_set_hash,
+
+            recomputed_trade_set_hash:
+                row?.integrity?.recomputed_trade_set_hash,
+
+        },
+
+        scope: {
+
+            period_start:
+                row?.scope?.period_start,
+
+            period_end:
+                row?.scope?.period_end,
+
+            included_trade_count:
+                Number(
+                    row?.scope?.included_trade_count ??
+                    row?.trade_count ??
+                    0
+                ),
+
+            excluded_trade_count:
+                Number(
+                    row?.scope?.excluded_trade_count ??
+                    0
+                ),
+
+            included_member_ids:
+                row?.scope?.included_member_ids ??
+                row?.scope?.included_members ??
+                [],
+
+            included_symbols:
+                row?.scope?.included_symbols ??
+                [],
+
+        },
+
+        performance: {
+
+            trade_count:
+                Number(
+                    row?.performance?.trade_count ??
+                    row?.trade_count ??
+                    0
+                ),
+
+            net_pnl:
+                Number(
+                    row?.performance?.net_pnl ??
+                    row?.net_pnl ??
+                    0
+                ),
+
+            profit_factor:
+                Number(
+                    row?.performance?.profit_factor ??
+                    row?.profit_factor ??
+                    0
+                ),
+
+            win_rate:
+                Number(
+                    row?.performance?.win_rate ??
+                    row?.win_rate ??
+                    0
+                ),
+
+        },
+
+        trust: {
+
+            score:
+                Number(
+                    row?.trust?.score ??
+                    row?.trust_score ??
+                    0
+                ),
+
+            band:
+                row?.trust?.band ??
+                row?.trust_band ??
+                "",
+
+            tier:
+                row?.trust?.tier ??
+                "tier_3",
+
+        },
+
+        evidence: {
+
+            primary_tier:
+                row?.evidence?.primary_tier ??
+                "tier_3",
+
+            primary_source:
+                row?.evidence?.primary_source ??
+                "Unknown",
+
+            trade_set_hash:
+                row?.evidence?.trade_set_hash ??
+                row?.trade_set_hash,
+
+        },
+
+        leaderboard:
+            Array.isArray(row?.leaderboard)
+                ? row.leaderboard
+                : [],
+
+        profile:
+            row?.profile
+                ? ensurePublicTrustProfile(row.profile)
+                : null,
+
+        equity_curve:
+            row?.equity_curve,
+
+    };
+
+}
+
 function ensureClaimIssuer(
   row?: Partial<ClaimIssuer> | null
 ): ClaimIssuer | undefined {
@@ -2463,44 +3392,94 @@ function ensureWorkspacePlanDetail(
   };
 }
 
-function ensurePlanCatalogItem(row: Partial<PlanCatalogItem>): PlanCatalogItem {
-  const code = String(row.code ?? "");
+function ensurePlanCatalogItem(row: any): any {
 
-  return {
-    code,
-    name: String(row.name ?? ""),
-    description: String(row.description ?? ""),
-    limits: {
-      claim_limit: Number(
-        row.limits?.claim_limit ??
-        (row.limits as any)?.claims ??
-        0
-      ),
-      trade_limit: Number(
-        row.limits?.trade_limit ??
-        (row.limits as any)?.trades ??
-        0
-      ),
-      member_limit: Number(
-        row.limits?.member_limit ??
-        (row.limits as any)?.members ??
-        0
-      ),
-      storage_limit_mb: Number(
-        row.limits?.storage_limit_mb ??
-        (row.limits as any)?.storage_mb ??
-        0
-      ),
-    },
-    recommended_for: Array.isArray(row.recommended_for) ? row.recommended_for.map(String) : [],
-    public_price_hint: row.public_price_hint ?? undefined,
-    billing: ensurePlanBilling(row.billing, code),
-  };
+    return {
+
+        code: String(row.code ?? ""),
+
+        name: String(row.name ?? ""),
+
+        description: String(row.description ?? ""),
+
+        recommended_for: Array.isArray(row.recommended_for)
+            ? row.recommended_for.map(String)
+            : [],
+
+        pricing: {
+
+            monthly:
+                Number(
+                    row.pricing?.monthly ??
+                    row.monthly_price_usd ??
+                    0
+                ),
+
+            annual:
+                Number(
+                    row.pricing?.annual ??
+                    row.annual_price_usd ??
+                    0
+                ),
+
+        },
+
+        claims: Number(row.claims ?? 0),
+
+        trades: Number(row.trades ?? 0),
+
+        members: Number(row.members ?? 0),
+
+        storage_mb: Number(row.storage_mb ?? 0),
+
+        infrastructure: Array.isArray(row.infrastructure)
+            ? row.infrastructure.map(String)
+            : [],
+
+        commercial_services: Array.isArray(row.commercial_services)
+            ? row.commercial_services.map(String)
+            : [],
+
+        capacity_summary:
+            row.capacity_summary ?? {},
+
+        is_public:
+            Boolean(row.is_public),
+
+    };
+
 }
 
 function ensureWorkspaceSettings(row: WorkspaceSettings): WorkspaceSettings {
   return {
     ...row,
+    preferences: {
+
+        timezone:
+            row.preferences?.timezone ??
+            "UTC",
+
+        language:
+            row.preferences?.language ??
+            "English",
+
+        currency:
+            row.preferences?.currency ??
+            "USD",
+
+        date_format:
+            row.preferences?.date_format ??
+            "YYYY-MM-DD",
+
+        auto_refresh:
+            row.preferences?.auto_refresh ??
+            true,
+
+        auto_save:
+            row.preferences?.auto_save ??
+            true,
+
+    },
     billing_provider: row?.billing_provider ?? null,
     stripe_customer_id: row?.stripe_customer_id ?? null,
     stripe_subscription_id: row?.stripe_subscription_id ?? null,
@@ -2778,11 +3757,58 @@ function ensureWorkspaceBillingFoundation(
         ? ensureManualPaymentDetails(row?.manual_payment_details)
         : undefined,
 
-    public_plans: Array.isArray((row as any)?.public_plans)
-      ? (row as any).public_plans.map((item: any) =>
-          ensurePlanCatalogItem(item)
-        )
-      : [],
+    public_plans: (() => {
+
+      const rawPlans = (row as any)?.public_plans;
+
+      if (!rawPlans) {
+        return {};
+      }
+
+      // Backend returned an object (current implementation)
+      if (
+        typeof rawPlans === "object" &&
+        !Array.isArray(rawPlans)
+      ) {
+
+        return Object.fromEntries(
+
+          Object.entries(rawPlans).map(
+
+            ([code, plan]: [string, any]) => [
+
+              code,
+
+              ensurePlanCatalogItem(plan),
+
+            ]
+
+          )
+
+        );
+
+      }
+
+      // Backward compatibility if an array is ever returned
+      if (Array.isArray(rawPlans)) {
+
+        return Object.fromEntries(
+
+          rawPlans.map((plan: any) => [
+
+            plan.code,
+
+            ensurePlanCatalogItem(plan),
+
+          ])
+
+        );
+
+      }
+
+      return {};
+
+    })(),
 
     checkout_state: {
       can_start_checkout: Boolean(row?.checkout_state?.can_start_checkout),
@@ -4119,21 +5145,18 @@ export const api = {
   },
 
   getVerifyClaimByHash: async (
-    claimHash: string
-  ): Promise<VerifyPayloadV7> => {
-    const row = await apiFetch<VerifyPayloadV7 | VerifyClaimResult>(
-      `/verify/${claimHash}`,
-      {
-        cache: "no-store",
-      }
-    );
+      claimHash: string,
+  ): Promise<VerificationCertificate> => {
 
-    return apiFetch<VerifyPayloadV7>(
-      `/verify/${claimHash}`,
-      {
-        cache: "no-store",
-      }
-    );
+      const row = await apiFetch<any>(
+          `/verify/${claimHash}`,
+          {
+              cache: "no-store",
+          }
+      );
+
+      return ensureVerificationCertificate(row);
+
   },
 
     // =========================
@@ -4291,6 +5314,15 @@ export function resolveVerificationExposureLevel(claim: any): VerificationExposu
   }
 
   return "internal_only";
+}
+
+export async function downloadEvidenceJson(
+  claimId: number
+) {
+  return apiDownload(
+    `/claim-schemas/${claimId}/evidence-pack/download`,
+    `evidence_pack_${claimId}.json`
+  );
 }
 
 export async function downloadEvidenceZip(claimId: number) {

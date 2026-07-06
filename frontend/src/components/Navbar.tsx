@@ -172,17 +172,25 @@ export default function Navbar({ workspaceId }: Props) {
     startsWithPath(currentPath, `${base}/leaderboard`) ||
     startsWithPath(currentPath, `${base}/verification-analytics`) ||
     startsWithPath(currentPath, `${base}/integrity-analytics`) ||
+    startsWithPath(currentPath, `${base}/evidence-analytics`) ||
     startsWithPath(currentPath, `${base}/risk-analytics`) ||
-    startsWithPath(currentPath, `${base}/due-diligence`);
+    startsWithPath(currentPath, `${base}/due-diligence`) ||
+    startsWithPath(
+      currentPath,
+      `${base}/report-center`
+    );
 
   const publicActive =
     startsWithPath(currentPath, `${base}/public-records`) ||
     startsWithPath(currentPath, `${base}/verification-routes`) ||
     startsWithPath(currentPath, `${base}/trust-directory`) ||
+    startsWithPath(currentPath, `${base}/verification-network`) ||
+    startsWithPath(currentPath, `${base}/external-reviews`) ||
+    startsWithPath(currentPath, `${base}/evidence-graph`) ||
     startsWithPath(currentPath, `${base}/public-profiles`) ||
-    startsWithPath(currentPath, `${base}/search`) ||
     startsWithPath(currentPath, "/claim") ||
-    startsWithPath(currentPath, "/verify");
+    startsWithPath(currentPath, "/verify") ||
+    startsWithPath(currentPath, "/profile");
 
   const administrationActive =
     startsWithPath(currentPath, `${base}/members`) ||
@@ -351,6 +359,14 @@ export default function Navbar({ workspaceId }: Props) {
           active: startsWithPath(currentPath, `${base}/integrity-analytics`),
         },
         {
+          href: `${base}/evidence-analytics`,
+          label: "Evidence Analytics",
+          active: startsWithPath(
+            currentPath,
+            `${base}/evidence-analytics`
+          ),
+        },
+        {
           href: `${base}/risk-analytics`,
           label: "Risk Analytics",
           active: startsWithPath(currentPath, `${base}/risk-analytics`),
@@ -359,6 +375,15 @@ export default function Navbar({ workspaceId }: Props) {
           href: `${base}/due-diligence`,
           label: "Due Diligence Reports",
           active: startsWithPath(currentPath, `${base}/due-diligence`),
+        },
+        {
+          href: `${base}/report-center`,
+          label: "Report Center",
+          active:
+            startsWithPath(
+              currentPath,
+              `${base}/report-center`
+            ),
         },
       ]
     : [];
@@ -374,7 +399,15 @@ export default function Navbar({ workspaceId }: Props) {
         {
           href: `${base}/verification-routes`,
           label: "Verification Routes",
-          active: startsWithPath(currentPath, `${base}/verification-routes`),
+          active:
+            startsWithPath(
+              currentPath,
+              `${base}/verification-routes`
+            ) ||
+            startsWithPath(
+              currentPath,
+              "/verify"
+            ),
         },
 
         {
@@ -384,9 +417,44 @@ export default function Navbar({ workspaceId }: Props) {
         },
 
         {
-          href: `${base}/public-profiles`,
+          href: `${base}/verification-network`,
+          label: "Verification Network",
+          active: startsWithPath(
+            currentPath,
+            `${base}/verification-network`
+          ),
+        },
+
+        {
+          href: `${base}/external-reviews`,
+          label: "External Reviews",
+          active: startsWithPath(
+            currentPath,
+            `${base}/external-reviews`
+          ),
+        },
+
+        {
+          href: `${base}/evidence-graph`,
+          label: "Evidence Graph",
+          active: startsWithPath(
+            currentPath,
+            `${base}/evidence-graph`
+          ),
+        },
+
+        {
+          href: `/profile/${resolvedWorkspaceId}`,
           label: "Public Profiles",
-          active: startsWithPath(currentPath, `${base}/public-profiles`),
+          active:
+            startsWithPath(
+              currentPath,
+              "/profile"
+            ) ||
+            startsWithPath(
+              currentPath,
+              `${base}/public-profiles`
+            ),
         },
 
         {

@@ -22,6 +22,64 @@ function formatNumber(value?: number | null, digits = 4) {
   return Number(value).toFixed(digits);
 }
 
+function getTier(trade: Trade) {
+
+    const source =
+        (trade.source_system || "").toUpperCase();
+
+    /*
+    --------------------------------------------------
+    Tier 1
+    Live broker synchronization
+    --------------------------------------------------
+    */
+
+    if (
+        source.includes("MT5") ||
+        source.includes("MT4") ||
+        source.includes("IBKR") ||
+        source.includes("BROKER") ||
+        source.includes("SYNC")
+    ) {
+        return {
+            label: "🟢 Tier I",
+            color:
+                "bg-green-100 text-green-700 border-green-300",
+        };
+    }
+
+    /*
+    --------------------------------------------------
+    Tier 2
+    Imported statements
+    --------------------------------------------------
+    */
+
+    if (
+        source.includes("CSV") ||
+        source.includes("IMPORT")
+    ) {
+        return {
+            label: "🟡 Tier II",
+            color:
+                "bg-amber-100 text-amber-700 border-amber-300",
+        };
+    }
+
+    /*
+    --------------------------------------------------
+    Tier 3
+    Manual / edited
+    --------------------------------------------------
+    */
+
+    return {
+        label: "🔴 Tier III",
+        color:
+            "bg-red-100 text-red-700 border-red-300",
+    };
+}
+
 export default function TradeTable({
   trades,
   canWriteTrades = false,
@@ -32,9 +90,9 @@ export default function TradeTable({
   const showActions = canWriteTrades && (Boolean(onEditTrade) || Boolean(onDeleteTrade));
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-x-auto overflow-y-auto max-h-[750px] rounded-2xl border border-slate-200 bg-white shadow-sm">
       <table className="min-w-full text-sm">
-        <thead className="bg-slate-50 text-left text-slate-600">
+        <thead className="sticky top-0 z-10 bg-slate-50 text-left text-slate-600 shadow-sm">
           <tr>
             <th className="px-4 py-3">ID</th>
             <th className="px-4 py-3">Member</th>
@@ -47,6 +105,9 @@ export default function TradeTable({
             <th className="px-4 py-3">Qty</th>
             <th className="px-4 py-3">Net PnL</th>
             <th className="px-4 py-3">Currency</th>
+            <th className="w-36 px-4 py-3 whitespace-nowrap">
+                Trust Tier
+            </th>
             <th className="px-4 py-3">Strategy</th>
             <th className="px-4 py-3">Source</th>
             {showActions ? <th className="px-4 py-3">Actions</th> : null}
@@ -55,7 +116,7 @@ export default function TradeTable({
         <tbody>
           {trades.length === 0 ? (
             <tr>
-              <td className="px-4 py-6 text-slate-500" colSpan={showActions ? 14 : 13}>
+              <td className="px-4 py-6 text-slate-500" colSpan={showActions ? 15 : 14}>
                 No trades found in this workspace.
               </td>
             </tr>
@@ -73,6 +134,26 @@ export default function TradeTable({
                 <td className="px-4 py-3">{formatNumber(trade.quantity)}</td>
                 <td className="px-4 py-3">{formatNumber(trade.net_pnl)}</td>
                 <td className="px-4 py-3">{trade.currency || "—"}</td>
+                <td className="w-36 px-4 py-3 whitespace-nowrap">
+
+                    {(() => {
+
+                        const tier = getTier(trade);
+
+                        return (
+
+                            <span
+                                className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold whitespace-nowrap ${tier.color}`}
+                            >
+                                {tier.label}
+                            </span>
+
+                        );
+
+                    })()}
+
+                </td>
+
                 <td className="px-4 py-3">
                   {trade.strategy_tag ? (
                     <span className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded-lg">

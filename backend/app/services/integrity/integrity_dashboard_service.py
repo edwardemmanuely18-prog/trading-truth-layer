@@ -85,9 +85,19 @@ def build_integrity_dashboard(
             + 1
         )
 
+    open_alerts = [
+        a
+        for a in alerts
+        if (
+            str(a.status or "")
+            .lower()
+            != "resolved"
+        )
+    ]
+
     score = (
         calculate_integrity_score(
-            alerts
+            open_alerts
         )
     )
 
@@ -122,7 +132,7 @@ def build_integrity_dashboard(
             severity,
 
         "healthy":
-            len(alerts) == 0,
+            score >= 80,
 
         "scanner_status": {
             "ledger": {

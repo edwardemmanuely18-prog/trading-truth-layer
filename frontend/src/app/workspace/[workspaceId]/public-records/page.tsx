@@ -378,6 +378,7 @@ export default function WorkspacePublicRecordsPage() {
                     </div>
 
                     <div className="flex flex-wrap gap-3">
+
                       <Link
                         href={publicHref}
                         className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
@@ -393,6 +394,14 @@ export default function WorkspacePublicRecordsPage() {
                           Open Verify Route
                         </Link>
                       ) : null}
+
+                      <Link
+                        href={`/workspace/${workspaceId}/external-reviews?claim=${row.claim_schema_id}`}
+                        className="rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+                      >
+                        Submit Review
+                      </Link>
+
                     </div>
                   </div>
 

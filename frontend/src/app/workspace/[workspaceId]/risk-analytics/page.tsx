@@ -35,6 +35,9 @@ export default function Page(
   const [loading, setLoading] =
     useState(true);
 
+  const [claimLimit, setClaimLimit] =
+    useState(20);
+
   useEffect(() => {
     async function load() {
       try {
@@ -145,10 +148,9 @@ export default function Page(
         <div className="mb-8 grid gap-4 md:grid-cols-3">
 
           <MetricCard
-            title="Max Drawdown"
+            title="Peak-to-Trough Drawdown (Units)"
             value={
-              overview?.max_drawdown ??
-              0
+              overview?.max_drawdown ?? 0
             }
           />
 
@@ -184,6 +186,8 @@ export default function Page(
             Claim Risk Feed
           </div>
 
+          <div className="max-h-[600px] overflow-y-auto">
+
           <table className="w-full">
 
             <thead className="bg-slate-100">
@@ -210,8 +214,8 @@ export default function Page(
                   Profit Factor
                 </th>
 
-                <th className="p-4 text-left">
-                  Max Drawdown
+                <th className="p-4 text-center">
+                  Peak→Trough DD (Units)
                 </th>
 
               </tr>
@@ -220,7 +224,9 @@ export default function Page(
 
             <tbody>
 
-              {claims.map(
+              {claims
+                .slice(0, claimLimit)
+                .map(
                 (claim) => (
                   <tr
                     key={
@@ -251,7 +257,7 @@ export default function Page(
                       }
                     </td>
 
-                    <td className="p-4">
+                    <td className="p-4 text-center font-medium">
                       {
                         claim.max_drawdown
                       }
@@ -264,6 +270,28 @@ export default function Page(
             </tbody>
 
           </table>
+
+          </div>
+
+        {claims.length >
+          claimLimit && (
+
+          <div className="border-t p-4">
+
+            <button
+              onClick={() =>
+                setClaimLimit(
+                  prev => prev + 20
+                )
+              }
+              className="rounded-lg border px-4 py-2"
+            >
+              Load More
+            </button>
+
+          </div>
+
+        )}
 
         </div>
 

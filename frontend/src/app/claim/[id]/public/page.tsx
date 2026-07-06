@@ -7,7 +7,7 @@ import {
   computeTrustScore,
   resolveVerificationExposureLevel,
   type ClaimSchema,
-  type VerifyPayloadV7,
+  type VerificationCertificate,
   type PublicVerifyResult,
 } from "../../../../lib/api";
 import EquityCurveChart from "../../../../components/EquityCurveChart";
@@ -218,8 +218,8 @@ export default function PublicClaimPage() {
 
   const [claim, setClaim] = useState<any>(null);
   const [preview, setPreview] = useState<PublicVerifyResult | null>(null);
-  const [verifyPayload, setVerifyPayload] =
-    useState<VerifyPayloadV7 | null>(null);
+  const [certificate, setCertificate] =
+    useState<VerificationCertificate | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [linkMessage, setLinkMessage] = useState<string | null>(null);
@@ -268,16 +268,14 @@ export default function PublicClaimPage() {
         setPreview(previewResult);
 
         try {
-          const verifyResult =
-            await api.getVerifyClaimByHash(claimHash);
+          const certificateResult =
+              await api.getVerifyClaimByHash(claimHash);
 
-          if (!active) return;
-
-          setVerifyPayload(verifyResult);
+          setCertificate(certificateResult);
         } catch {
           if (!active) return;
 
-          setVerifyPayload(null);
+          setCertificate(null);
         }
 
       } catch (err) {
@@ -361,13 +359,31 @@ export default function PublicClaimPage() {
   const resolvedPeriodEnd = resolvePeriodEnd(claim, preview);
 
   const trustScore =
-    Number(
-      (preview as any)?.trust_score ??
-      (claim as any)?.trust_score ??
-      0
-    );
+      certificate?.trust.score ??
+      Number(
+          (preview as any)?.trust_score ??
+          (claim as any)?.trust_score ??
+          0
+      );
 
-  const trustBand = resolveTrustBand(trustScore);
+  const trustBand =
+
+      certificate?.trust.band
+
+          ? {
+
+              label: certificate.trust.band,
+
+              className:
+                  certificate.trust.score >= 85
+                      ? "border-green-200 bg-green-100 text-green-800"
+                      : certificate.trust.score >= 60
+                          ? "border-amber-200 bg-amber-100 text-amber-800"
+                          : "border-red-200 bg-red-100 text-red-800",
+
+          }
+
+          : resolveTrustBand(trustScore);
   const exposureLevel = resolveVerificationExposureLevel(preview);
 
   async function handleCopyLink() {
@@ -510,7 +526,7 @@ export default function PublicClaimPage() {
               integrityStatus={
                 preview.integrity_status ??
                 claim.integrity_status ??
-                verifyPayload?.integrity_record?.status ??
+                certificate?.integrity.status ??
                 "unknown"
               }
             />
@@ -533,9 +549,41 @@ export default function PublicClaimPage() {
                   {trustBand.label}
                 </span>
               </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+
+                  <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">
+
+                      TVS
+
+                      {" "}
+
+                      {certificate?.trust.tier
+                          ?.replace("tier_", "Tier ")
+                          ?.replace("1", "I")
+                          ?.replace("2", "II")
+                          ?.replace("3", "III")}
+
+                  </span>
+
+                  <span className="rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-800">
+
+                      Evidence
+
+                      {" "}
+
+                      {certificate?.evidence.primary_tier
+                          ?.replace("tier_", "Tier ")
+                          ?.replace("1", "I")
+                          ?.replace("2", "II")
+                          ?.replace("3", "III")}
+
+                  </span>
+
+              </div>
             </div>
 
-            {verifyPayload ? (
+            {certificate ? (
               <div className="text-right">
                 <div className="text-xs uppercase tracking-wide text-slate-500">
                   Integrity Status
@@ -584,7 +632,7 @@ export default function PublicClaimPage() {
                   <div className="text-slate-500">integrity_status</div>
                   <div>
                     {
-                      verifyPayload?.integrity_record?.status ??
+                      certificate?.integrity.status ??
                       preview?.integrity_status ??
                       "unknown"
                     }
@@ -781,26 +829,55 @@ export default function PublicClaimPage() {
           </div>
 
           <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard
-              label="Trades"
-              value={preview.trade_count ?? 0}
-              hint="In-scope evidence rows"
-            />
-            <MetricCard
-              label="Net PnL"
-              value={formatNumber(preview.net_pnl, 2)}
-              hint="Aggregate net performance"
-            />
-            <MetricCard
-              label="Win Rate"
-              value={formatRatioPercent(preview.win_rate, 2)}
-              hint="Winning trades as percentage"
-            />
-            <MetricCard
-              label="Profit Factor"
-              value={formatNumber(preview.profit_factor, 4)}
-              hint="Gross profit ÷ gross loss"
-            />
+
+              <MetricCard
+                  label="Trades"
+                  value={
+                      String(
+                          certificate?.performance.trade_count ??
+                          preview.trade_count ??
+                          0
+                      )
+                  }
+                  hint="In-scope evidence rows"
+              />
+
+              <MetricCard
+                  label="Net PnL"
+                  value={
+                      formatNumber(
+                          certificate?.performance.net_pnl ??
+                          preview.net_pnl,
+                          2
+                      )
+                  }
+                  hint="Aggregate net performance"
+              />
+
+              <MetricCard
+                  label="Win Rate"
+                  value={
+                      formatRatioPercent(
+                          certificate?.performance.win_rate ??
+                          preview.win_rate,
+                          2
+                      )
+                  }
+                  hint="Winning trades as percentage"
+              />
+
+              <MetricCard
+                  label="Profit Factor"
+                  value={
+                      formatNumber(
+                          certificate?.performance.profit_factor ??
+                          preview.profit_factor,
+                          4
+                      )
+                  }
+                  hint="Gross profit ÷ gross loss"
+              />
+
           </div>
 
           <div className="mt-8">
@@ -882,7 +959,7 @@ export default function PublicClaimPage() {
                 </div>
               </div>
 
-              {verifyPayload ? (
+              {certificate ? (
                 <div className="rounded-3xl border border-slate-200 bg-white p-6">
                   <div className="text-sm text-slate-500">
                     Integrity Posture
@@ -901,7 +978,7 @@ export default function PublicClaimPage() {
                     <div>
                       Hash Match:
                       {" "}
-                      {verifyPayload.integrity_record?.is_valid
+                      {certificate?.integrity.valid
                         ? "true"
                         : "false"}
                     </div>
@@ -909,18 +986,16 @@ export default function PublicClaimPage() {
                     <div>
                       Stored Hash:
                       {shortHash(
-                        verifyPayload.integrity_record
-                          ?.stored_trade_set_hash ??
-                        preview.trade_set_hash
+                          certificate?.integrity.stored_trade_set_hash ??
+                          preview.trade_set_hash
                       )}
                     </div>
 
                     <div>
                       Recomputed Hash:
                       {shortHash(
-                        verifyPayload.integrity_record
-                          ?.recomputed_trade_set_hash ??
-                        preview.trade_set_hash
+                          certificate?.integrity.recomputed_trade_set_hash ??
+                          preview.trade_set_hash
                       )}
                     </div>
                   </div>
@@ -933,9 +1008,19 @@ export default function PublicClaimPage() {
             <div className="text-2xl font-semibold text-slate-950">Leaderboard</div>
 
             {Array.isArray(preview.leaderboard) && preview.leaderboard.length > 0 ? (
-              <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+              <div
+                  className="
+                      mt-4
+                      overflow-x-auto
+                      overflow-y-auto
+                      max-h-[500px]
+                      rounded-xl
+                      border
+                      border-slate-200
+                  "
+              >
                 <table className="min-w-full">
-                  <thead className="bg-slate-50 text-left text-sm text-slate-500">
+                  <thead className="sticky top-0 bg-white z-10">
                     <tr>
                       <th className="px-4 py-3 font-medium">Rank</th>
                       <th className="px-4 py-3 font-medium">Trader</th>

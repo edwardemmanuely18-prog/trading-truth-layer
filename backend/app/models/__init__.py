@@ -48,6 +48,13 @@ from app.models.trade_tag_map import (
     TradeTagMap,
 )
 
+from app.models.review_statement import (
+    ReviewStatement,
+)
+from app.models.workspace_preferences import (
+    WorkspacePreferences,
+)
+
 
 __all__ = [
     "Workspace",
@@ -74,4 +81,6 @@ __all__ = [
     "IngestionSession",
     "TradeTag",
     "TradeTagMap",
+    "ReviewStatement",
+    "WorkspacePreferences",
 ]

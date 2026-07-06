@@ -14,146 +14,20 @@ from app.services.claim_integrity_engine import (
     resolve_schema_trades,
 )
 
+from app.services.verification.verification_service import (
+    get_claim_verification_certificate,
+    get_claim_verification_metrics,
+)
+
+from app.services.trade_metrics_service import (
+    compute_trade_metrics,
+)
+
+from app.api.routes.claim_schemas import (
+    build_public_claim_payload,
+)
+
 router = APIRouter()
-
-
-# =========================
-# 🌐 CANONICAL PUBLIC CLAIM PAYLOAD
-# =========================
-def build_public_claim_payload(
-    claim,
-    db: Session,
-):
-    trust, metrics = compute_full_trust(claim, db)
-
-    workspace = (
-        db.query(Workspace)
-        .filter(Workspace.id == claim.workspace_id)
-        .first()
-    )
-
-    profile_payload = {
-        "profile_id": f"workspace:{claim.workspace_id}",
-        "workspace_id": claim.workspace_id,
-        "name": workspace.name if workspace else f"Workspace {claim.workspace_id}",
-        "type": "workspace",
-        "network": "internal",
-        "claims_count": 0,
-        "locked_claims_count": 0,
-        "contested_claims_count": 0,
-        "average_trust_score": trust,
-        "average_network_score": 0,
-        "total_net_pnl": metrics.get("net_pnl", 0),
-        "trust_profile_band":
-            "high"
-            if trust >= 80
-            else "moderate"
-            if trust >= 60
-            else "developing",
-    }
-
-    return {
-        # =========================
-        # CORE IDENTIFIERS
-        # =========================
-        "claim_schema_id": claim.id,
-        "claim_hash": claim.claim_hash,
-        "workspace_id": claim.workspace_id,
-
-        # =========================
-        # CANONICAL ROUTES
-        # =========================
-        "public_view_path": f"/claim/{claim.id}/public",
-        "verify_path": f"/verify/{claim.claim_hash}",
-
-        # =========================
-        # CORE CLAIM
-        # =========================
-        "name": getattr(claim, "name", f"Claim {claim.id}"),
-
-        # =========================
-        # ISSUER
-        # =========================
-        "issuer": {
-            "id": claim.workspace_id,
-            "name": workspace.name if workspace else f"Workspace {claim.workspace_id}",
-            "type": "workspace",
-            "network": "internal",
-            "profile": profile_payload,
-        },
-
-        # =========================
-        # PROFILE
-        # =========================
-        "profile": profile_payload,
-
-        # =========================
-        # VISIBILITY + SCOPE
-        # =========================
-        "scope": {
-            "visibility": claim.visibility,
-            "period_start": None,
-            "period_end": None,
-            "included_members": [],
-            "included_symbols": [],
-            "methodology_notes": "",
-        },
-
-        # =========================
-        # LIFECYCLE
-        # =========================
-        "lifecycle": {
-            "status": getattr(claim, "status", "unknown"),
-            "verified_at": getattr(claim, "verified_at", None),
-            "published_at": getattr(claim, "published_at", None),
-            "locked_at": getattr(claim, "locked_at", None),
-        },
-
-        # =========================
-        # COMPATIBILITY
-        # =========================
-        "verification_status": getattr(claim, "status", "unknown"),
-
-        # =========================
-        # PERFORMANCE
-        # =========================
-        "trade_count": metrics.get("trade_count", 0),
-        "net_pnl": metrics.get("net_pnl", 0),
-        "profit_factor": metrics.get("profit_factor", 0),
-        "win_rate": metrics.get("win_rate", 0),
-
-        # =========================
-        # TRUST
-        # =========================
-        "trust_score": trust,
-
-        # =========================
-        # LEADERBOARD
-        # =========================
-        "leaderboard": [],
-
-        # =========================
-        # PUBLIC STATE
-        # =========================
-        "is_publicly_accessible": (
-            claim.visibility == "public"
-            and getattr(claim, "status", "") == "locked"
-        ),
-    }
-
-
-# =========================
-# 🧠 TRUST COMPUTATION CORE
-# =========================
-def compute_full_trust(claim, db: Session):
-    trades = resolve_schema_trades(claim, db)
-    metrics = compute_trade_metrics(trades)
-    dispute_ctx = resolve_claim_dispute_context(claim, db)
-    integrity = resolve_claim_integrity_status(claim, trades)
-
-    trust = compute_backend_trust_score(claim, metrics, integrity, dispute_ctx)
-
-    return trust, metrics
 
 
 # =========================
@@ -178,7 +52,10 @@ def get_public_claims(
     enriched = []
 
     for c in claims:
-        payload = build_public_claim_payload(c, db)
+        payload = build_public_claim_payload(
+            schema=c,
+            db=db,
+        )
 
         if payload["trust_score"] < min_trust:
             continue
@@ -241,14 +118,19 @@ def get_leaderboard(db: Session = Depends(get_db)):
     rows = []
 
     for c in claims:
-        trust, metrics = compute_full_trust(c, db)
+        payload = build_public_claim_payload(
+            schema=c,
+            db=db,
+        )
 
-        rows.append({
-            "claim_id": c.id,
-            "workspace_id": c.workspace_id,
-            "trust_score": trust,
-            "net_pnl": metrics.get("net_pnl", 0),
-        })
+        rows.append(
+            {
+                "claim_id": c.id,
+                "workspace_id": c.workspace_id,
+                "trust_score": payload["verification"]["score"],
+                "net_pnl": payload["net_pnl"],
+            }
+        )
 
     ranked = sorted(
         rows,
@@ -292,13 +174,14 @@ def get_public_profile(
     total_trades = 0
 
     for c in claims:
-        trust, metrics = compute_full_trust(c, db)
+        payload = build_public_claim_payload(
+            schema=c,
+            db=db,
+        )
 
-        payload = build_public_claim_payload(c, db)
+        verification = payload["verification"]
 
-        enriched.append(payload)
-
-        total_trust += payload["trust_score"]
+        total_trust += verification["score"]
         total_pnl += payload["net_pnl"]
         total_trades += payload["trade_count"]
 
@@ -360,7 +243,10 @@ def get_public_claim(
             detail="Public claim not found"
         )
 
-    return build_public_claim_payload(claim, db)
+    return build_public_claim_payload(
+        schema=claim,
+        db=db,
+    )
 
 
 # =========================
@@ -385,7 +271,10 @@ def verify_claim_by_hash(claim_hash: str, db: Session = Depends(get_db)):
         )
 
 
-    payload = build_public_claim_payload(claim, db)
+    payload = build_public_claim_payload(
+        schema=claim,
+        db=db,
+    )
 
     return {
         **payload,

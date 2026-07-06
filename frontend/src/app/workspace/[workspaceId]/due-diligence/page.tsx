@@ -43,6 +43,11 @@ export default function Page(
             workspaceId
           );
 
+        console.log(
+          "DUE DILIGENCE RESPONSE",
+          JSON.stringify(data, null, 2)
+        );
+
         setReport(data);
       } catch (err) {
         console.error(err);
@@ -87,6 +92,27 @@ export default function Page(
             Due Diligence Report
           </h1>
 
+          <div className="mt-6 rounded-xl border bg-white p-6">
+
+            <h2 className="text-lg font-semibold">
+              Executive Summary
+            </h2>
+
+            <p className="mt-3 text-slate-600">
+
+              This report evaluates claim
+              verification quality,
+              evidence reliability,
+              integrity controls,
+              governance compliance,
+              and institutional trust
+              readiness for workspace
+              operations.
+
+            </p>
+
+          </div>
+
           <p className="mt-3 text-slate-600">
             Institutional assessment,
             verification quality,
@@ -122,18 +148,12 @@ export default function Page(
 
           <MetricCard
             title="Trust"
-            value={
-              report.trust
-                .trust_score
-            }
+            value={`${report.trust.trust_score}%`}
           />
 
           <MetricCard
             title="Network"
-            value={
-              report.trust
-                .network_score
-            }
+            value={`${report.trust.network_score}%`}
           />
 
           <MetricCard
@@ -146,105 +166,165 @@ export default function Page(
 
         </div>
 
+        <div className="mt-4 grid gap-4 md:grid-cols-5">
+
+          <MetricCard
+            title="Verification"
+            value={`${report.verification.coverage}%`}
+          />
+
+          <MetricCard
+            title="Integrity"
+            value={`${report.integrity.integrity_score}%`}
+          />
+
+          <MetricCard
+            title="Evidence"
+            value={`${report.evidence.quality_score}%`}
+          />
+
+          <MetricCard
+            title="Risk"
+            value={`${report.risk.risk_score}%`}
+          />
+
+          <MetricCard
+            title="Confidence"
+            value={`${report.assessment.confidence}%`}
+          />
+
+        </div>
+
         <div className="mt-8 grid gap-6 md:grid-cols-2">
 
           <AnalyticsCard
-            title="Verification"
+            title="Verification Review"
             items={[
               {
-                label:
-                  "Coverage",
+                label: "Coverage",
                 value:
-                  report
-                    .verification
-                    .coverage,
+                  `${report.verification.coverage}%`,
               },
               {
-                label:
-                  "Verified Claims",
+                label: "Verified Claims",
                 value:
-                  report
-                    .verification
-                    .verified_claims,
+                  report.verification.verified_claims,
+              },
+              {
+                label: "Verification Status",
+                value:
+                  report.verification.status,
               },
             ]}
           />
 
           <AnalyticsCard
-            title="Integrity"
+            title="Integrity Review"
             items={[
               {
-                label:
-                  "Integrity Score",
+                label: "Integrity Score",
                 value:
-                  report
-                    .integrity
-                    .integrity_score,
+                  `${report.integrity.integrity_score}%`,
               },
               {
-                label:
-                  "Compromised Claims",
+                label: "Compromised Claims",
                 value:
-                  report
-                    .integrity
-                    .compromised_claims,
+                  report.integrity.compromised_claims,
+              },
+              {
+                label: "Open Findings",
+                value:
+                  report.integrity.open_findings,
+              },
+              {
+                label: "Resolved Findings",
+                value:
+                  report.integrity.resolved_findings,
               },
             ]}
           />
 
           <AnalyticsCard
-            title="Risk"
+            title="Risk Review"
             items={[
               {
-                label:
-                  "Profit Factor",
+                label: "Profit Factor",
                 value:
-                  report.risk
-                    .profit_factor,
+                  report.risk.profit_factor,
+              },
+              {
+                label: "Win Rate",
+                value:
+                  `${report.risk.win_rate}%`,
               },
               {
                 label:
-                  "Win Rate",
+                  "Peak→Trough DD (Units)",
                 value:
-                  report.risk
-                    .win_rate,
-              },
-              {
-                label:
-                  "Max Drawdown",
-                value:
-                  report.risk
-                    .max_drawdown,
+                  `${report.risk.max_drawdown} units`,
               },
             ]}
           />
 
           <AnalyticsCard
-            title="Institutional Assessment"
+            title="Evidence Review"
             items={[
               {
-                label:
-                  "Grade",
+                label: "Quality Score",
                 value:
-                  report
-                    .assessment
-                    .grade,
+                  `${report.evidence.quality_score}%`,
               },
               {
-                label:
-                  "Status",
+                label: "Quality Band",
                 value:
-                  report
-                    .assessment
-                    .status,
+                  report.evidence.quality_band,
               },
               {
-                label:
-                  "Trust Band",
+                label: "Coverage",
                 value:
-                  report
-                    .trust
-                    .trust_band,
+                  `${report.evidence.coverage}%`,
+              },
+            ]}
+          />
+
+          <AnalyticsCard
+            title="Governance Review"
+            items={[
+              {
+                label: "Published Claims",
+                value:
+                  report.overview.published_claims,
+              },
+              {
+                label: "Locked Claims",
+                value:
+                  report.overview.locked_claims,
+              },
+              {
+                label: "Audit Compliance",
+                value:
+                  `${report.governance.compliance}%`,
+              },
+            ]}
+          />
+
+          <AnalyticsCard
+            title="Institutional Verdict"
+            items={[
+              {
+                label: "Grade",
+                value:
+                  report.assessment.grade,
+              },
+              {
+                label: "Status",
+                value:
+                  report.assessment.status,
+              },
+              {
+                label: "Recommendation",
+                value:
+                  report.assessment.recommendation,
               },
             ]}
           />

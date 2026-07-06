@@ -19,11 +19,37 @@ def compute_trade_metrics(trades: list[Trade]):
     if not pnl_values:
         return {
             "trade_count": trade_count,
+
+            "winning_trades": 0,
+            "losing_trades": 0,
+
+            "wins": 0,
+            "losses": 0,
+
+            "net_profit": 0.0,
             "net_pnl": 0.0,
+
+            "gross_profit": 0.0,
+            "gross_loss": 0.0,
+
             "win_rate": 0.0,
+            "loss_rate": 0.0,
+
             "profit_factor": 0.0,
+            "expectancy": 0.0,
+
+            "average_win": 0.0,
+            "average_loss": 0.0,
+
+            "payoff_ratio": 0.0,
+
             "best_trade": 0.0,
             "worst_trade": 0.0,
+
+            "max_drawdown": 0.0,
+            "recovery_factor": 0.0,
+
+            "performance_band": "No Data",
         }
 
     wins = [x for x in pnl_values if x > 0]
@@ -53,13 +79,151 @@ def compute_trade_metrics(trades: list[Trade]):
             / gross_loss_abs
         )
 
+    loss_rate = (
+        len(losses) / len(pnl_values)
+        if pnl_values
+        else 0.0
+    )
+
+    average_win = (
+        gross_profit / len(wins)
+        if wins
+        else 0.0
+    )
+
+    average_loss = (
+        gross_loss_abs / len(losses)
+        if losses
+        else 0.0
+    )
+
+    expectancy = (
+        (win_rate * average_win)
+        -
+        (loss_rate * average_loss)
+    ) if wins and losses else 0.0
+
+    payoff_ratio = (
+        average_win / average_loss
+        if average_loss > 0
+        else 0.0
+    )
+
+    if profit_factor >= 2.0 and win_rate >= 0.60:
+        performance_band = "Institutional"
+
+    elif profit_factor >= 1.50:
+        performance_band = "Professional"
+
+    elif profit_factor >= 1.00:
+        performance_band = "Developing"
+
+    else:
+        performance_band = "Weak"
+
+    equity_curve = build_equity_curve(trades)
+
+    drawdown = compute_drawdown_stats(
+        equity_curve["curve"],
+    )
+
+    max_drawdown = drawdown["max_drawdown"]
+
+    recovery_factor = (
+        net_pnl / max_drawdown
+        if max_drawdown > 0
+        else 0.0
+    )
+
     return {
+
         "trade_count": trade_count,
+
         "net_pnl": round(net_pnl, 4),
-        "win_rate": round(win_rate, 4),
-        "profit_factor": round(profit_factor, 4),
-        "best_trade": round(max(pnl_values), 4),
-        "worst_trade": round(min(pnl_values), 4),
+
+        "gross_profit": round(
+            gross_profit,
+            4,
+        ),
+
+        "gross_loss": round(
+            gross_loss_abs,
+            4,
+        ),
+
+        "winning_trades": len(wins),
+
+        "losing_trades": len(losses),
+
+        "wins": len(wins),
+
+        "losses": len(losses),
+
+        "net_profit": round(
+            net_pnl,
+            4,
+        ),
+
+        "loss_rate": round(
+            loss_rate,
+            4,
+        ),
+
+        "expectancy": round(
+            expectancy,
+            4,
+        ),
+
+        "max_drawdown": round(
+            max_drawdown,
+            4,
+        ),
+
+        "recovery_factor": round(
+            recovery_factor,
+            4,
+        ),
+
+        "win_rate": round(
+            win_rate,
+            4,
+        ),
+
+        "profit_factor": round(
+            profit_factor,
+            4,
+        ),
+
+        "best_trade": round(
+            max(pnl_values),
+            4,
+        ),
+
+        "worst_trade": round(
+            min(pnl_values),
+            4,
+        ),
+
+        "average_win": round(
+            average_win,
+            4,
+        ),
+
+        "average_loss": round(
+            average_loss,
+            4,
+        ),
+
+        "payoff_ratio": round(
+            payoff_ratio,
+            4,
+        ),
+
+        "performance_band": performance_band,
+
+        "equity_curve": equity_curve,
+
+        "drawdown": drawdown,
     }
 
 

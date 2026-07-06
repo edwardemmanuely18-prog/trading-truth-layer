@@ -626,7 +626,7 @@ export default function Page(
 
               ))}
 
-              <div className="flex-1 min-w-[300px]">
+              <div className="flex-1 min-w-[500px]">
 
                 <input
                   value={searchTerm}
@@ -636,9 +636,7 @@ export default function Page(
                     )
                   }
                   placeholder="
-                    Search by type,
-                    message,
-                    claim id...
+                  Search alerts, claim ids, hash mismatches, evidence issues...
                   "
                   className="
                     w-full
@@ -957,206 +955,6 @@ export default function Page(
 
             )}
 
-          </div>
-
-          <div
-            className="
-              flex
-              items-center
-              justify-between
-              border-b
-              px-6
-              py-4
-            "
-          >
-
-            <div className="grid gap-6 md:grid-cols-3">
-
-              <AnalyticsCard
-                title="Verification Distribution"
-                items={[
-                  {
-                    label: "Verified",
-                    value: verifiedCount,
-                  },
-                  {
-                    label: "Pending",
-                    value: pendingCount,
-                  },
-                  {
-                    label: "Unverified",
-                    value: unverifiedCount,
-                  },
-                ]}
-              />
-
-              <AnalyticsCard
-                title="Evidence Trust Distribution"
-                items={[
-                  {
-                    label: "Broker Verified",
-                    value: brokerVerified,
-                  },
-                  {
-                    label: "Broker Export",
-                    value: exportEvidence,
-                  },
-                  {
-                    label: "Manual Entry",
-                    value: manualEvidence,
-                  },
-                ]}
-              />
-
-              <AnalyticsCard
-                title="Protection Distribution"
-                items={[
-                  {
-                    label: "Dual Protected",
-                    value: dualProtected,
-                  },
-                  {
-                    label: "Hash Only",
-                    value: hashOnly,
-                  },
-                  {
-                    label: "Fingerprint Only",
-                    value: fingerprintOnly,
-                  },
-                  {
-                    label: "Unprotected",
-                    value: unprotected,
-                  },
-                ]}
-              />
-
-            </div>
-
-            <div className="font-semibold">
-              Integrity Monitoring Feed
-            </div>
-
-            <div className="text-sm text-slate-500">
-
-              Showing
-
-              {" "}
-
-              {Math.min(
-                records.length,
-                20
-              )}
-
-              of
-
-              {" "}
-
-              {records.length}
-
-              trades
-
-            </div>
-
-          </div>
-
-          <div
-            className="
-              max-h-[700px]
-              overflow-y-auto
-            "
-          >
-
-            <table className="w-full">
-
-            <thead className="bg-slate-100">
-
-              <tr>
-
-                <th className="p-4 text-left">
-                  Trade
-                </th>
-
-                <th className="p-4 text-left">
-                  Symbol
-                </th>
-
-                <th className="p-4 text-left">
-                  Verification
-                </th>
-
-                <th className="p-4 text-left">
-                  Trust Tier
-                </th>
-
-                <th className="p-4 text-left">
-                  Integrity Type
-                </th>
-
-              </tr>
-
-            </thead>
-
-            <tbody>
-
-              {loading && (
-
-                <tr>
-
-                  <td
-                    colSpan={5}
-                    className="p-6"
-                  >
-                    Loading...
-                  </td>
-
-                </tr>
-
-              )}
-
-              {!loading &&
-                records
-                  .slice(0, feedLimit)
-                  .map(record => (
-
-                  <tr
-                    key={record.trade_id}
-                    className="border-t"
-                  >
-
-                    <td className="p-4">
-                      {record.trade_id}
-                    </td>
-
-                    <td className="p-4">
-                      {record.symbol}
-                    </td>
-
-                    <td className="p-4">
-                      {
-                        record.verification_state
-                      }
-                    </td>
-
-                    <td className="p-4">
-                      {
-                        record.evidence_trust_tier
-                      }
-                    </td>
-
-                    <td className="p-4">
-                      {
-                        record.integrity_type
-                        || "-"
-                      }
-                    </td>
-
-                  </tr>
-
-                ))}
-
-            </tbody>
-
-          </table>
           </div>
 
           <div className="mb-8 rounded-xl border bg-white">

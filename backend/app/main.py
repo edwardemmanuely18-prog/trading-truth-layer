@@ -62,6 +62,18 @@ from app.api.routes import (
 from app.api.routes.dashboard_summary import (
     router as dashboard_summary_router
 )
+from app.api.routes.evidence_analytics import (
+    router as evidence_analytics_router,
+)
+from app.api.routes import external_reviews
+from app.api.routes import evidence_graph
+from app.api.routes.trust_scores import (
+    router as trust_scores_router,
+)
+from app.api.routes.reports import (
+    router as reports_router,
+)
+
 from app.api.routes import dashboard_executive
 from app.api.routes import dashboard_summary
 
@@ -335,6 +347,7 @@ app.include_router(
     dashboard_summary_router
 )
 
+
 # ALL WORKSPACE APIs MUST BE UNDER /api
 app.include_router(workspaces_router, prefix="/api")
 app.include_router(trades_router, prefix="/api")
@@ -391,6 +404,26 @@ app.include_router(
 )
 app.include_router(
     dashboard_summary.router,
+    prefix="/api",
+)
+app.include_router(
+    evidence_analytics_router,
+    prefix="/api",
+)
+app.include_router(
+    external_reviews.router,
+    prefix="/api",
+)
+app.include_router(
+    trust_scores_router,
+    prefix="/api",
+)
+app.include_router(
+    evidence_graph.router,
+    prefix="/api",
+)
+app.include_router(
+    reports_router,
     prefix="/api",
 )
 

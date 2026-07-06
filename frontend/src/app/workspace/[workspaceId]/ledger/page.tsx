@@ -452,6 +452,11 @@ export default function WorkspaceLedgerPage() {
     );
   }, [trades, search]);
 
+  const visibleTrades = displayTrades.slice(
+      0,
+      (page + 1) * PAGE_SIZE
+  );
+
   useEffect(() => {
     setPage(0);
   }, [selectedTag, symbolFilter, sideFilter]);
@@ -1387,13 +1392,24 @@ export default function WorkspaceLedgerPage() {
           ) : null}
 
           <TradeTable
-            trades={displayTrades}
+            trades={visibleTrades}
             canWriteTrades={canWriteTrades}
             onEditTrade={handleEditTrade}
             onDeleteTrade={handleDeleteTrade}
             deletingTradeId={deletingTradeId}
           />
         </div>
+
+        {visibleTrades.length < displayTrades.length && (
+            <div className="mt-6 flex justify-center">
+                <button
+                    onClick={() => setPage((p) => p + 1)}
+                    className="rounded-xl border border-slate-300 bg-white px-5 py-2 text-sm font-medium hover:bg-slate-50"
+                >
+                    Load More Trades
+                </button>
+            </div>
+        )}
 
         <div className="mt-10 rounded-2xl border bg-white p-5 shadow-sm">
           <h2 className="text-xl font-semibold">Audit Timeline</h2>

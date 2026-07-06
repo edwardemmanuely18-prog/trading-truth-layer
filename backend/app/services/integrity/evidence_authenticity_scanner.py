@@ -9,6 +9,7 @@ from app.services.claim_integrity_engine import (
 
 from app.services.integrity.common import (
     create_alert,
+    resolve_alert,
     SEVERITY_HIGH,
     SEVERITY_CRITICAL,
     SEVERITY_FATAL,
@@ -61,6 +62,15 @@ def scan_evidence_authenticity_integrity(
                 ),
             )
 
+        else:
+
+            resolve_alert(
+                db,
+                "EVIDENCE_HASH_MISSING",
+                "claim_schema",
+                schema.id,
+            )
+
         # ==========================================
         # SNAPSHOT MISSING
         # ==========================================
@@ -69,10 +79,10 @@ def scan_evidence_authenticity_integrity(
             schema.status == "locked"
             and (
                 not schema.integrity_snapshot_json
-                or schema.integrity_snapshot_json
-                == "{}"
+                or schema.integrity_snapshot_json == "{}"
             )
         ):
+
             create_alert(
                 db=db,
                 workspace_id=workspace_id,
@@ -87,6 +97,15 @@ def scan_evidence_authenticity_integrity(
             )
 
             continue
+
+        else:
+
+            resolve_alert(
+                db,
+                "EVIDENCE_SNAPSHOT_MISSING",
+                "claim_schema",
+                schema.id,
+            )
 
         # ==========================================
         # LOAD SNAPSHOT
@@ -113,6 +132,13 @@ def scan_evidence_authenticity_integrity(
             )
 
             continue
+
+        resolve_alert(
+            db,
+            "SNAPSHOT_CORRUPTED",
+            "claim_schema",
+            schema.id,
+        )
 
         trades = resolve_schema_trades(
             schema,
@@ -161,6 +187,15 @@ def scan_evidence_authenticity_integrity(
                 ),
             )
 
+        else:
+
+            resolve_alert(
+                db,
+                "LOCKED_EVIDENCE_CHANGED",
+                "claim_schema",
+                schema.id,
+            )
+
         # ==========================================
         # TRADE SET CHANGED
         # ==========================================
@@ -196,6 +231,15 @@ def scan_evidence_authenticity_integrity(
                 ),
             )
 
+        else:
+
+            resolve_alert(
+                db,
+                "EVIDENCE_LINEAGE_BROKEN",
+                "claim_schema",
+                schema.id,
+            )
+
         # ==========================================
         # LOCK HASH MISSING
         # ==========================================
@@ -217,6 +261,15 @@ def scan_evidence_authenticity_integrity(
                 ),
             )
 
+        else:
+
+            resolve_alert(
+                db,
+                "LOCK_REFERENCE_MISSING",
+                "claim_schema",
+                schema.id,
+            )
+
         # ==========================================
         # EVIDENCE COVERAGE FAILURE
         # ==========================================
@@ -236,4 +289,13 @@ def scan_evidence_authenticity_integrity(
                     f"Published claim {schema.id} "
                     f"missing evidence coverage."
                 ),
+            )
+
+        else:
+
+            resolve_alert(
+                db,
+                "EVIDENCE_COVERAGE_FAILURE",
+                "claim_schema",
+                schema.id,
             )

@@ -10,6 +10,7 @@ from app.services.trade_metrics_service import (
 
 from app.services.integrity.common import (
     create_alert,
+    resolve_alert,
     SEVERITY_WARNING,
 )
 
@@ -43,15 +44,14 @@ def scan_metrics_integrity(
         )
 
         if (
-            metrics["trade_count"]
-            == 0
-            and schema.status
-            in [
+            metrics["trade_count"] == 0
+            and schema.status in [
                 "verified",
                 "published",
                 "locked",
             ]
         ):
+
             create_alert(
                 db=db,
                 workspace_id=workspace_id,
@@ -62,10 +62,17 @@ def scan_metrics_integrity(
                 message=f"Claim {schema.id} verified with zero trades.",
             )
 
-        if (
-            metrics["profit_factor"]
-            < 0
-        ):
+        else:
+
+            resolve_alert(
+                db,
+                "EMPTY_VERIFIED_CLAIM",
+                "claim_schema",
+                schema.id,
+            )
+
+        if metrics["profit_factor"] < 0:
+
             create_alert(
                 db=db,
                 workspace_id=workspace_id,
@@ -74,4 +81,13 @@ def scan_metrics_integrity(
                 entity_type="claim_schema",
                 entity_id=schema.id,
                 message=f"Claim {schema.id} contains invalid metrics.",
+            )
+
+        else:
+
+            resolve_alert(
+                db,
+                "INVALID_PROFIT_FACTOR",
+                "claim_schema",
+                schema.id,
             )

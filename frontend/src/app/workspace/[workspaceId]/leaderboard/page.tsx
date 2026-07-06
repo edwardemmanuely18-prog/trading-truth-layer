@@ -48,6 +48,12 @@ export default function Page(
   const [data, setData] =
     useState<any>(null);
 
+  const [claimLimit, setClaimLimit] =
+    useState(20);
+
+  const [memberLimit, setMemberLimit] =
+    useState(20);
+
   useEffect(() => {
 
     async function load() {
@@ -152,6 +158,8 @@ export default function Page(
               Claim Rankings
             </div>
 
+            <div className="max-h-[600px] overflow-y-auto">
+
             <table className="w-full">
 
               <thead className="bg-slate-100">
@@ -204,7 +212,9 @@ export default function Page(
                 )}
 
                 {!loading &&
-                  claims.map(
+                  claims
+                    .slice(0, claimLimit)
+                    .map(
                     (
                       row: ClaimRanking,
                       index: number
@@ -251,6 +261,27 @@ export default function Page(
 
             </table>
 
+            </div>
+
+          {claims.length > claimLimit && (
+
+            <div className="border-t p-4">
+
+              <button
+                onClick={() =>
+                  setClaimLimit(
+                    prev => prev + 20
+                  )
+                }
+                className="rounded-lg border px-4 py-2"
+              >
+                Load More
+              </button>
+
+            </div>
+
+          )}
+
           </div>
 
           <div className="rounded-xl border bg-white overflow-hidden">
@@ -258,6 +289,8 @@ export default function Page(
             <div className="border-b px-6 py-4 font-semibold">
               Member Rankings
             </div>
+
+            <div className="max-h-[600px] overflow-y-auto">
 
             <table className="w-full">
 
@@ -299,7 +332,9 @@ export default function Page(
                 )}
 
                 {!loading &&
-                  members.map(
+                  members
+                    .slice(0, memberLimit)
+                    .map(
                     (
                       row: MemberRanking,
                       index: number
@@ -330,6 +365,27 @@ export default function Page(
               </tbody>
 
             </table>
+
+            </div>
+
+          {members.length > memberLimit && (
+
+            <div className="border-t p-4">
+
+              <button
+                onClick={() =>
+                  setMemberLimit(
+                    prev => prev + 20
+                  )
+                }
+                className="rounded-lg border px-4 py-2"
+              >
+                Load More
+              </button>
+
+            </div>
+
+          )}
 
           </div>
 

@@ -33,6 +33,9 @@ export default function Page(
   const [loading, setLoading] =
     useState(true);
 
+  const [feedLimit, setFeedLimit] =
+    useState(20);
+
   useEffect(() => {
 
     async function load() {
@@ -86,6 +89,24 @@ export default function Page(
             publication activity,
             and governance adoption.
           </p>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+
+            <a
+              href={`/api/reports/workspace/${workspaceId}/verification`}
+              className="rounded-lg border bg-white px-4 py-2"
+            >
+              Download JSON
+            </a>
+
+            <a
+              href={`/api/reports/workspace/${workspaceId}/verification/pdf`}
+              className="rounded-lg border bg-white px-4 py-2"
+            >
+              Download PDF
+            </a>
+
+          </div>
 
         </div>
 
@@ -245,6 +266,8 @@ export default function Page(
 
               </div>
 
+              <div className="max-h-[600px] overflow-y-auto">
+
               <table className="w-full">
 
                 <thead className="bg-slate-100">
@@ -281,7 +304,9 @@ export default function Page(
 
                 <tbody>
 
-                  {data.recent_events?.map(
+                  {data.recent_events
+                    ?.slice(0, feedLimit)
+                    .map(
                     (event: any) => (
 
                       <tr
@@ -333,6 +358,28 @@ export default function Page(
                 </tbody>
 
               </table>
+
+              </div>
+
+              {data.recent_events?.length >
+                feedLimit && (
+
+                <div className="border-t p-4">
+
+                  <button
+                    onClick={() =>
+                      setFeedLimit(
+                        prev => prev + 20
+                      )
+                    }
+                    className="rounded-lg border px-4 py-2"
+                  >
+                    Load More
+                  </button>
+
+                </div>
+
+              )}
 
             </div>
 

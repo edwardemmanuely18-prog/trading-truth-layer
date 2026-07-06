@@ -9,9 +9,11 @@ from app.services.claim_integrity_engine import (
 
 from app.services.integrity.common import (
     create_alert,
+    resolve_alert,
     SEVERITY_FATAL,
     SEVERITY_CRITICAL,
 )
+
 
 
 def scan_ledger_integrity(
@@ -51,8 +53,7 @@ def scan_ledger_integrity(
 
         if (
             stored_snapshot.get("trade_hash")
-            and
-            stored_snapshot["trade_hash"]
+            and stored_snapshot["trade_hash"]
             != current_snapshot["trade_hash"]
         ):
             create_alert(
@@ -63,6 +64,13 @@ def scan_ledger_integrity(
                 entity_type="claim_schema",
                 entity_id=schema.id,
                 message=f"Claim {schema.id} trade integrity changed.",
+            )
+        else:
+            resolve_alert(
+                db,
+                "TRADE_HASH_MISMATCH",
+                "claim_schema",
+                schema.id,
             )
 
         stored_trade_count = (
@@ -77,8 +85,7 @@ def scan_ledger_integrity(
 
         if (
             stored_trade_count is not None
-            and stored_trade_count
-            != current_trade_count
+            and stored_trade_count != current_trade_count
         ):
             create_alert(
                 db=db,
@@ -88,4 +95,11 @@ def scan_ledger_integrity(
                 entity_type="claim_schema",
                 entity_id=schema.id,
                 message=f"Claim {schema.id} trade count changed.",
+            )
+        else:
+            resolve_alert(
+                db,
+                "TRADE_COUNT_MISMATCH",
+                "claim_schema",
+                schema.id,
             )

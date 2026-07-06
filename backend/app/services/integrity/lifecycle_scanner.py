@@ -9,8 +9,10 @@ from app.services.claim_integrity_engine import (
 
 from app.services.integrity.common import (
     create_alert,
+    resolve_alert,
     SEVERITY_WARNING,
 )
+
 
 
 def scan_lifecycle_integrity(
@@ -65,6 +67,13 @@ def scan_lifecycle_integrity(
                 entity_id=schema.id,
                 message=f"Claim {schema.id} lifecycle changed.",
             )
+        else:
+            resolve_alert(
+                db,
+                "LIFECYCLE_HASH_MISMATCH",
+                "claim_schema",
+                schema.id,
+            )
 
         if (
             schema.status == "locked"
@@ -78,4 +87,11 @@ def scan_lifecycle_integrity(
                 entity_type="claim_schema",
                 entity_id=schema.id,
                 message=f"Claim {schema.id} lock state inconsistent.",
+            )
+        else:
+            resolve_alert(
+                db,
+                "LOCK_STATE_INCONSISTENT",
+                "claim_schema",
+                schema.id,
             )

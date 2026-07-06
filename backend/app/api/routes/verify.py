@@ -22,6 +22,10 @@ from app.services.claim_integrity_engine import (
     compute_trade_set_hash,
 )
 
+from app.services.verification.verification_service import (
+    get_claim_verification_certificate,
+)
+
 from app.models.trade import Trade
 import json
 
@@ -104,6 +108,21 @@ def build_verify_payload(claim: ClaimSchema, db: Session):
         )
     )
 
+    certificate = get_claim_verification_certificate(
+        db=db,
+        claim=claim,
+    )
+
+    summary = certificate.summary
+
+    identity = certificate.identity
+
+    issuer_certificate = certificate.issuer
+
+    components = certificate.component_scores
+
+    provenance = certificate.provenance
+
     return {
         "claim_id": claim.id,
         "workspace_id": claim.workspace_id,
@@ -127,9 +146,52 @@ def build_verify_payload(claim: ClaimSchema, db: Session):
 
         "payload_version": VERIFY_PAYLOAD_VERSION,
         "issuer": {
+
             "name": VERIFY_ISSUER,
+
             "network": VERIFY_NETWORK,
+
             "endpoint_kind": VERIFY_ENDPOINT_KIND,
+
+            "workspace_name":
+                issuer_certificate.workspace_name,
+
+            "issuer_status":
+                issuer_certificate.issuer_status,
+
+            "verified_claims":
+                issuer_certificate.verified_claims,
+
+            "verified_trades":
+                issuer_certificate.verified_trades,
+
+        },
+        "verification": {
+
+            "score":
+                summary.verification_score,
+
+            "band":
+                summary.verification_band,
+
+            "tier":
+                summary.verification_tier,
+
+            "status":
+                summary.verification_status,
+
+            "certificate_id":
+                identity.certificate_id,
+
+            "certificate_hash":
+                identity.certificate_hash,
+
+            "certificate_version":
+                identity.certificate_version,
+
+            "tvs_version":
+                identity.tvs_version,
+
         },
         "network_identity": {
             "claim_hash": computed_hash,
@@ -177,6 +239,45 @@ def build_verify_payload(claim: ClaimSchema, db: Session):
             "stored_trade_set_hash": stored_trade_set_hash,
             "recomputed_trade_set_hash": recomputed_trade_set_hash,
         },
+        "component_scores": {
+
+            "evidence":
+                components.evidence.score,
+
+            "integrity":
+                components.integrity.score,
+
+            "governance":
+                components.governance.score,
+
+            "transparency":
+                components.transparency.score,
+
+            "stability":
+                components.stability.score,
+
+            "network":
+                components.network.score,
+
+            "reviews":
+                components.reviews.score,
+
+            "disputes":
+                components.disputes.score,
+
+        },
+        "tier_composition": {
+
+            "primary_tier":
+                provenance.primary_tier,
+
+            "primary_source":
+                provenance.primary_source,
+
+            "composition":
+                provenance.tier_composition,
+
+        },
         "lifecycle": {
             "verified_at": claim.verified_at,
             "published_at": claim.published_at,
@@ -190,6 +291,27 @@ def build_verify_payload(claim: ClaimSchema, db: Session):
             "canonical": True,
             "portable": True,
             "api_addressable": True,
+        },
+        "verification_links": {
+
+            "verify":
+                f"https://tradingtruthlayer.com/verify/{computed_hash}",
+
+            "public":
+                f"https://tradingtruthlayer.com/claim/{claim.id}/public",
+
+            "certificate":
+                f"https://tradingtruthlayer.com/verify/{computed_hash}",
+
+        },
+        "qr": {
+
+            "type":
+                "verification",
+
+            "url":
+                f"https://tradingtruthlayer.com/verify/{computed_hash}",
+
         },
         "portable_capabilities": {
             "canonical": True,

@@ -13,6 +13,9 @@ from app.models.claim_schema import ClaimSchema
 from app.models.trade import Trade
 from app.models.user import User
 from app.models.workspace import Workspace
+from app.models.workspace_preferences import (
+    WorkspacePreferences,
+)
 from app.models.broker_connection import BrokerConnection
 from app.models.broker_adapter import BrokerAdapter
 from app.models.workspace_membership import WorkspaceMembership
@@ -85,9 +88,32 @@ class CreateWorkspacePayload(BaseModel):
 
 
 class UpdateWorkspaceSettingsPayload(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
-    description: str | None = Field(default=None, max_length=1000)
-    billing_email: str | None = Field(default=None, max_length=255)
+    name: str = Field(
+        min_length=1,
+        max_length=200,
+    )
+
+    description: str | None = Field(
+        default=None,
+        max_length=1000,
+    )
+
+    billing_email: str | None = Field(
+        default=None,
+        max_length=255,
+    )
+
+    timezone: str = "UTC"
+
+    language: str = "English"
+
+    currency: str = "USD"
+
+    date_format: str = "YYYY-MM-DD"
+
+    auto_refresh: bool = True
+
+    auto_save: bool = True
 
 
 class UpdateWorkspaceMemberRolePayload(BaseModel):
@@ -170,12 +196,17 @@ def serialize_workspace_settings(workspace: Workspace):
     limits = get_workspace_plan_limits(workspace)
 
     return {
+
         "workspace_id": workspace.id,
+
         "name": workspace.name,
+
         "description": workspace.description,
+
         "billing_email": workspace.billing_email,
 
         "plan_code": resolve_workspace_plan_code(workspace),
+
         "billing_status": normalize_billing_status(
             workspace.billing_status
         ),
@@ -183,6 +214,7 @@ def serialize_workspace_settings(workspace: Workspace):
         "limits": limits,
 
         "stripe_customer_id": workspace.stripe_customer_id,
+
         "stripe_subscription_id": workspace.stripe_subscription_id,
 
         "subscription_current_period_end": (
@@ -202,6 +234,54 @@ def serialize_workspace_settings(workspace: Workspace):
             if workspace.updated_at
             else None
         ),
+
+        # --------------------------------------------------
+        # Settings Page Extensions
+        # --------------------------------------------------
+
+        "preferences": None,
+
+        "profile": {
+
+            "workspace_name": workspace.name,
+
+            "description": workspace.description,
+
+            "billing_email": workspace.billing_email,
+
+        },
+
+        "branding": None,
+
+        "verification_preferences": None,
+
+        "governance": None,
+
+        "billing_summary": None,
+
+        "platform_readiness": None,
+
+        # --------------------------------------------------
+        # Billing Page Compatibility
+        # --------------------------------------------------
+
+        "configured_plan": normalize_plan_code(
+            workspace.plan_code
+        ),
+
+        "effective_plan": resolve_workspace_plan_code(
+            workspace
+        ),
+
+        "billing_provider": (
+            workspace.billing_provider
+            or "manual"
+        ),
+
+        "billing_status": normalize_billing_status(
+            workspace.billing_status
+        ),
+
     }
 
 
@@ -459,7 +539,69 @@ def get_workspace_settings(
         db,
     )
 
-    return serialize_workspace_settings(workspace)
+    settings = serialize_workspace_settings(workspace)
+
+    preferences = (
+        db.query(WorkspacePreferences)
+        .filter(
+            WorkspacePreferences.workspace_id == workspace.id
+        )
+        .first()
+    )
+
+    if preferences:
+
+        settings["preferences"] = {
+
+            "timezone": preferences.timezone,
+
+            "language": preferences.language,
+
+            "currency": preferences.currency,
+
+            "date_format": preferences.date_format,
+
+            "auto_refresh": preferences.auto_refresh,
+
+            "auto_save": preferences.auto_save,
+
+        }
+
+    else:
+
+        settings["preferences"] = {
+
+            "timezone": "UTC",
+
+            "language": "English",
+
+            "currency": "USD",
+
+            "date_format": "YYYY-MM-DD",
+
+            "auto_refresh": True,
+
+            "auto_save": True,
+
+        }
+
+    settings["billing"] = {
+        "provider": (
+            workspace.billing_provider
+            or "manual"
+        ),
+        "status": normalize_billing_status(
+            workspace.billing_status
+        ),
+        "configured_plan": normalize_plan_code(
+            workspace.plan_code
+        ),
+        "effective_plan": resolve_workspace_plan_code(
+            workspace
+        ),
+    }
+
+    return settings
 
 
 @router.patch("/workspaces/{workspace_id}/settings")
@@ -478,12 +620,75 @@ def update_workspace_settings(
     workspace.name = payload.name.strip()
     workspace.description = (payload.description or "").strip() or None
     workspace.billing_email = (payload.billing_email or "").strip() or None
+
+    preferences = (
+        db.query(WorkspacePreferences)
+        .filter(
+            WorkspacePreferences.workspace_id == workspace.id
+        )
+        .first()
+    )
+
+    if preferences is None:
+
+        preferences = WorkspacePreferences(
+            workspace_id=workspace.id,
+        )
+
+        db.add(preferences)
+
+    preferences.timezone = payload.timezone
+
+    preferences.language = payload.language
+
+    preferences.currency = payload.currency
+
+    preferences.date_format = payload.date_format
+
+    preferences.auto_refresh = payload.auto_refresh
+
+    preferences.auto_save = payload.auto_save
+
     workspace.updated_at = datetime.utcnow()
 
     db.commit()
     db.refresh(workspace)
 
-    return serialize_workspace_settings(workspace)
+    settings = serialize_workspace_settings(workspace)
+
+    settings["preferences"] = {
+
+        "timezone": preferences.timezone,
+
+        "language": preferences.language,
+
+        "currency": preferences.currency,
+
+        "date_format": preferences.date_format,
+
+        "auto_refresh": preferences.auto_refresh,
+
+        "auto_save": preferences.auto_save,
+
+    }
+
+    settings["billing"] = {
+        "provider": (
+            workspace.billing_provider
+            or "manual"
+        ),
+        "status": normalize_billing_status(
+            workspace.billing_status
+        ),
+        "configured_plan": normalize_plan_code(
+            workspace.plan_code
+        ),
+        "effective_plan": resolve_workspace_plan_code(
+            workspace
+        ),
+    }
+
+    return settings
     
 
 
@@ -551,7 +756,97 @@ def get_workspace_usage(
 
     entitlement["trade_metrics"] = trade_metrics
 
+    # ---------------------------------------------------
+    # Billing Page Compatibility
+    # ---------------------------------------------------
+
+    entitlement["configured_plan"] = normalize_plan_code(
+        workspace.plan_code
+    )
+
+    entitlement["effective_plan"] = resolve_workspace_plan_code(
+        workspace
+    )
+
+    entitlement["billing_status"] = normalize_billing_status(
+        workspace.billing_status
+    )
+
     return entitlement
+
+
+@router.get("/workspaces/{workspace_id}/governance")
+def get_workspace_governance(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    enforce_internal_workspace_access(
+        workspace,
+        current_user,
+        db,
+    )
+
+    return {
+        "workspace_id": workspace.id,
+
+        "configured_plan": normalize_plan_code(
+            workspace.plan_code
+        ),
+
+        "effective_plan": resolve_workspace_plan_code(
+            workspace
+        ),
+
+        "billing_status": normalize_billing_status(
+            workspace.billing_status
+        ),
+
+        "billing_provider": (
+            workspace.billing_provider
+            or "manual"
+        ),
+
+        "created_at": (
+            workspace.created_at.isoformat()
+            if workspace.created_at
+            else None
+        ),
+
+        "updated_at": (
+            workspace.updated_at.isoformat()
+            if workspace.updated_at
+            else None
+        ),
+
+        "workspace_locked": False,
+
+        "verification_locked": False,
+
+        "claim_lock_enabled": True,
+
+        "publish_enabled": True,
+
+        "owner_required": True,
+    }
 
 
 @router.get("/workspaces/{workspace_id}/broker-connections")
@@ -1714,3 +2009,5 @@ def debug_whoami(
         "user_id": current_user.id,
         "email": current_user.email,
     }
+
+    

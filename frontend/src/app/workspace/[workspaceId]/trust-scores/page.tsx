@@ -1,33 +1,30 @@
 "use client";
 
-import { use } from "react";
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 
 import Navbar from "../../../../components/Navbar";
+
 import {
   getTrustScores,
+  TrustScore,
 } from "../../../../lib/api";
 
-type Props = {
-  params: Promise<{
-    workspaceId: string;
-  }>;
-};
-
-export default function Page(
-  { params }: Props
-) {
-  const resolvedParams = use(params);
+export default function TrustScoresPage() {
+  const params = useParams();
 
   const workspaceId = Number(
-    resolvedParams.workspaceId
+    params.workspaceId
   );
 
   const [loading, setLoading] =
     useState(true);
 
-  const [profile, setProfile] =
-    useState<any>(null);
+  const [scores, setScores] =
+    useState<TrustScore[]>([]);
+
+  const [visibleRows, setVisibleRows] =
+    useState(10);
 
   useEffect(() => {
     async function load() {
@@ -35,11 +32,12 @@ export default function Page(
         const response =
           await getTrustScores(
             workspaceId
-          )
+          );
 
-        setProfile(
-          response
+        setScores(
+          response.scores || []
         );
+
       } catch (err) {
         console.error(err);
       } finally {
@@ -47,32 +45,33 @@ export default function Page(
       }
     }
 
-    load();
+    if (!Number.isNaN(workspaceId)) {
+      load();
+    }
   }, [workspaceId]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <Navbar />
+  const institutional =
+    scores.filter(
+      x =>
+        x.tier ===
+        "INSTITUTIONAL GRADE"
+    ).length;
 
-        <div className="mx-auto max-w-7xl px-6 py-10">
-          Loading trust intelligence...
-        </div>
-      </div>
-    );
-  }
+  const verified =
+    scores.filter(
+      x => x.tier === "VERIFIED"
+    ).length;
 
-  if (!profile) {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <Navbar />
-
-        <div className="mx-auto max-w-7xl px-6 py-10">
-          Unable to load trust profile.
-        </div>
-      </div>
-    );
-  }
+  const averageScore =
+    scores.length > 0
+      ? (
+          scores.reduce(
+            (sum, x) =>
+              sum + x.trust_score,
+            0
+          ) / scores.length
+        ).toFixed(1)
+      : "0";
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -83,128 +82,179 @@ export default function Page(
 
         <div className="mb-8">
 
-          <div className="text-xs uppercase tracking-widest text-slate-500">
-            Trust Intelligence
+          <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
+            TRUST INTELLIGENCE
           </div>
 
-          <h1 className="mt-2 text-4xl font-bold">
+          <h1 className="mt-2 text-5xl font-bold">
             Trust Scores
           </h1>
 
-          <p className="mt-3 text-slate-600">
-            Institutional trust scoring,
-            network credibility,
-            verification quality,
-            and governance health.
+          <p className="mt-4 max-w-4xl text-slate-600">
+            Institutional trust
+            ranking generated from
+            lifecycle integrity,
+            verification status,
+            publication status,
+            lock status and
+            independent review
+            activity.
           </p>
 
         </div>
 
-        <div className="grid gap-4 md:grid-cols-6">
-
-          <MetricCard
-            title="Trust Score"
-            value={
-              profile.average_trust_score
-            }
-          />
-
-          <MetricCard
-            title="Network Score"
-            value={
-              profile.average_network_score
-            }
-          />
+        <div className="grid gap-4 md:grid-cols-4 mb-8">
 
           <MetricCard
             title="Claims"
-            value={
-              profile.claims_count
-            }
+            value={scores.length}
           />
 
           <MetricCard
-            title="Locked"
-            value={
-              profile.locked_claims_count
-            }
+            title="Average Score"
+            value={averageScore}
           />
 
           <MetricCard
-            title="Contested"
-            value={
-              profile.contested_claims_count
-            }
+            title="Institutional Grade"
+            value={institutional}
           />
 
           <MetricCard
-            title="Trust Band"
-            value={
-              profile.trust_profile_band
-            }
+            title="Verified"
+            value={verified}
           />
 
         </div>
 
-        <div className="mt-8 grid gap-6 md:grid-cols-2">
+        <div className="rounded-2xl border bg-white p-8 mb-8">
 
-          <AnalyticsCard
-            title="Trust Profile"
-            items={[
-              {
-                label: "Profile",
-                value:
-                  profile.profile_id,
-              },
-              {
-                label: "Workspace",
-                value:
-                  profile.workspace_id,
-              },
-              {
-                label: "Type",
-                value:
-                  profile.type,
-              },
-              {
-                label: "Network",
-                value:
-                  profile.network,
-              },
-            ]}
-          />
+          <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
+            TRUST ENGINE
+          </div>
 
-          <AnalyticsCard
-            title="Performance Context"
-            items={[
-              {
-                label:
-                  "Total Net PnL",
-                value:
-                  profile.total_net_pnl,
-              },
-              {
-                label:
-                  "Average Trust",
-                value:
-                  profile.average_trust_score,
-              },
-              {
-                label:
-                  "Average Network",
-                value:
-                  profile.average_network_score,
-              },
-              {
-                label:
-                  "Trust Band",
-                value:
-                  profile.trust_profile_band,
-              },
-            ]}
-          />
+          <h2 className="mt-3 text-3xl font-semibold">
+            Institutional Ranking Registry
+          </h2>
+
+          <p className="mt-4 text-slate-600">
+            Trust scores aggregate
+            lifecycle governance,
+            verification maturity
+            and external review
+            participation into a
+            standardized
+            institutional signal.
+          </p>
 
         </div>
+
+        <div className="space-y-6">
+
+          {scores
+            .slice(0, visibleRows)
+            .map(score => (
+
+            <div
+              key={score.claim_id}
+              className="rounded-2xl border bg-white p-8"
+            >
+
+              <div className="flex items-start justify-between">
+
+                <div>
+
+                  <h2 className="text-3xl font-semibold">
+                    {score.claim_name}
+                  </h2>
+
+                  <div className="mt-3 flex gap-2 flex-wrap">
+
+                    <span className="rounded-full border border-slate-300 px-3 py-1 text-sm">
+                      {score.status}
+                    </span>
+
+                    <span
+                      className={`rounded-full px-3 py-1 text-sm border ${
+                        score.tier ===
+                        "INSTITUTIONAL GRADE"
+                          ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                          : score.tier ===
+                            "VERIFIED"
+                          ? "border-blue-300 bg-blue-50 text-blue-700"
+                          : "border-amber-300 bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      {score.tier}
+                    </span>
+
+                  </div>
+
+                </div>
+
+                <div className="text-right">
+
+                  <div className="text-xs text-slate-500">
+                    TRUST SCORE
+                  </div>
+
+                  <div className="text-5xl font-bold">
+                    {score.trust_score}
+                  </div>
+
+                </div>
+
+              </div>
+
+              <div className="mt-8 grid gap-4 md:grid-cols-3">
+
+                <InfoCard
+                  label="Reviews"
+                  value={
+                    score.review_count
+                  }
+                />
+
+                <InfoCard
+                  label="Average Rating"
+                  value={
+                    score.average_rating
+                  }
+                />
+
+                <InfoCard
+                  label="Claim ID"
+                  value={
+                    score.claim_id
+                  }
+                />
+
+              </div>
+
+            </div>
+
+          ))}
+
+        </div>
+
+        {scores.length > visibleRows && (
+
+          <div className="mt-8 flex justify-center">
+
+            <button
+              onClick={() =>
+                setVisibleRows(
+                  visibleRows + 10
+                )
+              }
+              className="rounded-xl bg-slate-900 px-6 py-3 text-white"
+            >
+              Load More
+            </button>
+
+          </div>
+
+        )}
 
       </div>
 
@@ -220,58 +270,34 @@ function MetricCard({
   value: string | number;
 }) {
   return (
-    <div className="rounded-xl border bg-white p-5">
+    <div className="rounded-2xl border bg-white p-6">
       <div className="text-sm text-slate-500">
         {title}
       </div>
 
-      <div className="mt-2 text-3xl font-bold">
+      <div className="mt-2 text-4xl font-bold">
         {value}
       </div>
     </div>
   );
 }
 
-function AnalyticsCard({
-  title,
-  items,
+function InfoCard({
+  label,
+  value,
 }: {
-  title: string;
-  items: {
-    label: string;
-    value: string | number;
-  }[];
+  label: string;
+  value: string | number;
 }) {
   return (
-    <div className="rounded-xl border bg-white p-6">
-
-      <h2 className="mb-4 text-lg font-semibold">
-        {title}
-      </h2>
-
-      <div className="space-y-3">
-
-        {items.map(item => (
-
-          <div
-            key={item.label}
-            className="flex justify-between"
-          >
-
-            <span>
-              {item.label}
-            </span>
-
-            <span className="font-semibold">
-              {item.value}
-            </span>
-
-          </div>
-
-        ))}
-
+    <div className="rounded-xl border p-5">
+      <div className="text-xs text-slate-500">
+        {label}
       </div>
 
+      <div className="mt-2 text-xl font-semibold">
+        {value}
+      </div>
     </div>
   );
 }

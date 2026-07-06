@@ -8,7 +8,7 @@ import {
   type ClaimTradeEvidence,
   type ClaimTradeScopeRow,
   type PublicVerifyResult,
-  type VerifyPayloadV7,
+  type VerificationCertificate,
   resolveVerificationExposureLevel,
 } from "../../../lib/api";
 import ClaimVerificationSignature from "../../../components/ClaimVerificationSignature";
@@ -91,9 +91,9 @@ function networkTone(lineage: any) {
   return "border-sky-200 bg-sky-50 text-sky-800";
 }
 
-function resolveIssuerSafe(result: any, v7Payload: any) {
+function resolveIssuerSafe(result: any, certificate: any) {
   return (
-    v7Payload?.issuer?.name ||
+    certificate?.issuer?.name ||
     result?.issuer?.name ||
     result?.issuer_name ||
     result?.workspace_name ||
@@ -332,9 +332,19 @@ function PublicTradeEvidenceTable({
       {rows.length === 0 ? (
         <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">{emptyText}</div>
       ) : (
-        <div className="mt-4 overflow-x-auto">
+        <div
+            className="
+                mt-4
+                overflow-x-auto
+                overflow-y-auto
+                max-h-[650px]
+                rounded-xl
+                border
+                border-slate-200
+            "
+        >
           <table className="min-w-full text-sm">
-            <thead>
+            <thead className="sticky top-0 bg-white z-10">
               <tr className="border-b text-left text-slate-500">
                 <th className="px-3 py-2">#</th>
                 <th className="px-3 py-2">Trade ID</th>
@@ -432,7 +442,8 @@ export default function PublicVerifyClaimPage() {
   }, [params]);
 
   const [result, setResult] = useState<PublicVerifyResult | null>(null);
-  const [v7Payload, setV7Payload] = useState<VerifyPayloadV7 | null>(null);
+  const [certificate, setCertificate] =
+      useState<VerificationCertificate | null>(null);
   const [tradeEvidence, setTradeEvidence] = useState<ClaimTradeEvidence | null>(null);
   const [loading, setLoading] = useState(true);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
@@ -459,11 +470,13 @@ export default function PublicVerifyClaimPage() {
 
         // Phase 7 canonical endpoint
         try {
-          const verify = await api.getVerifyClaimByHash(claimHash);
-          
-          // detect V7 payload (raw)
-          if ((verify as any)?.payload_version) {
-            setV7Payload(verify as unknown as VerifyPayloadV7);
+          const verify =
+              await api.getVerifyClaimByHash(claimHash);
+
+          if (verify?.payload_version) {
+
+              setCertificate(verify);
+
           }
         } catch {
           // ignore — Phase 7 optional
@@ -593,11 +606,11 @@ export default function PublicVerifyClaimPage() {
   const lineageSummary = buildLineageSummary(lineage);
   const networkType = resolveClaimOriginType(lineage);
   const networkLabel = resolveNetworkLabel(lineage);
-  const issuerName = resolveIssuerSafe(verifiedResult, v7Payload);
+  const issuerName = resolveIssuerSafe(verifiedResult, certificate);
 
   const leaderboard = Array.isArray(verifiedResult.leaderboard) ? verifiedResult.leaderboard : [];
   const integrityOk =
-    v7Payload?.integrity_record?.is_valid ??
+    certificate?.integrity?.valid ??
     normalizeText(result?.integrity_status) === "valid";
   const lifecycleStatus = normalizeText(verifiedResult.verification_status);
 
@@ -643,19 +656,16 @@ export default function PublicVerifyClaimPage() {
   const exposureLevel = resolveVerificationExposureLevel(verifiedResult);
 
  const canonicalCapability =
-  v7Payload?.proof_summary?.canonical ??
-  v7Payload?.portable_capabilities?.canonical ??
-  (lifecycleStatus === "published" || lifecycleStatus === "locked");
+   certificate?.verification?.canonical ??
+   (lifecycleStatus === "published" || lifecycleStatus === "locked");
 
  const portableCapability =
-  v7Payload?.proof_summary?.portable ??
-  v7Payload?.portable_capabilities?.portable ??
-  Boolean(verificationUrl);
+   certificate?.verification?.portable ??
+   Boolean(verificationUrl);
 
  const apiAddressableCapability =
-  v7Payload?.proof_summary?.api_addressable ??
-  v7Payload?.portable_capabilities?.api_addressable ??
-  Boolean(claimHash);
+   certificate?.verification?.api_addressable ??
+   Boolean(claimHash);
 
  const trustState = (() => {
   switch (trustLevel) {
@@ -969,6 +979,66 @@ export default function PublicVerifyClaimPage() {
                 </div>
               </div>
 
+              <div className="mt-5 grid gap-4 md:grid-cols-3">
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5">
+
+                      <div className="text-xs uppercase tracking-wide text-slate-500">
+
+                          TVS Tier
+
+                      </div>
+
+                      <div className="mt-2 text-2xl font-bold">
+
+                          {certificate?.trust.tier
+                              ?.replace("tier_", "Tier ")
+                              ?.replace("1","I")
+                              ?.replace("2","II")
+                              ?.replace("3","III")}
+
+                      </div>
+
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5">
+
+                      <div className="text-xs uppercase tracking-wide text-slate-500">
+
+                          Evidence Tier
+
+                      </div>
+
+                      <div className="mt-2 text-2xl font-bold">
+
+                          {certificate?.evidence.primary_tier
+                              ?.replace("tier_", "Tier ")
+                              ?.replace("1","I")
+                              ?.replace("2","II")
+                              ?.replace("3","III")}
+
+                      </div>
+
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5">
+
+                      <div className="text-xs uppercase tracking-wide text-slate-500">
+
+                          Trust Score
+
+                      </div>
+
+                      <div className="mt-2 text-2xl font-bold">
+
+                          {certificate?.trust.score}
+
+                      </div>
+
+                  </div>
+
+              </div>
+
               <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-green-200 bg-white p-4">
                   <div className="text-xs uppercase tracking-wide text-slate-500">Verification path</div>
@@ -1097,26 +1167,53 @@ export default function PublicVerifyClaimPage() {
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard
-              label="Trade Count"
-              value={String(verifiedResult.trade_count)}
-              hint="In-scope trades used for this record"
-            />
-            <MetricCard
-              label="Net PnL"
-              value={formatNumber(verifiedResult.net_pnl)}
-              hint="Aggregate net trading result"
-            />
-            <MetricCard
-              label="Profit Factor"
-              value={formatNumber(verifiedResult.profit_factor, 4)}
-              hint="Gross profit ÷ gross loss"
-            />
-            <MetricCard
-              label="Win Rate"
-              value={formatPercent(verifiedResult.win_rate, 2)}
-              hint="Winning trades as percentage"
-            />
+
+              <MetricCard
+                  label="Trade Count"
+                  value={
+                      String(
+                          certificate?.performance.trade_count ??
+                          verifiedResult.trade_count
+                      )
+                  }
+                  hint="In-scope trades used for this record"
+              />
+
+              <MetricCard
+                  label="Net PnL"
+                  value={
+                      formatNumber(
+                          certificate?.performance.net_pnl ??
+                          verifiedResult.net_pnl
+                      )
+                  }
+                  hint="Aggregate net trading result"
+              />
+
+              <MetricCard
+                  label="Profit Factor"
+                  value={
+                      formatNumber(
+                          certificate?.performance.profit_factor ??
+                          verifiedResult.profit_factor,
+                          4
+                      )
+                  }
+                  hint="Gross profit ÷ gross loss"
+              />
+
+              <MetricCard
+                  label="Win Rate"
+                  value={
+                      formatPercent(
+                          certificate?.performance.win_rate ??
+                          verifiedResult.win_rate,
+                          2
+                      )
+                  }
+                  hint="Winning trades as percentage"
+              />
+
           </div>
         </div>
 
@@ -1252,9 +1349,9 @@ export default function PublicVerifyClaimPage() {
           {leaderboard.length === 0 ? (
             <div className="mt-4 text-slate-500">No leaderboard rows available.</div>
           ) : (
-            <div className="mt-4 overflow-x-auto">
+            <div className="mt-4 overflow-x-auto overflow-y-auto max-h-[520px] rounded-xl border border-slate-200">
               <table className="min-w-full text-sm">
-                <thead>
+                <thead className="sticky top-0 bg-white z-10">
                   <tr className="border-b text-left text-slate-500">
                     <th className="px-3 py-2">Rank</th>
                     <th className="px-3 py-2">Member</th>

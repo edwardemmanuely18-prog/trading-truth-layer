@@ -38,11 +38,6 @@ class ClaimSchema(Base):
         index=True,
     )
 
-    integrity_snapshot_json = Column(
-        Text,
-        nullable=True,
-    )
-
     scope_hash = Column(
         String,
         nullable=True,

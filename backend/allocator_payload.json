@@ -1,0 +1,70 @@
+{
+  "allocator_assessment": {
+    "allocator_score": 57.36,
+    "allocator_band": "HIGH REVIEW",
+    "verdict": "NOT RECOMMENDED",
+    "allocation_capacity": "REJECTED"
+  },
+  "performance": {
+    "trade_count": 303,
+    "total_pnl": 70795.45,
+    "profit_factor": 105.893,
+    "expectancy": 233.65,
+    "win_rate": 22.11
+  },
+  "risk": {
+    "operational_risk": "HIGH",
+    "max_drawdown": 368.0,
+    "wins": 67,
+    "losses": 27
+  },
+  "verification": {
+    "coverage": 99.67,
+    "broker_verified": 222,
+    "verified": 80,
+    "self_reported": 1
+  },
+  "trust": {
+    "trust_score": 62.14,
+    "network_score": 51.45,
+    "trust_band": "developing"
+  },
+  "evidence": {
+    "quality_score": 100,
+    "quality_band": "EXCELLENT",
+    "tier_distribution": {
+      "tier_1": 222,
+      "tier_2": 80,
+      "tier_3": 1
+    }
+  },
+  "integrity": {
+    "integrity_score": 0,
+    "open_findings": 113,
+    "resolved_findings": 4
+  },
+  "governance": {
+    "claims": 9,
+    "locked_claims": 7,
+    "review_count": 5,
+    "average_rating": 6.0
+  },
+  "allocator_risks": {
+    "count": 3,
+    "items": [
+      "drawdown_present",
+      "integrity_monitoring_required",
+      "allocator_threshold_not_met"
+    ]
+  },
+  "report_metadata": {
+    "report_type": "ALLOCATOR",
+    "workspace_id": 1,
+    "version": "1.0"
+  },
+  "verification_links": {
+    "allocator_route": "/reports/workspace/1/allocator",
+    "verification_route": "/reports/workspace/1/verification",
+    "audit_route": "/reports/workspace/1/audit"
+  }
+}

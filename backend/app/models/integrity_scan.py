@@ -31,7 +31,7 @@ class IntegrityScan(Base):
     status = Column(
         String,
         nullable=False,
-        default="completed",
+        default="valid",
     )
 
     claims_scanned = Column(

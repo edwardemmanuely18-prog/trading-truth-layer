@@ -6,6 +6,7 @@ from app.services.claim_service import (
 
 from app.services.integrity.common import (
     create_alert,
+    resolve_alert,
     SEVERITY_HIGH,
 )
 
@@ -35,8 +36,18 @@ def scan_evidence_integrity(
                 entity_id=schema.id,
                 message=f"Claim {schema.id} has no claim hash.",
             )
+        
 
             continue
+
+        else:
+
+            resolve_alert(
+                db,
+                "CLAIM_HASH_MISSING",
+                "claim_schema",
+                schema.id,
+            )
 
         current_hash = (
             compute_claim_hash(
@@ -56,4 +67,11 @@ def scan_evidence_integrity(
                 entity_type="claim_schema",
                 entity_id=schema.id,
                 message=f"Claim {schema.id} hash mismatch.",
+            )
+        else:
+            resolve_alert(
+                db,
+                "CLAIM_HASH_MISMATCH",
+                "claim_schema",
+                schema.id,
             )

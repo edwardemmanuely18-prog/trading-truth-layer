@@ -37,3 +37,12 @@ def scan_verification_integrity(
                 entity_id=schema.id,
                 message=f"Claim {schema.id} cannot be verified publicly.",
             )
+
+        else:
+
+            resolve_alert(
+                db,
+                "VERIFICATION_ROUTE_BROKEN",
+                "claim_schema",
+                schema.id,
+            )

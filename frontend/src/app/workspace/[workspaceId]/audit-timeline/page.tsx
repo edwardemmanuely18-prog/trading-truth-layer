@@ -101,6 +101,24 @@ export default function Page(
             across the workspace.
           </p>
 
+          <div className="mt-6 flex flex-wrap gap-3">
+
+            <a
+              href={`/api/reports/workspace/${workspaceId}/audit`}
+              className="rounded-lg border bg-white px-4 py-2"
+            >
+              Download JSON
+            </a>
+
+            <a
+              href={`/api/reports/workspace/${workspaceId}/audit/pdf`}
+              className="rounded-lg border bg-white px-4 py-2"
+            >
+              Download PDF
+            </a>
+
+          </div>
+
         </div>
 
         <div className="grid gap-4 md:grid-cols-4 mb-8">

@@ -4,6 +4,18 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Navbar from "../../../../components/Navbar";
+
+import WorkspaceIdentityCard from "../../../../components/settings/cards/WorkspaceIdentityCard";
+import WorkspaceProfileCard from "../../../../components/settings/cards/WorkspaceProfileCard";
+import WorkspaceUsageCard from "../../../../components/settings/cards/WorkspaceUsageCard";
+import WorkspaceBillingCard from "../../../../components/settings/cards/WorkspaceBillingCard";
+import PlatformReadinessCard from "../../../../components/settings/cards/PlatformReadinessCard";
+import WorkspaceGovernanceCard from "../../../../components/settings/cards/WorkspaceGovernanceCard";
+import WorkspacePreferencesCard from "../../../../components/settings/cards/WorkspacePreferencesCard";
+import VerificationPreferencesCard from "../../../../components/settings/cards/VerificationPreferencesCard";
+import BrandingCard from "../../../../components/settings/cards/BrandingCard";
+import WorkspaceDangerZoneCard from "../../../../components/settings/cards/WorkspaceDangerZoneCard";
+
 import { useAuth } from "../../../../components/AuthProvider";
 import {
   api,
@@ -887,6 +899,18 @@ export default function WorkspaceSettingsPage() {
   const [description, setDescription] = useState("");
   const [billingEmail, setBillingEmail] = useState("");
 
+  const [timezone, setTimezone] = useState("UTC");
+
+  const [language, setLanguage] = useState("English");
+
+  const [currency, setCurrency] = useState("USD");
+
+  const [dateFormat, setDateFormat] = useState("YYYY-MM-DD");
+
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
+  const [autoSave, setAutoSave] = useState(true);
+
   const [selectedPlanCode, setSelectedPlanCode] = useState("starter");
   const [selectedBillingCycle, setSelectedBillingCycle] = useState("monthly");
 
@@ -922,6 +946,35 @@ export default function WorkspaceSettingsPage() {
       setName(settingsRes.name || "");
       setDescription(settingsRes.description || "");
       setBillingEmail(settingsRes.billing_email || "");
+      setTimezone(
+          settingsRes.preferences?.timezone ??
+          "UTC"
+      );
+
+      setLanguage(
+          settingsRes.preferences?.language ??
+          "English"
+      );
+
+      setCurrency(
+          settingsRes.preferences?.currency ??
+          "USD"
+      );
+
+      setDateFormat(
+          settingsRes.preferences?.date_format ??
+          "YYYY-MM-DD"
+      );
+
+      setAutoRefresh(
+          settingsRes.preferences?.auto_refresh ??
+          true
+      );
+
+      setAutoSave(
+          settingsRes.preferences?.auto_save ??
+          true
+      );
       setSelectedPlanCode(settingsRes.plan_code || "starter");
       setSelectedBillingCycle("monthly");
     } catch (err) {
@@ -950,6 +1003,35 @@ export default function WorkspaceSettingsPage() {
       setName(settingsRes.name || "");
       setDescription(settingsRes.description || "");
       setBillingEmail(settingsRes.billing_email || "");
+      setTimezone(
+          settingsRes.preferences?.timezone ??
+          "UTC"
+      );
+
+      setLanguage(
+          settingsRes.preferences?.language ??
+          "English"
+      );
+
+      setCurrency(
+          settingsRes.preferences?.currency ??
+          "USD"
+      );
+
+      setDateFormat(
+          settingsRes.preferences?.date_format ??
+          "YYYY-MM-DD"
+      );
+
+      setAutoRefresh(
+          settingsRes.preferences?.auto_refresh ??
+          true
+      );
+
+      setAutoSave(
+          settingsRes.preferences?.auto_save ??
+          true
+      );
       setSelectedPlanCode(settingsRes.plan_code || "starter");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to refresh billing state.");
@@ -1016,9 +1098,25 @@ export default function WorkspaceSettingsPage() {
       setSuccess(null);
 
       const updated = await api.updateWorkspaceSettings(workspaceId, {
-        name,
-        description,
-        billing_email: billingEmail,
+
+          name,
+
+          description,
+
+          billing_email: billingEmail,
+
+          timezone,
+
+          language,
+
+          currency,
+
+          date_format: dateFormat,
+
+          auto_refresh: autoRefresh,
+
+          auto_save: autoSave,
+
       });
 
       setSettings(updated);
@@ -1510,206 +1608,41 @@ export default function WorkspaceSettingsPage() {
                 </div>
               ) : null}
 
-              <div className="rounded-3xl border bg-white p-6 shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-2xl font-semibold">Billing Status</h2>
-                    <p className="mt-1 text-sm text-slate-500">
-                      Billing status, plan enforcement, and commercial activation for this workspace.
-                    </p>
-                  </div>
+              <WorkspaceBillingCard
 
-                  <div className="flex flex-wrap gap-2">
-                    <PlanBadge plan={settings?.plan_code} />
-                    <BillingBadge status={settings?.billing_status} />
-                  </div>
-                </div>
+                  configuredPlan={configuredPlanName}
 
-                <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-                  <div>
-                    <span className="font-semibold">Configured plan:</span> {configuredPlanName}
-                  </div>
-                  <div className="mt-1">
-                    <span className="font-semibold">Effective plan:</span> {effectivePlanName}
-                  </div>
-                  <div className="mt-1">
-                    <span className="font-semibold">Meaning:</span> the configured plan is the selected commercial tier,
-                    while the effective plan is the tier currently enforcing limits based on billing status.
-                  </div>
-                </div>
+                  effectivePlan={effectivePlanName}
 
-                <div className="mt-6 grid gap-4 md:grid-cols-2">
-                  <PriceCard
-                    label="Configured Monthly Price"
-                    value={formatUsd(currentPlanBilling?.monthly_price_usd)}
-                    hint="Commercial tier monthly price"
-                  />
-                  <PriceCard
-                    label="Configured Annual Price"
-                    value={formatUsd(currentPlanBilling?.annual_price_usd)}
-                    hint="Commercial tier annual price"
-                  />
-                </div>
+                  billingStatus={settings?.billing_status}
 
-                <div className="mt-4 grid gap-4 md:grid-cols-[1fr_220px]">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Selected Upgrade Plan
-                    </label>
+                  provider={billingProviderLabel}
 
-                    {(() => {
-                      console.log(
-                        "UPGRADE DROPDOWN SOURCE",
-                        planCatalog.map((p: any) => ({
-                          code: p.code,
-                          name: p.name,
-                          is_public: p.is_public,
-                        }))
-                      );
+                  monthlyPrice={currentPlanBilling?.monthly_price_usd}
 
-                      return null;
-                    })()}
+                  annualPrice={currentPlanBilling?.annual_price_usd}
 
-                    <select
-                      value={selectedPlanCode}
-                      onChange={(e) => {
-                        setSelectedPlanCode(e.target.value);
-                        setBillingMessage(null);
-                      }}
-                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                    >
-                      {Array.from(
-                        new Map(
-                          planCatalog
-                            .filter((plan) => {
+                  selectedPlan={selectedPlanCode}
 
-                              return (
-                                normalizeText(plan.code || plan.name) !== "internal"
-                              );
-                            })
-                            .map((plan: any) => [
-                              normalizeText(plan.code || plan.name),
-                              plan,
-                            ])
-                        ).values()
-                      ).map((plan: any) => (
-                        <option
-                          key={normalizeText(plan.code || plan.name)}
-                          value={plan.code || plan.name}
-                        >
-                          {formatPlanCodeLabel(plan.code || plan.name)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  billingCycle={selectedBillingCycle}
 
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Billing Cycle
-                    </label>
-                    <select
-                      value={selectedBillingCycle}
-                      onChange={(e) => {
-                        setSelectedBillingCycle(e.target.value);
-                        setBillingMessage(null);
-                      }}
-                      className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500"
-                    >
-                      <option value="monthly">Monthly</option>
-                      <option value="annual">Annual</option>
-                    </select>
-                  </div>
-                </div>
+                  checkoutLoading={checkoutLoading}
 
-                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                  <div>
-                    <span className="font-medium text-slate-900">Billing provider:</span>{" "}
-                    {billingProviderLabel}
-                  </div>
-                  <div className="mt-2">
-                    <span className="font-medium text-slate-900">Subscription:</span>{" "}
-                    {settings?.billing_status || "inactive"}
-                  </div>
-                  <div className="mt-2">
-                    <span className="font-medium text-slate-900">Renewal date:</span>{" "}
-                    {formatDateTime(settings?.subscription_current_period_end)}
-                  </div>
-                  <div className="mt-2">
-                    <span className="font-medium text-slate-900">Billing cycle:</span>{" "}
-                    {formatPlanCodeLabel(selectedBillingCycle)}
-                  </div>
-                </div>
+                  portalLoading={portalLoading}
 
-                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                  <div>
-                    <span className="font-medium text-slate-900">Checkout status:</span>{" "}
-                    {formatCheckoutModeLabel(billingFoundation?.checkout_state?.mode)}
-                  </div>
-                  <div className="mt-2">
-                    <span className="font-medium text-slate-900">Billing portal:</span>{" "}
-                    {billingFoundation?.checkout_state?.portal_available ? "available" : "unavailable"}
-                  </div>
-                  <div className="mt-2">
-                    <span className="font-medium text-slate-900">Provider environment:</span>{" "}
-                    {providerEnvironment}
-                  </div>
-                  <div className="mt-2">
-                    <span className="font-medium text-slate-900">Customer record linked:</span>{" "}
-                    {providerCustomerId ? "yes" : "no"}
-                  </div>
-                  <div className="mt-2">
-                    <span className="font-medium text-slate-900">Subscription record linked:</span>{" "}
-                    {providerSubscriptionId ? "yes" : "no"}
-                  </div>
-                </div>
+                  canUpgrade={canSeeUpgrade}
 
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => void handleStartCheckout()}
-                    disabled={primaryAction.disabled}
-                    className="rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-md hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                  >
-                    {checkoutLoading ? "Preparing Billing..." : primaryAction.label}
-                  </button>
+                  onSelectPlan={setSelectedPlanCode}
 
-                  <button
-                    type="button"
-                    onClick={() => void handleOpenBillingPortal()}
-                    disabled={
-                      !canSeeUpgrade ||
-                      portalLoading ||
-                      normalizeText(billingFoundation?.active_billing_provider) === "paddle"
-                    }
-                    className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-                  >
-                    {portalLoading
-                      ? "Opening Portal..."
-                      : normalizeText(billingFoundation?.active_billing_provider) === "paddle"
-                        ? "Billing Portal Coming Soon"
-                        : "Open Billing Portal"}
-                  </button>
+                  onBillingCycle={setSelectedBillingCycle}
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (workspaceId) {
-                        void refreshBillingState(workspaceId);
-                      }
-                    }}
-                    disabled={refreshingBillingState}
-                    className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
-                  >
-                    {refreshingBillingState ? "Refreshing..." : "Refresh Billing State"}
-                  </button>
-                </div>
+                  onCheckout={handleStartCheckout}
 
-                {!canSeeUpgrade ? (
-                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    Only workspace owners can start checkout or manage billing.
-                  </div>
-                ) : null}
-              </div>
+                  onPortal={handleOpenBillingPortal}
+
+                  plans={planCatalog}
+
+              />
 
               <ManualPaymentCard
                 billingFoundation={billingFoundation}
@@ -1719,302 +1652,56 @@ export default function WorkspaceSettingsPage() {
 
               <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
                 <div className="space-y-6">
-                  <div className="rounded-3xl border bg-white p-6 shadow-sm">
-                    <h2 className="text-2xl font-semibold">Plan Limits</h2>
-                    <p className="mt-1 text-sm text-slate-500">
-                      Current usage position against configured workspace plan limits.
-                    </p>
+                  <WorkspaceUsageCard
+                      usage={governanceUsage}
+                      limits={governanceLimits}
+                  />
 
-                    <div className="mt-4 space-y-4">
-                      <UsageCard
-                        label="Claims"
-                        used={governanceUsage.claims}
-                        limit={governanceLimits.claims}
-                        ratio={
-                          governanceLimits.claims > 0
-                            ? governanceUsage.claims / governanceLimits.claims
-                            : 0
-                        }
-                        atOrOver={
-                          governanceLimits.claims > 0 &&
-                          governanceUsage.claims >= governanceLimits.claims
-                        }
-                        hint="Public trust-surface and governed claim-capacity envelope"
-                      />
+                  <WorkspaceGovernanceCard
+                      governance={{
+                          workspaceId: settings?.workspace_id ?? workspaceId,
 
-                      <UsageCard
-                        label="Members"
-                        used={governanceUsage.members}
-                        limit={governanceLimits.members}
-                        ratio={
-                          governanceLimits.members > 0
-                            ? governanceUsage.members / governanceLimits.members
-                            : 0
-                        }
-                        atOrOver={
-                          governanceLimits.members > 0 &&
-                          governanceUsage.members >= governanceLimits.members
-                        }
-                        hint="Workspace collaborator capacity"
-                      />
+                          role: workspaceRole ?? "",
 
-                      <UsageCard
-                        label="Trades"
-                        used={governanceUsage.trades}
-                        limit={governanceLimits.trades}
-                        ratio={
-                          governanceLimits.trades > 0
-                            ? governanceUsage.trades / governanceLimits.trades
-                            : 0
-                        }
-                        atOrOver={
-                          governanceLimits.trades > 0 &&
-                          governanceUsage.trades >= governanceLimits.trades
-                        }
-                        hint="Evidence ingestion capacity"
-                      />
+                          configuredPlan: configuredPlanName,
 
-                      <UsageCard
-                        label="Storage"
-                        used={governanceUsage.storage_mb}
-                        limit={governanceLimits.storage_mb}
-                        ratio={
-                          governanceLimits.storage_mb > 0
-                            ? governanceUsage.storage_mb / governanceLimits.storage_mb
-                            : 0
-                        }
-                        atOrOver={
-                          governanceLimits.storage_mb > 0 &&
-                          governanceUsage.storage_mb >= governanceLimits.storage_mb
-                        }
-                        hint="Governed storage allocation"
-                      />
-                    </div>
-                  </div>
+                          effectivePlan: effectivePlanName,
 
-                  <div className="rounded-3xl border bg-white p-6 shadow-sm">
-                    <h2 className="text-2xl font-semibold">Claim Governance Unlocks</h2>
-                    <div className="mt-4 space-y-4 text-sm text-slate-700">
-                      <div className="rounded-xl bg-slate-50 p-4">
-                        <div className="font-medium">Governed version capacity</div>
-                        <div className="mt-1 text-slate-600">
-                          Higher plans increase available claim capacity so users can continue versioning
-                          instead of hitting blocked lineage actions.
-                        </div>
-                      </div>
-                      <div className="rounded-xl bg-slate-50 p-4">
-                        <div className="font-medium">Workflow continuity</div>
-                        <div className="mt-1 text-slate-600">
-                          Upgrading before limits are reached prevents interruption of claim creation,
-                          verification preparation, and governance review workflows.
-                        </div>
-                      </div>
-                      <div className="rounded-xl bg-slate-50 p-4">
-                        <div className="font-medium">Operational headroom</div>
-                        <div className="mt-1 text-slate-600">
-                          Claims, trades, members, and storage all contribute to how much governed trust
-                          infrastructure the workspace can support.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                          billingStatus: settings?.billing_status ?? "inactive",
 
-                  <div className="rounded-3xl border bg-white p-6 shadow-sm">
-                    <div className="mb-4 flex items-center justify-between gap-4">
-                      <div>
-                        <h2 className="text-2xl font-semibold">Workspace Profile</h2>
-                        <p className="mt-1 text-sm text-slate-500">
-                          Maintain workspace identity and billing contact metadata.
-                        </p>
-                      </div>
+                          createdAt: settings?.created_at ?? "",
 
-                      {!canEdit ? (
-                        <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-medium text-amber-700">
-                          Read only
-                        </span>
-                      ) : null}
-                    </div>
+                          updatedAt: settings?.updated_at ?? "",
+                      }}
+                  />
 
-                    <form onSubmit={handleSave} className="space-y-4">
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-slate-700">
-                          Workspace Name
-                        </label>
-                        {canEdit ? (
-                          <input
-                            type="text"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            disabled={saving}
-                            className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500 disabled:bg-slate-100"
-                          />
-                        ) : (
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800">
-                            {name || "—"}
-                          </div>
-                        )}
-                      </div>
+                  <WorkspaceProfileCard
+                      canEdit={canEdit}
+                      saving={saving}
+                      name={name}
+                      description={description}
+                      billingEmail={billingEmail}
+                      setName={setName}
+                      setDescription={setDescription}
+                      setBillingEmail={setBillingEmail}
+                      onSubmit={() => {
+                          void handleSave(
+                              {} as React.FormEvent<HTMLFormElement>
+                          );
+                      }}
+                  />
 
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-slate-700">
-                          Description
-                        </label>
-                        {canEdit ? (
-                          <textarea
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            disabled={saving}
-                            rows={5}
-                            className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500 disabled:bg-slate-100"
-                          />
-                        ) : (
-                          <div className="min-h-[132px] rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800 whitespace-pre-wrap">
-                            {description || "—"}
-                          </div>
-                        )}
-                      </div>
+                  <WorkspaceDangerZoneCard
 
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-slate-700">
-                          Billing Email
-                        </label>
-                        {canEdit ? (
-                          <input
-                            type="email"
-                            value={billingEmail}
-                            onChange={(e) => setBillingEmail(e.target.value)}
-                            disabled={saving}
-                            className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-500 disabled:bg-slate-100"
-                          />
-                        ) : (
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-800">
-                            {billingEmail || "—"}
-                          </div>
-                        )}
-                      </div>
+                      onExport={() => {}}
 
-                      <div className="flex flex-wrap gap-3">
-                        {canEdit ? (
-                          <button
-                            type="submit"
-                            disabled={saving}
-                            className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                          >
-                            {saving ? "Saving..." : "Save Settings"}
-                          </button>
-                        ) : null}
+                      onArchive={() => {}}
 
-                        <Link
-                          href={`/workspace/${workspaceId}/dashboard`}
-                          className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
-                        >
-                          Back to Dashboard
-                        </Link>
-                      </div>
-                    </form>
-                  </div>
-                </div>
+                      onTransfer={() => {}}
 
-                <div className="space-y-6">
-                  <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h2 className="text-2xl font-semibold">Platform Readiness</h2>
-                        <p className="mt-1 text-sm text-slate-500">
-                          External verification, API exposure, broker-ingestion posture, and webhook readiness.
-                        </p>
-                      </div>
+                      onDelete={() => {}}
 
-                      <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold">
-                        {platformReadiness?.verification_exposure_level || "internal_only"}
-                      </span>
-                    </div>
-
-                    <div className="mt-5 grid gap-4 md:grid-cols-2">
-                      <div className="rounded-xl border bg-slate-50 p-4">
-                        <div className="text-sm text-slate-500">External Verification</div>
-                        <div className="mt-1 font-semibold">
-                          {formatCapabilityStatus({
-                            enabled: platformReadiness?.capabilities.external_verification_enabled,
-                            fallbackWhenDisabled: "internal only",
-                          })}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          Public verification exposure and external trust-surface posture.
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border bg-slate-50 p-4">
-                        <div className="text-sm text-slate-500">API Access</div>
-                        <div className="mt-1 font-semibold">
-                          {formatCapabilityStatus({
-                            enabled: platformReadiness?.capabilities.api_access_enabled,
-                            fallbackWhenDisabled: "foundation ready",
-                            foundationLabel: "foundation ready",
-                          })}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          API layer posture for external systems and automated ingestion flows.
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border bg-slate-50 p-4">
-                        <div className="text-sm text-slate-500">Broker Integration</div>
-                        <div className="mt-1 font-semibold">
-                          {formatCapabilityStatus({
-                            enabled: platformReadiness?.capabilities.broker_import_enabled,
-                            fallbackWhenDisabled: "active foundation",
-                            foundationLabel: "active foundation",
-                          })}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          CSV, MT5, and IBKR ingestion are available on the shared broker-neutral pipeline.
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border bg-slate-50 p-4">
-                        <div className="text-sm text-slate-500">Webhook Ingestion</div>
-                        <div className="mt-1 font-semibold">
-                          {formatCapabilityStatus({
-                            enabled: platformReadiness?.capabilities.webhook_ingestion_enabled,
-                            fallbackWhenDisabled: "foundation active",
-                            foundationLabel: "foundation active",
-                          })}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          Webhook and stream-event ingestion surfaces are available in backend.
-                        </div>
-                      </div>
-                    </div>
-
-                    {platformReadiness?.integration_sources?.length ? (
-                      <div className="mt-5">
-                        <div className="text-sm font-medium text-slate-900">Connected Sources</div>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {platformReadiness.integration_sources.map((src, idx) => (
-                            <span
-                              key={`src-${idx}`}
-                              className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs"
-                            >
-                              {formatReadinessSourceLabel(src.provider)}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-                        No explicit external connection metadata has been registered yet, but this workspace
-                        already has active broker-import and webhook-ingestion foundations available through
-                        the shared ingestion surface.
-                      </div>
-                    )}
-
-                    {platformReadiness?.recommended_next_step ? (
-                      <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-                        Recommended next step: {platformReadiness.recommended_next_step}
-                      </div>
-                    ) : null}
-                  </div>
+                  />
 
                   <div className="rounded-3xl border bg-white p-6 shadow-sm">
                     <h2 className="text-2xl font-semibold">Workspace Record</h2>
@@ -2039,6 +1726,85 @@ export default function WorkspaceSettingsPage() {
                       ) : null}
                     </div>
                   </div>
+                </div>
+
+                <div className="space-y-6">
+                  <PlatformReadinessCard
+                      verificationExposure="Public"
+                      externalVerification="Enabled"
+                      apiAccess="Foundation Ready"
+                      brokerConnections="Supported"
+                      webhooks="Supported"
+                      trustNetwork="Enabled"
+                  />
+
+                  <WorkspacePreferencesCard
+                      timezone={timezone}
+                      currency={currency}
+                      language={language}
+                      dateFormat={dateFormat}
+                      autoRefresh={autoRefresh}
+                      autoSave={autoSave}
+                      onTimezoneChange={setTimezone}
+                      onCurrencyChange={setCurrency}
+                      onLanguageChange={setLanguage}
+                      onDateFormatChange={setDateFormat}
+                      onAutoRefreshChange={setAutoRefresh}
+                      onAutoSaveChange={setAutoSave}
+                  />
+
+                  <VerificationPreferencesCard
+                      publicVerification={true}
+                      verificationRoutes={true}
+                      trustScore={true}
+                      qrCodes={true}
+                      jsonEvidence={true}
+                      pdfEvidence={true}
+                      zipEvidence={true}
+                      autoLock={true}
+                      autoPublish={false}
+                      onPublicVerification={() => {}}
+                      onVerificationRoutes={() => {}}
+                      onTrustScore={() => {}}
+                      onQrCodes={() => {}}
+                      onJsonEvidence={() => {}}
+                      onPdfEvidence={() => {}}
+                      onZipEvidence={() => {}}
+                      onAutoLock={() => {}}
+                      onAutoPublish={() => {}}
+                  />
+
+                  <BrandingCard
+
+                      organization={name}
+
+                      website=""
+
+                      logo=""
+
+                      primaryColor="#0f172a"
+
+                      accentColor="#2563eb"
+
+                      reportFooter=""
+
+                      disclaimer=""
+
+                      onOrganizationChange={() => {}}
+
+                      onWebsiteChange={() => {}}
+
+                      onLogoChange={() => {}}
+
+                      onPrimaryColorChange={() => {}}
+
+                      onAccentColorChange={() => {}}
+
+                      onFooterChange={() => {}}
+
+                      onDisclaimerChange={() => {}}
+
+                  />
 
                   {!canEdit ? (
                     <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-amber-800 shadow-sm">

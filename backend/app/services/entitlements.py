@@ -46,6 +46,28 @@ PLAN_DEFAULTS = {
         "trades": 1000,
         "members": 3,
         "storage_mb": 100,
+        "infrastructure": [
+            "Manual Trade Import",
+            "Evidence Registry",
+            "PDF Evidence Reports",
+            "Workspace Governance",
+            "Verification Ledger",
+        ],
+
+        "commercial_services": [
+            "Manual Trade Imports",
+            "CSV Import",
+            "Claim Verification",
+            "Evidence Registry",
+            "Workspace Management",
+        ],
+
+        "capacity_summary": {
+            "claims": "5 Claims",
+            "trades": "1,000 Trades",
+            "members": "3 Members",
+            "storage": "100 MB",
+        },
     },
 
     "internal": {
@@ -88,6 +110,28 @@ PLAN_DEFAULTS = {
         "trades": 5000,
         "members": 3,
         "storage_mb": 500,
+        "infrastructure": [
+            "Public Verification",
+            "Claim Governance",
+            "Trust Registry",
+            "Verification Links",
+            "Evidence Export",
+        ],
+
+        "commercial_services": [
+            "Everything in Sandbox",
+            "Public Verification Pages",
+            "Verification Links",
+            "Trust Directory",
+            "Workspace Governance",
+        ],
+
+        "capacity_summary": {
+            "claims": "5 Claims",
+            "trades": "5,000 Trades",
+            "members": "3 Members",
+            "storage": "500 MB",
+        },
     },
 
     "pro": {
@@ -110,6 +154,28 @@ PLAN_DEFAULTS = {
         "trades": 50000,
         "members": 25,
         "storage_mb": 2048,
+        "infrastructure": [
+            "Broker Connectivity",
+            "Verification Intelligence",
+            "Institutional Reports",
+            "Trust Analytics",
+            "Verification Network",
+        ],
+
+        "commercial_services": [
+            "Everything in Starter",
+            "Broker Connections",
+            "Verification Analytics",
+            "Trust Intelligence",
+            "Verification Network",
+        ],
+
+        "capacity_summary": {
+            "claims": "50 Claims",
+            "trades": "50,000 Trades",
+            "members": "25 Members",
+            "storage": "2 GB",
+        },
     },
 
     "growth": {
@@ -132,6 +198,28 @@ PLAN_DEFAULTS = {
         "trades": 250000,
         "members": 100,
         "storage_mb": 10240,
+        "infrastructure": [
+            "Continuous Synchronization",
+            "Automation Engine",
+            "External API",
+            "Evidence Analytics",
+            "Operational Governance",
+        ],
+
+        "commercial_services": [
+            "Everything in Pro",
+            "Continuous Sync",
+            "Automation",
+            "External API",
+            "Evidence Analytics",
+        ],
+
+        "capacity_summary": {
+            "claims": "200 Claims",
+            "trades": "250,000 Trades",
+            "members": "100 Members",
+            "storage": "10 GB",
+        },
     },
 
     "business": {
@@ -154,7 +242,223 @@ PLAN_DEFAULTS = {
         "trades": 1000000,
         "members": 250,
         "storage_mb": 51200,
+        "infrastructure": [
+            "Enterprise Governance",
+            "Institutional API",
+            "Dedicated Infrastructure",
+            "Compliance Reports",
+            "Priority Support",
+        ],
+
+        "commercial_services": [
+            "Everything in Growth",
+            "Enterprise Governance",
+            "Institutional Reports",
+            "Dedicated Infrastructure",
+            "Priority Support",
+        ],
+
+        "capacity_summary": {
+            "claims": "500 Claims",
+            "trades": "1,000,000 Trades",
+            "members": "250 Members",
+            "storage": "50 GB",
+        },
     },
+}
+
+
+PLAN_FEATURES = {
+
+    "sandbox": {
+
+        "manual_trades": True,
+        "csv_import": True,
+
+        "broker_connections": False,
+        "continuous_sync": False,
+
+        "claim_lifecycle": True,
+        "verification_routes": False,
+        "public_records": False,
+        "verification_network": False,
+
+        "pdf_reports": True,
+        "json_export": True,
+        "zip_export": False,
+
+        "external_review": False,
+        "trust_intelligence": False,
+        "evidence_analytics": False,
+        "api_access": False,
+
+        "multi_user": False,
+
+    },
+
+    "starter": {
+
+        "manual_trades": True,
+        "csv_import": True,
+
+        "broker_connections": False,
+        "continuous_sync": False,
+
+        "claim_lifecycle": True,
+        "verification_routes": True,
+        "public_records": True,
+        "verification_network": False,
+
+        "pdf_reports": True,
+        "json_export": True,
+        "zip_export": True,
+
+        "external_review": False,
+        "trust_intelligence": False,
+        "evidence_analytics": False,
+        "api_access": False,
+
+        "multi_user": False,
+
+    },
+
+    "pro": {
+
+        "manual_trades": True,
+        "csv_import": True,
+
+        "broker_connections": True,
+        "continuous_sync": False,
+
+        "claim_lifecycle": True,
+        "verification_routes": True,
+        "public_records": True,
+        "verification_network": True,
+
+        "pdf_reports": True,
+        "json_export": True,
+        "zip_export": True,
+
+        "external_review": False,
+        "trust_intelligence": True,
+        "evidence_analytics": False,
+        "api_access": False,
+
+        "multi_user": False,
+
+    },
+
+    "growth": {
+
+        "manual_trades": True,
+        "csv_import": True,
+
+        "broker_connections": True,
+        "continuous_sync": True,
+
+        "claim_lifecycle": True,
+        "verification_routes": True,
+        "public_records": True,
+        "verification_network": True,
+
+        "pdf_reports": True,
+        "json_export": True,
+        "zip_export": True,
+
+        "external_review": True,
+        "trust_intelligence": True,
+        "evidence_analytics": True,
+        "api_access": True,
+
+        "multi_user": True,
+
+    },
+
+    "business": {
+
+        "manual_trades": True,
+        "csv_import": True,
+
+        "broker_connections": True,
+        "continuous_sync": True,
+
+        "claim_lifecycle": True,
+        "verification_routes": True,
+        "public_records": True,
+        "verification_network": True,
+
+        "pdf_reports": True,
+        "json_export": True,
+        "zip_export": True,
+
+        "external_review": True,
+        "trust_intelligence": True,
+        "evidence_analytics": True,
+        "api_access": True,
+
+        "multi_user": True,
+
+        "allocator_workflows": True,
+        "institutional_reports": True,
+        "audit_exports": True,
+
+    },
+
+    "internal": {
+
+        "__all__": True,
+
+    }
+
+}
+
+
+PLAN_COMMERCIAL_SERVICES = {
+    "sandbox": [
+        "Manual Trade Imports",
+        "CSV Import",
+        "Claim Lifecycle",
+        "PDF Evidence Reports",
+        "JSON Export",
+    ],
+
+    "starter": [
+        "Everything in Sandbox",
+        "Public Verification Pages",
+        "Public Records",
+        "ZIP Evidence Export",
+        "Verification Governance",
+    ],
+
+    "pro": [
+        "Everything in Starter",
+        "Broker Connections",
+        "Verification Network",
+        "Trust Intelligence",
+        "Professional Verification Infrastructure",
+    ],
+
+    "growth": [
+        "Everything in Pro",
+        "Continuous Broker Synchronization",
+        "Evidence Analytics",
+        "External Review",
+        "API Access",
+        "Multi-user Workspace",
+    ],
+
+    "business": [
+        "Everything in Growth",
+        "Institutional Reports",
+        "Allocator Workflows",
+        "Audit Exports",
+        "Enterprise Governance",
+    ],
+
+    "internal": [
+        "All Commercial Services",
+        "Unlimited Internal Access",
+    ],
 }
 
 
@@ -264,6 +568,104 @@ def get_workspace_plan_limits(workspace: Workspace) -> dict[str, int]:
     }
 
 
+def get_workspace_plan_features(
+    workspace: Workspace,
+) -> dict[str, Any]:
+
+    plan = resolve_workspace_plan_code(
+        workspace
+    )
+
+    features = PLAN_FEATURES.get(
+        plan,
+        {},
+    )
+
+    if features.get("__all__"):
+
+        return {
+            "__all__": True
+        }
+
+    return features.copy()
+
+
+def workspace_has_feature(
+    workspace: Workspace,
+    feature: str,
+) -> bool:
+
+    features = get_workspace_plan_features(
+        workspace
+    )
+
+    if features.get("__all__"):
+
+        return True
+
+    return bool(
+        features.get(
+            feature,
+            False,
+        )
+    )
+
+
+def enforce_workspace_feature(
+
+    workspace_id: int,
+
+    db: Session,
+
+    feature: str,
+
+    action: str,
+
+) -> Workspace:
+
+    workspace = enforce_workspace_billing_access(
+
+        workspace_id,
+
+        db,
+
+        allow_past_due=True,
+
+        action_label=action,
+
+    )
+
+    if workspace_has_feature(
+        workspace,
+        feature,
+    ):
+        return workspace
+
+    raise HTTPException(
+
+        status_code=403,
+
+        detail={
+
+            "code": "feature_locked",
+
+            "feature": feature,
+
+            "plan": resolve_workspace_plan_code(
+                workspace
+            ),
+
+            "upgrade_required": True,
+
+            "message":
+
+                f"{feature.replace('_',' ').title()} requires a higher workspace plan.",
+
+        },
+
+    )
+
+
 def get_workspace_raw_limit_columns(workspace: Workspace) -> dict[str, int | None]:
     return {
         "claim_limit": _positive_int_or_none(getattr(workspace, "claim_limit", None)),
@@ -359,6 +761,13 @@ def build_entitlement_snapshot(workspace_id: int, db: Session) -> dict[str, Any]
             "is_restricted": workspace_is_restricted(workspace),
         },
         "limits": limits,
+        "features": get_workspace_plan_features(workspace),
+
+        "commercial_services":
+            PLAN_COMMERCIAL_SERVICES.get(
+                resolved_plan_code,
+                []
+            ),
         "usage": {
             "members": usage["members"],
 
@@ -404,6 +813,18 @@ def build_entitlement_snapshot(workspace_id: int, db: Session) -> dict[str, Any]
             "raw_limit_columns": get_workspace_raw_limit_columns(workspace),
             "defaults_for_resolved_plan": PLAN_DEFAULTS[resolved_plan_code],
         },
+        "available_plans": [
+            {
+                "code": code,
+                "name": PLAN_DEFAULTS[code]["name"],
+                "description": PLAN_DEFAULTS[code]["description"],
+                "pricing": PLAN_DEFAULTS[code]["pricing"],
+                "recommended_for": PLAN_DEFAULTS[code]["recommended_for"],
+                "commercial_services": PLAN_COMMERCIAL_SERVICES.get(code, []),
+                "features": PLAN_FEATURES.get(code, {}),
+            }
+            for code in get_public_plan_codes()
+        ],
     }
 
 
