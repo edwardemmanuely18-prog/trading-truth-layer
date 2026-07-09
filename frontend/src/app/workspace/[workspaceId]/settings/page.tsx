@@ -8,21 +8,18 @@ import Navbar from "../../../../components/Navbar";
 import WorkspaceIdentityCard from "../../../../components/settings/cards/WorkspaceIdentityCard";
 import WorkspaceProfileCard from "../../../../components/settings/cards/WorkspaceProfileCard";
 import WorkspaceUsageCard from "../../../../components/settings/cards/WorkspaceUsageCard";
-import WorkspaceBillingCard from "../../../../components/settings/cards/WorkspaceBillingCard";
 import PlatformReadinessCard from "../../../../components/settings/cards/PlatformReadinessCard";
 import WorkspaceGovernanceCard from "../../../../components/settings/cards/WorkspaceGovernanceCard";
 import WorkspacePreferencesCard from "../../../../components/settings/cards/WorkspacePreferencesCard";
 import VerificationPreferencesCard from "../../../../components/settings/cards/VerificationPreferencesCard";
 import BrandingCard from "../../../../components/settings/cards/BrandingCard";
+import InternalPlanSimulationCard
+from "../../../../components/settings/cards/InternalPlanSimulationCard";
 import WorkspaceDangerZoneCard from "../../../../components/settings/cards/WorkspaceDangerZoneCard";
 
 import { useAuth } from "../../../../components/AuthProvider";
 import {
   api,
-  type BillingCheckoutResponse,
-  type BillingPortalResponse,
-  type PlanCatalogItem,
-  type WorkspaceBillingFoundation,
   type WorkspaceSettings,
   type WorkspaceUsageSummary,
   type PlatformReadiness,
@@ -98,32 +95,6 @@ function formatBooleanLabel(value?: boolean) {
   return value ? "yes" : "no";
 }
 
-function formatBillingProviderLabel(
-  billingFoundation?: WorkspaceBillingFoundation | null
-) {
-  const label =
-    billingFoundation?.billing_provider_label ||
-    billingFoundation?.active_billing_provider ||
-    billingFoundation?.billing_provider;
-
-  const normalized = normalizeText(label);
-
-  if (normalized === "paddle") return "Paddle";
-
-  if (
-    normalized === "lemon" ||
-    normalized === "lemonsqueezy" ||
-    normalized === "lemon_squeezy"
-  ) {
-    return "Lemon Squeezy";
-  }
-
-  if (normalized === "stripe") return "Stripe";
-  if (normalized === "manual" || normalized === "manual billing") return "Manual Billing";
-  if (normalized === "none" || !normalized) return "Unconfigured";
-  return label || "Unconfigured";
-}
-
 function formatCheckoutModeLabel(mode?: string | null) {
   const normalized = normalizeText(mode);
 
@@ -172,58 +143,9 @@ function formatReadinessSourceLabel(provider?: string | null) {
   return provider || "internal";
 }
 
-function getPlanFromCatalog(
-  planCatalog: PlanCatalogItem[],
-  planCode?: string | null
-): PlanCatalogItem | null {
-  const normalized = normalizeText(planCode);
-  return planCatalog.find((item) => normalizeText(item.code) === normalized) ?? null;
-}
-
 function getUsageRatio(used?: number, limit?: number): number | null {
   if (used === undefined || limit === undefined || limit <= 0) return null;
   return used / limit;
-}
-
-function PlanBadge({ plan }: { plan?: string | null }) {
-  const normalized = normalizeText(plan);
-
-  const className =
-    normalized === "sandbox"
-      ? "border-purple-200 bg-purple-50 text-purple-800"
-      : normalized === "pro" ||
-          normalized === "growth" ||
-          normalized === "business" ||
-          normalized === "team"
-        ? "border-blue-200 bg-blue-50 text-blue-800"
-        : "border-slate-200 bg-slate-100 text-slate-700";
-
-  return (
-    <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
-      {plan || "starter"}
-    </span>
-  );
-}
-
-function BillingBadge({ status }: { status?: string | null }) {
-  const normalized = normalizeText(status);
-
-  const className =
-    normalized === "active"
-      ? "border-green-200 bg-green-50 text-green-800"
-      : normalized === "pending_manual_review"
-        ? "border-blue-200 bg-blue-50 text-blue-800"
-        : normalized === "past_due" || normalized === "trialing"
-          ? "border-amber-200 bg-amber-50 text-amber-800"
-          : normalized === "canceled"
-            ? "border-red-200 bg-red-50 text-red-800"
-            : "border-slate-200 bg-slate-100 text-slate-700";
-
-  return (
-    <span className={`inline-flex rounded-full border px-3 py-1 text-sm font-medium ${className}`}>
-      {status || "inactive"}
-    </span>
-  );
 }
 
 function UsageCard({
@@ -298,550 +220,6 @@ function SummaryCard({
   );
 }
 
-function PriceCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <div className="text-sm text-slate-500">{label}</div>
-      <div className="mt-1 text-xl font-semibold text-slate-900">{value}</div>
-      {hint ? <div className="mt-2 text-xs text-slate-500">{hint}</div> : null}
-    </div>
-  );
-}
-
-function PlanCard({
-  plan,
-  configuredPlanCode,
-  effectivePlanCode,
-  selectedPlanCode,
-  onSelect,
-}: {
-  plan: PlanCatalogItem;
-  configuredPlanCode?: string | null;
-  effectivePlanCode?: string | null;
-  selectedPlanCode?: string | null;
-  onSelect: (planCode: string) => void;
-}) {
-  const isConfigured = normalizeText(plan.code) === normalizeText(configuredPlanCode);
-  const isEffective = normalizeText(plan.code) === normalizeText(effectivePlanCode);
-  const isSelected = normalizeText(plan.code) === normalizeText(selectedPlanCode);
-
-  const storageMb = plan.limits.storage_limit_mb ?? 0;
-
-  const monthlyPrice = plan.billing?.monthly_price_usd;
-  const annualPrice = plan.billing?.annual_price_usd;
-  console.log("PLAN CARD DATA", plan);
-
-  return (
-    <div
-      className={`rounded-2xl border p-5 shadow-sm ${
-        isSelected
-          ? "border-blue-300 bg-blue-50 text-slate-900"
-          : isConfigured
-            ? "border-slate-900 bg-slate-900 text-white"
-            : "border-slate-200 bg-white text-slate-900"
-      }`}
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="text-lg font-semibold">{plan.name}</div>
-        {isConfigured ? (
-          <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold">
-            configured
-          </span>
-        ) : null}
-        {isEffective && !isConfigured ? (
-          <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
-            effective
-          </span>
-        ) : null}
-        {isSelected ? (
-          <span className="rounded-full border border-blue-300 bg-white px-3 py-1 text-xs font-semibold text-blue-800">
-            selected
-          </span>
-        ) : null}
-      </div>
-
-      <p className={`mt-2 text-sm ${isConfigured && !isSelected ? "text-slate-200" : "text-slate-600"}`}>
-        {normalizeText(plan.code) === "sandbox"
-          ? "Controlled evaluation environment for product proof, limited governed capacity, and safe pre-billing exploration."
-          : plan.description}
-      </p>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div className={`rounded-xl p-3 ${isConfigured && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
-          <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
-            Monthly
-          </div>
-          <div className="mt-1 font-semibold">{formatUsd(monthlyPrice)}</div>
-        </div>
-        <div className={`rounded-xl p-3 ${isConfigured && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
-          <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
-            Annual
-          </div>
-          <div className="mt-1 font-semibold">{formatUsd(annualPrice)}</div>
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div className={`rounded-xl p-3 ${isConfigured && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
-          <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
-            Claims
-          </div>
-          <div className="mt-1 font-semibold">{plan.limits.claim_limit}</div>
-        </div>
-        <div className={`rounded-xl p-3 ${isConfigured && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
-          <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
-            Trades
-          </div>
-          <div className="mt-1 font-semibold">{plan.limits.trade_limit}</div>
-        </div>
-        <div className={`rounded-xl p-3 ${isConfigured && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
-          <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
-            Members
-          </div>
-          <div className="mt-1 font-semibold">{plan.limits.member_limit}</div>
-        </div>
-        <div className={`rounded-xl p-3 ${isConfigured && !isSelected ? "bg-white/10" : "bg-slate-50"}`}>
-          <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
-            Storage MB
-          </div>
-
-          <div className="mt-1 font-semibold">
-            {storageMb >= 1024
-              ? `${(storageMb / 1024).toFixed(
-                  storageMb % 1024 === 0 ? 0 : 1
-                )} GB`
-              : `${storageMb} MB`}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <div className={`text-xs ${isConfigured && !isSelected ? "text-slate-300" : "text-slate-500"}`}>
-          Recommended for
-        </div>
-
-        <div className="mt-2 flex flex-wrap gap-2">
-          {plan.recommended_for.map((item) => (
-            <span
-              key={`${plan.code}-${item}`}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${
-                isConfigured && !isSelected ? "bg-white/10 text-slate-100" : "bg-slate-100 text-slate-700"
-              }`}
-            >
-              {item}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {!isSelected ? (
-        <div className="mt-5">
-          <button
-            type="button"
-            onClick={() => onSelect(plan.code)}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-          >
-            Select Plan
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function ManualPaymentCard({
-  billingFoundation,
-  selectedPlanCode,
-  selectedBillingCycle,
-}: {
-  billingFoundation: WorkspaceBillingFoundation | null;
-  selectedPlanCode: string;
-  selectedBillingCycle: string;
-}) {
-  const details = billingFoundation?.manual_payment_details ?? null;
-  const manualBilling = billingFoundation?.manual_billing ?? null;
-
-  if (!manualBilling?.enabled || !manualBilling?.visible || !details) {
-    return null;
-  }
-
-  return (
-    <div className="rounded-3xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold text-blue-950">Manual Payment Instructions</h2>
-          <p className="mt-1 text-sm text-blue-900">
-            Automated billing is not active for this deployment. Subscribers should pay manually using the
-            details below, then payment is verified and access is activated internally.
-          </p>
-        </div>
-
-        <span className="rounded-full border border-blue-300 bg-white px-3 py-1 text-xs font-semibold text-blue-800">
-          Manual billing active
-        </span>
-      </div>
-
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-blue-200 bg-white p-4">
-          <div className="text-sm text-slate-500">Payment Method</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">
-            {details.payment_method || "Bank transfer"}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-blue-200 bg-white p-4">
-          <div className="text-sm text-slate-500">Selected Billing Target</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">
-            {formatPlanCodeLabel(selectedPlanCode)} · {formatPlanCodeLabel(selectedBillingCycle)}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-blue-200 bg-white p-4">
-          <div className="text-sm text-slate-500">Account Name</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">
-            {details.account_name || "—"}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-blue-200 bg-white p-4">
-          <div className="text-sm text-slate-500">Account Number</div>
-          <div className="mt-1 break-all font-mono text-lg font-semibold text-slate-900">
-            {details.account_number || "—"}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-blue-200 bg-white p-4">
-          <div className="text-sm text-slate-500">Bank Name</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">
-            {details.bank_name || "—"}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-blue-200 bg-white p-4">
-          <div className="text-sm text-slate-500">Phone Number</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">
-            {details.phone_number || "—"}
-          </div>
-        </div>
-      </div>
-
-      {details.notes ? (
-        <div className="mt-4 rounded-2xl border border-blue-200 bg-white p-4">
-          <div className="text-sm text-slate-500">Payment Notes</div>
-          <div className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{details.notes}</div>
-        </div>
-      ) : null}
-
-      <div className="mt-4 rounded-2xl border border-blue-200 bg-white p-4 text-sm text-slate-700">
-        After receiving payment, update the subscriber workspace internally and grant the correct
-        paid plan access.
-      </div>
-    </div>
-  );
-}
-
-function resolvePrimaryBillingAction(params: {
-  configuredPlanCode: string;
-  selectedPlanCode: string;
-  billingStatus?: string | null;
-  canSeeUpgrade: boolean;
-  checkoutLoading: boolean;
-  billingStatusIsPaid?: boolean;
-}) {
-  const {
-    configuredPlanCode,
-    selectedPlanCode,
-    billingStatus,
-    canSeeUpgrade,
-    checkoutLoading,
-    billingStatusIsPaid,
-  } = params;
-
-  const configured = normalizeText(configuredPlanCode);
-  const selected = normalizeText(selectedPlanCode);
-  const billing = normalizeText(billingStatus);
-
-  const configuredIsPaidPlan = !["sandbox", "starter"].includes(configured);
-  const selectedIsSandbox = selected === "sandbox";
-  const selectedIsPaidPlan = !["sandbox", "starter"].includes(selected);
-  const billingInactive =
-    billingStatusIsPaid === undefined ? !["active", "trialing"].includes(billing) : !billingStatusIsPaid;
-
-  let label = "Upgrade Plan";
-  let helper: string | null = null;
-  let disabled = !canSeeUpgrade || checkoutLoading;
-
-  if (selectedIsSandbox && selected !== configured) {
-    label = "Activate Sandbox";
-    helper = "Switch this workspace into the controlled evaluation environment. No checkout is required.";
-    disabled = !canSeeUpgrade || checkoutLoading;
-  } else if (configuredIsPaidPlan && billingInactive) {
-    if (selected === configured) {
-      label = "Activate Billing";
-      helper = "Complete billing for the currently configured paid workspace tier.";
-      disabled = !canSeeUpgrade || checkoutLoading;
-    } else if (selectedIsPaidPlan) {
-      label = "Upgrade and Activate";
-      helper = "Move to a higher commercial tier and start billing for that upgraded plan.";
-      disabled = !canSeeUpgrade || checkoutLoading;
-    } else if (selected === "starter") {
-      label = "Move to Starter";
-      helper = "Switch this workspace back to Starter without activating billing.";
-      disabled = !canSeeUpgrade || checkoutLoading;
-    }
-  } else if (selected === configured) {
-    if (!canSeeUpgrade) {
-      label = "Current Plan Selected";
-      helper = "Only workspace owners can change billing or upgrade plans.";
-      disabled = true;
-    } else if (billingInactive && selectedIsPaidPlan) {
-      label = "Activate Billing";
-      helper = "Billing is not active yet for this plan. Activate billing to enforce this workspace tier.";
-      disabled = checkoutLoading;
-    } else if (configured === "sandbox") {
-      label = "Sandbox Active";
-      helper = "This workspace is operating in the controlled evaluation environment.";
-      disabled = true;
-    } else {
-      label = "Plan Active";
-      helper = "Your workspace is currently using its configured plan correctly.";
-      disabled = true;
-    }
-  } else if (!selectedIsPaidPlan) {
-    label = selected === "starter" ? "Move to Starter" : "Activate Sandbox";
-    helper =
-      selected === "starter"
-        ? "Switch this workspace to Starter without initiating checkout."
-        : "Switch this workspace into the controlled evaluation environment.";
-    disabled = !canSeeUpgrade || checkoutLoading;
-  }
-
-  return { label, helper, disabled };
-}
-
-function UpgradePressureBanner({
-  configuredPlanName,
-  effectivePlanName,
-  usage,
-  governance,
-  planMismatch,
-}: {
-  configuredPlanName: string;
-  effectivePlanName: string;
-  usage: WorkspaceUsageSummary | null;
-  governance: WorkspaceUsageSummary["governance"] | undefined;
-  planMismatch: boolean;
-}) {
-  const claimsUsed = Number(usage?.usage?.claims ?? 0);
-  const claimsLimit = Number(usage?.limits?.claims ?? 0);
-  const claimsRatio = getUsageRatio(claimsUsed, claimsLimit);
-
-  let message =
-    "You are currently using 2.4% of your plan capacity. Upgrade when you need higher throughput, team scaling, or external verification load.";
-
-  if (claimsRatio !== null) {
-    if (claimsRatio >= 1) {
-      message =
-        "Capacity limit approaching or reached. Claim creation and verification workflows may be blocked. Upgrade required.";
-    } else if (claimsRatio >= 0.8) {
-      message =
-        "You are approaching your plan limits. Upgrade to avoid workflow interruptions.";
-    } else {
-      message = `You are currently using ${formatPercent(claimsRatio)} of your plan capacity. Upgrade when you need higher throughput, team scaling, or external verification load.`;
-    }
-  }
-
-  if (planMismatch) {
-    message = `This workspace is configured as ${configuredPlanName}, but active commercial enforcement may still fall back to ${effectivePlanName} until billing is activated.`;
-  }
-
-  if (governance?.billing_activation_recommended) {
-    message = `This workspace already targets ${configuredPlanName}, but billing is not fully active yet. Activate billing to enforce the intended commercial posture.`;
-  }
-
-  if (governance?.upgrade_required_now) {
-    message =
-      "This workspace has reached or exceeded configured plan capacity in one or more governed dimensions. Some workflows may now be blocked.";
-  } else if (governance?.upgrade_recommended_soon && !governance?.billing_activation_recommended) {
-    message =
-      "This workspace is approaching one or more configured plan ceilings. Upgrading now protects workflow continuity.";
-  }
-
-  return (
-    <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-      {message}
-    </div>
-  );
-}
-
-function UpgradeSummaryPanel({
-  usage,
-  configuredPlanName,
-  configuredPlanCode,
-  selectedPlanCode,
-  selectedBillingCycle,
-  canSeeUpgrade,
-  onStartCheckout,
-  checkoutLoading,
-  governance,
-  primaryAction,
-}: {
-  usage: WorkspaceUsageSummary | null;
-  configuredPlanName: string;
-  configuredPlanCode: string;
-  selectedPlanCode: string;
-  selectedBillingCycle: string;
-  canSeeUpgrade: boolean;
-  onStartCheckout: () => void;
-  checkoutLoading: boolean;
-  governance: WorkspaceUsageSummary["governance"] | undefined;
-  primaryAction: { label: string; helper: string | null; disabled: boolean };
-}) {
-  const claimUsed = Number(usage?.usage?.claims ?? 0);
-  const claimLimit = Number(usage?.limits?.claims ?? 0);
-
-  const tradeUsed = Number(usage?.usage?.trades ?? 0);
-  const tradeLimit = Number(usage?.limits?.trades ?? 0);
-
-  const memberUsed = Number(usage?.usage?.members ?? 0);
-  const memberLimit = Number(usage?.limits?.members ?? 0);
-
-  const storageUsed = Number(usage?.usage?.storage_mb ?? 0);
-  const storageLimit = Number(usage?.limits?.storage_mb ?? 0);
-
-  return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold">Upgrade Summary</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            The next step should be obvious for users arriving from blocked claim actions.
-          </p>
-        </div>
-
-        <span
-          className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-            governance?.billing_activation_recommended
-              ? "border-blue-200 bg-blue-50 text-blue-800"
-              : governance?.upgrade_required_now
-                ? "border-amber-200 bg-amber-50 text-amber-800"
-                : "border-green-200 bg-green-50 text-green-800"
-          }`}
-        >
-          {governance?.billing_activation_recommended
-            ? "billing activation needed"
-            : governance?.upgrade_required_now
-              ? "upgrade required"
-              : governance?.upgrade_recommended_soon
-                ? "upgrade recommended"
-                : "capacity available"}
-        </span>
-      </div>
-
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Configured plan</div>
-          <div className="mt-1 text-xl font-semibold text-slate-900">{configuredPlanName}</div>
-          <div className="mt-2 text-sm text-slate-600">
-            Claims: {claimUsed} / {claimLimit}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Selected billing target</div>
-          <div className="mt-1 text-xl font-semibold text-slate-900">
-            {formatPlanCodeLabel(selectedPlanCode)}
-          </div>
-          <div className="mt-2 text-sm text-slate-600">
-            Billing cycle:{" "}
-            {selectedPlanCode === "sandbox" ? "No billing required" : formatPlanCodeLabel(selectedBillingCycle)}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Claims</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">
-            {claimUsed} / {claimLimit}
-          </div>
-          <div className="mt-1 text-xs text-slate-500">
-            Public trust-surface and governed claim-capacity envelope
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Trades</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">
-            {tradeUsed} / {tradeLimit}
-          </div>
-          <div className="mt-1 text-xs text-slate-500">Evidence ingestion capacity</div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Members</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">
-            {memberUsed} / {memberLimit}
-          </div>
-          <div className="mt-1 text-xs text-slate-500">Workspace collaborator capacity</div>
-        </div>
-      </div>
-
-      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-        <div className="font-medium text-slate-900">What happens after activation</div>
-        <ul className="mt-2 space-y-1">
-          <li>• Claim creation and versioning restrictions are lifted</li>
-          <li>• Lifecycle actions become fully available</li>
-          <li>• Workspace capacity expands based on selected plan</li>
-          <li>• Public trust surfaces operate without interruption</li>
-        </ul>
-      </div>
-
-      {primaryAction.helper ? (
-        <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          {primaryAction.helper}
-        </div>
-      ) : null}
-
-      <div className="mt-5 flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={onStartCheckout}
-          disabled={primaryAction.disabled}
-          className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-        >
-          {checkoutLoading ? "Preparing Billing..." : primaryAction.label}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            const el = document.getElementById("plan-ladder");
-            el?.scrollIntoView({ behavior: "smooth", block: "start" });
-          }}
-          className="rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
-        >
-          Compare Plans
-        </button>
-      </div>
-
-      {!canSeeUpgrade ? (
-        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Only workspace owners can start checkout or change billing.
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export default function WorkspaceSettingsPage() {
   const params = useParams();
   const router = useRouter();
@@ -885,19 +263,16 @@ export default function WorkspaceSettingsPage() {
   const canEdit = workspaceRole === "owner";
   const canSeeUpgrade = workspaceRole === "owner";
 
-  const checkoutStatus = searchParams.get("checkout");
-  const checkoutSessionId = searchParams.get("session_id");
-  const portalStatus = searchParams.get("portal");
   const activeTab = searchParams.get("tab");
 
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
-  const [billingFoundation, setBillingFoundation] = useState<WorkspaceBillingFoundation | null>(null);
   const [platformReadiness, setPlatformReadiness] = useState<PlatformReadiness | null>(null);
+
+  const [simulation,setSimulation]=useState<any>(null);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [billingEmail, setBillingEmail] = useState("");
 
   const [timezone, setTimezone] = useState("UTC");
 
@@ -911,41 +286,62 @@ export default function WorkspaceSettingsPage() {
 
   const [autoSave, setAutoSave] = useState(true);
 
-  const [selectedPlanCode, setSelectedPlanCode] = useState("starter");
-  const [selectedBillingCycle, setSelectedBillingCycle] = useState("monthly");
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [portalLoading, setPortalLoading] = useState(false);
-  const [refreshingBillingState, setRefreshingBillingState] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [billingMessage, setBillingMessage] = useState<string | null>(null);
-
-  const handledQueryStateRef = useRef<string | null>(null);
 
   async function loadPage(targetWorkspaceId: number) {
     try {
       setLoading(true);
       setError(null);
 
-      const [settingsRes, usageRes, billingFoundationRes, platformReadinessRes] = await Promise.all([
-        api.getWorkspaceSettings(targetWorkspaceId),
-        api.getWorkspaceUsage(targetWorkspaceId),
-        api.getWorkspaceBillingFoundation(targetWorkspaceId),
-        api.getWorkspacePlatformReadiness(targetWorkspaceId),
+      const [
+
+          settingsRes,
+
+          usageRes,
+
+          platformReadinessRes,
+
+          simulationRes,
+
+      ] = await Promise.all([
+
+          api.getWorkspaceSettings(
+              targetWorkspaceId
+          ),
+
+          api.getWorkspaceUsage(
+              targetWorkspaceId
+          ),
+
+          api.getWorkspacePlatformReadiness(
+              targetWorkspaceId
+          ),
+
+          api.getWorkspacePlanSimulation(
+              targetWorkspaceId
+          ),
+
       ]);
 
       setSettings(settingsRes);
       setUsage(usageRes);
-      setBillingFoundation(billingFoundationRes);
       setPlatformReadiness(platformReadinessRes);
+
+      setSettings(settingsRes);
+      setUsage(usageRes);
+
+      setPlatformReadiness(platformReadinessRes);
+
+      setSimulation(
+          simulationRes
+      );
 
       setName(settingsRes.name || "");
       setDescription(settingsRes.description || "");
-      setBillingEmail(settingsRes.billing_email || "");
       setTimezone(
           settingsRes.preferences?.timezone ??
           "UTC"
@@ -975,68 +371,10 @@ export default function WorkspaceSettingsPage() {
           settingsRes.preferences?.auto_save ??
           true
       );
-      setSelectedPlanCode(settingsRes.plan_code || "starter");
-      setSelectedBillingCycle("monthly");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load workspace settings.");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function refreshBillingState(targetWorkspaceId: number) {
-    try {
-      setRefreshingBillingState(true);
-
-      const [settingsRes, usageRes, billingFoundationRes, platformReadinessRes] = await Promise.all([
-        api.getWorkspaceSettings(targetWorkspaceId),
-        api.getWorkspaceUsage(targetWorkspaceId),
-        api.getWorkspaceBillingFoundation(targetWorkspaceId),
-        api.getWorkspacePlatformReadiness(targetWorkspaceId),
-      ]);
-
-      setSettings(settingsRes);
-      setUsage(usageRes);
-      setBillingFoundation(billingFoundationRes);
-      setPlatformReadiness(platformReadinessRes);
-
-      setName(settingsRes.name || "");
-      setDescription(settingsRes.description || "");
-      setBillingEmail(settingsRes.billing_email || "");
-      setTimezone(
-          settingsRes.preferences?.timezone ??
-          "UTC"
-      );
-
-      setLanguage(
-          settingsRes.preferences?.language ??
-          "English"
-      );
-
-      setCurrency(
-          settingsRes.preferences?.currency ??
-          "USD"
-      );
-
-      setDateFormat(
-          settingsRes.preferences?.date_format ??
-          "YYYY-MM-DD"
-      );
-
-      setAutoRefresh(
-          settingsRes.preferences?.auto_refresh ??
-          true
-      );
-
-      setAutoSave(
-          settingsRes.preferences?.auto_save ??
-          true
-      );
-      setSelectedPlanCode(settingsRes.plan_code || "starter");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to refresh billing state.");
-    } finally {
-      setRefreshingBillingState(false);
     }
   }
 
@@ -1045,47 +383,6 @@ export default function WorkspaceSettingsPage() {
     if (!workspaceMembership) return;
     void loadPage(workspaceId);
   }, [workspaceId, workspaceMembership]);
-
-  useEffect(() => {
-    if (!workspaceId || loading) return;
-
-    const stateKey = `${checkoutStatus || ""}|${checkoutSessionId || ""}|${portalStatus || ""}`;
-    if (handledQueryStateRef.current === stateKey) return;
-
-    if (!checkoutStatus && !portalStatus) return;
-
-    handledQueryStateRef.current = stateKey;
-
-    void (async () => {
-      await refreshBillingState(workspaceId);
-
-      if (checkoutStatus === "success") {
-        setError(null);
-        setSuccess("Checkout completed. Workspace billing state was refreshed.");
-        setBillingMessage(
-          checkoutSessionId
-            ? `Checkout session completed successfully. Session ID: ${checkoutSessionId}`
-            : "Checkout completed successfully."
-        );
-      } else if (checkoutStatus === "cancelled") {
-        setSuccess(null);
-        setBillingMessage("Checkout was cancelled. No billing change was finalized.");
-      } else if (portalStatus === "returned") {
-        setSuccess("Returned from billing portal. Workspace billing state was refreshed.");
-        setBillingMessage("Billing portal session ended and workspace billing state was reloaded.");
-      }
-
-      const next = new URLSearchParams(searchParams.toString());
-      next.delete("checkout");
-      next.delete("session_id");
-      next.delete("portal");
-
-      const nextQuery = next.toString();
-      router.replace(`/workspace/${workspaceId}/settings${nextQuery ? `?${nextQuery}` : ""}`, {
-        scroll: false,
-      });
-    })();
-  }, [workspaceId, loading, checkoutStatus, checkoutSessionId, portalStatus, router, searchParams]);
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1102,8 +399,6 @@ export default function WorkspaceSettingsPage() {
           name,
 
           description,
-
-          billing_email: billingEmail,
 
           timezone,
 
@@ -1122,298 +417,16 @@ export default function WorkspaceSettingsPage() {
       setSettings(updated);
       setSuccess("Workspace settings updated successfully.");
 
-      const [refreshedUsage, refreshedBillingFoundation] = await Promise.all([
-        api.getWorkspaceUsage(workspaceId),
-        api.getWorkspaceBillingFoundation(workspaceId),
-      ]);
+      const refreshedUsage =
+          await api.getWorkspaceUsage(workspaceId);
 
       setUsage(refreshedUsage);
-      setBillingFoundation(refreshedBillingFoundation);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update workspace settings.");
     } finally {
       setSaving(false);
     }
   }
-
-  async function handleStartCheckout() {
-    if (!workspaceId || !canSeeUpgrade) return;
-
-    try {
-      setCheckoutLoading(true);
-      setBillingMessage(null);
-      setError(null);
-      setSuccess(null);
-
-      const response: BillingCheckoutResponse =
-        await api.createBillingCheckoutSession(workspaceId, {
-          plan_code: selectedPlanCode,
-          billing_cycle: selectedBillingCycle,
-        });
-
-      if (
-        response.checkout_intent === "sandbox_activation" ||
-        response.mode === "sandbox_activation"
-      ) {
-        await refreshBillingState(workspaceId);
-
-        setSuccess("Sandbox activated successfully.");
-        setBillingMessage(null);
-
-        return;
-      }
-
-      if (response.url) {
-        window.location.href = response.url;
-        return;
-      }
-
-      const manualDetails = response.manual_payment_details;
-      const manualMessage = manualDetails
-        ? ` Payment method: ${manualDetails.payment_method || "Manual transfer"}. Account name: ${
-            manualDetails.account_name || "—"
-          }. Account number: ${manualDetails.account_number || "—"}. Bank: ${
-            manualDetails.bank_name || "—"
-          }. Phone: ${manualDetails.phone_number || "—"}.`
-        : "";
-
-      setBillingMessage(
-        (response.message ||
-          `Checkout foundation is ready, but no redirect URL was returned for ${selectedPlanCode} (${selectedBillingCycle}).`) + manualMessage
-      );
-
-      const refreshedBillingFoundation = await api.getWorkspaceBillingFoundation(workspaceId);
-      setBillingFoundation(refreshedBillingFoundation);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start billing checkout.");
-    } finally {
-      setCheckoutLoading(false);
-    }
-  }
-
-  async function handleOpenBillingPortal() {
-    if (!workspaceId || !canSeeUpgrade) return;
-
-    try {
-      setPortalLoading(true);
-      setBillingMessage(null);
-      setError(null);
-      setSuccess(null);
-
-      const response: BillingPortalResponse = await api.createBillingPortalSession(workspaceId);
-
-      if (response.url) {
-        window.location.href = response.url;
-        return;
-      }
-
-      const manualDetails = response.manual_payment_details;
-      const manualMessage = manualDetails
-        ? ` Payment method: ${manualDetails.payment_method || "Manual transfer"}. Account name: ${
-            manualDetails.account_name || "—"
-          }. Account number: ${manualDetails.account_number || "—"}. Bank: ${
-            manualDetails.bank_name || "—"
-          }. Phone: ${manualDetails.phone_number || "—"}.`
-        : "";
-
-      setBillingMessage((response.message || "Billing portal did not return a redirect URL.") + manualMessage);
-
-      const refreshedBillingFoundation = await api.getWorkspaceBillingFoundation(workspaceId);
-      setBillingFoundation(refreshedBillingFoundation);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to open billing portal.");
-    } finally {
-      setPortalLoading(false);
-    }
-  }
-
-  const planCatalog = useMemo(() => {
-
-    const rawPlans: any[] = Array.isArray(billingFoundation?.public_plans)
-      ? billingFoundation.public_plans
-      : billingFoundation?.public_plans &&
-        typeof billingFoundation.public_plans === "object"
-      ? Object.values(billingFoundation.public_plans as Record<string, any>)
-      : Array.isArray(usage?.plan_catalog)
-      ? usage.plan_catalog
-      : [];
-
-    const uniquePlans = Array.from(
-      new Map(
-        rawPlans.map((plan: any) => [
-          String(plan.code ?? plan.name).toLowerCase(),
-          plan,
-        ])
-      ).values()
-    );
-
-    console.log("BILLING FOUNDATION FULL", billingFoundation);
-    console.log("PUBLIC PLANS TYPE", typeof billingFoundation?.public_plans);
-    console.log("PUBLIC PLANS VALUE", billingFoundation?.public_plans);
-    console.log("USAGE FULL", usage);
-    console.log("USAGE PLAN CATALOG", usage?.plan_catalog);
-    console.log("RAW PLANS FINAL", rawPlans);
-
-    return uniquePlans.map((plan: any) => ({
-      ...plan,
-
-      code:
-        plan.code ??
-        normalizeText(plan.name) ??
-        "unknown",
-
-      name:
-        plan.name ??
-        formatPlanCodeLabel(plan.code ?? "unknown"),
-
-      description:
-        typeof plan.description === "string"
-          ? plan.description
-          : "",
-
-      recommended_for: Array.isArray(plan.recommended_for)
-        ? plan.recommended_for
-        : [],
-
-      billing: {
-        monthly_price_usd:
-          plan.pricing?.monthly_price_usd ??
-          plan.pricing?.monthly_price ??
-          plan.pricing?.monthly ??
-          null,
-
-        annual_price_usd:
-          plan.pricing?.annual_price_usd ??
-          plan.pricing?.annual_price ??
-          plan.pricing?.annual ??
-          null,
-      },
-
-      limits: {
-        claim_limit:
-          plan.claims ??
-          plan.limits?.claim_limit ??
-          plan.limits?.claims ??
-          0,
-
-        trade_limit:
-          plan.trades ??
-          plan.limits?.trade_limit ??
-          plan.limits?.trades ??
-          0,
-
-        member_limit:
-          plan.members ??
-          plan.limits?.member_limit ??
-          plan.limits?.members ??
-          0,
-
-        storage_limit_mb:
-          plan.storage_mb ??
-          plan.limits?.storage_limit_mb ??
-          plan.limits?.storage_mb ??
-          0,
-      },
-    }));
-  }, [usage, billingFoundation]);
-  const configuredPlanCode = settings?.plan_code || "starter";
-  const effectivePlanCode =
-    usage?.effective_plan_code || settings?.effective_plan_code || "starter";
-
-  const configuredPlanItem = getPlanFromCatalog(planCatalog, configuredPlanCode);
-  const configuredPlanName =
-    configuredPlanItem?.name || settings?.plan_detail?.name || formatPlanCodeLabel(configuredPlanCode);
-
-  const effectivePlanName =
-    usage?.effective_plan_detail?.name ||
-    settings?.effective_plan_detail?.name ||
-    formatPlanCodeLabel(effectivePlanCode);
-
-  const configuredClaimLimit =
-    configuredPlanItem?.limits.claim_limit ??
-    usage?.limits?.claims ??
-    0;
-
-  const configuredTradeLimit =
-    configuredPlanItem?.limits.trade_limit ??
-    usage?.limits?.trades ??
-    0;
-
-  const configuredMemberLimit =
-    configuredPlanItem?.limits.member_limit ??
-    usage?.limits?.members ??
-    0;
-
-  const configuredStorageLimit =
-    configuredPlanItem?.limits.storage_limit_mb ??
-    usage?.limits?.storage_mb ??
-    0;
-
-  const claimsUsed = Number(usage?.usage?.claims ?? 0);
-  const tradesUsed = Number(usage?.usage?.trades ?? 0);
-  const membersUsed = Number(usage?.usage?.members ?? 0);
-  const storageUsed = Number(usage?.usage?.storage_mb ?? 0);
-
-  const claimsRatio = getUsageRatio(claimsUsed, configuredClaimLimit);
-  const tradesRatio = getUsageRatio(tradesUsed, configuredTradeLimit);
-  const membersRatio = getUsageRatio(membersUsed, configuredMemberLimit);
-  const storageRatio = getUsageRatio(storageUsed, configuredStorageLimit);
-
-  const membersAtOrOverLimit = isAtOrOverLimit(
-    membersUsed,
-    configuredMemberLimit
-  );
-
-  const tradesAtOrOverLimit = isAtOrOverLimit(
-    tradesUsed,
-    configuredTradeLimit
-  );
-
-  const claimsAtOrOverLimit = isAtOrOverLimit(
-    claimsUsed,
-    configuredClaimLimit
-  );
-
-  const storageAtOrOverLimit = isAtOrOverLimit(
-    storageUsed,
-    configuredStorageLimit
-  );
-
-  const planMismatch =
-    Boolean(billingFoundation?.plan_mismatch) ||
-    normalizeText(configuredPlanCode) !== normalizeText(effectivePlanCode);
-
-  const upgradeRecommendation = usage?.upgrade_recommendation;
-  const governance = usage?.governance;
-  const currentPlanBilling = configuredPlanItem?.billing || settings?.plan_detail?.billing;
-
-  const billingProviderLabel = formatBillingProviderLabel(billingFoundation);
-  const providerCustomerId =
-    billingFoundation?.provider_customer_id ||
-    (normalizeText(billingFoundation?.active_billing_provider) === "paddle"
-      ? billingFoundation?.paddle_customer_id
-      : billingFoundation?.stripe_customer_id) ||
-    null;
-
-  const providerSubscriptionId =
-    billingFoundation?.provider_subscription_id ||
-    (normalizeText(billingFoundation?.active_billing_provider) === "paddle"
-      ? billingFoundation?.paddle_subscription_id
-      : billingFoundation?.stripe_subscription_id) ||
-    null;
-
-  const providerEnvironment = formatProviderEnvironmentLabel(
-    billingFoundation?.provider_environment || billingFoundation?.paddle_ready?.environment || "live"
-  );
-
-  const primaryAction = resolvePrimaryBillingAction({
-    configuredPlanCode,
-    selectedPlanCode,
-    billingStatus: settings?.billing_status,
-    billingStatusIsPaid: billingFoundation?.billing_status_is_paid,
-    canSeeUpgrade,
-    checkoutLoading,
-  });
 
   if (!workspaceId) {
     return <div className="p-6 text-red-600">Invalid workspace id.</div>;
@@ -1464,11 +477,11 @@ export default function WorkspaceSettingsPage() {
       <main className="mx-auto max-w-[1400px] px-6 py-10">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="text-sm text-slate-500">Trading Truth Layer · Workspace Settings & Billing</div>
-            <h1 className="mt-2 text-4xl font-bold tracking-tight">Workspace Billing & Governance</h1>
+            <div className="text-sm text-slate-500">Trading Truth Layer · Workspace Settings</div>
+            <h1 className="mt-2 text-4xl font-bold tracking-tight">Workspace Settings</h1>
             <p className="mt-3 max-w-3xl text-slate-600">
-              Billing, plan posture, and governed capacity control surface for workspace growth,
-              blocked workflow recovery, and commercial activation.
+              Configure workspace identity, operational governance,
+              verification behaviour, branding and platform preferences.
             </p>
             {activeTab === "billing" ? (
               <div className="mt-4 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">
@@ -1483,172 +496,12 @@ export default function WorkspaceSettingsPage() {
           </div>
         </div>
 
-        {refreshingBillingState ? (
-          <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-            Refreshing billing state...
-          </div>
-        ) : null}
-
         {loading ? (
           <div className="rounded-2xl border bg-white p-6 shadow-sm">Loading workspace settings...</div>
         ) : error ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700">{error}</div>
         ) : (
           <>
-            <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-              <SummaryCard
-                label="Configured Plan"
-                value={configuredPlanName}
-                hint="Commercial tier assigned to this workspace"
-              />
-              <SummaryCard
-                label="Billing Status"
-                value={
-                  normalizeText(configuredPlanCode) === "sandbox"
-                    ? "sandbox (no billing)"
-                    : normalizeText(settings?.billing_status) === "active"
-                      ? "active"
-                      : "inactive"
-                }
-                hint="Subscription state"
-              />
-              <SummaryCard
-                label="Effective Active Plan"
-                value={effectivePlanName}
-                hint="Plan currently enforcing limits and entitlements"
-              />
-              <SummaryCard
-                label="Billing Provider"
-                value={billingProviderLabel}
-                hint={formatCheckoutModeLabel(billingFoundation?.checkout_state?.mode)}
-              />
-              <SummaryCard
-                label="Claims Used"
-                value={`${claimsUsed} / ${configuredClaimLimit}`}
-                hint="Governed claim-capacity position"
-              />
-            </div>
-
-            {(success || billingMessage) && (
-              <div className="mb-6 space-y-3">
-                {success ? (
-                  <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
-                    {success}
-                  </div>
-                ) : null}
-
-                {billingMessage ? (
-                  <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-                    {billingMessage}
-                  </div>
-                ) : null}
-              </div>
-            )}
-
-            <UpgradePressureBanner
-              configuredPlanName={configuredPlanName}
-              effectivePlanName={effectivePlanName}
-              usage={usage}
-              governance={governance}
-              planMismatch={planMismatch}
-            />
-
-            <div className="mt-6 space-y-6">
-              <UpgradeSummaryPanel
-                usage={usage}
-                configuredPlanName={configuredPlanName}
-                configuredPlanCode={configuredPlanCode}
-                selectedPlanCode={selectedPlanCode}
-                selectedBillingCycle={selectedBillingCycle}
-                canSeeUpgrade={canSeeUpgrade}
-                onStartCheckout={() => void handleStartCheckout()}
-                checkoutLoading={checkoutLoading}
-                governance={governance}
-                primaryAction={primaryAction}
-              />
-
-              {planCatalog.length > 0 ? (
-                <div id="plan-ladder" className="rounded-3xl border bg-white p-6 shadow-sm">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-2xl font-semibold">Plan Ladder</h2>
-                      <p className="mt-1 text-sm text-slate-500">
-                        Workspace monetization tiers, pricing, and operational capacity ranges.
-                      </p>
-                    </div>
-
-                    {upgradeRecommendation?.recommended_plan_is_distinct &&
-                    upgradeRecommendation?.recommended_plan_name ? (
-                      <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                        Recommended next plan:{" "}
-                        <span className="font-semibold">
-                          {upgradeRecommendation.recommended_plan_name}
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="mt-5 grid gap-4 xl:grid-cols-2">
-                    {planCatalog
-                        .filter((plan) => normalizeText(plan.code) !== "internal")
-                        .map((plan, index) => (
-                      <PlanCard
-                        key={`${plan.code}-${index}`}
-                        plan={plan}
-                        configuredPlanCode={settings?.plan_code}
-                        effectivePlanCode={effectivePlanCode}
-                        selectedPlanCode={selectedPlanCode}
-                        onSelect={(planCode) => {
-                          setSelectedPlanCode(planCode);
-                          setBillingMessage(null);
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              <WorkspaceBillingCard
-
-                  configuredPlan={configuredPlanName}
-
-                  effectivePlan={effectivePlanName}
-
-                  billingStatus={settings?.billing_status}
-
-                  provider={billingProviderLabel}
-
-                  monthlyPrice={currentPlanBilling?.monthly_price_usd}
-
-                  annualPrice={currentPlanBilling?.annual_price_usd}
-
-                  selectedPlan={selectedPlanCode}
-
-                  billingCycle={selectedBillingCycle}
-
-                  checkoutLoading={checkoutLoading}
-
-                  portalLoading={portalLoading}
-
-                  canUpgrade={canSeeUpgrade}
-
-                  onSelectPlan={setSelectedPlanCode}
-
-                  onBillingCycle={setSelectedBillingCycle}
-
-                  onCheckout={handleStartCheckout}
-
-                  onPortal={handleOpenBillingPortal}
-
-                  plans={planCatalog}
-
-              />
-
-              <ManualPaymentCard
-                billingFoundation={billingFoundation}
-                selectedPlanCode={selectedPlanCode}
-                selectedBillingCycle={selectedBillingCycle}
-              />
 
               <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
                 <div className="space-y-6">
@@ -1660,17 +513,10 @@ export default function WorkspaceSettingsPage() {
                   <WorkspaceGovernanceCard
                       governance={{
                           workspaceId: settings?.workspace_id ?? workspaceId,
-
                           role: workspaceRole ?? "",
-
-                          configuredPlan: configuredPlanName,
-
-                          effectivePlan: effectivePlanName,
-
-                          billingStatus: settings?.billing_status ?? "inactive",
-
+                          configuredPlan: settings?.plan_code ?? "",
+                          effectivePlan: settings?.effective_plan_code ?? "",
                           createdAt: settings?.created_at ?? "",
-
                           updatedAt: settings?.updated_at ?? "",
                       }}
                   />
@@ -1680,10 +526,8 @@ export default function WorkspaceSettingsPage() {
                       saving={saving}
                       name={name}
                       description={description}
-                      billingEmail={billingEmail}
                       setName={setName}
                       setDescription={setDescription}
-                      setBillingEmail={setBillingEmail}
                       onSubmit={() => {
                           void handleSave(
                               {} as React.FormEvent<HTMLFormElement>
@@ -1718,12 +562,6 @@ export default function WorkspaceSettingsPage() {
                         <span className="font-medium text-slate-900">Updated:</span>{" "}
                         {formatDateTime(settings?.updated_at)}
                       </div>
-                      {settings?.plan_detail?.description ? (
-                        <div>
-                          <span className="font-medium text-slate-900">Plan Description:</span>{" "}
-                          {settings.plan_detail.description}
-                        </div>
-                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -1745,12 +583,7 @@ export default function WorkspaceSettingsPage() {
                       dateFormat={dateFormat}
                       autoRefresh={autoRefresh}
                       autoSave={autoSave}
-                      onTimezoneChange={setTimezone}
-                      onCurrencyChange={setCurrency}
-                      onLanguageChange={setLanguage}
-                      onDateFormatChange={setDateFormat}
-                      onAutoRefreshChange={setAutoRefresh}
-                      onAutoSaveChange={setAutoSave}
+                      readOnly
                   />
 
                   <VerificationPreferencesCard
@@ -1775,34 +608,55 @@ export default function WorkspaceSettingsPage() {
                   />
 
                   <BrandingCard
-
                       organization={name}
 
-                      website=""
+                      website="https://tradingtruthlayer.com"
 
-                      logo=""
+                      logo="/ttl-logo.png"
 
                       primaryColor="#0f172a"
 
                       accentColor="#2563eb"
 
-                      reportFooter=""
+                      reportFooter={
+                          "Trading Truth Layer"
+                      }
 
-                      disclaimer=""
+                      disclaimer={
+                          "Generated by the Trading Truth Layer Verification System."
+                      }
 
-                      onOrganizationChange={() => {}}
+                      readOnly
+                  />
 
-                      onWebsiteChange={() => {}}
+                  <InternalPlanSimulationCard
 
-                      onLogoChange={() => {}}
+                      workspaceId={
+                          workspaceId
+                      }
 
-                      onPrimaryColorChange={() => {}}
+                      simulation={
+                          simulation
+                      }
 
-                      onAccentColorChange={() => {}}
+                      onChanged={
+                          async ()=>{
 
-                      onFooterChange={() => {}}
+                              const snapshot =
+                                  await api.getWorkspacePlanSimulation(
+                                      workspaceId
+                                  );
 
-                      onDisclaimerChange={() => {}}
+                              setSimulation(
+                                  snapshot
+                              );
+
+                              await loadPage(
+                                  workspaceId
+                              );
+
+                          }
+                      }
 
                   />
 
@@ -1815,7 +669,6 @@ export default function WorkspaceSettingsPage() {
                   ) : null}
                 </div>
               </div>
-            </div>
           </>
         )}
       </main>

@@ -6,8 +6,8 @@ from app.models.review_statement import (
     ReviewStatement,
 )
 
-from app.services.metrics_service import (
-    get_workspace_trade_metrics,
+from app.services.performance.performance_service import (
+    get_workspace_performance_metrics,
 )
 
 from app.services.verification.verification_service import (
@@ -55,41 +55,29 @@ def build_allocator_report_payload(
         )
     )
 
-    metrics = (
-        get_workspace_trade_metrics(
-            db,
-            workspace_id,
+    performance = (
+        get_workspace_performance_metrics(
+            db=db,
+            workspace_id=workspace_id,
         )
     )
 
     gross_profit = float(
-        metrics.get(
-            "gross_profit",
-            0,
-        ) or 0
+        performance.gross_profit
     )
 
     gross_loss = abs(
         float(
-            metrics.get(
-                "gross_loss",
-                0,
-            ) or 0
+            performance.gross_loss
         )
     )
 
     wins = int(
-        metrics.get(
-            "wins",
-            0,
-        ) or 0
+        performance.winning_trades
     )
 
     losses = int(
-        metrics.get(
-            "losses",
-            0,
-        ) or 0
+        performance.losing_trades
     )
 
     average_win = round(
@@ -109,22 +97,12 @@ def build_allocator_report_payload(
 
     loss_rate = round(
         100 -
-        float(
-            metrics.get(
-                "win_rate",
-                0,
-            ) or 0
-        ),
+        performance.win_rate,
         2,
     )
 
     net_profit = round(
-        float(
-            metrics.get(
-                "total_pnl",
-                0,
-            ) or 0
-        ),
+        performance.net_profit,
         2,
     )
 
@@ -189,17 +167,17 @@ def build_allocator_report_payload(
     # INSTITUTIONAL BANDS
     # ==========================================
 
-    if metrics["profit_factor"] >= 2:
+    if performance.profit_factor >= 2:
         performance_band = "STRONG"
-    elif metrics["profit_factor"] >= 1.2:
+    elif performance.profit_factor >= 1.2:
         performance_band = "MODERATE"
     else:
         performance_band = "WEAK"
 
 
-    if metrics["max_drawdown"] <= 10:
+    if performance.max_drawdown <= 10:
         risk_band = "LOW"
-    elif metrics["max_drawdown"] <= 20:
+    elif performance.max_drawdown <= 20:
         risk_band = "MODERATE"
     else:
         risk_band = "HIGH"
@@ -281,7 +259,7 @@ def build_allocator_report_payload(
 
     allocator_risks = []
 
-    if metrics["max_drawdown"] > 20:
+    if performance.max_drawdown > 20:
         allocator_risks.append(
             "drawdown_present"
         )
@@ -369,30 +347,40 @@ def build_allocator_report_payload(
         "performance": {
 
             "trade_count":
-                metrics["trade_count"],
+                performance.trade_count,
 
             "total_pnl":
-                metrics["total_pnl"],
+                performance.net_profit,
 
-            "net_profit": f"${net_profit:,.2f}",
+            "net_profit":
+                f"${performance.net_profit:,.2f}",
 
-            "gross_profit": f"${gross_profit:,.2f}",
+            "gross_profit":
+                f"${performance.gross_profit:,.2f}",
 
-            "gross_loss": f"${gross_loss:,.2f}",
+            "gross_loss":
+                f"${performance.gross_loss:,.2f}",
 
-            "profit_factor": f"{metrics['profit_factor']:.2f}",
+            "profit_factor":
+                f"{performance.profit_factor:.2f}",
 
-            "expectancy": f"{metrics['expectancy']:.2f}",
+            "expectancy":
+                f"{performance.expectancy:.2f}",
 
-            "win_rate": f"{metrics['win_rate']:.2f}%",
+            "win_rate":
+                f"{performance.win_rate:.2f}%",
 
-            "loss_rate": f"{loss_rate:.2f}%",
+            "loss_rate":
+                f"{loss_rate:.2f}%",
 
-            "average_win": f"${average_win:,.2f}",
+            "average_win":
+                f"${average_win:,.2f}",
 
-            "average_loss": f"${average_loss:,.2f}",
+            "average_loss":
+                f"${average_loss:,.2f}",
 
-            "payoff_ratio": f"{payoff_ratio:.2f}",
+            "payoff_ratio":
+                f"{performance.payoff_ratio:.2f}",
 
             "performance_band":
                 performance_band,
@@ -403,11 +391,11 @@ def build_allocator_report_payload(
             "operational_risk":
                 operational_risk,
 
-            "max_drawdown":
-                f"{metrics.get('peak_to_trough_drawdown_units', metrics.get('max_drawdown', 0)):,.2f}",
+           "max_drawdown":
+                f"{performance.max_drawdown:,.2f}",
 
-            "max_drawdown_pct":
-                f"{metrics.get('max_drawdown_pct', 0):.2f}%",
+            "max_drawdown":
+                f"{performance.max_drawdown:.2f}%",
 
             "wins":
                 wins,
@@ -416,10 +404,10 @@ def build_allocator_report_payload(
                 losses,
 
             "recovery_factor":
-                f"{metrics.get('recovery_factor', 0):.2f}",
+                f"{performance.recovery_factor:.2f}",
 
             "payoff_ratio":
-                f"{payoff_ratio:.2f}",
+                f"{performance.payoff_ratio:.2f}",
 
             "risk_band":
                 risk_band,

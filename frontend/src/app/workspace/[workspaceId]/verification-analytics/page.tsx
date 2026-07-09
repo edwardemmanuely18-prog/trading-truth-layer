@@ -36,6 +36,9 @@ export default function Page(
   const [feedLimit, setFeedLimit] =
     useState(20);
 
+  const [exporting, setExporting] =
+    useState(false);
+
   useEffect(() => {
 
     async function load() {
@@ -84,27 +87,71 @@ export default function Page(
 
           <p className="mt-3 text-slate-600">
             Institutional visibility into
-            claim verification coverage,
-            lifecycle progression,
-            publication activity,
-            and governance adoption.
+            workspace verification coverage,
+            claim lifecycle progression,
+            verification governance,
+            publication readiness,
+            and Trading Verification System (TVS)
+            adoption across the workspace.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
 
-            <a
-              href={`/api/reports/workspace/${workspaceId}/verification`}
-              className="rounded-lg border bg-white px-4 py-2"
-            >
-              Download JSON
-            </a>
+            <button
+                onClick={async () => {
 
-            <a
-              href={`/api/reports/workspace/${workspaceId}/verification/pdf`}
-              className="rounded-lg border bg-white px-4 py-2"
+                    try {
+
+                        setExporting(true);
+
+                        const response = await fetch(
+                            `/api/reports/workspace/${workspaceId}/verification`
+                        );
+
+                        const blob =
+                            await response.blob();
+
+                        const url =
+                            window.URL.createObjectURL(
+                                blob
+                            );
+
+                        const link =
+                            document.createElement("a");
+
+                        link.href = url;
+
+                        link.download =
+                            `verification-report-${workspaceId}.json`;
+
+                        document.body.appendChild(link);
+
+                        link.click();
+
+                        link.remove();
+
+                        window.URL.revokeObjectURL(
+                            url
+                        );
+
+                    } finally {
+
+                        setExporting(false);
+
+                    }
+
+                }}
+                disabled={exporting}
+                className="rounded-lg border bg-white px-4 py-2 disabled:opacity-60"
             >
-              Download PDF
-            </a>
+
+                {
+                    exporting
+                        ? "Exporting..."
+                        : "Export Verification JSON"
+                }
+
+            </button>
 
           </div>
 
@@ -131,7 +178,10 @@ export default function Page(
                   Total Claims
                 </div>
                 <div className="mt-2 text-3xl font-bold">
-                  {data.total_claims}
+                  {data.lifecycle.draft +
+                   data.lifecycle.verified +
+                   data.lifecycle.published +
+                   data.lifecycle.locked}
                 </div>
               </div>
 
@@ -140,7 +190,7 @@ export default function Page(
                   Draft Claims
                 </div>
                 <div className="mt-2 text-3xl font-bold">
-                  {data.draft_claims}
+                  {data.lifecycle.draft}
                 </div>
               </div>
 
@@ -149,7 +199,7 @@ export default function Page(
                   Verified Claims
                 </div>
                 <div className="mt-2 text-3xl font-bold">
-                  {data.verified_claims}
+                  {data.lifecycle.verified}
                 </div>
               </div>
 
@@ -158,7 +208,7 @@ export default function Page(
                   Published Claims
                 </div>
                 <div className="mt-2 text-3xl font-bold">
-                  {data.published_claims}
+                  {data.lifecycle.published}
                 </div>
               </div>
 
@@ -167,7 +217,7 @@ export default function Page(
                   Locked Claims
                 </div>
                 <div className="mt-2 text-3xl font-bold">
-                  {data.locked_claims}
+                  {data.lifecycle.locked}
                 </div>
               </div>
 
@@ -176,7 +226,7 @@ export default function Page(
                   Verification Coverage
                 </div>
                 <div className="mt-2 text-3xl font-bold">
-                  {data.verification_coverage}%
+                  {data.coverage.verification}%
                 </div>
               </div>
 
@@ -197,28 +247,28 @@ export default function Page(
                   <div className="flex justify-between">
                     <span>Draft</span>
                     <span className="font-semibold">
-                      {data.draft_claims}
+                      {data.lifecycle.draft}
                     </span>
                   </div>
 
                   <div className="flex justify-between">
                     <span>Verified</span>
                     <span className="font-semibold">
-                      {data.verified_claims}
+                      {data.lifecycle.verified}
                     </span>
                   </div>
 
                   <div className="flex justify-between">
                     <span>Published</span>
                     <span className="font-semibold">
-                      {data.published_claims}
+                      {data.lifecycle.published}
                     </span>
                   </div>
 
                   <div className="flex justify-between">
                     <span>Locked</span>
                     <span className="font-semibold">
-                      {data.locked_claims}
+                      {data.lifecycle.locked}
                     </span>
                   </div>
 
@@ -237,14 +287,14 @@ export default function Page(
                   <div className="flex justify-between">
                     <span>Public Claims</span>
                     <span className="font-semibold">
-                      {data.public_claims}
+                      {data.visibility.public}
                     </span>
                   </div>
 
                   <div className="flex justify-between">
                     <span>Private Claims</span>
                     <span className="font-semibold">
-                      {data.private_claims}
+                      {data.visibility.private}
                     </span>
                   </div>
 
@@ -266,11 +316,11 @@ export default function Page(
 
               </div>
 
-              <div className="max-h-[600px] overflow-y-auto">
+              <div className="max-h-[420px] overflow-y-auto">
 
               <table className="w-full">
 
-                <thead className="bg-slate-100">
+                <thead className="sticky top-0 bg-slate-100 z-10">
 
                   <tr>
 
@@ -304,9 +354,25 @@ export default function Page(
 
                 <tbody>
 
-                  {data.recent_events
-                    ?.slice(0, feedLimit)
-                    .map(
+                  {[...data.claims]
+                      .sort(
+                          (a, b) =>
+                              new Date(
+                                  b.locked_at ??
+                                  b.published_at ??
+                                  b.verified_at ??
+                                  0
+                              ).getTime()
+                              -
+                              new Date(
+                                  a.locked_at ??
+                                  a.published_at ??
+                                  a.verified_at ??
+                                  0
+                              ).getTime()
+                      )
+                      .slice(0, feedLimit)
+                      .map(
                     (event: any) => (
 
                       <tr
@@ -361,7 +427,7 @@ export default function Page(
 
               </div>
 
-              {data.recent_events?.length >
+              {data.claims?.length >
                 feedLimit && (
 
                 <div className="border-t p-4">

@@ -22,6 +22,10 @@ from app.services.integrity_score_service import (
     calculate_integrity_score,
 )
 
+from app.services.verification.verification_service import (
+    get_workspace_verification_context,
+)
+
 
 def get_dashboard_overview(
     db: Session,
@@ -174,6 +178,14 @@ def get_dashboard_overview(
         workspace_id,
     )
 
+    verification = (
+        get_workspace_verification_context(
+            db=db,
+            workspace_id=workspace_id,
+            include_draft=False,
+        )
+    )
+
     # =====================================================
     # WORKFLOW STATE
     # =====================================================
@@ -260,6 +272,19 @@ def get_dashboard_overview(
         )
     )
 
+    operational_services = {
+
+        "evidence_engine": "ONLINE",
+
+        "verification_engine": "ONLINE",
+
+        "institutional_reporting": "ONLINE",
+
+        "trust_layer": "ONLINE",
+
+        "governance": "ONLINE",
+    }
+
     # =====================================================
     # FINAL PAYLOAD
     # =====================================================
@@ -317,29 +342,36 @@ def get_dashboard_overview(
 
         "executive": {
 
-            "active_alerts":
-                active_alerts,
+            "active_alerts": active_alerts,
 
-            "integrity_health":
-                (
-                    "healthy"
-                    if active_alerts == 0
-                    else "warning"
-                ),
+            "integrity_health": (
+                "healthy"
+                if active_alerts == 0
+                else "warning"
+            ),
 
-            "integrity_score":
-                integrity_score,
+            "integrity_score": integrity_score,
 
-            "verification_coverage":
-                round(
-                    (
-                        locked_claims
-                        / claim_count
-                    ) * 100,
-                    2,
-                )
-                if claim_count
-                else 0,
+            "verification": {
+
+                "coverage":
+                    verification.metrics.coverage,
+
+                "score":
+                    verification.metrics.verification_score,
+
+                "band":
+                    verification.metrics.band,
+
+                "verified_claims":
+                    verification.metrics.verified_claims,
+
+                "published_claims":
+                    verification.metrics.published_claims,
+
+                "locked_claims":
+                    verification.metrics.locked_claims,
+            },
         },
 
         "integrity": {
@@ -354,5 +386,29 @@ def get_dashboard_overview(
             "high_alerts": high_alerts,
 
             "warning_alerts": warning_alerts,
+        },
+
+        "operational": {
+
+            "services":
+                operational_services,
+
+            "stage": {
+
+                "import":
+                    workflow["import_complete"],
+
+                "claims":
+                    workflow["claim_created"],
+
+                "verification":
+                    workflow["verification_started"],
+
+                "public_trust":
+                    workflow["published"],
+
+                "locked":
+                    workflow["locked"],
+            },
         },
     }

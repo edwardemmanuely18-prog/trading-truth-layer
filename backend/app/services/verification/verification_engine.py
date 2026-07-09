@@ -157,27 +157,6 @@ def compute_verification_certificate(
         context.trades
     )
 
-    print("\n===== TVS SCORE BREAKDOWN =====")
-    print("Claim:", context.claim_schema.id)
-
-    print("Evidence:", evidence.earned_points)
-    print("Integrity:", integrity.earned_points)
-    print("Governance:", governance.earned_points)
-    print("Transparency:", transparency.earned_points)
-    print("Stability:", stability.earned_points)
-    print("Network:", network.earned_points)
-    print("Reviews:", reviews.earned_points)
-    print("Disputes:", disputes.earned_points)
-
-    print("TOTAL:", component_set.total_score)
-    print("===============================\n")
-
-    print("Trades:", len(context.trades))
-    print("Members:", context.claim_schema.included_member_ids_json)
-    print("Symbols:", context.claim_schema.included_symbols_json)
-    print("Period:", context.claim_schema.period_start, "->", context.claim_schema.period_end)
-    print()
-
     certificate = (
         build_verification_certificate(
 

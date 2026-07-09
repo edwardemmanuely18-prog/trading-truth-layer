@@ -6,11 +6,12 @@ import { useParams, useRouter } from "next/navigation";
 import Navbar from "../../../../components/Navbar";
 import { useAuth } from "../../../../components/AuthProvider";
 import {
-  api,
-  type DashboardResponse,
-  type PublicClaimDirectoryItem,
-  type WorkspaceUsageSummary,
-  type DashboardSummary,
+    api,
+    type DashboardResponse,
+    type PublicClaimDirectoryItem,
+    type WorkspaceUsageSummary,
+    type DashboardSummary,
+    type WorkspaceSnapshot,
 } from "../../../../lib/api";
 import PaywallModal from "../../../../components/PaywallModal";
 import { useWorkspaceGate } from "../../../../hooks/useWorkspaceGate";
@@ -339,7 +340,7 @@ function RoleBanner({
         and trade import remain restricted to owner/operator roles.
       </p>
 
-            <div className="mt-4 flex flex-wrap gap-3">
+      <div className="mt-4 flex flex-wrap gap-3">
         <Link
           href={`/workspace/${workspaceId}/claims`}
           className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-medium hover:bg-amber-100"
@@ -522,26 +523,27 @@ function WorkflowStage({
 }
 
 function DashboardStatusPanel({
-  workspaceId,
-  dashboard,
-  claims,
-  usage,
-  canCreateClaim,
-  canImportTrades,
+    workspaceId,
+    dashboard,
+    usage,
+    verifiedClaims,
+    publishedClaims,
+    lockedClaims,
+    draftClaims,
+    canCreateClaim,
+    canImportTrades,
 }: {
-  workspaceId: number;
-  dashboard: DashboardResponse;
-  claims: PublicClaimDirectoryItem[];
-  usage: WorkspaceUsageSummary;
-  canCreateClaim: boolean;
-  canImportTrades: boolean;
+    workspaceId: number;
+    dashboard: DashboardResponse;
+    usage: WorkspaceUsageSummary;
+    verifiedClaims: number;
+    publishedClaims: number;
+    lockedClaims: number;
+    draftClaims: number;
+    canCreateClaim: boolean;
+    canImportTrades: boolean;
 }) {
-  const draftClaims = claims.filter((claim) => normalizeText(claim?.verification_status) === "draft");
-  const lockedClaims = claims.filter((claim) => normalizeText(claim?.verification_status) === "locked");
-  const publishedClaims = claims.filter((claim) =>
-    ["published", "locked"].includes(normalizeText(claim?.verification_status))
-  );
-
+  
   const tradeCount = Number(dashboard.trade_count ?? 0);
   const claimCount = Number(dashboard.claim_count ?? 0);
   const memberCount = Number(dashboard.member_count ?? 0);
@@ -563,26 +565,57 @@ function DashboardStatusPanel({
             : "No trade activity available yet",
     },
     {
-      label: "Claims",
-      tone: draftClaims.length > 0 ? "warning" : claimCount > 0 ? "good" : "neutral",
-      summary:
-        draftClaims.length > 0
-          ? `${draftClaims.length} draft ${draftClaims.length === 1 ? "claim requires" : "claims require"} action`
-          : claimCount > 0
-            ? `${formatNumber(claimCount)} governed claims available`
-            : canCreateClaim
-              ? "No claims yet · create your first record"
-              : "No claims available yet",
+        label: "Claims",
+
+        tone:
+            draftClaims > 0
+                ? "warning"
+                : claimCount > 0
+                ? "good"
+                : "neutral",
+
+        summary:
+            draftClaims > 0
+                ? `${draftClaims} draft ${
+                    draftClaims === 1
+                        ? "claim requires"
+                        : "claims require"
+                  } action`
+
+                : claimCount > 0
+                ? `${formatNumber(claimCount)} governed claims available`
+
+                : canCreateClaim
+                ? "No claims yet - create your first record"
+
+                : "No claims available yet",
     },
     {
-      label: "Verification",
-      tone: lockedClaims.length > 0 ? "good" : publishedClaims.length > 0 ? "warning" : "neutral",
-      summary:
-        lockedClaims.length > 0
-          ? `${lockedClaims.length} locked verification ${lockedClaims.length === 1 ? "record" : "records"}`
-          : publishedClaims.length > 0
-            ? `${publishedClaims.length} public ${publishedClaims.length === 1 ? "record" : "records"} not yet locked`
-            : "No externally finalized records yet",
+        label: "Verification",
+
+        tone:
+            lockedClaims > 0
+                ? "good"
+                : publishedClaims > 0
+                ? "warning"
+                : verifiedClaims > 0
+                ? "warning"
+                : "neutral",
+
+        summary:
+            lockedClaims > 0
+                ? `${lockedClaims} locked verification record${lockedClaims === 1 ? "" : "s"}`
+
+            : publishedClaims > 0
+                ? `${publishedClaims} published record${publishedClaims === 1 ? "" : "s"} awaiting lock`
+
+            : verifiedClaims > 0
+                ? `${verifiedClaims} verified record${verifiedClaims === 1 ? "" : "s"} awaiting publication`
+
+            : draftClaims > 0
+                ? `${draftClaims} draft claim${draftClaims === 1 ? "" : "s"} pending verification`
+
+            : "Verification workflow not started",
     },
     {
       label: "Plan",
@@ -924,7 +957,7 @@ export default function WorkspaceDashboardPage() {
   const canImportTrades = workspaceRole === "owner" || workspaceRole === "operator";
 
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
-  const [claims, setClaims] = useState<PublicClaimDirectoryItem[]>([]);
+  
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
   const [
     dashboardSummary,
@@ -944,11 +977,13 @@ export default function WorkspaceDashboardPage() {
         setError(null);
 
         const [
-          dashboardSummary,
-          usageRes,
+            dashboardSummary,
+            usageRes,
+            snapshot,
         ] = await Promise.all([
-          api.getDashboardSummary(workspaceId),
-          api.getWorkspaceUsage(workspaceId),
+            api.getDashboardSummary(workspaceId),
+            api.getWorkspaceUsage(workspaceId),
+            api.getWorkspaceSnapshot(workspaceId),
         ]);
 
         setDashboardSummary(dashboardSummary);
@@ -1227,15 +1262,26 @@ export default function WorkspaceDashboardPage() {
           <GovernanceBanner workspaceId={workspaceId} usage={usage} />
 
           <DashboardStatusPanel
-            workspaceId={workspaceId}
-            dashboard={{
-              ...dashboard,
-              trade_count: Number(usage?.usage?.trades ?? 0),
-            }}
-            claims={claims}
-            usage={usage}
-            canCreateClaim={canCreateClaim}
-            canImportTrades={canImportTrades}
+              workspaceId={workspaceId}
+              dashboard={{
+                  ...dashboard,
+                  trade_count: Number(
+                      usage?.usage?.trades ?? 0
+                  ),
+              }}
+              usage={usage}
+
+              verifiedClaims={verifiedClaims}
+
+              publishedClaims={publishedClaims}
+
+              lockedClaims={lockedClaims}
+
+              draftClaims={draftClaimsCount}
+
+              canCreateClaim={canCreateClaim}
+
+              canImportTrades={canImportTrades}
           />
 
           <TrustOverviewPanel
@@ -1284,20 +1330,16 @@ export default function WorkspaceDashboardPage() {
               )} · ${formatPercent(tradesUsage.ratio)}`}
             />
             <SummaryCard
-              label="Governed Claims"
-              value={formatNumber(governanceUsage.claims)}
-              hint={`${formatNumber(governanceUsage.claims)} / ${formatNumber(
-                governanceLimits.claims
-              )} · ${formatPercent(
-                governanceLimits.claims > 0
-                  ? governanceUsage.claims / governanceLimits.claims
-                  : 0
-              )}`}
+                label="Governed Claims"
+                value={formatNumber(claimCount)}
+                hint={`${formatNumber(claimCount)} governed verification records`}
             />
             <SummaryCard
-              label="Public Trust Records"
-              value={`${lockedClaims} / ${publishedClaims}`}
-              hint={`Configured: ${configuredPlanName} · Effective: ${effectivePlanName}`}
+                label="Public Trust Records"
+                value={formatNumber(
+                    lockedClaims + publishedClaims
+                )}
+                hint={`${lockedClaims} Locked • ${publishedClaims} Published`}
             />
           </div>
 
@@ -1327,11 +1369,12 @@ export default function WorkspaceDashboardPage() {
             <CapacityCard
               label="Claim Capacity"
               ratio={
-                governanceLimits.claims > 0
-                  ? governanceUsage.claims / governanceLimits.claims
-                  : 0
+                  governanceLimits.claims > 0
+                      ? claimCount /
+                        governanceLimits.claims
+                      : 0
               }
-              used={governanceUsage.claims}
+              used={claimCount}
               limit={governanceLimits.claims}
             />
 
@@ -1360,94 +1403,152 @@ export default function WorkspaceDashboardPage() {
               verifiedCount={verifiedClaims}
             />
           ) : (
-            <div className="mb-8 grid gap-6 lg:grid-cols-[1.3fr_1fr]">
-              <div className="rounded-2xl border bg-white p-6 shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      Claim activity
-                    </div>
-                    <h2 className="mt-2 text-2xl font-semibold">Recent Claims</h2>
-                    <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-600">
-                      Claims are prioritized by operational relevance so active drafts, finalized
-                      records, and recent working items are easier to review.
-                    </p>
-                  </div>
-
-                  <Link
-                    href={`/workspace/${workspaceId}/claims`}
-                    className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
-                  >
-                    Open Claim Library
-                  </Link>
-                </div>
-
-      
-
-
-                <div className="mt-4 text-slate-500">
-                  Claim activity is now summarized at executive level.
-                  Open Claim Library to review individual records.
-                </div>
-                  
-              </div>
-
+            <div className="mb-8">
               <div className="rounded-2xl border bg-white p-6 shadow-sm">
                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Executive Actions
+                  Executive Workspace Center
                 </div>
-                <h2 className="mt-2 text-2xl font-semibold">Priority Actions</h2>
+                <h2 className="mt-2 text-2xl font-semibold">Operational Command Center</h2>
 
-                <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-5">
-                  <div className="text-sm font-semibold text-blue-900">{nextAction.title}</div>
-                  <div className="mt-2 text-sm leading-7 text-blue-800">
+                <div className="text-sm font-semibold text-blue-900">
+                    {nextAction.title}
+                </div>
+
+                <div className="mt-2 text-sm leading-7 text-blue-800">
                     {nextAction.description}
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    {nextAction.primaryAction === "create" ? (
-                      <ActionButton
-                        onClick={() => void handleCreateDraftClick()}
-                        label={nextAction.primaryLabel}
-                        loading={createChecking}
-                        disabled={!canCreateClaim}
-                      />
-                    ) : nextAction.primaryHref ? (
-                      <ActionLink href={nextAction.primaryHref} label={nextAction.primaryLabel} active />
-                    ) : null}
-
-                    {nextAction.secondaryHref && nextAction.secondaryLabel ? (
-                      <ActionLink href={nextAction.secondaryHref} label={nextAction.secondaryLabel} />
-                    ) : null}
-                  </div>
                 </div>
 
-                <div className="mt-5 space-y-3">
-                  {canCreateClaim ? (
-                    <ActionButton
-                      onClick={() => void handleCreateDraftClick()}
-                      label="Create Draft Claim"
-                      loading={createChecking}
-                    />
-                  ) : (
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-3 text-center text-sm font-medium text-slate-500">
-                      Claim creation available to owner/operator only
-                    </div>
-                  )}
+                <div className="mt-8 grid gap-5 md:grid-cols-2">
 
-                  {canImportTrades ? (
-                    <ActionLink href={`/workspace/${workspaceId}/import`} label="Import Trades" />
-                  ) : (
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-3 text-center text-sm font-medium text-slate-500">
-                      Trade import available to owner/operator only
-                    </div>
-                  )}
+                    {/* ======================================================= */}
+                    {/* Live Workflow */}
+                    {/* ======================================================= */}
 
-                  <ActionLink href={`/workspace/${workspaceId}/members`} label="Invite Members" />
-                  <ActionLink href={`/workspace/${workspaceId}/ledger`} label="Open Ledger" />
-                  <ActionLink href={`/workspace/${workspaceId}/claims`} label="Open Claim Library" />
-                  <ActionLink href={`/claims`} label="Explore Public Proof" />
-                  <ActionLink href={`/workspace/${workspaceId}/settings`} label="Open Settings & Billing" />
+                    <div className="rounded-xl border border-slate-200 bg-white p-5 md:col-span-2">
+
+                        <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
+
+                            Live Workflow
+
+                        </div>
+
+                        <div className="mt-5 space-y-3">
+
+                            <div className="flex justify-between">
+
+                                <span>Evidence Intake</span>
+
+                                <span>{tradeCount > 0 ? "✓" : "•"}</span>
+
+                            </div>
+
+                            <div className="flex justify-between">
+
+                                <span>Claim Production</span>
+
+                                <span>{claimCount > 0 ? "✓" : "•"}</span>
+
+                            </div>
+
+                            <div className="flex justify-between">
+
+                                <span>Verification</span>
+
+                                <span>{verifiedClaims > 0 ? "✓" : "•"}</span>
+
+                            </div>
+
+                            <div className="flex justify-between">
+
+                                <span>Public Trust</span>
+
+                                <span>{lockedClaims > 0 ? "✓" : "•"}</span>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-white p-5 md:col-span-2">
+
+                        <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
+
+                            Executive Readiness
+
+                        </div>
+
+                        <div className="mt-5 space-y-3 text-sm">
+
+                            <div className="flex justify-between">
+                                <span>Verification Stage</span>
+                                <strong>
+                                    {lockedClaims > 0
+                                         ? "Locked"
+
+                                     : publishedClaims > 0
+                                         ? "Published"
+
+                                     : verifiedClaims > 0
+                                         ? "Verified"
+
+                                     : claimCount > 0
+                                         ? "Draft"
+
+                                     : "No Claims"}
+                                </strong>
+                            </div>
+
+                            <div className="flex justify-between">
+                                <span>Verification Coverage</span>
+                                <strong>
+                                    {lockedClaims > 0
+                                         ? "READY"
+
+                                     : publishedClaims > 0
+                                         ? "PUBLIC"
+
+                                     : verifiedClaims > 0
+                                         ? "VERIFIED"
+
+                                     : claimCount > 0
+                                         ? "CLAIM CREATED"
+
+                                     : "NOT STARTED"}
+                                </strong>
+                            </div>
+
+                            <div className="flex justify-between">
+                                <span>Verification Coverage</span>
+
+                                <strong>
+                                    {claimCount > 0
+                                        ? `${Math.round(
+                                            ((publishedClaims + lockedClaims) / claimCount) * 100
+                                          )}%`
+                                        : "0%"}
+                                </strong>
+                            </div>
+
+                            <div className="flex justify-between">
+                                <span>Governed Claims</span>
+
+                                <strong>
+                                    {claimCount}
+                                </strong>
+                            </div>
+
+                            <div className="flex justify-between">
+                                <span>Next Executive Action</span>
+                                <strong>
+                                    {nextAction.title}
+                                </strong>
+                            </div>
+
+                        </div>
+
+                    </div>             
+
                 </div>
 
                 {billingActivationRecommended ? (

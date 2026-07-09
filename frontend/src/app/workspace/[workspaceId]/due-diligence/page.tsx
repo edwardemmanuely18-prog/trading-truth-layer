@@ -43,11 +43,6 @@ export default function Page(
             workspaceId
           );
 
-        console.log(
-          "DUE DILIGENCE RESPONSE",
-          JSON.stringify(data, null, 2)
-        );
-
         setReport(data);
       } catch (err) {
         console.error(err);
@@ -73,6 +68,28 @@ export default function Page(
         No report available.
       </div>
     );
+  }
+
+  function formatEvidenceBand(
+      band: string,
+  ) {
+      switch (band) {
+
+          case "tier_1":
+              return "Tier I";
+
+          case "tier_2":
+              return "Tier II";
+
+          case "tier_3":
+              return "Tier III";
+
+          case "tier_4":
+              return "Tier IV";
+
+          default:
+              return band;
+      }
   }
 
   return (
@@ -103,7 +120,7 @@ export default function Page(
               This report evaluates claim
               verification quality,
               evidence reliability,
-              integrity controls,
+              scanner health,
               governance compliance,
               and institutional trust
               readiness for workspace
@@ -116,21 +133,27 @@ export default function Page(
           <p className="mt-3 text-slate-600">
             Institutional assessment,
             verification quality,
-            integrity monitoring,
+            scanner health,
             trust evaluation,
             and risk review.
           </p>
 
         </div>
 
-        <div className="grid gap-4 md:grid-cols-6">
+        <h2 className="mb-4 text-xl font-semibold">
+            Executive Assessment
+        </h2>
+
+        <div className="grid gap-4 md:grid-cols-14">
 
           <MetricCard
+            className="md:col-span-2"
             title="Claims"
             value={report.overview.claims}
           />
 
           <MetricCard
+            className="md:col-span-2"
             title="Published"
             value={
               report.overview
@@ -139,6 +162,7 @@ export default function Page(
           />
 
           <MetricCard
+            className="md:col-span-2"
             title="Locked"
             value={
               report.overview
@@ -147,16 +171,23 @@ export default function Page(
           />
 
           <MetricCard
+            className="md:col-span-2"
             title="Trust"
-            value={`${report.trust.trust_score}%`}
+            value={`${Number(
+                       report.trust.trust_score
+                   ).toFixed(2)}%`}
           />
 
           <MetricCard
+            className="md:col-span-2"
             title="Network"
-            value={`${report.trust.network_score}%`}
+            value={`${Number(
+                       report.trust.network_score
+                   ).toFixed(2)}%`}
           />
 
           <MetricCard
+            className="md:col-span-4"
             title="Grade"
             value={
               report.assessment
@@ -166,34 +197,52 @@ export default function Page(
 
         </div>
 
+        <h2 className="mb-4 mt-8 text-xl font-semibold">
+            Institutional Scores
+        </h2>
+
         <div className="mt-4 grid gap-4 md:grid-cols-5">
 
           <MetricCard
             title="Verification"
-            value={`${report.verification.coverage}%`}
+            value={`${Number(
+                       report.verification.coverage
+                   ).toFixed(2)}%`}
           />
 
           <MetricCard
-            title="Integrity"
-            value={`${report.integrity.integrity_score}%`}
+            title="Scanner Health"
+            value={`${Number(
+                       report.scanner_health.health_score
+                   ).toFixed(2)}%`}
           />
 
           <MetricCard
             title="Evidence"
-            value={`${report.evidence.quality_score}%`}
+            value={`${Number(
+                       report.evidence.quality_score
+                   ).toFixed(2)}%`}
           />
 
           <MetricCard
             title="Risk"
-            value={`${report.risk.risk_score}%`}
+            value={`${Number(
+                       report.risk.risk_score
+                   ).toFixed(2)}%`}
           />
 
           <MetricCard
             title="Confidence"
-            value={`${report.assessment.confidence}%`}
+            value={`${Number(
+                       report.assessment.confidence
+                   ).toFixed(2)}%`}
           />
 
         </div>
+
+        <h2 className="mb-4 mt-10 text-xl font-semibold">
+            Detailed Reviews
+        </h2>
 
         <div className="mt-8 grid gap-6 md:grid-cols-2">
 
@@ -219,27 +268,27 @@ export default function Page(
           />
 
           <AnalyticsCard
-            title="Integrity Review"
+            title="Scanner Health"
             items={[
               {
-                label: "Integrity Score",
+                label: "Scanner Health Score",
                 value:
-                  `${report.integrity.integrity_score}%`,
+                  `${report.scanner_health.health_score}%`,
               },
               {
                 label: "Compromised Claims",
                 value:
-                  report.integrity.compromised_claims,
+                  report.scanner_health.compromised_claims,
               },
               {
                 label: "Open Findings",
                 value:
-                  report.integrity.open_findings,
+                  report.scanner_health.open_findings,
               },
               {
                 label: "Resolved Findings",
                 value:
-                  report.integrity.resolved_findings,
+                  report.scanner_health.resolved_findings,
               },
             ]}
           />
@@ -277,7 +326,9 @@ export default function Page(
               {
                 label: "Quality Band",
                 value:
-                  report.evidence.quality_band,
+                    formatEvidenceBand(
+                        report.evidence.quality_band
+                    ),
               },
               {
                 label: "Coverage",
@@ -340,17 +391,34 @@ export default function Page(
 function MetricCard({
   title,
   value,
+  className = "",
 }: {
   title: string;
   value: string | number;
+  className?: string;
 }) {
   return (
-    <div className="rounded-xl border bg-white p-5">
+    <div
+        className={
+            `rounded-xl border bg-white p-5 ${className}`
+        }
+    >
       <div className="text-sm text-slate-500">
         {title}
       </div>
-      <div className="mt-2 text-3xl font-bold">
-        {value}
+      <div
+          className="
+              mt-2
+              rounded-lg
+              bg-slate-100
+              px-3
+              py-3
+              text-center
+              text-2xl
+              font-bold
+          "
+      >
+          {value}
       </div>
     </div>
   );

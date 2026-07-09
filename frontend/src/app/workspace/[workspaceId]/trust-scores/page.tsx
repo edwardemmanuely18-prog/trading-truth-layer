@@ -23,8 +23,11 @@ export default function TrustScoresPage() {
   const [scores, setScores] =
     useState<TrustScore[]>([]);
 
+  const [summary, setSummary] =
+    useState<any>(null);
+
   const [visibleRows, setVisibleRows] =
-    useState(10);
+    useState(20);
 
   useEffect(() => {
     async function load() {
@@ -33,6 +36,10 @@ export default function TrustScoresPage() {
           await getTrustScores(
             workspaceId
           );
+
+        setSummary(
+          response.summary
+        );
 
         setScores(
           response.scores || []
@@ -50,28 +57,25 @@ export default function TrustScoresPage() {
     }
   }, [workspaceId]);
 
-  const institutional =
-    scores.filter(
-      x =>
-        x.tier ===
-        "INSTITUTIONAL GRADE"
-    ).length;
+  if (loading) {
 
-  const verified =
-    scores.filter(
-      x => x.tier === "VERIFIED"
-    ).length;
+    return (
 
-  const averageScore =
-    scores.length > 0
-      ? (
-          scores.reduce(
-            (sum, x) =>
-              sum + x.trust_score,
-            0
-          ) / scores.length
-        ).toFixed(1)
-      : "0";
+      <div className="min-h-screen bg-slate-50">
+
+        <Navbar />
+
+        <div className="mx-auto max-w-7xl px-6 py-10">
+
+          Loading TVS verification profile...
+
+        </div>
+
+      </div>
+
+    );
+
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -103,27 +107,72 @@ export default function TrustScoresPage() {
 
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4 mb-8">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-12 mb-8">
 
-          <MetricCard
-            title="Claims"
-            value={scores.length}
-          />
+          <div className="lg:col-span-2">
 
-          <MetricCard
-            title="Average Score"
-            value={averageScore}
-          />
+            <MetricCard
+              title="Claims"
+              value={
+                summary?.claims ?? 0
+              }
+            />
 
-          <MetricCard
-            title="Institutional Grade"
-            value={institutional}
-          />
+          </div>
 
-          <MetricCard
-            title="Verified"
-            value={verified}
-          />
+          <div className="lg:col-span-2">
+
+            <MetricCard
+              title="Average Trust"
+              value={
+                summary?.average_score ?? 0
+              }
+            />
+
+          </div>
+
+          <div className="lg:col-span-4">
+
+            <MetricCard
+              title="Institutional Grade"
+              value={
+                summary?.institutional_grade ??
+                "-"
+              }
+            />
+
+          </div>
+
+          <div className="lg:col-span-2">
+
+            <MetricCard
+              title="Verified Claims"
+              value={
+                summary?.verified ?? 0
+              }
+            />
+
+          </div>
+
+          <div className="lg:col-span-2">
+
+            <MetricCard
+              title="Network Score"
+              value={
+                summary?.network_score ?? 0
+              }
+            />
+
+          </div>
+
+          <div className="lg:col-span-2">
+
+            <MetricCard
+              title="Registry"
+              value="TVS"
+            />
+
+          </div>
 
         </div>
 
@@ -149,91 +198,133 @@ export default function TrustScoresPage() {
 
         </div>
 
-        <div className="space-y-6">
+        <div className="rounded-2xl border bg-white p-8 mb-8">
 
-          {scores
-            .slice(0, visibleRows)
-            .map(score => (
+          <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
+            TVS REGISTRY
+          </div>
 
-            <div
-              key={score.claim_id}
-              className="rounded-2xl border bg-white p-8"
-            >
+          <h2 className="mt-3 text-3xl font-semibold">
+            Verification Registry
+          </h2>
 
-              <div className="flex items-start justify-between">
+          <p className="mt-4 text-slate-600">
+            Every verification decision shown below is
+            produced by the Trading Verification System
+            (TVS). The registry represents the canonical
+            verification status of every claim in this
+            workspace and will progressively expose
+            evidence quality, governance, network trust,
+            transparency and lifecycle verification
+            metrics.
+          </p>
 
-                <div>
+        </div>
 
-                  <h2 className="text-3xl font-semibold">
-                    {score.claim_name}
-                  </h2>
+        <div className="rounded-2xl border bg-white overflow-hidden">
 
-                  <div className="mt-3 flex gap-2 flex-wrap">
+          <div className="max-h-[700px] overflow-y-auto">
 
-                    <span className="rounded-full border border-slate-300 px-3 py-1 text-sm">
+            <table className="w-full">
+
+              <thead className="sticky top-0 bg-slate-100 z-10">
+
+                <tr>
+
+                  <th className="p-4 text-left">
+                    Rank
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Claim
+                  </th>
+
+                  <th className="p-4 text-center">
+                    Trust Score
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Tier
+                  </th>
+
+                  <th className="p-4 text-left">
+                    Status
+                  </th>
+
+                  <th className="p-4 text-center">
+                    Reviews
+                  </th>
+
+                  <th className="p-4 text-center">
+                    Rating
+                  </th>
+
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                {scores
+                  .slice(0, visibleRows)
+                  .map((score,index)=>(
+
+                  <tr
+                    key={score.claim_id}
+                    className="border-t"
+                  >
+
+                    <td className="p-4">
+                      {index + 1}
+                    </td>
+
+                    <td className="p-4 font-medium">
+                      {score.claim_name}
+                    </td>
+
+                    <td className="p-4 text-center font-bold">
+                      {score.trust_score}
+                    </td>
+
+                    <td className="p-4">
+
+                      <span
+                        className={`rounded-full px-3 py-1 text-sm border ${
+                          score.tier ===
+                          "INSTITUTIONAL GRADE"
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                            : score.tier ===
+                              "VERIFIED"
+                            ? "border-blue-300 bg-blue-50 text-blue-700"
+                            : "border-amber-300 bg-amber-50 text-amber-700"
+                        }`}
+                      >
+                        {score.tier}
+                      </span>
+
+                    </td>
+
+                    <td className="p-4">
                       {score.status}
-                    </span>
+                    </td>
 
-                    <span
-                      className={`rounded-full px-3 py-1 text-sm border ${
-                        score.tier ===
-                        "INSTITUTIONAL GRADE"
-                          ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                          : score.tier ===
-                            "VERIFIED"
-                          ? "border-blue-300 bg-blue-50 text-blue-700"
-                          : "border-amber-300 bg-amber-50 text-amber-700"
-                      }`}
-                    >
-                      {score.tier}
-                    </span>
+                    <td className="p-4 text-center">
+                      {score.review_count}
+                    </td>
 
-                  </div>
+                    <td className="p-4 text-center">
+                      {score.average_rating}
+                    </td>
 
-                </div>
+                  </tr>
 
-                <div className="text-right">
+                ))}
 
-                  <div className="text-xs text-slate-500">
-                    TRUST SCORE
-                  </div>
+              </tbody>
 
-                  <div className="text-5xl font-bold">
-                    {score.trust_score}
-                  </div>
+            </table>
 
-                </div>
-
-              </div>
-
-              <div className="mt-8 grid gap-4 md:grid-cols-3">
-
-                <InfoCard
-                  label="Reviews"
-                  value={
-                    score.review_count
-                  }
-                />
-
-                <InfoCard
-                  label="Average Rating"
-                  value={
-                    score.average_rating
-                  }
-                />
-
-                <InfoCard
-                  label="Claim ID"
-                  value={
-                    score.claim_id
-                  }
-                />
-
-              </div>
-
-            </div>
-
-          ))}
+          </div>
 
         </div>
 
@@ -244,7 +335,7 @@ export default function TrustScoresPage() {
             <button
               onClick={() =>
                 setVisibleRows(
-                  visibleRows + 10
+                  visibleRows + 20
                 )
               }
               className="rounded-xl bg-slate-900 px-6 py-3 text-white"
@@ -269,35 +360,47 @@ function MetricCard({
   title: string;
   value: string | number;
 }) {
+
+  const isText =
+    typeof value === "string" &&
+    value.length > 4;
+
   return (
-    <div className="rounded-2xl border bg-white p-6">
+
+    <div className="rounded-2xl border bg-white p-6 h-full">
+
       <div className="text-sm text-slate-500">
         {title}
       </div>
 
-      <div className="mt-2 text-4xl font-bold">
-        {value}
-      </div>
-    </div>
-  );
-}
+      {
 
-function InfoCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
-  return (
-    <div className="rounded-xl border p-5">
-      <div className="text-xs text-slate-500">
-        {label}
-      </div>
+        isText ? (
 
-      <div className="mt-2 text-xl font-semibold">
-        {value}
-      </div>
+          <div className="mt-5">
+
+            <span className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-lg font-semibold text-amber-700">
+
+              {value}
+
+            </span>
+
+          </div>
+
+        ) : (
+
+          <div className="mt-2 text-4xl font-bold whitespace-nowrap">
+
+            {value}
+
+          </div>
+
+        )
+
+      }
+
     </div>
+
   );
+
 }

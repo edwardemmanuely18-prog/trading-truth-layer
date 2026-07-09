@@ -357,7 +357,7 @@ export default function BillingPage() {
 
         return [
             {
-                title: "Enabled Commercial Services",
+                title: "Enabled Commercial Workflows",
                 description:
                     "Commercial infrastructure currently enabled for this workspace.",
                 services: enabled,
@@ -419,8 +419,14 @@ export default function BillingPage() {
                 commercial_services:
                     plan.commercial_services ?? [],
 
+                workflow_outcomes:
+                    plan.workflow_outcomes ?? [],
+
                 features:
                     plan.infrastructure ?? [],
+
+                capacity_summary:
+                    plan.capacity_summary ?? {},
 
             })
         );
@@ -874,22 +880,25 @@ export default function BillingPage() {
 
                                 <MetricRow
                                     label="Claims"
-                                    value={plan.claims ?? "Unlimited"}
+                                    value={plan.capacity_summary?.claims ?? plan.claims}
                                 />
 
                                 <MetricRow
                                     label="Trades"
-                                    value={plan.trades ?? "Unlimited"}
+                                    value={plan.capacity_summary?.trades ?? plan.trades}
                                 />
 
                                 <MetricRow
                                     label="Members"
-                                    value={plan.members ?? "Unlimited"}
+                                    value={plan.capacity_summary?.members ?? plan.members}
                                 />
 
                                 <MetricRow
                                     label="Storage"
-                                    value={`${plan.storage_mb ?? "Unlimited"} MB`}
+                                    value={
+                                        plan.capacity_summary?.storage ??
+                                        `${plan.storage_mb} MB`
+                                    }
                                 />
 
                             </div>
@@ -905,13 +914,64 @@ export default function BillingPage() {
                                 {selected ? "Selected Plan" : "Select Plan"}
                             </button>
 
+                            <div className="mt-8 rounded-2xl border border-indigo-200 bg-indigo-50 p-6">
+
+                                <div className="font-semibold uppercase tracking-wide text-indigo-700">
+
+                                    Commercial Outcomes
+
+                                </div>
+
+                                <div className="mt-4 space-y-3">
+
+                                    {(plan.workflow_outcomes ?? []).length === 0 ? (
+
+                                        <div className="text-slate-500">
+
+                                            Standard commercial outcomes.
+
+                                        </div>
+
+                                    ) : (
+
+                                        plan.workflow_outcomes.map(
+                                            (workflow: string) => (
+
+                                                <div
+                                                    key={workflow}
+                                                    className="flex gap-3"
+                                                >
+
+                                                    <span className="font-bold text-indigo-700">
+
+                                                        ✓
+
+                                                    </span>
+
+                                                    <span>
+
+                                                        {workflow}
+
+                                                    </span>
+
+                                                </div>
+
+                                            )
+                                        )
+
+                                    )}
+
+                                </div>
+
+                            </div>
+
                             <div className="mt-8 grid gap-6 lg:grid-cols-2">
 
                                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
 
                                     <div className="font-semibold uppercase tracking-wide text-emerald-700">
 
-                                        Infrastructure
+                                        Platform Infrastructure
 
                                     </div>
 
@@ -1021,13 +1081,13 @@ export default function BillingPage() {
 
             <h2 className="text-4xl font-bold">
 
-            Currently Enabled Infrastructure
+            Currently Enabled Commercial Infrastructure
 
             </h2>
 
             <p className="mt-3 text-slate-600">
 
-            Commercial capabilities currently enabled for this workspace irrespective of the selected subscription tier.
+            The commercial infrastructure currently available to this workspace based on its effective subscription plan and entitlement configuration.
 
             </p>
 
@@ -1113,14 +1173,13 @@ export default function BillingPage() {
 
                     <h2 className="text-4xl font-bold">
 
-                        Checkout Console
+                        Subscription Activation
 
                     </h2>
 
                     <p className="mt-3 text-slate-600">
 
-                        Select a commercial tier, review institutional capacity,
-                        compare services and complete workspace activation.
+                        Review subscription tiers, compare operational workflows, evaluate commercial capacity, and activate the subscription that best matches your verification operations.
 
                     </p>
 
@@ -1372,7 +1431,7 @@ export default function BillingPage() {
 
                     <div className="text-slate-500">
 
-                    Standard Commercial Services
+                    Standard Commercial Workflows
 
                     </div>
 

@@ -7,6 +7,10 @@ const DEV_USER_ID: number | null = null;
 const TOKEN_STORAGE_KEY = "ttl_access_token";
 const ACTIVE_WORKSPACE_STORAGE_KEY = "ttl_active_workspace_id";
 
+import type {
+    WorkspaceEntitlements,
+} from "./entitlements";
+
 const inflightRequests = new Map<
   string,
   Promise<any>
@@ -360,6 +364,34 @@ export interface IntegrityRecord {
   trade_fingerprint: string | null;
 
   ingestion_timestamp: string | null;
+}
+
+export interface WorkspaceSnapshot {
+
+    health_score: number;
+
+    health_state: string;
+
+    trust_state: string;
+
+    governance_state: string;
+
+    active_alerts: number;
+
+    services: {
+
+        evidence_engine: string;
+
+        verification_engine: string;
+
+        report_engine: string;
+
+        trust_layer: string;
+
+        governance_engine: string;
+
+    };
+
 }
 
 export async function getIntegrityRegistry(
@@ -1835,6 +1867,7 @@ export type TrustScoresAnalytics = {
 };
 
 export type TrustScore = {
+
   claim_id: number;
 
   claim_name: string;
@@ -1848,12 +1881,41 @@ export type TrustScore = {
   average_rating: number;
 
   tier: string;
+
+  verification_band: string;
+
+  decision: string;
+
+  confidence: number;
+
+  verified_at?: string | null;
+
+  published_at?: string | null;
+
+  locked_at?: string | null;
+
 };
 
 export type TrustScoreResponse = {
+
+  summary: {
+
+    claims: number;
+
+    average_score: number;
+
+    institutional_grade: string;
+
+    verified: number;
+
+    network_score: number;
+
+  };
+
   count: number;
 
   scores: TrustScore[];
+
 };
 
 export type LeaderboardAnalytics = {
@@ -2651,12 +2713,12 @@ export interface DueDiligenceResponse {
     status: string;
   };
 
-  integrity: {
-    integrity_score: number;
+  scanner_health: {
+    health_score: number;
     compromised_claims: number;
     open_findings: number;
     resolved_findings: number;
-  };
+  }
 
   evidence: {
     quality_score: number;
@@ -2740,6 +2802,16 @@ export async function getDashboardSummary(
   return apiFetch(
     `/dashboard-summary/${workspaceId}`
   );
+
+}
+
+export async function getWorkspaceSnapshot(
+    workspaceId: number
+) {
+
+    return apiFetch(
+        `/workspaces/${workspaceId}/snapshot`
+    );
 
 }
 
@@ -4271,6 +4343,16 @@ export const api = {
     );
   },
 
+  getWorkspaceSnapshot(
+      workspaceId: number
+  ): Promise<WorkspaceSnapshot> {
+
+      return apiFetch<WorkspaceSnapshot>(
+          `/workspaces/${workspaceId}/snapshot`
+      );
+
+  },
+
   async getIntegrityDashboard(
     workspaceId: number
   ): Promise<
@@ -4484,6 +4566,12 @@ export const api = {
       manual_payment_details: ensureManualPaymentDetails(row?.manual_payment_details),
     };
   },
+
+  getWorkspacePlanSimulation,
+
+  setWorkspacePlanSimulation,
+
+  clearWorkspacePlanSimulation,
 
   async previewImportFile(
     workspaceId: number,
@@ -5337,4 +5425,74 @@ export async function downloadClaimReportPdf(claimId: number) {
     `/claim-schemas/${claimId}/claim-report/download`,
     `claim_report_${claimId}.pdf`
   );
+}
+
+export async function getWorkspaceEntitlements(
+    workspaceId: number,
+): Promise<WorkspaceEntitlements> {
+
+    return apiFetch<WorkspaceEntitlements>(
+        `/workspaces/${workspaceId}/entitlements`,
+    );
+
+}
+
+export async function getWorkspacePlanSimulation(
+    workspaceId:number,
+){
+
+    return apiFetch(
+
+        `/workspaces/${workspaceId}/plan-simulation`
+
+    );
+
+}
+
+export async function setWorkspacePlanSimulation(
+
+    workspaceId:number,
+
+    plan:string,
+
+){
+
+    return apiFetch(
+
+        `/workspaces/${workspaceId}/plan-simulation`,
+
+        {
+
+            method:"PUT",
+
+            body:JSON.stringify({
+
+                plan,
+
+            }),
+
+        },
+
+    );
+
+}
+
+export async function clearWorkspacePlanSimulation(
+
+    workspaceId:number,
+
+){
+
+    return apiFetch(
+
+        `/workspaces/${workspaceId}/plan-simulation`,
+
+        {
+
+            method:"DELETE",
+
+        },
+
+    );
+
 }

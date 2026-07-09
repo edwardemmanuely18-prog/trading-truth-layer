@@ -41,6 +41,8 @@ class CertificateIdentity:
 
     claim_schema_id: int
 
+    claim_name: str
+
     workspace_id: int
 
     # --------------------------------------------------------

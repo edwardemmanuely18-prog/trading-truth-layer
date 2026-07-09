@@ -150,6 +150,14 @@ class WorkspacePerformanceMetrics:
 
     loss_rate: float
 
+    # --------------------------------------------------------
+    # Trade Distribution
+    # --------------------------------------------------------
+
+    winning_trades: int
+
+    losing_trades: int
+
     max_drawdown: float
 
     recovery_factor: float

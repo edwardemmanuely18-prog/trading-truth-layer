@@ -4,6 +4,9 @@ from dataclasses import dataclass
 
 import json
 
+import time
+from pprint import pformat
+
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -17,6 +20,16 @@ from app.models.review_statement import ReviewStatement
 from app.models.claim_dispute import ClaimDispute
 from app.models.audit_event import AuditEvent
 from app.models.broker_connection import BrokerConnection
+
+from .workspace_context_cache import (
+    get_workspace_context_cache,
+)
+
+from app.services.claim_integrity_engine import (
+    parse_period_start,
+    parse_period_end,
+    coerce_trade_opened_at,
+)
 
 
 @dataclass(slots=True)
@@ -55,17 +68,16 @@ def load_context_data(
     This function performs NO scoring.
     """
 
-    workspace = (
-
-        db.query(Workspace)
-
-        .filter(
-            Workspace.id == claim_schema.workspace_id
-        )
-
-        .first()
-
+    workspace_cache = get_workspace_context_cache(
+        db,
+        claim_schema.workspace_id,
     )
+
+    workspace = workspace_cache.workspace
+
+    profile = {}
+
+    total_start = time.perf_counter()
 
     #
     # ----------------------------------------------------------
@@ -97,54 +109,65 @@ def load_context_data(
         )
     )
 
-    query = (
-
-        db.query(Trade)
-
-        .filter(
-            Trade.workspace_id
-            == claim_schema.workspace_id
-        )
-
+    period_start = parse_period_start(
+        claim_schema.period_start
     )
 
-    #
-    # Date Range
-    #
+    period_end = parse_period_end(
+        claim_schema.period_end
+    )
 
-    if claim_schema.period_start:
+    t = time.perf_counter()
 
-        query = query.filter(
-            Trade.opened_at >= claim_schema.period_start
-        )
+    trades = workspace_cache.trades
 
-    if claim_schema.period_end:
+    if period_start:
 
-        query = query.filter(
-            Trade.opened_at <= claim_schema.period_end
-        )
+        trades = [
+            trade
+            for trade in trades
+            if (
+                coerce_trade_opened_at(trade.opened_at)
+                is not None
+                and
+                coerce_trade_opened_at(trade.opened_at)
+                >= period_start
+            )
+        ]
 
-    #
-    # Included Members
-    #
+    if period_end:
+
+        trades = [
+            trade
+            for trade in trades
+            if (
+                coerce_trade_opened_at(trade.opened_at)
+                is not None
+                and
+                coerce_trade_opened_at(trade.opened_at)
+                <= period_end
+            )
+        ]
 
     if included_members:
 
-        query = query.filter(
-            Trade.member_id.in_(included_members)
-        )
-
-    #
-    # Included Symbols
-    #
+        trades = [
+            trade
+            for trade in trades
+            if trade.member_id in included_members
+        ]
 
     if included_symbols:
 
-        query = query.filter(
-            Trade.symbol.in_(included_symbols)
-        )
+        trades = [
+            trade
+            for trade in trades
+            if (trade.symbol or "").upper() in included_symbols
+        ]
 
-    trades = query.all()
+    profile["trade_filter"] = (
+        time.perf_counter() - t
+    )
 
     #
     # Python-side filters
@@ -174,114 +197,53 @@ def load_context_data(
 
         ]
 
-    evidence_records = (
+    evidence_records = workspace_cache.evidence_records
 
-        db.query(EvidenceRecord)
+    integrity_scan = workspace_cache.integrity_scan
 
-        .filter(
+    integrity_alerts = workspace_cache.integrity_alerts
 
-            EvidenceRecord.workspace_id
-            == claim_schema.workspace_id
-
-        )
-
-        .all()
-
+    profile["workspace_cache"] = (
+        time.perf_counter() - total_start
     )
 
-    integrity_scan = (
+    t = time.perf_counter()
 
-        db.query(IntegrityScan)
+    review_statements = [
+        statement
+        for statement in workspace_cache.review_statements
+        if statement.claim_schema_id == claim_schema.id
+    ]
 
-        .filter(
-
-            IntegrityScan.workspace_id
-            == claim_schema.workspace_id
-
-        )
-
-        .order_by(
-            IntegrityScan.id.desc()
-        )
-
-        .first()
-
+    profile["review_statements"] = (
+        time.perf_counter() - t
     )
 
-    integrity_alerts = (
+    t = time.perf_counter()
 
-        db.query(IntegrityAlert)
+    disputes = [
+        dispute
+        for dispute in workspace_cache.claim_disputes
+        if dispute.claim_schema_id == claim_schema.id
+    ]
 
-        .filter(
-
-            IntegrityAlert.workspace_id
-            == claim_schema.workspace_id
-
-        )
-
-        .all()
-
+    profile["claim_disputes"] = (
+        time.perf_counter() - t
     )
 
-    review_statements = (
+    audit_events = workspace_cache.audit_events
 
-        db.query(ReviewStatement)
+    broker_connections = workspace_cache.broker_connections
 
-        .filter(
-
-            ReviewStatement.claim_schema_id
-            == claim_schema.id
-
-        )
-
-        .all()
-
+    profile["TOTAL"] = (
+        time.perf_counter() - total_start
     )
 
-    disputes = (
-
-        db.query(ClaimDispute)
-
-        .filter(
-
-            ClaimDispute.claim_schema_id
-            == claim_schema.id
-
-        )
-
-        .all()
-
-    )
-
-    audit_events = (
-
-        db.query(AuditEvent)
-
-        .filter(
-
-            AuditEvent.workspace_id
-            == str(claim_schema.workspace_id)
-
-        )
-
-        .all()
-
-    )
-
-    broker_connections = (
-
-        db.query(BrokerConnection)
-
-        .filter(
-
-            BrokerConnection.workspace_id
-            == claim_schema.workspace_id
-
-        )
-
-        .all()
-
-    )
+    print("\n" + "=" * 80)
+    print(f"TVS CONTEXT PROFILE - CLAIM {claim_schema.id}")
+    print("=" * 80)
+    print(pformat(profile))
+    print("=" * 80 + "\n")
 
     return VerificationContextData(
 

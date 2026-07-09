@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from statistics import mean
 
+from collections import Counter
+
 from app.services.verification.certificate.certificate_models import (
     VerificationCertificate,
 )
@@ -12,6 +14,10 @@ from app.services.verification.metric_models import (
 
 from app.services.verification.verification_models import (
     ComponentResult,
+)
+
+from app.services.verification.intelligence.verification_band import (
+    determine_verification_band,
 )
 
 
@@ -109,6 +115,16 @@ def build_workspace_verification_metrics(
 
             claim_count=0,
 
+            draft_claim_count=0,
+
+            verified_claim_count=0,
+
+            published_claim_count=0,
+
+            locked_claim_count=0,
+
+            verification_coverage=0.0,
+
             average_verification_score=0.0,
 
             verification_band="Unavailable",
@@ -161,6 +177,22 @@ def build_workspace_verification_metrics(
         .workspace_id
     )
 
+    status_distribution = Counter()
+
+    decision_distribution = Counter()
+
+    band_distribution = Counter()
+
+    tier_distribution = Counter()
+
+    draft_claim_count = 0
+
+    verified_claim_count = 0
+
+    published_claim_count = 0
+
+    locked_claim_count = 0
+
     average_score = round(
 
         mean(
@@ -177,25 +209,93 @@ def build_workspace_verification_metrics(
 
     )
 
+    for certificate in certificates:
+
+        status = str(
+            certificate.summary.verification_status
+        ).lower()
+
+        decision = str(
+            certificate.decision.decision
+        )
+
+        band = str(
+            certificate.summary.verification_band
+        )
+
+        tier = str(
+            certificate.summary.verification_tier
+        )
+
+        status_distribution[status] += 1
+
+        decision_distribution[decision] += 1
+
+        band_distribution[band] += 1
+
+        tier_distribution[tier] += 1
+
+        if status == "draft":
+            draft_claim_count += 1
+
+        elif status == "verified":
+            verified_claim_count += 1
+
+        elif status == "published":
+            published_claim_count += 1
+
+        elif status == "locked":
+            locked_claim_count += 1
+
+
+    verified_like = (
+
+        verified_claim_count +
+
+        published_claim_count +
+
+        locked_claim_count
+
+    )
+
+    verification_coverage = round(
+
+        verified_like
+
+        /
+
+        len(certificates)
+
+        * 100,
+
+        2,
+
+    ) if certificates else 0.0
+
     # Highest certification band currently
     # represented in the workspace.
-    verification_band = max(
 
-        certificates,
-
-        key=lambda c: (
-            c.summary.verification_score
-        ),
-
-    ).summary.verification_band
+    verification_band = (
+        determine_verification_band(
+            average_score
+        ).label
+    )
 
     return WorkspaceVerificationMetrics(
 
         workspace_id=workspace_id,
 
-        claim_count=len(
-            certificates
-        ),
+        claim_count=len(certificates),
+
+        draft_claim_count=draft_claim_count,
+
+        verified_claim_count=verified_claim_count,
+
+        published_claim_count=published_claim_count,
+
+        locked_claim_count=locked_claim_count,
+
+        verification_coverage=verification_coverage,
 
         average_verification_score=average_score,
 
@@ -311,6 +411,22 @@ def build_workspace_verification_metrics(
 
             name="Disputes",
 
+        ),
+
+        status_distribution=dict(
+            status_distribution
+        ),
+
+        decision_distribution=dict(
+            decision_distribution
+        ),
+
+        band_distribution=dict(
+            band_distribution
+        ),
+
+        tier_distribution=dict(
+            tier_distribution
         ),
 
         metadata={

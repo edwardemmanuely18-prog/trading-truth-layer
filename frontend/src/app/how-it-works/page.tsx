@@ -12,11 +12,9 @@ export default function HowItWorksPage() {
           </h1>
 
           <p className="mt-5 max-w-4xl text-lg leading-8 text-slate-600">
-            Trading Truth Layer converts raw trading activity into governed claims,
-            reproducible evidence, canonical integrity records, and public verification
-            surfaces. The system is designed for serious operators, trading businesses,
-            communities, allocators, institutional reviewers, and dispute-sensitive
-            environments where correctness, auditability, and trust posture matter.
+            Trading Truth Layer transforms raw trading activity into governed evidence, canonical verification, institutional reports, and independently verifiable public trust.
+
+            Every published output is derived from the Trading Verification System (TVS), ensuring every metric, report, certificate, and public record originates from a single canonical evidence model rather than disconnected calculations.
           </p>
         </div>
 
@@ -128,24 +126,23 @@ export default function HowItWorksPage() {
                 Step 3
               </div>
               <h3 className="mt-3 text-2xl font-semibold text-slate-950">
-                Generate evidence and metrics
+                Trading Verification System (TVS)
               </h3>
               <p className="mt-4 text-sm leading-7 text-slate-600">
-                Once the scope is defined, the system computes evidence-bearing claim
-                outputs such as equity path, net PnL, win rate, profit factor, drawdown,
-                trade-level inclusion or exclusion, and member-level leaderboard context.
+                Once a claim scope has been defined, the Trading Verification System becomes the canonical computation engine.
+
+                TVS computes every metric, verification score, evidence artifact, report input, public record, and governance signal from a single immutable evidence snapshot.
               </p>
               <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
                 <div className="text-sm font-medium text-slate-900">System effect</div>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Every visible number is tied back to the claim scope and underlying
-                  ledger rows, making the record reproducible, explainable, and suitable
-                  for internal or external review.
+                  Every downstream surface—including Claim Reports, Allocator Reports, Verification Certificates, Evidence Graphs and Public Verification Records—consumes the exact same canonical TVS output.
+
+                  Nothing recomputes metrics independently.
                 </p>
               </div>
               <div className="mt-4 text-sm text-slate-500">
-                → This transforms raw activity into inspectable evidence rather than a
-                loose performance summary.
+                → TVS becomes the single source of truth for the entire platform.
               </div>
             </div>
 
@@ -179,12 +176,14 @@ export default function HowItWorksPage() {
                 Step 5
               </div>
               <h3 className="mt-3 text-2xl font-semibold text-slate-950">
-                Publish public proof
+                Publish institutional trust
               </h3>
               <p className="mt-4 text-sm leading-7 text-slate-600">
-                A publishable claim can move into external trust surfaces. The platform
-                separates presentation from proof so audiences can consume the record
-                appropriately.
+                After verification, TTL separates presentation from verification.
+
+                The public page is only one consumer of the canonical verification record.
+
+                Institutional reports, allocators, auditors and external reviewers all consume the same governed evidence.
               </p>
 
               <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -193,11 +192,10 @@ export default function HowItWorksPage() {
                     Public record
                   </div>
                   <div className="mt-2 text-lg font-semibold text-slate-950">
-                    Presentation layer
+                    Public Verification Record
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-600">
-                    A clean public surface for distributing claim results, scope summary,
-                    leaderboard highlights, and trust-facing outputs.
+                    Public-facing verification page exposing governed performance without exposing private operational evidence.
                   </p>
                 </div>
 
@@ -206,18 +204,16 @@ export default function HowItWorksPage() {
                     Verification route
                   </div>
                   <div className="mt-2 text-lg font-semibold text-slate-950">
-                    Canonical proof layer
+                    Verification Certificate
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-600">
-                    A direct integrity-oriented verification surface where third parties can
-                    inspect canonical identifiers, fingerprints, and evidence posture.
+                    Institutional verification certificate containing trust metrics, governance posture, verification score and canonical identifiers generated by the Verification Engine.
                   </p>
                 </div>
               </div>
 
               <div className="mt-4 text-sm text-slate-500">
-                → External users can review the presentation layer while serious reviewers
-                can move one step deeper into the proof layer.
+                → Every trust surface is generated from the same immutable verification record produced by TVS.
               </div>
             </div>
           </div>
@@ -229,59 +225,63 @@ export default function HowItWorksPage() {
               What the platform produces
             </div>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
-              Governed outputs, not just charts
+              Verification Certificate
             </h2>
             <p className="mt-4 text-base leading-7 text-slate-600">
-              Each governed claim can produce multiple artifacts and trust surfaces. These
-              outputs are designed for machine consumption, human review, archival storage,
-              public distribution, and dispute resolution.
+              Institutional certificate containing trust metrics,
+              verification posture,
+              governance score,
+              integrity score
+              and canonical identifiers.
             </p>
 
             <div className="mt-8 grid gap-4">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                <div className="text-lg font-semibold text-slate-950">Evidence JSON</div>
+                <div className="text-lg font-semibold text-slate-950">Public Verification Record</div>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Portable machine-readable evidence payload containing structured claim
-                  scope, evidence rows, metrics, hashes, and related metadata for systems,
-                  automation, and downstream inspection.
+                  Immutable public verification page exposing governed claim information backed by TVS.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                <div className="text-lg font-semibold text-slate-950">Evidence ZIP bundle</div>
+                <div className="text-lg font-semibold text-slate-950">Claim Report</div>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Packaged export for archival handoff, internal review, dispute handling,
-                  or external delivery. Bundles can include evidence payloads, audit events,
-                  manifests, and related claim artifacts.
+                  Professional report generated directly from verified evidence and canonical TVS outputs.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                <div className="text-lg font-semibold text-slate-950">Claim report PDF</div>
+                <div className="text-lg font-semibold text-slate-950">Allocator Due-Diligence Report</div>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Presentation-grade document for committees, allocators, institutional
-                  reviewers, clients, community operators, or formal review workflows that
-                  require a stable human-readable report.
+                  Institutional investment report summarizing governance,
+                  performance,
+                  risk,
+                  verification,
+                  and evidence quality.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                 <div className="text-lg font-semibold text-slate-950">
-                  Hashes and integrity anchors
+                  Evidence Graph
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Canonical claim hash and locked trade-set fingerprint establish
-                  tamper-evident integrity posture and allow later confirmation that the
-                  published claim still matches the stored record.
+                  Visual relationship graph connecting trades,
+                  evidence,
+                  claims,
+                  reports,
+                  verification
+                  and audit history.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                <div className="text-lg font-semibold text-slate-950">Audit timeline</div>
+                <div className="text-lg font-semibold text-slate-950">Evidence Bundle</div>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Lifecycle transitions, edits, publication changes, and lock-state
-                  progression remain visible through audit history so trust can be supported
-                  by chronology, not only by final numbers.
+                  Governed archive containing evidence,
+                  verification artifacts,
+                  review history
+                  and canonical exports.
                 </p>
               </div>
             </div>
@@ -354,6 +354,99 @@ export default function HowItWorksPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* INSTITUTIONAL ARCHITECTURE */}
+
+        <div className="mt-14 rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+
+          <div className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Institutional Architecture
+          </div>
+
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+            Canonical services powering every verification
+          </h2>
+
+          <p className="mt-4 max-w-4xl text-base leading-7 text-slate-600">
+            Trading Truth Layer is composed of institutional services operating on a
+            shared canonical evidence model. Every report, verification result,
+            governance score, public record, and trust surface is generated from the
+            same underlying Trading Verification System rather than independent
+            calculations.
+          </p>
+
+          <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="text-lg font-semibold text-slate-950">
+                Trading Verification System (TVS)
+              </div>
+
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Canonical computation engine responsible for every metric,
+                verification result, report input, and public trust record.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="text-lg font-semibold text-slate-950">
+                Verification Engine
+              </div>
+
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Produces institutional verification certificates, trust metrics,
+                governance scores, integrity posture, and verification bands.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="text-lg font-semibold text-slate-950">
+                Evidence Registry
+              </div>
+
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Stores normalized trading evidence that serves as the foundation for
+                every downstream verification workflow.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="text-lg font-semibold text-slate-950">
+                Evidence Graph
+              </div>
+
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Maintains traceable relationships between evidence, claims,
+                verification, reports, governance history, and public trust records.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="text-lg font-semibold text-slate-950">
+                Reporting Engine
+              </div>
+
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Generates institutional Claim Reports, Allocator Reports,
+                Verification Certificates, and executive documentation directly
+                from TVS outputs.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="text-lg font-semibold text-slate-950">
+                Public Verification Layer
+              </div>
+
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Publishes governed public verification records while protecting
+                internal operational evidence and maintaining full traceability.
+              </p>
+            </div>
+
+          </div>
+
         </div>
 
         <div className="mt-14 rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm sm:p-8">

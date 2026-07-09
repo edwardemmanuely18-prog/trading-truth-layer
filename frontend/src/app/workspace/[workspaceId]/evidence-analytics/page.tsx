@@ -38,13 +38,34 @@ export default function Page(
   const [loading, setLoading] =
     useState(true);
 
-  const [feedLimit, setFeedLimit] =
-    useState(20);
-
   const [
     exceptionLimit,
     setExceptionLimit
   ] = useState(20);
+
+  const formatPercent = (
+    value: number
+  ) =>
+    `${Number(value).toFixed(2)}%`;
+
+  const formatTier = (tier: string) => {
+
+    switch ((tier || "").toLowerCase()) {
+
+      case "tier_1":
+        return "Tier I";
+
+      case "tier_2":
+        return "Tier II";
+
+      case "tier_3":
+        return "Tier III";
+
+      default:
+        return tier;
+    }
+
+  };
 
   useEffect(() => {
 
@@ -129,21 +150,27 @@ export default function Page(
           <MetricCard
             title="Coverage %"
             value={
-              report.overview.coverage
+              formatPercent(
+                report.overview.coverage
+              )
             }
           />
 
           <MetricCard
             title="Reliability %"
             value={
-              report.overview.reliability
+              formatPercent(
+                report.overview.reliability
+              )
             }
           />
 
           <MetricCard
             title="Protection %"
             value={
-              report.overview.protection
+              formatPercent(
+                report.overview.protection
+              )
             }
           />
 
@@ -158,8 +185,12 @@ export default function Page(
           <MetricCard
             title="Quality Band"
             value={
-              report.overview
-                .quality_band
+              report.overview.quality_band
+                .toLowerCase()
+                .replace(
+                  /^./,
+                  c => c.toUpperCase()
+                )
             }
           />
 
@@ -186,32 +217,40 @@ export default function Page(
             <MetricCard
               title="Verification Quality"
               value={
-                report.quality
-                  .verification_quality
+                formatPercent(
+                  report.quality
+                    .verification_quality
+                )
               }
             />
 
             <MetricCard
               title="Protection Quality"
               value={
-                report.quality
-                  .protection_quality
+                formatPercent(
+                  report.quality
+                    .protection_quality
+                )
               }
             />
 
             <MetricCard
               title="Completeness Quality"
               value={
-                report.quality
-                  .completeness_quality
+                formatPercent(
+                  report.quality
+                    .completeness_quality
+                )
               }
             />
 
             <MetricCard
               title="Import Quality"
               value={
-                report.quality
-                  .import_quality
+                formatPercent(
+                  report.quality
+                    .import_quality
+                )
               }
             />
 
@@ -345,11 +384,11 @@ export default function Page(
 
           </div>
 
-          <div className="max-h-[500px] overflow-y-auto">
+          <div className="max-h-[500px] overflow-auto">
 
             <table className="w-full">
 
-              <thead className="bg-slate-100">
+              <thead className="sticky top-0 z-10 bg-slate-100">
 
                 <tr>
 
@@ -405,7 +444,13 @@ export default function Page(
                         </td>
 
                         <td className="p-4">
-                          {row.issues.join(", ")}
+                          {row.issues
+                             .map(issue =>
+                               issue
+                                 .replaceAll("_", " ")
+                                 .replace(/\b\w/g, c => c.toUpperCase())
+                             )
+                             .join(", ")}
                         </td>
 
                       </tr>
@@ -451,19 +496,13 @@ export default function Page(
               Evidence Monitoring Feed
             </h2>
 
-            <div className="text-sm text-slate-500">
-              Showing {Math.min(feedLimit, report.overview.records)}
-              of {report.overview.records}
-              records
-            </div>
-
           </div>
 
-          <div className="max-h-[600px] overflow-y-auto">
+          <div className="max-h-[600px] overflow-auto">
 
             <table className="w-full">
 
-              <thead className="bg-slate-100">
+              <thead className="sticky top-0 z-10 bg-slate-100">
 
                 <tr>
 
@@ -493,9 +532,7 @@ export default function Page(
 
               <tbody>
 
-                {report.feed
-                  .slice(0, feedLimit)
-                  .map(
+                {report.feed.map(
                     row => (
                       <tr
                         key={
@@ -522,9 +559,7 @@ export default function Page(
                         </td>
 
                         <td className="p-4">
-                          {
-                            row.trust_tier
-                          }
+                          {formatTier(row.trust_tier)}
                         </td>
 
                         <td className="p-4">
@@ -542,27 +577,6 @@ export default function Page(
             </table>
 
           </div>
-
-          {report.feed.length >
-            feedLimit && (
-
-            <div className="border-t p-4">
-
-              <button
-                onClick={() =>
-                  setFeedLimit(
-                    prev =>
-                      prev + 20
-                  )
-                }
-                className="rounded-lg border px-4 py-2"
-              >
-                Load More
-              </button>
-
-            </div>
-
-          )}
 
         </div>
 

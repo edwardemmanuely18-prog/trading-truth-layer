@@ -12,8 +12,6 @@ type Props = {
 
         effectivePlan: string;
 
-        billingStatus: string;
-
         createdAt: string;
 
         updatedAt: string;
@@ -93,7 +91,7 @@ export default function WorkspaceGovernanceCard({
 
                 <Row
 
-                    label="Current Plan"
+                    label="Workspace Tier"
 
                     value={governance?.configuredPlan ?? "—"}
 
@@ -104,14 +102,6 @@ export default function WorkspaceGovernanceCard({
                     label="Workspace Role"
 
                     value={governance?.role ?? "—"}
-
-                />
-
-                <Row
-
-                    label="Billing Status"
-
-                    value={governance?.billingStatus ?? "Inactive"}
 
                 />
 

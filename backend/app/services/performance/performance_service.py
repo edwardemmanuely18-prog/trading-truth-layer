@@ -33,6 +33,14 @@ from sqlalchemy.orm import Session
 
 from app.models.claim_schema import ClaimSchema
 
+from app.services.claim_integrity_engine import (
+    resolve_schema_trades,
+)
+
+from app.services.trade_metrics_service import (
+    compute_trade_metrics,
+)
+
 from app.services.performance.claim_performance import (
     build_claim_performance_metrics,
 )
@@ -75,7 +83,14 @@ def _build_claim_analytics(
     # --------------------------------------------------------
     #
 
-    return {}
+    trades = resolve_schema_trades(
+        claim,
+        db,
+    )
+
+    return compute_trade_metrics(
+        trades,
+    )
 
 
 # ============================================================
@@ -137,12 +152,216 @@ def get_workspace_performance_metrics(
     # --------------------------------------------------------
     #
 
-    analytics = {}
+    from app.models.claim_schema import ClaimSchema
+
+    schemas = (
+        db.query(ClaimSchema)
+        .filter(
+            ClaimSchema.workspace_id == workspace_id
+        )
+        .all()
+    )
+
+    claim_metrics = []
+
+    total_trades = 0
+
+    total_wins = 0
+
+    total_losses = 0
+
+    gross_profit = 0.0
+
+    gross_loss = 0.0
+
+    net_profit = 0.0
+
+    max_drawdown = 0.0
+
+    for claim in schemas:
+
+        analytics = _build_claim_analytics(
+            db=db,
+            claim=claim,
+        )
+
+        if analytics.get("trade_count", 0):
+
+            claim_metrics.append(
+                analytics
+            )
+
+            total_trades += analytics["trade_count"]
+
+            total_wins += analytics["winning_trades"]
+
+            total_losses += analytics["losing_trades"]
+
+            gross_profit += analytics["gross_profit"]
+
+            gross_loss += analytics["gross_loss"]
+
+            net_profit += analytics["net_profit"]
+
+            max_drawdown = max(
+                max_drawdown,
+                analytics["max_drawdown"],
+            )
+
+    if not claim_metrics:
+
+        analytics = {}
+
+    else:
+
+        if gross_loss > 0:
+
+            workspace_pf = gross_profit / gross_loss
+
+        else:
+
+            workspace_pf = gross_profit
+
+        if workspace_pf >= 2:
+
+            performance_band = "STRONG"
+
+        elif workspace_pf >= 1.2:
+
+            performance_band = "MODERATE"
+
+        else:
+
+            performance_band = "WEAK"
+
+        analytics = {
+
+            "claim_count": len(claim_metrics),
+
+            "trade_count": sum(
+                m["trade_count"]
+                for m in claim_metrics
+            ),
+
+            "winning_trades": sum(
+                m["winning_trades"]
+                for m in claim_metrics
+            ),
+
+            "losing_trades": sum(
+                m["losing_trades"]
+                for m in claim_metrics
+            ),
+
+            "net_profit": sum(
+                m["net_profit"]
+                for m in claim_metrics
+            ),
+
+            "gross_profit": sum(
+                m["gross_profit"]
+                for m in claim_metrics
+            ),
+
+            "gross_loss": sum(
+                m["gross_loss"]
+                for m in claim_metrics
+            ),
+
+            "profit_factor": (
+                round(
+                    gross_profit / gross_loss,
+                    4,
+                )
+                if gross_loss > 0
+                else round(
+                    gross_profit,
+                    4,
+                )
+            ),
+
+            "expectancy": (
+                round(
+                    net_profit / total_trades,
+                    4,
+                )
+                if total_trades
+                else 0
+            ),
+
+            "average_win": (
+                round(
+                    gross_profit / total_wins,
+                    4,
+                )
+                if total_wins
+                else 0
+            ),
+
+            "average_loss": (
+                round(
+                    gross_loss / total_losses,
+                    4,
+                )
+                if total_losses
+                else 0
+            ),
+
+            "payoff_ratio": (
+                round(
+                    (gross_profit / total_wins)
+                    /
+                    (gross_loss / total_losses),
+                    4,
+                )
+                if total_wins
+                and total_losses
+                and gross_loss > 0
+                else 0
+            ),
+
+            "win_rate": (
+                round(
+                    total_wins
+                    /
+                    (total_wins + total_losses)
+                    * 100,
+                    4,
+                )
+                if (total_wins + total_losses)
+                else 0
+            ),
+
+            "loss_rate": (
+                round(
+                    total_losses
+                    /
+                    (total_wins + total_losses)
+                    * 100,
+                    4,
+                )
+                if (total_wins + total_losses)
+                else 0
+            ),
+
+            "max_drawdown":
+                max_drawdown,
+
+            "recovery_factor": (
+                round(
+                    net_profit / max_drawdown,
+                    4,
+                )
+                if max_drawdown > 0
+                else 0
+            ),
+
+            "performance_band":
+                performance_band,
+
+        }
 
     return build_workspace_performance_metrics(
-
         workspace_id=workspace_id,
-
         analytics=analytics,
-
     )

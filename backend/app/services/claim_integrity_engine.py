@@ -51,7 +51,11 @@ def coerce_trade_opened_at(value):
     return None
 
 
-def resolve_schema_trades(schema: ClaimSchema, db: Session):
+def resolve_schema_trades(
+    schema: ClaimSchema,
+    db: Session,
+    workspace_trades: list[Trade] | None = None,
+):
     included_members = json.loads(schema.included_member_ids_json or "[]")
     included_symbols = [s.upper() for s in json.loads(schema.included_symbols_json or "[]")]
     excluded_trade_ids = set(json.loads(schema.excluded_trade_ids_json or "[]"))
@@ -59,7 +63,16 @@ def resolve_schema_trades(schema: ClaimSchema, db: Session):
     period_start = parse_period_start(schema.period_start)
     period_end = parse_period_end(schema.period_end)
 
-    trades = db.query(Trade).filter(Trade.workspace_id == schema.workspace_id).all()
+    if workspace_trades is None:
+        workspace_trades = (
+            db.query(Trade)
+            .filter(
+                Trade.workspace_id == schema.workspace_id
+            )
+            .all()
+        )
+
+    trades = workspace_trades
 
     filtered = []
     for trade in trades:

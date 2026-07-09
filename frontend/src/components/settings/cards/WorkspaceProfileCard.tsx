@@ -8,13 +8,9 @@ type Props = {
 
     description: string;
 
-    billingEmail: string;
-
     setName: (value: string) => void;
 
     setDescription: (value: string) => void;
-
-    setBillingEmail: (value: string) => void;
 
     onSubmit: () => void;
 
@@ -30,13 +26,9 @@ export default function WorkspaceProfileCard({
 
     description,
 
-    billingEmail,
-
     setName,
 
     setDescription,
-
-    setBillingEmail,
 
     onSubmit,
 
@@ -101,13 +93,6 @@ export default function WorkspaceProfileCard({
             Billing Email
           </label>
 
-          <input
-              className="mt-2 w-full rounded-xl border px-4 py-3"
-              value={billingEmail}
-              onChange={(e) => setBillingEmail(e.target.value)}
-              disabled={!canEdit}
-          />
-
         </div>
 
         <div>
@@ -117,7 +102,7 @@ export default function WorkspaceProfileCard({
             disabled={!canEdit || saving}
             className="rounded-xl bg-slate-900 px-6 py-3 text-white hover:bg-slate-800 disabled:opacity-60"
           >
-            {saving ? "Saving..." : "Save Workspace"}
+            {saving ? "Saving..." : "Save Settings"}
           </button>
 
         </div>

@@ -19,7 +19,12 @@ type PublicClaimRow = {
   profit_factor?: number | null;
   win_rate?: number | null;
   trust_score?: number | null;
-  trust_band?: string | null;
+  verification?: {
+      score?: number;
+      band?: string;
+      tier?: string;
+      status?: string;
+  };
   network_score?: number | null;
   network_weighted_pnl?: number | null;
   disputes_count?: number | null;
@@ -360,14 +365,6 @@ export default function WorkspacePublicRecordsPage() {
                           )}`}
                         >
                           integrity: {row.integrity_status || "unknown"}
-                        </span>
-
-                        <span
-                          className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${trustBandBadgeClass(
-                            row.trust_band
-                          )}`}
-                        >
-                          trust: {row.trust_band || "unknown"}
                         </span>
                       </div>
 

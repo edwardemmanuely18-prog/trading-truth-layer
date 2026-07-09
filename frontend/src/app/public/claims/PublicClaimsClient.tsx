@@ -101,14 +101,16 @@ export default function PublicClaimsClient({
       {/* LIST */}
       <div className="space-y-4">
         {claims.map((claim) => {
+          const tier = claim.tier ?? "unranked";
+
           const tierColor =
-            claim.tier === "gold"
-              ? "text-yellow-500"
-              : claim.tier === "silver"
-              ? "text-gray-400"
-              : claim.tier === "bronze"
-              ? "text-orange-500"
-              : "text-gray-300";
+              tier === "gold"
+                  ? "text-yellow-500"
+                  : tier === "silver"
+                  ? "text-gray-400"
+                  : tier === "bronze"
+                  ? "text-orange-500"
+                  : "text-slate-400";
 
           return (
             <div
@@ -123,7 +125,7 @@ export default function PublicClaimsClient({
                 <div
                   className={`text-sm font-semibold ${tierColor}`}
                 >
-                  {claim.tier.toUpperCase()}
+                  {tier.toUpperCase()}
                 </div>
               </div>
 

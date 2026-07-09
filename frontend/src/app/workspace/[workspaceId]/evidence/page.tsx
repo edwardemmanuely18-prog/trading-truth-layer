@@ -827,10 +827,15 @@ export default function WorkspaceEvidencePage() {
                 </div>
 
                 <div>
-                  <div className="text-sm text-slate-500">Public Claim Payload Preview</div>
-                  <pre className="mt-2 overflow-x-auto rounded-xl bg-slate-50 p-4 text-xs text-slate-700">
-                    {safeJson(publicClaim)}
-                  </pre>
+                  <div className="text-sm text-slate-500">
+                    Public Claim Payload Preview
+                  </div>
+
+                  <div className="mt-2 max-h-[520px] overflow-auto rounded-xl border border-slate-200 bg-slate-50">
+                    <pre className="min-w-max p-4 text-xs text-slate-700">
+                      {safeJson(publicClaim)}
+                    </pre>
+                  </div>
                 </div>
               </div>
             )}
@@ -845,7 +850,7 @@ export default function WorkspaceEvidencePage() {
             {auditEvents.length === 0 ? (
               <div className="text-sm text-slate-500">No audit events found for this claim.</div>
             ) : (
-              <div className="space-y-4">
+              <div className="max-h-[520px] space-y-4 overflow-y-auto pr-2">
                 {auditEvents.slice(0, 6).map((event) => {
                   const metadata = tryParseJson(event.metadata_json);
 
@@ -862,9 +867,11 @@ export default function WorkspaceEvidencePage() {
                         entity: {event.entity_type} / {event.entity_id}
                       </div>
 
-                      <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
-                        {JSON.stringify(metadata, null, 2)}
-                      </pre>
+                      <div className="mt-3 overflow-x-auto rounded-lg bg-slate-50">
+                        <pre className="min-w-max p-3 text-xs text-slate-700">
+                          {JSON.stringify(metadata, null, 2)}
+                        </pre>
+                      </div>
                     </div>
                   );
                 })}

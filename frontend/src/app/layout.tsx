@@ -74,12 +74,10 @@ export default function RootLayout({
                       fontSize: 14,
                       color: "#475569",
                       lineHeight: 1.7,
-                      maxWidth: 720,
+                      maxWidth: 900,
                     }}
                   >
-                    Verification infrastructure for trading records,
-                    canonical ledgers, auditability, governance
-                    workflows, and dispute-ready proof systems.
+                    Verification infrastructure for trading records, canonical ledgers, auditability, governance workflows, and dispute-ready proof systems.
                   </div>
                 </div>
 

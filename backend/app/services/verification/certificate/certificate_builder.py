@@ -112,6 +112,8 @@ def build_verification_certificate(
 
         claim_schema_id=claim.id,
 
+        claim_name=claim.name,
+
         workspace_id=workspace.id,
 
         claim_hash=claim.claim_hash,

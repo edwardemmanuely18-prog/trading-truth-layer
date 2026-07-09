@@ -172,6 +172,16 @@ class WorkspaceVerificationMetrics:
 
     claim_count: int
 
+    draft_claim_count: int
+
+    verified_claim_count: int
+
+    published_claim_count: int
+
+    locked_claim_count: int
+
+    verification_coverage: float
+
     average_verification_score: float
 
     verification_band: str
@@ -191,6 +201,22 @@ class WorkspaceVerificationMetrics:
     reviews: ComponentResult
 
     disputes: ComponentResult
+
+    status_distribution: dict[str, int] = field(
+        default_factory=dict,
+    )
+
+    decision_distribution: dict[str, int] = field(
+        default_factory=dict,
+    )
+
+    band_distribution: dict[str, int] = field(
+        default_factory=dict,
+    )
+
+    tier_distribution: dict[str, int] = field(
+        default_factory=dict,
+    )
 
     metadata: dict[str, Any] = field(
         default_factory=dict

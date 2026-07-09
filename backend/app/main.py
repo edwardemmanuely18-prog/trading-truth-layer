@@ -87,6 +87,23 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 
 
+from pathlib import Path
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+ENV_FILE = BASE_DIR.parent / ".env"
+
+if not ENV_FILE.exists():
+    ENV_FILE = BASE_DIR / ".env"
+
+load_dotenv(ENV_FILE)
+
+print("ENV FILE =", ENV_FILE)
+print(
+    "ENABLE_PLAN_SIMULATION =",
+    os.getenv("ENABLE_PLAN_SIMULATION"),
+)
 
 
 # =========================
@@ -429,7 +446,10 @@ app.include_router(
 
 
 # IMPORTANT: prefix for API routes
-app.include_router(workspace_members.router, prefix="/api")
+app.include_router(
+    workspace_members.router,
+    prefix="/api",
+)
 
 # =========================
 # BASIC ENDPOINTS

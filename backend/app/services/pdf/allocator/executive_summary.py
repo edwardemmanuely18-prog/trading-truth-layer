@@ -68,8 +68,6 @@ def build_executive_summary(report):
 
     governance = report["governance"]
 
-    trust = report["trust"]
-
     story = []
 
     #
@@ -290,14 +288,6 @@ def build_executive_summary(report):
             "Governance",
 
             governance["governance_band"],
-
-        ],
-
-        [
-
-            "Trust",
-
-            trust["trust_band"],
 
         ],
 

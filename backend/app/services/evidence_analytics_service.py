@@ -6,6 +6,30 @@ from app.services.evidence_classification_service import (
     classify_trade,
 )
 
+from app.services.evidence.calculators.coverage import (
+    compute_coverage,
+)
+
+from app.services.evidence.calculators.protection import (
+    compute_protection,
+)
+
+from app.services.evidence.calculators.tiers import (
+    compute_tiers,
+)
+
+from app.services.evidence.feeds.monitoring_feed import (
+    build_monitoring_feed,
+)
+
+from app.services.evidence.feeds.exception_feed import (
+    build_exception_registry,
+)
+
+from app.services.evidence.calculators.quality import (
+    compute_quality,
+)
+
 
 def build_evidence_analytics(
     db: Session,
@@ -133,84 +157,79 @@ def build_evidence_analytics(
             "integrity_type": integrity,
         })
 
-    coverage = round(
-        (
-            (broker_verified + verified)
-            / total
-        ) * 100,
-        2,
-    ) if total else 0
+    monitoring_feed = build_monitoring_feed(
+        feed,
+    )
 
-    reliability = round(
-        (
-            tier1
-            / total
-        ) * 100,
-        2,
-    ) if total else 0
+    exception_registry = build_exception_registry(
+        exceptions,
+    )
 
-    protection = round(
-        (
-            (fingerprinted + hash_protected)
-            / total
-        ) * 100,
-        2,
-    ) if total else 0
+    coverage_metrics = compute_coverage(
+
+        total_records=total,
+
+        broker_verified=broker_verified,
+
+        verified=verified,
+
+        self_reported=self_reported,
+
+    )
+
+    coverage = coverage_metrics.coverage
+
+    tier_metrics = compute_tiers(
+
+        total_records=total,
+
+        tier1=tier1,
+
+        tier2=tier2,
+
+        tier3=tier3,
+
+    )
+
+    reliability = (
+        tier_metrics.reliability
+    )
+
+    protection_metrics = compute_protection(
+
+        total_records=total,
+
+        fingerprinted=fingerprinted,
+
+        hash_protected=hash_protected,
+
+    )
+
+    protection = (
+        protection_metrics.protection
+    )
 
     unprotected = (
-        total
-        - fingerprinted
-        - hash_protected
+        protection_metrics.unprotected
     )
 
-    quality_score = 100
+    quality_metrics = compute_quality(
 
-    if tier3 > 0:
-        quality_score -= min(
-            25,
-            round(
-                (tier3 / total) * 25
-            )
-        )
+        total_records=total,
 
-    if unprotected > 0:
-        quality_score -= min(
-            25,
-            round(
-                (unprotected / total) * 25
-            )
-        )
+        coverage=coverage,
 
-    quality_score = max(
-        quality_score,
-        0,
+        reliability=reliability,
+
+        protection=protection,
+
+        tier3=tier_metrics.tier3,
+
+        unprotected=protection_metrics.unprotected,
+
+        exception_count=len(exceptions),
+
     )
-
-    verification_quality = coverage
-
-    protection_quality = protection
-
-    completeness_quality = round(
-        (
-            (total - len(exceptions))
-            / total
-        ) * 100,
-        2,
-    ) if total else 0
-
-    import_quality = reliability
-
-    if quality_score >= 90:
-        quality_band = "EXCELLENT"
-
-    elif quality_score >= 75:
-        quality_band = "GOOD"
-
-    elif quality_score >= 60:
-        quality_band = "MONITORING"
-
-    else:
-        quality_band = "POOR"
 
     return {
         "overview": {
@@ -218,61 +237,75 @@ def build_evidence_analytics(
             "coverage": coverage,
             "reliability": reliability,
             "protection": protection,
-            "quality_score": quality_score,
-            "quality_band": quality_band,
+            "quality_score":
+                quality_metrics.score,
+
+            "quality_band":
+                quality_metrics.band,
         },
 
         "verification": {
+
             "broker_verified":
-                broker_verified,
+                coverage_metrics.broker_verified,
 
             "verified":
-                verified,
+                coverage_metrics.verified,
 
             "self_reported":
-                self_reported,
+                coverage_metrics.self_reported,
+
         },
 
         "tiers": {
-            "tier_1": tier1,
-            "tier_2": tier2,
-            "tier_3": tier3,
+
+            "tier_1":
+                tier_metrics.tier1,
+
+            "tier_2":
+                tier_metrics.tier2,
+
+            "tier_3":
+                tier_metrics.tier3,
+
         },
 
         "protection": {
+
             "fingerprinted":
-                fingerprinted,
+                protection_metrics.fingerprinted,
 
             "hash_protected":
-                hash_protected,
+                protection_metrics.hash_protected,
 
             "unprotected":
-                unprotected,
+                protection_metrics.unprotected,
+
         },
 
-        "feed": feed[:20],
+        "feed": monitoring_feed.rows,
 
         "exceptions":
-            exceptions[:50],
+            exception_registry.rows[:50],
 
         "quality": {
 
             "verification_quality":
-                verification_quality,
+                quality_metrics.verification_quality,
 
             "protection_quality":
-                protection_quality,
+                quality_metrics.protection_quality,
 
             "completeness_quality":
-                completeness_quality,
+                quality_metrics.completeness_quality,
 
             "import_quality":
-                import_quality,
+                quality_metrics.import_quality,
 
             "score":
-                quality_score,
+                quality_metrics.score,
 
             "band":
-                quality_band,
+                quality_metrics.band,
         },
     }

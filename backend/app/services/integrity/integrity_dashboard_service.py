@@ -5,6 +5,11 @@ from app.services.integrity_score_service import (
     calculate_integrity_score,
 )
 
+from app.services.claim_integrity_engine import (
+    resolve_schema_trades,
+    compute_trade_set_hash,
+)
+
 from app.services.integrity.scanner_registry_service import (
     build_scanner_status,
 )
@@ -54,6 +59,8 @@ def build_integrity_dashboard(
     open_findings = 0
     resolved_findings = 0
 
+    compromised_claims = 0
+
     for alert in alerts:
 
         level = (
@@ -85,6 +92,29 @@ def build_integrity_dashboard(
             + 1
         )
 
+    for claim in claims:
+
+        if (
+            claim.status != "locked"
+            or not claim.locked_trade_set_hash
+        ):
+            continue
+
+        trades = resolve_schema_trades(
+            claim,
+            db,
+        )
+
+        current_hash = compute_trade_set_hash(
+            trades
+        )
+
+        if (
+            current_hash
+            != claim.locked_trade_set_hash
+        ):
+            compromised_claims += 1
+
     open_alerts = [
         a
         for a in alerts
@@ -106,6 +136,9 @@ def build_integrity_dashboard(
 
         "claims_scanned":
             len(claims),
+
+        "compromised_claims":
+            compromised_claims,
 
         "total_alerts":
             len(alerts),

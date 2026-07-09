@@ -3,9 +3,16 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { api } from "../lib/api";
+import {
+  api,
+  getWorkspaceEntitlements,
+} from "../lib/api";
 import { useAuth } from "./AuthProvider";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
+
+import { Lock } from "lucide-react";
+
+import UpgradeRequired from "./UpgradeRequired";
 
 type Props = {
   workspaceId?: number;
@@ -38,6 +45,16 @@ export default function Navbar({ workspaceId }: Props) {
   const pathname = usePathname();
   const { user, logout, getWorkspaceRole, loading, workspaces } = useAuth();
 
+  const [
+    entitlements,
+    setEntitlements,
+  ] = useState<any>(null);
+
+  const [
+      upgradeFeature,
+      setUpgradeFeature,
+  ] = useState<string | null>(null);
+
   const resolvedWorkspaceId = useMemo(() => {
     if (typeof workspaceId === "number" && !Number.isNaN(workspaceId)) {
       return workspaceId;
@@ -49,6 +66,56 @@ export default function Navbar({ workspaceId }: Props) {
 
     return null;
   }, [workspaceId, workspaces]);
+
+  useEffect(() => {
+
+      if (!resolvedWorkspaceId) {
+          return;
+      }
+
+      let mounted = true;
+
+      async function loadEntitlements() {
+
+          try {
+
+              if (resolvedWorkspaceId == null) {
+                  return;
+              }
+
+              const result =
+                  await getWorkspaceEntitlements(
+                      resolvedWorkspaceId,
+                  );
+
+              if (mounted) {
+
+                  setEntitlements(
+                      result,
+                  );
+
+              }
+
+          } catch {
+
+              // Leave navigation visible if
+              // entitlements cannot be loaded.
+
+          }
+
+      }
+
+      void loadEntitlements();
+
+      return () => {
+
+          mounted = false;
+
+      };
+
+  }, [
+      resolvedWorkspaceId,
+  ]);
 
   const currentPath = normalizePath(pathname);
   const publicTrustActive = isPublicTrustPath(currentPath);
@@ -216,10 +283,69 @@ export default function Navbar({ workspaceId }: Props) {
                   ? "admin"
                   : "dashboard";
 
+  function pageEnabled(
+      page: string,
+  ) {
+
+      if (!entitlements) {
+          return true;
+      }
+
+      if (
+          entitlements.pages?.__all__
+      ) {
+          return true;
+      }
+
+      return Boolean(
+          entitlements.pages?.[page]
+      );
+
+  }
+
+  function domainEnabled(
+      ...pages: string[]
+  ) {
+
+      if (!entitlements) {
+          return true;
+      }
+
+      if (entitlements.pages?.__all__) {
+          return true;
+      }
+
+      return pages.some(
+          page =>
+              Boolean(
+                  entitlements.pages?.[page]
+              )
+      );
+
+  }
+
   function navClass(active: boolean) {
     return active
       ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm"
       : "rounded-xl px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100";
+  }
+
+  function disabledNavClass() {
+
+      return `
+          rounded-xl
+          border
+          border-slate-200
+          bg-slate-100
+          px-4
+          py-2
+          text-sm
+          font-medium
+          text-slate-400
+          cursor-not-allowed
+          opacity-70
+      `;
+
   }
 
   function utilityNavClass(active: boolean) {
@@ -239,38 +365,51 @@ export default function Navbar({ workspaceId }: Props) {
     : [];
 
   const intakeLinks =
-    resolvedWorkspaceId && canSeeImport
-      ? [
-          {
-            href: `${base}/broker-connections`,
-            label: "Broker Connections",
-            active: startsWithPath(currentPath, `${base}/broker-connections`),
-          },
-          {
-            href: `${base}/import-center`,
-            label: "Import Center",
-            active:
-              startsWithPath(
-                currentPath,
-                `${base}/import-center`
-              ) ||
-              startsWithPath(
-                currentPath,
-                `${base}/import`
-              ),
-          },
-          {
-            href: `${base}/sync-jobs`,
-            label: "Sync Jobs",
-            active: startsWithPath(currentPath, `${base}/sync-jobs`),
-          },
-          {
-            href: `${base}/adapter-registry`,
-            label: "Adapter Registry",
-            active: startsWithPath(currentPath, `${base}/adapter-registry`),
-          },
-        ]
-      : [];
+      resolvedWorkspaceId && canSeeImport
+          ? [
+              {
+                  href: `${base}/broker-connections`,
+                  label: "Broker Connections",
+                  feature: "broker_connections",
+                  active: startsWithPath(
+                      currentPath,
+                      `${base}/broker-connections`
+                  ),
+              },
+              {
+                  href: `${base}/import-center`,
+                  label: "Import Center",
+                  feature: "import_center",
+                  active:
+                      startsWithPath(
+                          currentPath,
+                          `${base}/import-center`
+                      ) ||
+                      startsWithPath(
+                          currentPath,
+                          `${base}/import`
+                      ),
+              },
+              {
+                  href: `${base}/sync-jobs`,
+                  label: "Sync Jobs",
+                  feature: "sync_jobs",
+                  active: startsWithPath(
+                      currentPath,
+                      `${base}/sync-jobs`
+                  ),
+              },
+              {
+                  href: `${base}/adapter-registry`,
+                  label: "Adapter Registry",
+                  feature: "adapter_registry",
+                  active: startsWithPath(
+                      currentPath,
+                      `${base}/adapter-registry`
+                  ),
+              },
+          ]
+          : [];
 
   const registryLinks = resolvedWorkspaceId
     ? [
@@ -278,26 +417,31 @@ export default function Navbar({ workspaceId }: Props) {
           href: `${base}/ledger`,
           label: "Trade Ledger",
           active: startsWithPath(currentPath, `${base}/ledger`),
+          feature: "ledger"
         },
         {
           href: `${base}/evidence-records`,
           label: "Evidence Records",
           active: startsWithPath(currentPath, `${base}/evidence-records`),
+          feature: "evidence_records"
         },
         {
           href: `${base}/import-batches`,
           label: "Import Batches",
           active: startsWithPath(currentPath, `${base}/import-batches`),
+          feature: "import_batches"
         },
         {
           href: `${base}/audit-timeline`,
           label: "Audit Timeline",
           active: startsWithPath(currentPath, `${base}/audit-timeline`),
+          feature: "audit_timeline"
         },
         {
           href: `${base}/integrity-registry`,
           label: "Integrity Registry",
           active: startsWithPath(currentPath, `${base}/integrity-registry`),
+          feature: "integrity_registry"
         },
       ]
     : [];
@@ -308,30 +452,35 @@ export default function Navbar({ workspaceId }: Props) {
           href: "/schema",
           label: "Claim Builder",
           active: currentPath === "/schema",
+          feature: "claim_builder",
         },
 
         {
           href: `${base}/claims`,
           label: "Claim Library",
           active: startsWithPath(currentPath, `${base}/claims`),
+          feature: "claims",
         },
 
         {
           href: `${base}/evidence`,
           label: "Evidence Review",
           active: startsWithPath(currentPath, `${base}/evidence`),
+          feature: "claim_review",
         },
 
         {
           href: `${base}/schema`,
           label: "Schema Registry",
           active: startsWithPath(currentPath, `${base}/schema`),
+          feature: "schema_registry",
         },
 
         {
           href: `${base}/claim-templates`,
           label: "Templates",
           active: startsWithPath(currentPath, `${base}/claim-templates`),
+          feature: "templates",
         },
       ]
     : [];
@@ -342,21 +491,25 @@ export default function Navbar({ workspaceId }: Props) {
           href: `${base}/trust-scores`,
           label: "Trust Scores",
           active: startsWithPath(currentPath, `${base}/trust-scores`),
+          feature: "trust_scores",
         },
         {
           href: `${base}/leaderboard`,
           label: "Leaderboards",
           active: startsWithPath(currentPath, `${base}/leaderboard`),
+          feature: "leaderboard",
         },
         {
           href: `${base}/verification-analytics`,
           label: "Verification Analytics",
           active: startsWithPath(currentPath, `${base}/verification-analytics`),
+          feature: "verification_analytics",
         },
         {
           href: `${base}/integrity-analytics`,
           label: "Integrity Analytics",
           active: startsWithPath(currentPath, `${base}/integrity-analytics`),
+          feature: "integrity_analytics",
         },
         {
           href: `${base}/evidence-analytics`,
@@ -365,16 +518,19 @@ export default function Navbar({ workspaceId }: Props) {
             currentPath,
             `${base}/evidence-analytics`
           ),
+          feature: "evidence_analytics",
         },
         {
           href: `${base}/risk-analytics`,
           label: "Risk Analytics",
           active: startsWithPath(currentPath, `${base}/risk-analytics`),
+          feature: "risk_analytics",
         },
         {
           href: `${base}/due-diligence`,
           label: "Due Diligence Reports",
           active: startsWithPath(currentPath, `${base}/due-diligence`),
+          feature: "allocator_reports",
         },
         {
           href: `${base}/report-center`,
@@ -384,9 +540,12 @@ export default function Navbar({ workspaceId }: Props) {
               currentPath,
               `${base}/report-center`
             ),
+          feature: "report_center",
         },
       ]
     : [];
+
+    const visibleTrustLinks = trustLinks;
 
   const publicLinks = resolvedWorkspaceId
     ? [
@@ -394,6 +553,7 @@ export default function Navbar({ workspaceId }: Props) {
           href: `${base}/public-records`,
           label: "Public Records",
           active: startsWithPath(currentPath, `${base}/public-records`),
+          feature: "public_records",
         },
 
         {
@@ -408,12 +568,14 @@ export default function Navbar({ workspaceId }: Props) {
               currentPath,
               "/verify"
             ),
+          feature: "verification_routes",
         },
 
         {
           href: `${base}/trust-directory`,
           label: "Trust Directory",
           active: startsWithPath(currentPath, `${base}/trust-directory`),
+          feature: "trust_directory",
         },
 
         {
@@ -423,6 +585,7 @@ export default function Navbar({ workspaceId }: Props) {
             currentPath,
             `${base}/verification-network`
           ),
+          feature: "verification_network",
         },
 
         {
@@ -432,6 +595,7 @@ export default function Navbar({ workspaceId }: Props) {
             currentPath,
             `${base}/external-reviews`
           ),
+          feature: "external_reviews",
         },
 
         {
@@ -441,6 +605,7 @@ export default function Navbar({ workspaceId }: Props) {
             currentPath,
             `${base}/evidence-graph`
           ),
+          feature: "evidence_graph",
         },
 
         {
@@ -455,12 +620,14 @@ export default function Navbar({ workspaceId }: Props) {
               currentPath,
               `${base}/public-profiles`
             ),
+          feature: "public_profiles",
         },
 
         {
           href: `${base}/search`,
           label: "Search",
           active: startsWithPath(currentPath, `${base}/search`),
+          feature: "search",
         },
       ]
     : [];
@@ -471,26 +638,31 @@ export default function Navbar({ workspaceId }: Props) {
           href: `${base}/members`,
           label: "Members",
           active: startsWithPath(currentPath, `${base}/members`),
+          feature: "members",
         },
         {
           href: `${base}/roles`,
           label: "Roles",
           active: startsWithPath(currentPath, `${base}/roles`),
+          feature: "roles",
         },
         {
           href: `${base}/billing`,
           label: "Billing",
           active: startsWithPath(currentPath, `${base}/billing`),
+          feature: "billing",
         },
         {
           href: `${base}/settings`,
           label: "Settings",
           active: startsWithPath(currentPath, `${base}/settings`),
+          feature: "settings",
         },
         {
           href: `${base}/audit-logs`,
           label: "Audit Logs",
           active: startsWithPath(currentPath, `${base}/audit-logs`),
+          feature: "audit_logs",
         },
       ]
     : [];
@@ -505,10 +677,73 @@ export default function Navbar({ workspaceId }: Props) {
           : activeDomain === "claims"
             ? claimLinks
             : activeDomain === "trust"
-              ? trustLinks
+              ? visibleTrustLinks
               : activeDomain === "public"
                 ? publicLinks
                 : adminLinks;
+
+  function renderTopButton(
+
+      pages: string[],
+
+      href: string,
+
+      label: string,
+
+      active: boolean,
+
+  ) {
+
+      const enabled =
+          domainEnabled(
+              ...pages,
+          );
+
+      const activeClass =
+          active
+              ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+              : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium";
+
+      if (enabled) {
+
+          return (
+
+              <Link
+                  href={href}
+                  className={activeClass}
+              >
+                  {label}
+              </Link>
+
+          );
+
+      }
+
+      return (
+
+          <button
+              type="button"
+              onClick={() =>
+                  setUpgradeFeature(
+                      label,
+                  )
+              }
+              className={disabledNavClass()}
+          >
+
+              <span className="flex items-center gap-2">
+
+                  <Lock className="h-4 w-4" />
+
+                  {label}
+
+              </span>
+
+          </button>
+
+      );
+
+  }
 
   return (
     <header className="border-b border-slate-200 bg-white">
@@ -621,97 +856,178 @@ export default function Navbar({ workspaceId }: Props) {
 
           <div className="flex flex-wrap gap-2">
 
-            <Link
-              href={dashboardHref}
-              className={
-                activeDomain === "dashboard"
-                  ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-                  : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
-              }
-            >
-              Dashboard
-            </Link>
+            {
+            renderTopButton(
+                [
+                    "dashboard",
+                ],
+                dashboardHref,
+                "Dashboard",
+                activeDomain==="dashboard",
+            )
+            }
 
-            <Link
-              href={importHref}
-              className={
-                activeDomain === "intake"
-                  ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-                  : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
-              }
-            >
-              Evidence Intake
-            </Link>
+            {
+            renderTopButton(
+                [
+                    "broker_connections",
+                    "import_center",
+                    "sync_jobs",
+                    "adapter_registry",
+                ],
+                importHref,
+                "Evidence Intake",
+                activeDomain==="intake",
+            )
+            }
 
-            <Link
-              href={ledgerHref}
-              className={
-                activeDomain === "registry"
-                  ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-                  : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
-              }
-            >
-              Evidence Registry
-            </Link>
+            {
+            renderTopButton(
+                [
+                    "ledger",
+                    "evidence_records",
+                    "import_batches",
+                    "audit_timeline",
+                    "integrity_registry",
+                ],
+                ledgerHref,
+                "Evidence Registry",
+                activeDomain==="registry",
+            )
+            }
 
-            <Link
-              href={claimsHref}
-              className={
-                activeDomain === "claims"
-                  ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-                  : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
-              }
-            >
-              Claim Operations
-            </Link>
+            {
+            renderTopButton(
+                [
+                    "claims",
+                    "claim_builder",
+                    "claim_review",
+                    "schema_registry",
+                    "templates",
+                ],
+                claimsHref,
+                "Claim Operations",
+                activeDomain==="claims",
+            )
+            }
 
-            <Link
-              href={leaderboardHref}
-              className={
-                activeDomain === "trust"
-                  ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-                  : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
-              }
-            >
-              Trust Intelligence
-            </Link>
+            {
+            renderTopButton(
+                [
+                    "trust_scores",
+                    "leaderboard",
+                    "verification_analytics",
+                    "integrity_analytics",
+                    "evidence_analytics",
+                    "risk_analytics",
+                    "allocator_reports",
+                    "report_center",
+                ],
+                leaderboardHref,
+                "Trust Intelligence",
+                activeDomain==="trust",
+            )
+            }
 
-            <Link
-              href={publicClaimsHref}
-              className={
-                activeDomain === "public"
-                  ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-                  : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
-              }
-            >
-              Public Trust Layer
-            </Link>
+            {
+            renderTopButton(
+                [
+                    "public_records",
+                    "verification_routes",
+                    "trust_directory",
+                    "verification_network",
+                    "external_reviews",
+                    "evidence_graph",
+                    "public_profiles",
+                    "search",
+                ],
+                publicClaimsHref,
+                "Public Trust Layer",
+                activeDomain==="public",
+            )
+            }
 
-            <Link
-              href={membersHref}
-              className={
-                activeDomain === "admin"
-                  ? "rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-                  : "rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
-              }
-            >
-              Administration
-            </Link>
+            {
+            renderTopButton(
+                [
+                    "members",
+                    "roles",
+                    "billing",
+                    "settings",
+                    "audit_logs",
+                ],
+                membersHref,
+                "Administration",
+                activeDomain==="admin",
+            )
+            }
 
           </div>
 
           <div className="mt-3 border-t border-slate-200 pt-3"></div>
 
-          <nav className="flex flex-wrap items-center gap-2">
-            {contextualLinks.map((item, index) => (
-              <Link
-                key={`${item.href}-${index}`}
-                href={item.href}
-                className={navClass(item.active)}
-              >
-                {item.label}
-              </Link>
-            ))}
+          <nav className="flex flex-wrap gap-2">
+
+              {contextualLinks.map(
+                  (
+                      item: any,
+                      index: number,
+                  ) => {
+
+                      const enabled =
+                          !item.feature ||
+                          pageEnabled(
+                              item.feature
+                          );
+
+                      if (enabled) {
+
+                          return (
+
+                              <Link
+                                  key={index}
+                                  href={item.href}
+                                  className={navClass(
+                                      item.active
+                                  )}
+                              >
+                                  {item.label}
+                              </Link>
+
+                          );
+
+                      }
+
+                      return (
+
+                          <button
+                              key={index}
+                              type="button"
+                              onClick={() =>
+                                  setUpgradeFeature(
+                                      item.label
+                                  )
+                              }
+                              className={disabledNavClass()}
+                          >
+
+                              <span className="flex items-center gap-2">
+
+                                  <Lock
+                                      className="h-4 w-4"
+                                  />
+
+                                  {item.label}
+
+                              </span>
+
+                          </button>
+
+                      );
+
+                  }
+              )}
+
           </nav>
         </div>
 

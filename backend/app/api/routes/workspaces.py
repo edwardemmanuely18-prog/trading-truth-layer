@@ -44,6 +44,10 @@ from app.models.broker_account import (
     BrokerAccount,
 )
 
+from app.services.plan_simulation import (
+    PlanSimulationService,
+)
+
 
 from secrets import token_urlsafe
 
@@ -53,7 +57,6 @@ from fastapi import UploadFile, File, Form
 
 
 router = APIRouter()
-
 
 
 
@@ -521,6 +524,74 @@ def get_workspace_dashboard(
     }
 
 
+@router.get(
+    "/workspaces/{workspace_id}/snapshot"
+)
+def get_workspace_snapshot(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(
+            Workspace.id == workspace_id
+        )
+        .first()
+    )
+
+    if workspace is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    enforce_internal_workspace_access(
+        workspace,
+        current_user,
+        db,
+    )
+
+    trade_count = (
+        db.query(Trade)
+        .filter(
+            Trade.workspace_id == workspace_id
+        )
+        .count()
+    )
+
+    claim_count = (
+        db.query(ClaimSchema)
+        .filter(
+            ClaimSchema.workspace_id == workspace_id
+        )
+        .count()
+    )
+
+    member_count = (
+        db.query(WorkspaceMembership)
+        .filter(
+            WorkspaceMembership.workspace_id == workspace_id
+        )
+        .count()
+    )
+
+    return {
+        "workspace_id": workspace.id,
+        "workspace_name": workspace.name,
+        "trade_count": trade_count,
+        "claim_count": claim_count,
+        "member_count": member_count,
+        "generated_at": datetime.utcnow().isoformat(),
+    }
+
+
 @router.get("/workspaces/{workspace_id}/settings")
 def get_workspace_settings(
     workspace_id: int,
@@ -727,6 +798,21 @@ def get_workspace_usage(
         db,
     )
 
+    entitlement["commercial_services"] = entitlement.get(
+        "commercial_services",
+        {}
+    )
+
+    entitlement["features"] = entitlement.get(
+        "features",
+        {}
+    )
+
+    entitlement["permissions"] = entitlement.get(
+        "permissions",
+        {}
+    )
+
     # Defensive normalization layer
     if "usage" not in entitlement:
         entitlement["usage"] = {}
@@ -773,6 +859,252 @@ def get_workspace_usage(
     )
 
     return entitlement
+
+
+@router.get("/workspaces/{workspace_id}/entitlements")
+def get_workspace_entitlements(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = (
+        db.query(Workspace)
+        .filter(Workspace.id == workspace_id)
+        .first()
+    )
+
+    if not workspace:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    enforce_internal_workspace_access(
+        workspace,
+        current_user,
+        db,
+    )
+
+    entitlement = build_entitlement_snapshot(
+        workspace_id,
+        db,
+    )
+
+    entitlement["configured_plan"] = normalize_plan_code(
+        workspace.plan_code
+    )
+
+    entitlement["effective_plan"] = (
+        resolve_workspace_plan_code(workspace)
+    )
+
+    entitlement["billing_status"] = (
+        normalize_billing_status(
+            workspace.billing_status
+        )
+    )
+
+    return entitlement
+
+
+from pydantic import BaseModel
+
+
+class PlanSimulationRequest(BaseModel):
+
+    plan: str
+
+
+import os
+
+
+def ensure_plan_simulation_enabled(
+    workspace: Workspace,
+):
+    """
+    Production safety.
+
+    Plan Simulation is only available when explicitly enabled
+    and only inside internal workspaces.
+    """
+
+    if (
+        os.getenv(
+            "ENABLE_PLAN_SIMULATION",
+            "false",
+        ).lower()
+        != "true"
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Not Found",
+        )
+
+    if not getattr(
+        workspace,
+        "is_internal_workspace",
+        False,
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Plan simulation is restricted "
+                "to internal workspaces."
+            ),
+        )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/plan-simulation"
+)
+def get_plan_simulation(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    workspace = (
+        db.query(Workspace)
+        .filter(
+            Workspace.id == workspace_id
+        )
+        .first()
+    )
+
+    if workspace is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    ensure_plan_simulation_enabled(
+        workspace,
+    )
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    enforce_internal_workspace_access(
+        workspace,
+        current_user,
+        db,
+    )
+
+    return PlanSimulationService.build_snapshot(
+        workspace,
+    )
+
+
+@router.put(
+    "/workspaces/{workspace_id}/plan-simulation"
+)
+def update_plan_simulation(
+    workspace_id: int,
+    request: PlanSimulationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    workspace = (
+        db.query(Workspace)
+        .filter(
+            Workspace.id == workspace_id
+        )
+        .first()
+    )
+
+    if workspace is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    ensure_plan_simulation_enabled(
+        workspace,
+    )
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    enforce_internal_workspace_access(
+        workspace,
+        current_user,
+        db,
+    )
+
+    PlanSimulationService.set_override(
+
+        workspace_id,
+
+        request.plan,
+
+    )
+
+    return PlanSimulationService.build_snapshot(
+        workspace,
+    )
+
+
+@router.delete(
+    "/workspaces/{workspace_id}/plan-simulation"
+)
+def clear_plan_simulation(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    workspace = (
+        db.query(Workspace)
+        .filter(
+            Workspace.id == workspace_id
+        )
+        .first()
+    )
+
+    if workspace is None:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
+
+    ensure_plan_simulation_enabled(
+        workspace,
+    )
+
+    require_workspace_member(
+        workspace_id,
+        current_user,
+        db,
+    )
+
+    enforce_internal_workspace_access(
+        workspace,
+        current_user,
+        db,
+    )
+
+    PlanSimulationService.clear_override(
+        workspace_id,
+    )
+
+    return PlanSimulationService.build_snapshot(
+        workspace,
+    )
 
 
 @router.get("/workspaces/{workspace_id}/governance")
@@ -951,8 +1283,6 @@ def create_broker_connection(
         current_user,
         db,
     )
-
-    print("PROVIDER RECEIVED:", payload.provider)
 
     adapter = (
         db.query(BrokerAdapter)

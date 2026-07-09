@@ -138,6 +138,20 @@ def build_workspace_performance_metrics(
             )
         ),
 
+        winning_trades=int(
+            analytics.get(
+                "winning_trades",
+                0,
+            )
+        ),
+
+        losing_trades=int(
+            analytics.get(
+                "losing_trades",
+                0,
+            )
+        ),
+
         max_drawdown=float(
             analytics.get(
                 "max_drawdown",

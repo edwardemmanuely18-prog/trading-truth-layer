@@ -60,11 +60,31 @@ def get_workspace_usage(workspace_id: int, db: Session):
     )
 
     return {
+
         "public_claims": public_claims,
+
         "locked_claims": locked_claims,
+
         "plan": effective_plan_code,
-        "billing_active": workspace.billing_status == "active",
-        "limit": snapshot["claim_limit"],
+
+        "billing_active":
+            workspace.billing_status == "active",
+
+        "claim_limit":
+            snapshot["claim_limit"],
+
+        "trade_limit":
+            snapshot["trade_limit"],
+
+        "member_limit":
+            snapshot["member_limit"],
+
+        "storage_limit_mb":
+            snapshot["storage_limit_mb"],
+
+        "effective_plan_code":
+            effective_plan_code,
+
     }
 
 

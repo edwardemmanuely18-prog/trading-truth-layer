@@ -8,6 +8,9 @@ import zipfile
 from pathlib import Path
 from typing import List
 
+import time
+from pprint import pformat
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -93,9 +96,37 @@ from app.services.verification_network_service import (
 from app.services.verification.verification_service import (
     get_claim_verification_certificate,
     get_claim_verification_metrics,
+    get_workspace_verification_context,
 )
 from app.services.pdf.claim_report.claim_report_pdf_service import (
     build_claim_report_pdf,
+)
+from app.services.performance.performance_service import (
+    get_workspace_performance_metrics,
+)
+from app.services.performance.performance_service import (
+    get_claim_performance_metrics,
+)
+from app.services.performance.member_performance import (
+    get_workspace_member_performance,
+)
+from app.services.public_records.list_service import (
+    build_workspace_public_records,
+)
+from app.services.snapshots.workspace_snapshot_service import (
+    get_workspace_snapshot,
+    invalidate_workspace_snapshot,
+)
+from app.services.verification.verification_service import (
+    get_claim_verification_context,
+)
+from app.services.verification.context.workspace_context_cache import (
+    WorkspaceContextCache,
+    get_workspace_context_cache,
+)
+from app.services.public_profile_cache import (
+    get_workspace_public_profile,
+    store_workspace_public_profile,
 )
 
 
@@ -499,24 +530,48 @@ def resolve_schema_trade_scope(schema: ClaimSchema, db: Session):
     }
 
 
-def resolve_claim_dispute_context(schema: ClaimSchema, db: Session):
-    disputes = (
-        db.query(ClaimDispute)
-        .filter(ClaimDispute.claim_schema_id == schema.id)
-        .all()
-    )
+def resolve_claim_dispute_context(
+    schema: ClaimSchema,
+    db: Session,
+    disputes: list[ClaimDispute] | None = None,
+):
+    if disputes is None:
+
+        disputes = (
+            db.query(ClaimDispute)
+            .filter(
+                ClaimDispute.claim_schema_id == schema.id
+            )
+            .all()
+        )
+
+    elif isinstance(disputes, dict):
+
+        disputes = disputes.get(
+            schema.id,
+            [],
+        )
 
     total = len(disputes)
 
-    active = [d for d in disputes if d.status == "open"]
-    resolved = [d for d in disputes if d.status == "resolved"]
+    active = [
+        d
+        for d in disputes
+        if d.status == "open"
+    ]
+
+    resolved = [
+        d
+        for d in disputes
+        if d.status == "resolved"
+    ]
 
     has_active = len(active) > 0
 
-    # penalty logic (authoritative backend rule)
     penalty_factor = 1.0
+
     if has_active:
-        penalty_factor = 0.7  # ← your trust penalty
+        penalty_factor = 0.7
 
     return {
         "disputes_count": total,
@@ -525,46 +580,6 @@ def resolve_claim_dispute_context(schema: ClaimSchema, db: Session):
         "has_active_dispute": has_active,
         "dispute_penalty_factor": penalty_factor,
     }
-
-
-def compute_backend_trust_score(
-    schema: ClaimSchema,
-    metrics: dict,
-    integrity_status: str,
-    dispute_ctx: dict,
-):
-    score = 0.0
-
-    if integrity_status == "valid":
-        score += 40
-
-    if schema.status == "locked":
-        score += 20
-    elif schema.status in {"published", "verified"}:
-        score += 12
-
-    trade_count = int(metrics.get("trade_count", 0) or 0)
-    if trade_count >= 50:
-        score += 20
-    elif trade_count >= 20:
-        score += 15
-    elif trade_count >= 10:
-        score += 10
-    elif trade_count > 0:
-        score += 5
-
-    if schema.verified_at:
-        score += 10
-
-    if schema.visibility == "public":
-        score += 10
-    elif schema.visibility == "unlisted":
-        score += 6
-
-    penalty_factor = float(dispute_ctx.get("dispute_penalty_factor", 1.0) or 1.0)
-    score = score * penalty_factor
-
-    return round(min(score, 100.0), 2)
 
 
 def resolve_claim_origin_type(schema: ClaimSchema):
@@ -887,9 +902,25 @@ def resolve_claim_integrity_status(schema: ClaimSchema, trades: list[Trade]) -> 
     return "valid" if recomputed_trade_set_hash == schema.locked_trade_set_hash else "compromised"
 
 
-def build_issuer_payload(schema: ClaimSchema, db: Session):
-    workspace = get_workspace_or_404(schema.workspace_id, db)
-    profile = build_public_trust_profile_for_workspace(schema.workspace_id, db)
+def build_issuer_payload(
+    schema: ClaimSchema,
+    db: Session,
+    profile: dict | None = None,
+    workspace: Workspace | None = None,
+):
+    if workspace is None:
+
+        workspace = get_workspace_or_404(
+            schema.workspace_id,
+            db,
+        )
+
+    if profile is None:
+
+        profile = build_public_trust_profile_for_workspace(
+            schema.workspace_id,
+            db,
+        )
 
     return {
         "id": workspace.id,
@@ -901,7 +932,34 @@ def build_issuer_payload(schema: ClaimSchema, db: Session):
 
 
 def build_public_trust_profile_for_workspace(workspace_id: int, db: Session):
+
+    cached = get_workspace_public_profile(
+        workspace_id,
+    )
+
+    if cached is not None:
+        return cached
+
     workspace = get_workspace_or_404(workspace_id, db)
+
+    workspace_cache = get_workspace_context_cache(
+        db,
+        workspace_id,
+    )
+
+    #
+    # ----------------------------------------------------------
+    # Canonical Workspace TVS
+    # ----------------------------------------------------------
+    #
+
+    workspace_tvs = get_workspace_verification_context(
+        db=db,
+        workspace_id=workspace_id,
+        include_draft=False,
+    )
+
+    workspace_metrics = workspace_tvs.metrics
 
     claims = (
         db.query(ClaimSchema)
@@ -926,20 +984,18 @@ def build_public_trust_profile_for_workspace(workspace_id: int, db: Session):
     contested_claims_count = 0
 
     for schema in locked_claims:
-        filtered_trades = resolve_schema_trades(schema, db)
-        trade_metrics = compute_trade_metrics(filtered_trades)
-        dispute_ctx = resolve_claim_dispute_context(schema, db)
-        integrity_status = resolve_claim_integrity_status(schema, filtered_trades)
-        trust_score = compute_backend_trust_score(
+        filtered_trades = resolve_schema_trades(
             schema,
-            trade_metrics,
-            integrity_status,
-            dispute_ctx,
+            db,
+            workspace_trades=workspace_cache.trades,
         )
-        network_ctx = compute_backend_network_score(schema, trust_score)
-
-        trust_scores.append(trust_score)
-        network_scores.append(network_ctx["network_score"])
+        trade_metrics = compute_trade_metrics(filtered_trades)
+        dispute_ctx = resolve_claim_dispute_context(
+            schema,
+            db,
+            workspace_cache.claim_disputes_by_claim,
+        )
+    
         total_net_pnl += float(
             trade_metrics.get("net_pnl", 0.0) or 0.0
         )
@@ -951,13 +1007,14 @@ def build_public_trust_profile_for_workspace(workspace_id: int, db: Session):
     locked_claims_count = len(locked_claims)
 
     average_trust_score = (
-        round(sum(trust_scores) / len(trust_scores), 2) if trust_scores else 0.0
-    )
-    average_network_score = (
-        round(sum(network_scores) / len(network_scores), 2) if network_scores else 0.0
+        workspace_metrics.average_verification_score
     )
 
-    return {
+    average_network_score = (
+        workspace_metrics.network.earned_points
+    )
+
+    profile = {
         "profile_id": f"workspace:{workspace.id}",
         "workspace_id": workspace.id,
         "name": workspace.name,
@@ -969,12 +1026,23 @@ def build_public_trust_profile_for_workspace(workspace_id: int, db: Session):
         "average_trust_score": average_trust_score,
         "average_network_score": average_network_score,
         "total_net_pnl": round(total_net_pnl, 4),
-        "trust_profile_band": resolve_profile_trust_band(average_trust_score),
+        "trust_profile_band":
+            workspace_metrics.verification_band,
     }
+
+    store_workspace_public_profile(
+        workspace_id,
+        profile,
+    )
+
+    return profile
 
 
 def build_public_profile_response(workspace_id: int, db: Session):
-    profile = build_public_trust_profile_for_workspace(workspace_id, db)
+    profile = build_public_trust_profile_for_workspace(
+        workspace_id,
+        db,
+    )
 
     claims = (
         db.query(ClaimSchema)
@@ -986,7 +1054,11 @@ def build_public_profile_response(workspace_id: int, db: Session):
     )
 
     claim_rows = [
-        build_claim_list_row(schema, db)
+        build_claim_list_row(
+            schema,
+            db,
+            issuer_profile=profile,
+        )
         for schema in claims
         if can_show_in_profile(schema)
     ]
@@ -998,32 +1070,141 @@ def build_public_profile_response(workspace_id: int, db: Session):
     }
 
 
-def build_claim_list_row(schema: ClaimSchema, db: Session):
-    filtered_trades = resolve_schema_trades(schema, db)
+def build_claim_list_row(
+    schema: ClaimSchema,
+    db: Session,
+    issuer_profile: dict | None = None,
+    workspace_cache: WorkspaceContextCache | None = None,
+):
 
+    profile = {}
+
+    if workspace_cache is None:
+
+        workspace_cache = get_workspace_context_cache(
+            db,
+            schema.workspace_id,
+        )
+
+    total_start = time.perf_counter()
+
+    #
+    # ----------------------------------------------------
+    # Resolve Trades
+    # ----------------------------------------------------
+    #
+    t = time.perf_counter()
+
+    filtered_trades = resolve_schema_trades(
+        schema,
+        db,
+        workspace_trades=workspace_cache.trades,
+    )
+
+    profile["resolve_schema_trades"] = time.perf_counter() - t
+
+    #
+    # ----------------------------------------------------
+    # Trade Metrics
+    # ----------------------------------------------------
+    #
+    t = time.perf_counter()
     trade_metrics = compute_trade_metrics(filtered_trades)
+    profile["compute_trade_metrics"] = time.perf_counter() - t
+
+    #
+    # ----------------------------------------------------
+    # Integrity
+    # ----------------------------------------------------
+    #
+    t = time.perf_counter()
 
     integrity_status = resolve_claim_integrity_status(
         schema,
         filtered_trades,
     )
 
+    profile["resolve_claim_integrity_status"] = (
+        time.perf_counter() - t
+    )
+
+    #
+    # ----------------------------------------------------
+    # Disputes
+    # ----------------------------------------------------
+    #
+    t = time.perf_counter()
+
     dispute_ctx = resolve_claim_dispute_context(
         schema,
         db,
+        workspace_cache.claim_disputes_by_claim,
     )
+
+    profile["resolve_claim_dispute_context"] = (
+        time.perf_counter() - t
+    )
+
+    #
+    # ----------------------------------------------------
+    # Leaderboard
+    # ----------------------------------------------------
+    #
+    t = time.perf_counter()
 
     leaderboard = build_leaderboard(filtered_trades)
 
-    certificate = get_claim_verification_certificate(
+    profile["build_leaderboard"] = (
+        time.perf_counter() - t
+    )
+
+    #
+    # ----------------------------------------------------
+    # TVS Context
+    # ----------------------------------------------------
+    #
+    t = time.perf_counter()
+
+    verification_ctx = get_claim_verification_context(
         db=db,
         claim=schema,
     )
 
-    verification = get_claim_verification_metrics(
-        db=db,
-        claim=schema,
+    profile["get_claim_verification_context"] = (
+        time.perf_counter() - t
     )
+
+    certificate = verification_ctx.certificate
+
+    verification = verification_ctx.metrics
+
+    #
+    # ----------------------------------------------------
+    # Issuer Payload
+    # ----------------------------------------------------
+    #
+    t = time.perf_counter()
+
+    issuer_payload = build_issuer_payload(
+        schema,
+        db,
+        profile=issuer_profile,
+        workspace=workspace_cache.workspace,
+    )
+
+    profile["build_issuer_payload"] = (
+        time.perf_counter() - t
+    )
+
+    profile["TOTAL"] = (
+        time.perf_counter() - total_start
+    )
+
+    print("\n" + "=" * 80)
+    print(f"CLAIM {schema.id} PERFORMANCE PROFILE")
+    print("=" * 80)
+    print(pformat(profile))
+    print("=" * 80 + "\n")
 
     components = certificate.component_scores
 
@@ -1053,7 +1234,7 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
     "claim_schema_id": schema.id,
     "claim_hash": claim_hash,
 
-    "issuer": build_issuer_payload(schema, db),
+    "issuer": issuer_payload,
 
     "integrity_status": integrity_status,
     "public_view_path": f"/claim/{schema.id}/public",
@@ -1159,9 +1340,23 @@ def build_claim_list_row(schema: ClaimSchema, db: Session):
 
 
 def build_public_claim_payload(schema: ClaimSchema, db: Session):
-    filtered_trades = resolve_schema_trades(schema, db)
+
+    workspace_cache = get_workspace_context_cache(
+        db,
+        schema.workspace_id,
+    )
+
+    filtered_trades = resolve_schema_trades(
+        schema,
+        db,
+        workspace_trades=workspace_cache.trades,
+    )
     trade_metrics = compute_trade_metrics(filtered_trades)
-    dispute_ctx = resolve_claim_dispute_context(schema, db)
+    dispute_ctx = resolve_claim_dispute_context(
+        schema,
+        db,
+        workspace_cache.claim_disputes_by_claim,
+    )
     leaderboard = build_leaderboard(filtered_trades)
 
     if not can_access_verify_route(schema):
@@ -1195,15 +1390,13 @@ def build_public_claim_payload(schema: ClaimSchema, db: Session):
         filtered_trades,
     )
 
-    certificate = get_claim_verification_certificate(
+    verification_ctx = get_claim_verification_context(
         db=db,
         claim=schema,
     )
 
-    verification = get_claim_verification_metrics(
-        db=db,
-        claim=schema,
-    )
+    certificate = verification_ctx.certificate
+    verification = verification_ctx.metrics
 
     components = certificate.component_scores
 
@@ -1228,7 +1421,18 @@ def build_public_claim_payload(schema: ClaimSchema, db: Session):
     excluded_rows = build_excluded_trade_scope_rows(scope["excluded"])
     equity_curve = build_equity_curve(scope["included"])
     claim_hash = schema.claim_hash or compute_claim_hash(schema)
-    issuer = build_issuer_payload(schema, db)
+
+    workspace_profile = build_public_trust_profile_for_workspace(
+        schema.workspace_id,
+        db,
+    )
+
+    issuer = build_issuer_payload(
+        schema,
+        db,
+        profile=workspace_profile,
+        workspace=workspace_cache.workspace,
+    )
 
     return {
         "claim_schema_id": schema.id,
@@ -1244,7 +1448,7 @@ def build_public_claim_payload(schema: ClaimSchema, db: Session):
         "win_rate": trade_metrics["win_rate"],
         "leaderboard": leaderboard,
         "issuer": issuer,
-        "profile": build_public_trust_profile_for_workspace(schema.workspace_id, db),
+        "profile": workspace_profile,
         "disputes": dispute_ctx,
         "verification": {
 
@@ -1376,7 +1580,17 @@ def build_public_claim_payload(schema: ClaimSchema, db: Session):
 
 
 def build_evidence_pack_payload(schema: ClaimSchema, db: Session):
-    filtered_trades = resolve_schema_trades(schema, db)
+
+    workspace_cache = get_workspace_context_cache(
+        db,
+        schema.workspace_id,
+    )
+
+    filtered_trades = resolve_schema_trades(
+        schema,
+        db,
+        workspace_trades=workspace_cache.trades,
+    )
     trade_metrics = compute_trade_metrics(filtered_trades)
 
     trade_set_hash = schema.locked_trade_set_hash
@@ -1410,7 +1624,7 @@ def build_evidence_pack_payload(schema: ClaimSchema, db: Session):
         },
         "trade_set_hash": trade_set_hash,
         "metrics_snapshot": trade_metrics,
-        "equity_curve_snapshot": build_equity_curve(filtered_trades),
+        "equity_curve_snapshot": trade_metrics["equity_curve"],
         "methodology_notes": schema.methodology_notes,
         "lifecycle": {
             "status": schema.status,
@@ -1423,19 +1637,24 @@ def build_evidence_pack_payload(schema: ClaimSchema, db: Session):
 
 
 def build_audit_events_payload(schema: ClaimSchema, db: Session):
-    events = (
-        db.query(AuditEvent)
-        .filter(
-            AuditEvent.entity_type == "claim_schema",
-            AuditEvent.entity_id == str(schema.id),
-        )
-        .order_by(AuditEvent.id.asc())
-        .all()
+    workspace_cache = get_workspace_context_cache(
+        db,
+        schema.workspace_id,
+    )
+
+    events = workspace_cache.audit_events_by_claim.get(
+        schema.id,
+        [],
+    )
+
+    claim_hash = (
+        schema.claim_hash
+        or compute_claim_hash(schema)
     )
 
     return {
         "claim_schema_id": schema.id,
-        "claim_hash": schema.claim_hash or compute_claim_hash(schema),
+        "claim_hash": claim_hash,
         "exported_at": datetime.utcnow().isoformat(),
         "export_version": "audit_events_v1",
         "event_count": len(events),
@@ -1463,9 +1682,14 @@ def build_evidence_bundle_payload(schema: ClaimSchema, db: Session):
     audit_events = build_audit_events_payload(schema, db)
     manifest = build_evidence_bundle_manifest(schema)
 
+    claim_hash = (
+        schema.claim_hash
+        or compute_claim_hash(schema)
+    )
+
     return {
         "claim_schema_id": schema.id,
-        "claim_hash": schema.claim_hash or compute_claim_hash(schema),
+        "claim_hash": claim_hash,
         "exported_at": manifest["exported_at"],
         "export_version": manifest["export_version"],
         "included_files": manifest["included_files"],
@@ -2126,7 +2350,25 @@ def list_workspace_claim_schemas(
         .all()
     )
 
-    return [build_claim_list_row(schema, db) for schema in rows]
+    workspace_cache = get_workspace_context_cache(
+        db,
+        workspace_id,
+    )
+
+    issuer_profile = build_public_trust_profile_for_workspace(
+        workspace_id,
+        db,
+    )
+
+    return [
+        build_claim_list_row(
+            schema,
+            db,
+            issuer_profile=issuer_profile,
+            workspace_cache=workspace_cache,
+        )
+        for schema in rows
+    ]
 
 
 @router.post("/claim-schemas")
@@ -2189,6 +2431,11 @@ def create_claim_schema(
 
     schema.root_claim_id = schema.id
     db.commit()
+
+    invalidate_workspace_snapshot(
+        schema.workspace_id
+    )
+
     db.refresh(schema)
 
     log_audit_event(
@@ -2280,6 +2527,10 @@ def update_claim_schema(
 
     db.commit()
     db.refresh(schema)
+
+    invalidate_workspace_snapshot(
+        schema.workspace_id
+    )
 
     log_audit_event(
         db,
@@ -2437,6 +2688,11 @@ def verify_claim_schema(
     schema.verified_at = datetime.utcnow()
     schema.claim_hash = compute_claim_hash(schema)
     db.commit()
+
+    invalidate_workspace_snapshot(
+        schema.workspace_id
+    )
+
     db.refresh(schema)
 
     log_audit_event(
@@ -2538,6 +2794,11 @@ def publish_claim_schema(
 
 
     db.commit()
+
+    invalidate_workspace_snapshot(
+        schema.workspace_id
+    )
+
     db.refresh(schema)
 
     log_audit_event(
@@ -2660,6 +2921,11 @@ def lock_claim_schema(
     schema.claim_hash = compute_claim_hash(schema)
 
     db.commit()
+
+    invalidate_workspace_snapshot(
+        schema.workspace_id
+    )
+
     db.refresh(schema)
 
     from app.services.integrity_monitor_service import (
@@ -2812,12 +3078,27 @@ def get_evidence_pack(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+
+    request_start = time.perf_counter()
+
     schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_schema_id).first()
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
     require_workspace_member(schema.workspace_id, current_user, db)
-    return build_evidence_pack_payload(schema, db)
+    payload = build_evidence_pack_payload(schema, db)
+
+    elapsed = time.perf_counter() - request_start
+
+    print("\n")
+    print("=" * 80)
+    print("EVIDENCE PACK")
+    print(f"Claim : {claim_schema_id}")
+    print(f"TOTAL : {elapsed:.3f} sec")
+    print("=" * 80)
+    print("\n")
+
+    return payload
 
 
 @router.get("/claim-schemas/{claim_schema_id}/evidence-pack/download")
@@ -2826,6 +3107,8 @@ def download_evidence_pack(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    request_start = time.perf_counter()
+
     schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_schema_id).first()
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
@@ -2834,6 +3117,16 @@ def download_evidence_pack(
 
     payload = build_evidence_pack_payload(schema, db)
     filename = f'evidence_pack_claim_{schema.id}_{compute_claim_hash(schema)[:12]}.json'
+
+    elapsed = time.perf_counter() - request_start
+
+    print("\n")
+    print("=" * 80)
+    print("EVIDENCE PACK DOWNLOAD")
+    print(f"Claim : {claim_schema_id}")
+    print(f"TOTAL : {elapsed:.3f} sec")
+    print("=" * 80)
+    print("\n")
 
     return JSONResponse(
         content=payload,
@@ -2954,7 +3247,19 @@ def list_public_claims(db: Session = Depends(get_db)):
         .all()
     )
 
-    return [build_claim_list_row(schema, db) for schema in rows]
+    issuer_profile = build_public_trust_profile_for_workspace(
+        rows[0].workspace_id,
+        db,
+    ) if rows else None
+
+    return [
+        build_claim_list_row(
+            schema,
+            db,
+            issuer_profile=issuer_profile,
+        )
+        for schema in rows
+    ]
 
 
 @router.get("/public/verify/{claim_hash}")
@@ -3002,23 +3307,32 @@ def verify_claim_schema_integrity(
         raise HTTPException(status_code=400, detail="Locked claim has no stored trade set hash")
 
     # ✅ NEW: use snapshot instead of live scope
-    locked_ids = set(json.loads(schema.locked_trade_ids_json or "[]"))
-
-    trades = (
-        db.query(Trade)
-        .filter(
-            Trade.workspace_id == schema.workspace_id,
-            Trade.id.in_(locked_ids) if locked_ids else False
-        )
-        .all()
+    workspace_cache = get_workspace_context_cache(
+        db,
+        schema.workspace_id,
     )
+
+    locked_ids = set(
+        json.loads(
+            schema.locked_trade_ids_json or "[]"
+        )
+    )
+
+    trades = [
+        trade
+        for trade in workspace_cache.trades
+        if trade.id in locked_ids
+    ]
 
     recomputed_hash = compute_trade_set_hash(trades)
     integrity_ok = recomputed_hash == schema.locked_trade_set_hash
 
     return {
         "claim_schema_id": schema.id,
-        "claim_hash": compute_claim_hash(schema),
+        "claim_hash": (
+            schema.claim_hash
+            or compute_claim_hash(schema)
+        ),
         "name": schema.name,
         "status": schema.status,
         "integrity_status": "valid" if integrity_ok else "compromised",
@@ -3038,18 +3352,32 @@ def get_public_profile(
 
     return build_public_profile_response(workspace.id, db)
 
+
 @router.get("/workspaces/{workspace_id}/public-claims")
 def get_workspace_public_claims(workspace_id: int, db: Session = Depends(get_db)):
-    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    request_start = time.perf_counter()
+    workspace = (
+        db.query(Workspace)
+        .filter(
+            Workspace.id == workspace_id
+        )
+        .first()
+    )
+
     if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Workspace not found",
+        )
 
     rows = (
         db.query(ClaimSchema)
         .filter(
             ClaimSchema.workspace_id == workspace_id,
         )
-        .order_by(ClaimSchema.id.desc())
+        .order_by(
+            ClaimSchema.id.desc()
+        )
         .all()
     )
 
@@ -3059,7 +3387,30 @@ def get_workspace_public_claims(workspace_id: int, db: Session = Depends(get_db)
         if can_show_in_public_directory(schema)
     ]
 
-    return [build_claim_list_row(schema, db) for schema in rows]       
+    elapsed = time.perf_counter() - request_start
+
+    print("\n")
+    print("=" * 80)
+    print("PUBLIC RECORDS REQUEST")
+    print(f"Workspace : {workspace_id}")
+    print(f"Claims    : {len(rows)}")
+    print(f"TOTAL     : {elapsed:.3f} sec")
+    print("=" * 80)
+    print("\n")
+
+    issuer_profile = build_public_trust_profile_for_workspace(
+        workspace_id,
+        db,
+    )
+
+    return [
+        build_claim_list_row(
+            schema,
+            db,
+            issuer_profile=issuer_profile,
+        )
+        for schema in rows
+    ]
 
 
 @router.post("/api/claims/create")
@@ -3285,75 +3636,114 @@ def get_leaderboard_analytics(
         .all()
     )
 
+    workspace_metrics = (
+        get_workspace_performance_metrics(
+            db=db,
+            workspace_id=workspace_id,
+        )
+    )
+
+    member_metrics = (
+        get_workspace_member_performance(
+            db=db,
+            workspace_id=workspace_id,
+        )
+    )
+
     claim_rankings = []
-    member_totals = {}
 
     for schema in schemas:
+
+        claim_metrics = (
+            get_claim_performance_metrics(
+                db=db,
+                claim=schema,
+            )
+        )
 
         trades = resolve_schema_trades(
             schema,
             db,
         )
 
-        trade_metrics = compute_trade_metrics(
-            trades
-        )
-
         claim_rankings.append(
             {
+
                 "claim_schema_id":
                     schema.id,
+
                 "name":
                     schema.name,
+
                 "status":
                     schema.status,
+
                 "trade_count":
-                    trade_metrics["trade_count"],
+                    claim_metrics.trade_count,
+
                 "net_pnl":
-                    trade_metrics["net_pnl"],
+                    claim_metrics.net_profit,
+
                 "profit_factor":
-                    trade_metrics["profit_factor"],
+                    claim_metrics.profit_factor,
+
                 "win_rate":
-                    trade_metrics["win_rate"],
+                    claim_metrics.win_rate,
+
             }
         )
-
-        leaderboard = build_leaderboard(
-            trades
-        )
-
-        for row in leaderboard:
-
-            member = row["member"]
-
-            if member not in member_totals:
-
-                member_totals[member] = {
-                    "member": member,
-                    "net_pnl": 0,
-                }
-
-            member_totals[member][
-                "net_pnl"
-            ] += row["net_pnl"]
 
     claim_rankings.sort(
         key=lambda x: x["net_pnl"],
         reverse=True,
     )
 
-    member_rankings = sorted(
-        member_totals.values(),
-        key=lambda x: x["net_pnl"],
-        reverse=True,
-    )
+    member_rankings = [
+
+        {
+
+            "member": m.member_name,
+
+            "net_pnl": m.net_profit,
+
+            "trade_count": m.trade_count,
+
+            "claim_count": m.claim_count,
+
+            "profit_factor": m.profit_factor,
+
+            "win_rate": m.win_rate,
+
+        }
+
+        for m in member_metrics
+
+    ]
 
     return {
         "summary": {
+
             "claims":
-                len(claim_rankings),
+                workspace_metrics.claim_count,
+
             "members":
                 len(member_rankings),
+
+            "trade_count":
+                workspace_metrics.trade_count,
+
+            "net_profit":
+                workspace_metrics.net_profit,
+
+            "profit_factor":
+                workspace_metrics.profit_factor,
+
+            "win_rate":
+                workspace_metrics.win_rate,
+
+            "max_drawdown":
+                workspace_metrics.max_drawdown,
+
         },
         "claim_rankings":
             claim_rankings,
@@ -3378,70 +3768,27 @@ def get_risk_analytics(
         .all()
     )
 
-    total_trades = 0
-    total_net_pnl = 0
-
-    total_wins = 0
-    total_losses = 0
-
-    profit_factors = []
-    drawdowns = []
+    workspace_metrics = (
+        get_workspace_performance_metrics(
+            db=db,
+            workspace_id=workspace_id,
+        )
+    )
 
     recent_claims = []
 
     for schema in schemas:
 
-        trades = resolve_schema_trades(
-            schema,
-            db,
-        )
-
-        trade_metrics = compute_trade_metrics(
-            trades
-        )
-
-        equity_curve = build_equity_curve(
-            trades
-        )
-
-        drawdown_stats = (
-            compute_drawdown_stats(
-                equity_curve["curve"]
+        claim_metrics = (
+            get_claim_performance_metrics(
+                db=db,
+                claim=schema,
             )
         )
-
-        total_trades += (
-            trade_metrics["trade_count"]
-        )
-
-        total_net_pnl += (
-            trade_metrics["net_pnl"]
-        )
-
-        profit_factors.append(
-            trade_metrics["profit_factor"]
-        )
-
-        drawdowns.append(
-            drawdown_stats[
-                "max_drawdown"
-            ]
-        )
-
-        for trade in trades:
-
-            pnl = (
-                trade.net_pnl or 0
-            )
-
-            if pnl > 0:
-                total_wins += 1
-
-            elif pnl < 0:
-                total_losses += 1
 
         recent_claims.append(
             {
+
                 "claim_schema_id":
                     schema.id,
 
@@ -3452,20 +3799,17 @@ def get_risk_analytics(
                     schema.status,
 
                 "trade_count":
-                    trade_metrics["trade_count"],
+                    claim_metrics.trade_count,
 
                 "net_pnl":
-                    trade_metrics["net_pnl"],
+                    claim_metrics.net_profit,
 
                 "profit_factor":
-                    trade_metrics[
-                        "profit_factor"
-                    ],
+                    claim_metrics.profit_factor,
 
                 "max_drawdown":
-                    drawdown_stats[
-                        "max_drawdown"
-                    ],
+                    claim_metrics.max_drawdown,
+
             }
         )
 
@@ -3475,72 +3819,33 @@ def get_risk_analytics(
         reverse=True,
     )
 
-    total_closed = (
-        total_wins +
-        total_losses
-    )
-
-    win_rate = (
-        round(
-            (
-                total_wins /
-                total_closed
-            ) * 100,
-            2,
-        )
-        if total_closed
-        else 0
-    )
-
-    average_pf = (
-        round(
-            sum(
-                profit_factors
-            )
-            /
-            len(
-                profit_factors
-            ),
-            2,
-        )
-        if profit_factors
-        else 0
-    )
-
-    max_drawdown = (
-        max(drawdowns)
-        if drawdowns
-        else 0
-    )
-
     return {
         "overview": {
+
             "trades":
-                total_trades,
+                workspace_metrics.trade_count,
 
             "net_pnl":
-                round(
-                    total_net_pnl,
-                    2,
-                ),
+                workspace_metrics.net_profit,
 
             "wins":
-                total_wins,
+                workspace_metrics.winning_trades,
 
             "losses":
-                total_losses,
+                workspace_metrics.losing_trades,
 
             "win_rate":
-                win_rate,
-
-            "profit_factor":
-                average_pf,
-
-            "max_drawdown":
                 round(
-                    max_drawdown,
+                    workspace_metrics.win_rate * 100,
                     2,
                 ),
+
+            "profit_factor":
+                workspace_metrics.profit_factor,
+
+            "max_drawdown":
+                workspace_metrics.max_drawdown,
+
         },
 
         "recent_claims":
@@ -3569,11 +3874,15 @@ def get_due_diligence(
             detail="Workspace not found",
         )
 
-    profile = (
-        build_public_trust_profile_for_workspace(
-            workspace_id,
-            db,
+    workspace_verification = (
+        get_workspace_verification_context(
+            db=db,
+            workspace_id=workspace_id,
         )
+    )
+
+    verification_metrics = (
+        workspace_verification.metrics
     )
 
     claims = (
@@ -3595,166 +3904,18 @@ def get_due_diligence(
         or 0
     )
 
-    published_claims = 0
-    locked_claims = 0
-    verified_claims = 0
-
-
-    compromised_claims = 0
-
-    for schema in claims:
-
-        if schema.status == "published":
-            published_claims += 1
-
-        if schema.status == "locked":
-            locked_claims += 1
-
-        if schema.status in [
-            "verified",
-            "published",
-            "locked",
-        ]:
-            verified_claims += 1
-
-        trades = resolve_schema_trades(
-            schema,
-            db,
-        )
-
-        trade_metrics = compute_trade_metrics(
-            trades
-        )
-
-        if (
-            schema.status == "locked"
-            and schema.locked_trade_set_hash
-        ):
-            current_hash = (
-                compute_trade_set_hash(
-                    trades
-                )
-            )
-
-            if (
-                current_hash
-                != schema.locked_trade_set_hash
-            ):
-                compromised_claims += 1
-
-    claim_count = len(claims)
-
-    coverage = (
-        round(
-            (
-                verified_claims
-                / claim_count
-            )
-            * 100,
-            2,
-        )
-        if claim_count > 0
-        else 0
+    published_claims = (
+        verification_metrics.published_claim_count
     )
 
-    total_trades = 0
-    total_wins = 0
-    total_losses = 0
-
-    profit_factors = []
-
-    gross_profit = 0.0
-    gross_loss_abs = 0.0
-    drawdowns = []
-
-    for schema in claims:
-
-        trades = resolve_schema_trades(
-            schema,
-            db,
-        )
-
-        trade_metrics = compute_trade_metrics(
-            trades
-        )
-
-        curve = build_equity_curve(
-            trades
-        )
-
-        dd_stats = (
-            compute_drawdown_stats(
-                curve["curve"]
-            )
-        )
-
-        total_trades += (
-            trade_metrics["trade_count"]
-        )
-
-        profit_factors.append(
-            metrics["profit_factor"]
-        )
-
-        drawdowns.append(
-            dd_stats["max_drawdown"]
-        )
-
-        for trade in trades:
-
-            pnl = (
-                trade.net_pnl or 0
-            )
-
-            if pnl > 0:
-
-                total_wins += 1
-
-                gross_profit += pnl
-
-            elif pnl < 0:
-
-                total_losses += 1
-
-                gross_loss_abs += abs(pnl)
-
-    total_closed = (
-        total_wins
-        + total_losses
+    locked_claims = (
+        verification_metrics.locked_claim_count
     )
 
-    risk_win_rate = (
-        round(
-            (
-                total_wins
-                / total_closed
-            ) * 100,
-            2,
-        )
-        if total_closed
-        else 0
-    )
-
-    risk_profit_factor = (
-        round(
-            gross_profit
-            / gross_loss_abs,
-            2,
-        )
-        if gross_loss_abs > 0
-        else round(
-            gross_profit,
-            2,
-        )
-    )
-
-    risk_max_drawdown = (
-        round(
-            max(drawdowns),
-            2,
-        )
-        if drawdowns
-        else 0
+    verified_claims = (
+        published_claims
+        + locked_claims
+        + verification_metrics.verified_claim_count
     )
 
     integrity_dashboard = (
@@ -3762,6 +3923,35 @@ def get_due_diligence(
             db,
             workspace_id,
         )
+    )
+
+    compromised_claims = (
+        integrity_dashboard["compromised_claims"]
+    )
+
+    claim_count = len(claims)
+
+    coverage = (
+        verification_metrics.verification_coverage
+    )
+
+    workspace_performance = (
+        get_workspace_performance_metrics(
+            db=db,
+            workspace_id=workspace_id,
+        )
+    )
+
+    risk_profit_factor = (
+        workspace_performance.profit_factor
+    )
+
+    risk_win_rate = (
+        workspace_performance.win_rate
+    )
+
+    risk_max_drawdown = (
+        workspace_performance.max_drawdown
     )
 
     integrity_score = (
@@ -3783,60 +3973,52 @@ def get_due_diligence(
     )
 
     trust_score = (
-        profile.get(
-            "average_trust_score",
-            0,
-        )
+        verification_metrics.average_verification_score
     )
 
-    if trust_score >= 85:
-        grade = "A"
-
-    elif trust_score >= 70:
-        grade = "B"
-
-    elif trust_score >= 55:
-        grade = "C"
-
-    else:
-        grade = "D"
+    grade = (
+        verification_metrics.verification_band
+    )
 
     evidence = build_evidence_analytics(
         db,
         workspace_id,
     )
 
-    confidence = round(
+    due_diligence_score = round(
         (
             trust_score
             + integrity_score
             + coverage
             + evidence["quality"]["score"]
-        ) / 4,
+        )
+        / 4,
         2,
     )
 
-    if confidence >= 90:
+    if due_diligence_score >= 90:
+
         recommendation = "LOW RISK"
 
-    elif confidence >= 75:
+    elif due_diligence_score >= 75:
+
         recommendation = "MODERATE RISK"
 
-    elif confidence >= 60:
+    elif due_diligence_score >= 60:
+
         recommendation = "MEDIUM RISK"
 
     else:
+
         recommendation = "HIGH RISK"
 
-    governance_compliance = round(
-        (
-            locked_claims
-            / claim_count
-        ) * 100,
-        2,
-    ) if claim_count else 0
+    governance_compliance = (
+        verification_metrics.governance.percentage
+    )
 
-    verification_status = recommendation
+    verification_status = (
+        verification_metrics.verification_band
+    )
 
     return {
 
@@ -3848,29 +4030,34 @@ def get_due_diligence(
         },
 
         "trust": {
-            "trust_score": profile.get(
-                "average_trust_score",
-                0,
-            ),
-            "network_score": profile.get(
-                "average_network_score",
-                0,
-            ),
-            "trust_band": profile.get(
-                "trust_profile_band",
-                "unknown",
-            ),
+
+            "trust_score":
+                verification_metrics.average_verification_score,
+
+            "network_score":
+                verification_metrics.network.percentage,
+
+            "trust_band":
+                verification_metrics.verification_band,
+
         },
 
         "verification": {
-            "coverage": coverage,
-            "verified_claims": verified_claims,
-            "status": verification_status,
+
+            "coverage":
+                coverage,
+
+            "verified_claims":
+                verified_claims,
+
+            "status":
+                verification_status,
+
         },
 
-        "integrity": {
+        "scanner_health": {
 
-            "integrity_score":
+            "health_score":
                 integrity_score,
 
             "compromised_claims":
@@ -3884,14 +4071,16 @@ def get_due_diligence(
         },
 
         "evidence": {
+
             "quality_score":
-                evidence["quality"]["score"],
+                verification_metrics.evidence.percentage,
 
             "quality_band":
-                evidence["quality"]["band"],
+                verification_metrics.evidence.status,
 
             "coverage":
-                evidence["overview"]["coverage"],
+                verification_metrics.evidence.percentage,
+
         },
 
         "governance": {
@@ -3900,7 +4089,8 @@ def get_due_diligence(
         },
 
         "risk": {
-            "risk_score": confidence,
+            "risk_score":
+                due_diligence_score,
             "profit_factor":
                 risk_profit_factor,
             "win_rate":
@@ -3910,16 +4100,19 @@ def get_due_diligence(
         },
 
         "assessment": {
-            "grade": grade,
+
+            "grade":
+                verification_metrics.verification_band,
+
             "status":
-                profile.get(
-                    "trust_profile_band",
-                    "unknown",
-                ),
+                verification_metrics.verification_band,
+
             "confidence":
-                confidence,
+                due_diligence_score,
+
             "recommendation":
                 recommendation,
+
         },
     }
 

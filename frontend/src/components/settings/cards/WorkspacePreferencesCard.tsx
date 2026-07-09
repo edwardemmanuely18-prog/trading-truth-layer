@@ -14,17 +14,19 @@ type Props = {
 
     autoSave:boolean;
 
-    onTimezoneChange:(v:string)=>void;
+    readOnly?: boolean;
 
-    onCurrencyChange:(v:string)=>void;
+    onTimezoneChange?:(v:string)=>void;
 
-    onLanguageChange:(v:string)=>void;
+    onCurrencyChange?:(v:string)=>void;
 
-    onDateFormatChange:(v:string)=>void;
+    onLanguageChange?:(v:string)=>void;
 
-    onAutoRefreshChange:(v:boolean)=>void;
+    onDateFormatChange?:(v:string)=>void;
 
-    onAutoSaveChange:(v:boolean)=>void;
+    onAutoRefreshChange?:(v:boolean)=>void;
+
+    onAutoSaveChange?:(v:boolean)=>void;
 
 };
 
@@ -41,6 +43,8 @@ export default function WorkspacePreferencesCard({
     autoRefresh,
 
     autoSave,
+
+    readOnly=false,
 
     onTimezoneChange,
 
@@ -78,24 +82,28 @@ export default function WorkspacePreferencesCard({
                 <Field
                     label="Timezone"
                     value={timezone}
+                    readOnly={readOnly}
                     onChange={onTimezoneChange}
                 />
 
                 <Field
                     label="Currency"
                     value={currency}
+                    readOnly={readOnly}
                     onChange={onCurrencyChange}
                 />
 
                 <Field
                     label="Language"
                     value={language}
+                    readOnly={readOnly}
                     onChange={onLanguageChange}
                 />
 
                 <Field
                     label="Date Format"
                     value={dateFormat}
+                    readOnly={readOnly}
                     onChange={onDateFormatChange}
                 />
 
@@ -109,6 +117,8 @@ export default function WorkspacePreferencesCard({
 
                     checked={autoRefresh}
 
+                    readOnly={readOnly}
+
                     onChange={onAutoRefreshChange}
 
                 />
@@ -118,6 +128,8 @@ export default function WorkspacePreferencesCard({
                     label="Automatic Save"
 
                     checked={autoSave}
+
+                    readOnly={readOnly}
 
                     onChange={onAutoSaveChange}
 
@@ -137,6 +149,8 @@ function Field({
 
     value,
 
+    readOnly,
+
     onChange,
 
 }:{
@@ -145,7 +159,9 @@ function Field({
 
     value:string;
 
-    onChange:(v:string)=>void;
+    readOnly?:boolean;
+
+    onChange?:(v:string)=>void;
 
 }){
 
@@ -161,11 +177,23 @@ function Field({
 
             <input
 
-                className="w-full rounded-xl border px-4 py-3"
+                className="w-full rounded-xl border bg-slate-50 px-4 py-3"
 
                 value={value}
 
-                onChange={(e)=>onChange(e.target.value)}
+                readOnly={readOnly}
+
+                disabled={readOnly}
+
+                onChange={(e)=>
+
+                    onChange?.(
+
+                        e.target.value
+
+                    )
+
+                }
 
             />
 
@@ -181,6 +209,8 @@ function Toggle({
 
     checked,
 
+    readOnly = false,
+
     onChange,
 
 }:{
@@ -189,7 +219,9 @@ function Toggle({
 
     checked:boolean;
 
-    onChange:(v:boolean)=>void;
+    readOnly?:boolean;
+
+    onChange?:(v:boolean)=>void;
 
 }){
 
@@ -209,7 +241,17 @@ function Toggle({
 
                 checked={checked}
 
-                onChange={(e)=>onChange(e.target.checked)}
+                disabled={readOnly}
+
+                onChange={(e)=>
+
+                    onChange?.(
+
+                        e.target.checked
+
+                    )
+
+                }
 
             />
 

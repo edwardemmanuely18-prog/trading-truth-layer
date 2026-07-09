@@ -8,6 +8,10 @@ from app.models.claim_schema import ClaimSchema
 from app.models.integrity_alert import IntegrityAlert
 from app.models.trade import Trade
 
+from app.services.verification.verification_service import (
+    get_workspace_verification_context,
+)
+
 
 def get_verification_network(
     db: Session,
@@ -22,6 +26,19 @@ def get_verification_network(
     Integrity
     Claim Registry
     """
+
+    #
+    # ----------------------------------------------------------
+    # Canonical TVS Workspace Context
+    # ----------------------------------------------------------
+    #
+
+    tvs = get_workspace_verification_context(
+        db=db,
+        workspace_id=workspace_id,
+    )
+
+    verification_metrics = tvs.metrics
 
     #
     # ----------------------------------------------------------
@@ -268,7 +285,7 @@ def get_verification_network(
 
         "workspace_trust_score":
 
-            trust_score,
+            verification_metrics.average_verification_score,
 
         "allocator_ready":
 
@@ -302,29 +319,7 @@ def get_verification_network(
 
         "verification_band":
 
-            (
-
-                "Institutional"
-
-                if trust_score >= 90
-
-                else
-
-                "Excellent"
-
-                if trust_score >= 80
-
-                else
-
-                "Good"
-
-                if trust_score >= 65
-
-                else
-
-                "Needs Improvement"
-
-            ),
+            verification_metrics.verification_band,
 
     }
 
@@ -416,10 +411,7 @@ def get_verification_network(
 
             "verification":
 
-                round(
-                    verification_pct,
-                    2,
-                ),
+                verification_metrics.verification_coverage,
 
             "publication":
 
@@ -449,19 +441,19 @@ def get_verification_network(
 
             "draft":
 
-                status_counter["draft"],
+                verification_metrics.draft_claim_count,
 
             "verified":
 
-                status_counter["verified"],
+                verification_metrics.verified_claim_count,
 
             "published":
 
-                status_counter["published"],
+                verification_metrics.published_claim_count,
 
             "locked":
 
-                status_counter["locked"],
+                verification_metrics.locked_claim_count,
 
         },
 

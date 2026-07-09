@@ -16,19 +16,21 @@ type Props = {
 
     disclaimer:string;
 
-    onOrganizationChange:(v:string)=>void;
+    readOnly?: boolean;
 
-    onWebsiteChange:(v:string)=>void;
+    onOrganizationChange?:(v:string)=>void;
 
-    onLogoChange:(v:string)=>void;
+    onWebsiteChange?:(v:string)=>void;
 
-    onPrimaryColorChange:(v:string)=>void;
+    onLogoChange?:(v:string)=>void;
 
-    onAccentColorChange:(v:string)=>void;
+    onPrimaryColorChange?:(v:string)=>void;
 
-    onFooterChange:(v:string)=>void;
+    onAccentColorChange?:(v:string)=>void;
 
-    onDisclaimerChange:(v:string)=>void;
+    onFooterChange?:(v:string)=>void;
+
+    onDisclaimerChange?:(v:string)=>void;
 
 };
 
@@ -47,6 +49,8 @@ export default function BrandingCard({
     reportFooter,
 
     disclaimer,
+
+    readOnly = false,
 
     onOrganizationChange,
 
@@ -81,13 +85,15 @@ export default function BrandingCard({
 
             </p>
 
-            <div className="mt-6 grid gap-5 md:grid-cols-2">
+            <div className="mt-6 grid gap-6">
 
                 <Input
 
                     label="Organization"
 
                     value={organization}
+
+                    readOnly={readOnly}
 
                     onChange={onOrganizationChange}
 
@@ -99,39 +105,25 @@ export default function BrandingCard({
 
                     value={website}
 
+                    readOnly={readOnly}
+
                     onChange={onWebsiteChange}
 
                 />
 
-                <Input
+                <div className="md:col-span-2">
+                    <div className="mb-2 text-sm font-medium">
+                        Platform Logo
+                    </div>
 
-                    label="Logo URL"
-
-                    value={logo}
-
-                    onChange={onLogoChange}
-
-                />
-
-                <Input
-
-                    label="Primary Color"
-
-                    value={primaryColor}
-
-                    onChange={onPrimaryColorChange}
-
-                />
-
-                <Input
-
-                    label="Accent Color"
-
-                    value={accentColor}
-
-                    onChange={onAccentColorChange}
-
-                />
+                    <div className="flex h-64 items-center justify-center rounded-xl border bg-white p-6">
+                        <img
+                            src={logo}
+                            alt="Trading Truth Layer"
+                            className="max-h-full max-w-full object-contain"
+                        />
+                    </div>
+                </div>
 
             </div>
 
@@ -147,13 +139,17 @@ export default function BrandingCard({
 
                     rows={3}
 
-                    className="mt-2 w-full rounded-xl border px-4 py-3"
+                    readOnly={readOnly}
+
+                    disabled={readOnly}
+
+                    className="mt-2 w-full rounded-xl border bg-slate-50 px-4 py-3"
 
                     value={reportFooter}
 
                     onChange={(e)=>
 
-                        onFooterChange(
+                        onFooterChange?.(
 
                             e.target.value
 
@@ -177,13 +173,17 @@ export default function BrandingCard({
 
                     rows={4}
 
-                    className="mt-2 w-full rounded-xl border px-4 py-3"
+                    className="mt-2 w-full rounded-xl border bg-slate-50 px-4 py-3"
 
                     value={disclaimer}
 
+                    readOnly={readOnly}
+
+                    disabled={readOnly}
+
                     onChange={(e)=>
 
-                        onDisclaimerChange(
+                        onDisclaimerChange?.(
 
                             e.target.value
 
@@ -207,6 +207,8 @@ function Input({
 
     value,
 
+    readOnly = false,
+
     onChange,
 
 }:{
@@ -215,7 +217,9 @@ function Input({
 
     value:string;
 
-    onChange:(v:string)=>void;
+    readOnly?:boolean;
+
+    onChange?:(v:string)=>void;
 
 }){
 
@@ -231,13 +235,17 @@ function Input({
 
             <input
 
-                className="w-full rounded-xl border px-4 py-3"
+                className="w-full rounded-xl border bg-slate-50 px-4 py-3"
 
                 value={value}
 
+                readOnly={readOnly}
+
+                disabled={readOnly}
+
                 onChange={(e)=>
 
-                    onChange(
+                    onChange?.(
 
                         e.target.value
 

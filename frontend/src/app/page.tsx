@@ -31,34 +31,34 @@ export default function HomePage() {
 
   const featureCards = [
     {
-      title: "Deterministic claim definition",
+      title: "Evidence Registry",
       description:
-        "Define exactly what a claim includes so results can be recomputed, audited, and independently reviewed.",
+        "Canonical evidence storage for imported trading activity, normalized into a governed institutional record.",
     },
     {
-      title: "Canonical trade ledger",
+      title: "Trading Verification System (TVS)",
       description:
-        "All ingestion routes normalize into a single source of truth used across claims, evidence, and verification.",
+        "The canonical verification engine that computes every claim, metric, report, and public verification surface from a single source of truth.",
     },
     {
-      title: "Evidence-first computation",
+      title: "Verification Engine",
       description:
-        "Metrics and performance outputs are derived directly from underlying trade evidence, not detached summaries.",
+        "Produces institutional verification certificates, trust metrics, governance scores, and verification coverage.",
     },
     {
-      title: "Verification surfaces",
+      title: "Evidence Graph",
       description:
-        "Each claim produces both a public presentation layer and a canonical verification route.",
+        "Visualizes relationships between trades, evidence, claims, reports, and verification artifacts for complete traceability.",
     },
     {
-      title: "Governed lifecycle",
+      title: "Institutional Reporting",
       description:
-        "Draft, verify, publish, and lock states enforce discipline and prevent silent mutation of claims.",
+        "Generate allocator reports, claim reports, governance reports, and due-diligence documentation directly from verified evidence.",
     },
     {
-      title: "Audit and traceability",
+      title: "Governance & Audit Trail",
       description:
-        "Every claim maintains a full lifecycle history suitable for internal review and external validation.",
+        "Every action is governed, auditable, cryptographically traceable, and protected against silent modification.",
     },
   ];
 
@@ -120,13 +120,14 @@ export default function HomePage() {
           </div>
 
           <h1 className="mt-6 text-5xl font-bold leading-tight">
-            Turn trading activity into verifiable performance records,
-            canonical ledgers, and dispute-ready proof.
+            Turn trading activity into institutional verification,
+            governed evidence and independently verifiable trust.
           </h1>
 
           <p className="mt-6 text-lg text-slate-600">
-            Replace screenshots and unverifiable claims with structured,
-            cryptographically verifiable records that are auditable and externally provable.
+            Trading Truth Layer transforms raw trading activity into governed evidence,
+            institutional reports, public verification records and cryptographically
+            verifiable proof suitable for investors, allocators, regulators and external reviewers.
           </p>
 
           {/* CTA */}
@@ -160,33 +161,33 @@ export default function HomePage() {
       {/* 🔥 NEW: PROOF OUTPUTS */}
       <section className="mx-auto max-w-7xl px-6 pb-16">
         <h2 className="text-2xl font-semibold">
-          What the system produces
+          Institutional Outputs
         </h2>
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <SurfaceCard
-            title="Evidence JSON"
-            description="Machine-readable structured evidence payload for systems, audits, and automation."
+            title="Verification Certificate"
+            description="Institutional verification certificate containing trust metrics, governance score and verification outcome."
           />
           <SurfaceCard
-            title="Evidence ZIP bundle"
-            description="Packaged archive for dispute handling, sharing, and long-term storage."
+            title="Allocator Due-Diligence Report"
+            description="Institutional allocator report generated directly from governed evidence and verification output."
           />
           <SurfaceCard
-            title="Claim report PDF"
-            description="Presentation-grade report for investors, institutions, and formal review."
+            title="Institutional Claim Report"
+            description="Presentation-grade report suitable for investors, institutions and compliance review."
           />
           <SurfaceCard
-            title="Public record"
-            description="Clean presentation surface for distributing claim results."
+            title="Evidence Bundle"
+            description="Governed archive containing canonical evidence, verification artifacts and supporting records."
           />
           <SurfaceCard
-            title="Verification route"
-            description="Canonical proof layer for independent verification."
+            title="Public Verification Record"
+            description="Public verification surface exposing immutable verification results without exposing private trading data."
           />
           <SurfaceCard
-            title="Integrity hashes"
-            description="Claim hash and trade fingerprint ensure tamper-evident trust."
+            title="Canonical Evidence Graph"
+            description="Relationship graph connecting evidence, claims, reports and verification history into a single trust network."
           />
         </div>
       </section>
@@ -218,23 +219,65 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section className="mx-auto max-w-7xl px-6 pb-16">
+
+        <h2 className="text-2xl font-semibold">
+          Why institutions use Trading Truth Layer
+        </h2>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+
+          <SurfaceCard
+            title="Evidence-first"
+            description="Every performance metric originates from governed trading evidence."
+          />
+
+          <SurfaceCard
+            title="Independent verification"
+            description="Verification results can be validated independently without trusting the publisher."
+          />
+
+          <SurfaceCard
+            title="Allocator ready"
+            description="Generate professional due-diligence documentation directly from verified claims."
+          />
+
+          <SurfaceCard
+            title="Governed lifecycle"
+            description="Claims progress through Draft, Verify, Publish and Lock with full audit history."
+          />
+
+          <SurfaceCard
+            title="Evidence Graph"
+            description="Navigate relationships between evidence, reports and verification artifacts."
+          />
+
+          <SurfaceCard
+            title="Permanent audit trail"
+            description="Every verification event is permanently traceable through canonical governance records."
+          />
+
+        </div>
+
+      </section>
+
       {/* COMMERCIAL */}
       <section className="mx-auto max-w-7xl px-6 pb-20">
         <div className="rounded-3xl border bg-white p-8">
           <h2 className="text-2xl font-semibold">
-            Controlled commercial rollout
+            Institutional Verification Lifecycle
           </h2>
 
           <div className="mt-4 text-sm text-slate-600">
-            Sandbox → Starter → Growth → Business
+            Import → Verify → Govern → Report → Publish
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <div className="border p-4 rounded-xl">
-              Sandbox: safe evaluation and onboarding
+              Import trading activity into the canonical Evidence Registry.
             </div>
             <div className="border p-4 rounded-xl">
-              Paid tiers unlock governance and scale
+              Generate institutional reports and publish independently verifiable trust records.
             </div>
           </div>
         </div>

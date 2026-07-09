@@ -75,6 +75,14 @@ export default function Page(
   const claims =
     data?.recent_claims ?? [];
 
+  const formatNumber = (value: number) =>
+    value.toLocaleString(undefined, {
+      maximumFractionDigits: 2,
+    });
+
+  const formatPercent = (value: number) =>
+    `${value.toFixed(2)}%`;
+
   return (
     <div className="min-h-screen bg-slate-50">
       <Navbar />
@@ -111,9 +119,7 @@ export default function Page(
 
           <MetricCard
             title="Net PnL"
-            value={
-              overview?.net_pnl ?? 0
-            }
+            value={formatNumber(overview?.net_pnl ?? 0)}
           />
 
           <MetricCard
@@ -132,15 +138,12 @@ export default function Page(
 
           <MetricCard
             title="Win Rate"
-            value={`${overview?.win_rate ?? 0}%`}
+            value={formatPercent(overview?.win_rate ?? 0)}
           />
 
           <MetricCard
             title="Profit Factor"
-            value={
-              overview?.profit_factor ??
-              0
-            }
+            value={(overview?.profit_factor ?? 0).toFixed(2)}
           />
 
         </div>
@@ -149,9 +152,7 @@ export default function Page(
 
           <MetricCard
             title="Peak-to-Trough Drawdown (Units)"
-            value={
-              overview?.max_drawdown ?? 0
-            }
+           value={formatNumber(overview?.max_drawdown ?? 0)}
           />
 
           <MetricCard
@@ -186,11 +187,11 @@ export default function Page(
             Claim Risk Feed
           </div>
 
-          <div className="max-h-[600px] overflow-y-auto">
+          <div className="max-h-[520px] overflow-auto">
 
           <table className="w-full">
 
-            <thead className="bg-slate-100">
+            <thead className="sticky top-0 z-10 bg-slate-100">
 
               <tr>
 
@@ -248,19 +249,15 @@ export default function Page(
                     </td>
 
                     <td className="p-4">
-                      {claim.net_pnl}
+                      {formatNumber(claim.net_pnl)}
                     </td>
 
                     <td className="p-4">
-                      {
-                        claim.profit_factor
-                      }
+                      {claim.profit_factor.toFixed(2)}
                     </td>
 
                     <td className="p-4 text-center font-medium">
-                      {
-                        claim.max_drawdown
-                      }
+                      {formatNumber(claim.max_drawdown)}
                     </td>
 
                   </tr>

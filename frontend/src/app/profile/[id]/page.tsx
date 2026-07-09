@@ -325,7 +325,7 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
 
       <main className="mx-auto max-w-[1400px] px-6 py-10">
         <div className="mb-8">
-          <div className="text-sm text-slate-500">Trading Truth Layer · Public Trust Profile</div>
+          <div className="text-sm text-slate-500">Trading Truth Layer · Issuer Verification Profile</div>
           <h1 className="mt-2 text-4xl font-bold">
             {profile?.name || `Workspace #${workspaceId}`}
           </h1>
@@ -343,39 +343,6 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
 
         {!loadError && profile ? (
           <>
-            <div className="mb-8 rounded-2xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <div className="text-sm font-semibold text-blue-900">
-                    Public Trust Proof
-                  </div>
-                  <div className="mt-1 text-sm text-blue-800">
-                    This profile is a verifiable public trust surface backed by locked claims,
-                    audit history, and network-aware scoring.
-                  </div>
-
-                  <div className="mt-3 font-mono text-xs text-blue-700">
-                    /profile/{profile.workspace_id}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Link
-                    href={`/profile/${profile.workspace_id}`}
-                    className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-medium hover:bg-blue-100"
-                  >
-                    Open Profile
-                  </Link>
-
-                  <Link
-                    href="/leaderboard"
-                    className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-medium hover:bg-blue-100"
-                  >
-                    Leaderboard
-                  </Link>
-                </div>
-              </div>
-            </div>
 
             <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
               <h2 className="text-xl font-semibold">Embed Trust Widget</h2>
@@ -436,14 +403,6 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
                       <span className="font-medium text-slate-900">Claims surfaced:</span>{" "}
                       {profile.claims_count ?? 0}
                   </div>
-                  <div className="mt-2">
-                      <Link
-                      href="/leaderboard"
-                      className="text-slate-900 underline underline-offset-4"
-                      >
-                      Back to Leaderboard
-                      </Link>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -479,9 +438,9 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
             <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
               <h2 className="text-2xl font-semibold">Profile Trust Context</h2>
               <div className="mt-2 max-w-4xl text-sm text-slate-500">
-                This profile aggregates claim-level trust, dispute pressure, and network-aware
-                reputation into a public issuer surface. High-trust profiles sustain credible
-                public distribution better than isolated claims because performance, governance,
+                This profile aggregates claim-level trust, verification posture, evidence integrity,
+                and governance into a public issuer profile backed by canonical records. 
+                High-trust profiles sustain credible public distribution better than isolated claims because performance, governance,
                 and verification posture are evaluated across claim history.
               </div>
 
