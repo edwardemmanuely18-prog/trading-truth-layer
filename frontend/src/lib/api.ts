@@ -920,6 +920,79 @@ export type WorkspaceMember = {
   workspace_role: string;
 };
 
+export interface WorkspaceGovernanceSnapshot {
+
+  workspace: {
+    id: number;
+    name: string;
+    plan: string;
+  };
+
+  capacity: {
+    members: number;
+    member_limit: number;
+    utilization: number;
+  };
+
+  identity_summary: {
+    owners: number;
+    operators: number;
+    auditors: number;
+    members: number;
+  };
+
+  authority_distribution: {
+    critical: number;
+    high: number;
+    medium: number;
+    standard: number;
+  };
+
+  governance_health: {
+    overall_score: number;
+
+    owner: {
+      score: number;
+      healthy: boolean;
+    };
+
+    operator: {
+      score: number;
+      healthy: boolean;
+    };
+
+    auditor: {
+      score: number;
+      healthy: boolean;
+    };
+
+    invitation: {
+      score: number;
+      healthy: boolean;
+      findings: {
+        title: string;
+        description: string;
+        severity: string;
+      }[];
+    };
+  };
+
+  recommendations: {
+    title: string;
+    description: string;
+    priority: string;
+    action: string;
+  }[];
+
+  profiles: any[];
+
+  governance_version?: string;
+
+  generated_by?: string;
+
+  snapshot_type?: string;
+}
+
 export type WorkspaceInvite = {
   id: number;
   workspace_id: number;
@@ -4349,6 +4422,21 @@ export const api = {
 
       return apiFetch<WorkspaceSnapshot>(
           `/workspaces/${workspaceId}/snapshot`
+      );
+
+  },
+
+  getWorkspaceGovernanceSnapshot: async (
+      workspaceId: number
+  ): Promise<WorkspaceGovernanceSnapshot> => {
+
+      return apiFetch<WorkspaceGovernanceSnapshot>(
+          withDevUser(
+              `/workspaces/${workspaceId}/governance`
+          ),
+          {
+              cache: "no-store",
+          }
       );
 
   },

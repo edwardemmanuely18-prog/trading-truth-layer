@@ -15,13 +15,25 @@ import {
   type WorkspaceUsageSummary,
 } from "../../../../lib/api";
 
+import GovernanceHero from "@/components/governance/GovernanceHero";
+import GovernanceOverview from "@/components/governance/GovernanceOverview";
+import IdentityArchitecture from "@/components/governance/IdentityArchitecture";
+import PermissionMatrix from "@/components/governance/PermissionMatrix";
+import CapacityOverview from "@/components/governance/CapacityOverview";
+import IdentityOnboarding from "@/components/governance/IdentityOnboarding";
+import IdentityDirectory from "@/components/governance/IdentityDirectory";
+import InvitationLedger from "@/components/governance/InvitationLedger";
+import GovernanceTimeline from "@/components/governance/GovernanceTimeline";
+
+import type {
+    GovernanceSummary,
+} from "@/components/governance/types";
+
+import GovernanceIntelligence
+from "@/components/governance/GovernanceIntelligence";
+
 function normalizeText(value?: string | null) {
   return String(value || "").toLowerCase().trim();
-}
-
-function formatPercent(value?: number | null) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
-  return `${(Number(value) * 100).toFixed(1)}%`;
 }
 
 function formatDimensionLabel(value: string) {
@@ -37,24 +49,6 @@ function formatDimensionLabel(value: string) {
     default:
       return value;
   }
-}
-
-function SummaryCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string | number;
-  hint?: string;
-}) {
-  return (
-    <div className="rounded-2xl border bg-white p-5 shadow-sm">
-      <div className="text-sm text-slate-500">{label}</div>
-      <div className="mt-2 text-2xl font-semibold">{value}</div>
-      {hint ? <div className="mt-2 text-xs text-slate-500">{hint}</div> : null}
-    </div>
-  );
 }
 
 function GovernanceBanner({
@@ -271,6 +265,42 @@ function InviteVisibilityNotice({
   );
 }
 
+function Metric({
+
+    title,
+
+    value,
+
+}:{
+
+    title:string;
+
+    value:number|string;
+
+}){
+
+    return(
+
+        <div className="rounded-2xl border bg-slate-50 p-5">
+
+            <div className="text-xs uppercase tracking-wide text-slate-500">
+
+                {title}
+
+            </div>
+
+            <div className="mt-3 text-3xl font-bold">
+
+                {value}
+
+            </div>
+
+        </div>
+
+    );
+
+}
+
 export default function WorkspaceMembersPage() {
   const params = useParams();
   const { user, workspaces, loading: authLoading, getWorkspaceRole } = useAuth();
@@ -292,6 +322,13 @@ export default function WorkspaceMembersPage() {
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [invites, setInvites] = useState<WorkspaceInvite[]>([]);
   const [usage, setUsage] = useState<WorkspaceUsageSummary | null>(null);
+
+  // ==========================================================
+  // GOVERNANCE SNAPSHOT (Future Canonical Source)
+  // ==========================================================
+
+  const [governanceSnapshot, setGovernanceSnapshot] =
+      useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -300,15 +337,46 @@ export default function WorkspaceMembersPage() {
       setLoading(true);
       setError(null);
 
-      const [membersRes, invitesRes, usageRes] = await Promise.all([
-        api.getWorkspaceMembers(targetWorkspaceId),
-        canManageMembers ? api.getWorkspaceInvites(targetWorkspaceId).catch(() => []) : Promise.resolve([]),
-        api.getWorkspaceUsage(targetWorkspaceId).catch(() => null),
+      const [
+
+          membersRes,
+
+          invitesRes,
+
+          usageRes,
+
+          governanceSnapshotRes,
+
+      ] = await Promise.all([
+
+          api.getWorkspaceMembers(
+              targetWorkspaceId
+          ),
+
+          canManageMembers
+              ? api.getWorkspaceInvites(
+                    targetWorkspaceId
+                ).catch(() => [])
+              : Promise.resolve([]),
+
+          api.getWorkspaceUsage(
+              targetWorkspaceId
+          ).catch(() => null),
+
+          api
+              .getWorkspaceGovernanceSnapshot(
+                  targetWorkspaceId
+              )
+              .catch(() => null),
+
       ]);
 
       setMembers(Array.isArray(membersRes) ? membersRes : []);
       setInvites(Array.isArray(invitesRes) ? invitesRes : []);
       setUsage(usageRes);
+      setGovernanceSnapshot(
+          governanceSnapshotRes
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load workspace members page.");
     } finally {
@@ -352,7 +420,7 @@ export default function WorkspaceMembersPage() {
   }
 
   const pendingInvites = invites.filter((row) => row.status === "pending");
-  const acceptedInvites = invites.filter((row) => row.status === "accepted");
+  
   const memberUsage = usage?.usage?.members ?? 0;
 
   const configuredPlan = usage?.plan_catalog?.find(
@@ -378,39 +446,317 @@ export default function WorkspaceMembersPage() {
       ?.billing_activation_recommended
   );
 
+  const governanceSummary: GovernanceSummary = {
+
+      workspaceName:
+          governanceSnapshot?.workspace?.name ??
+          workspaceMembership?.workspace_name ??
+          `Workspace ${workspaceId}`,
+
+      plan:
+          governanceSnapshot?.workspace?.plan ??
+          effectivePlanName,
+
+      memberCount:
+          governanceSnapshot?.capacity?.members ??
+          members.length,
+
+      memberLimit:
+          governanceSnapshot?.capacity?.member_limit ??
+          Number(effectiveMemberLimit ?? 0),
+
+      ownerCount:
+          governanceSnapshot?.identity_summary?.owners ??
+          members.filter(
+              (m) => m.workspace_role === "owner"
+          ).length,
+
+      operatorCount:
+          governanceSnapshot?.identity_summary?.operators ??
+          members.filter(
+              (m) => m.workspace_role === "operator"
+          ).length,
+
+      auditorCount:
+          governanceSnapshot?.identity_summary?.auditors ??
+          members.filter(
+              (m) => m.workspace_role === "auditor"
+          ).length,
+
+      pendingInvites:
+          pendingInvites.length,
+
+      governanceHealth:
+          governanceSnapshot?.governance_health?.health ??
+          "healthy",
+
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <Navbar workspaceId={workspaceId} />
 
       <main className="mx-auto max-w-[1400px] px-6 py-10">
-        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="text-sm text-slate-500">Trading Truth Layer · Workspace Access Control</div>
-            <h1 className="mt-2 text-4xl font-bold">
-              Workspace Access & Identity Control
-            </h1>
-            <p className="mt-3 max-w-3xl text-slate-600">
-              Govern membership, identity access, invitation lifecycle, and capacity enforcement
-              for workspace {workspaceId}.
-            </p>
+        <div className="space-y-8">
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+
+              <div className="flex items-center justify-between">
+
+                  <div>
+
+                      <div className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
+
+                          Identity Governance System
+
+                      </div>
+
+                      <h1 className="mt-2 text-3xl font-bold">
+
+                          Workspace Identity &
+                          Governance
+
+                      </h1>
+
+                      <p className="mt-2 max-w-3xl text-slate-600">
+
+                          Manage institutional identities,
+                          operational authority,
+                          delegated responsibilities,
+                          governance health,
+                          invitations,
+                          and organizational readiness.
+
+                      </p>
+
+                  </div>
+
+              </div>
+
           </div>
+
+            <GovernanceHero
+                summary={governanceSummary}
+                snapshot={governanceSnapshot}
+            />
+
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+
+            <div className="font-semibold text-emerald-800">
+
+            Canonical Governance Snapshot
+
+            </div>
+
+            <div className="mt-1 text-sm text-emerald-700">
+
+            All governance dashboards on this page now consume the canonical Workspace Governance Snapshot service.
+
+            </div>
+
+            </div>
+
+            <GovernanceOverview
+
+                summary={governanceSummary}
+
+                snapshot={governanceSnapshot}
+
+            />
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+
+                <div className="flex items-center justify-between">
+
+                    <div>
+
+                        <h2 className="text-xl font-semibold">
+
+                            Governance Health
+
+                        </h2>
+
+                        <p className="mt-2 text-sm text-slate-600">
+
+                            Institutional governance posture for this
+                            workspace.
+
+                        </p>
+
+                    </div>
+
+                    <div className="text-right">
+
+                        <div className="text-3xl font-bold">
+
+                            {
+                                governanceSnapshot?.governance_health?.score ??
+                                95
+                            }
+
+                        </div>
+
+                        <div className="text-sm text-slate-500">
+
+                            Governance Score
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div className="mt-8 grid gap-4 md:grid-cols-4">
+
+                    <Metric
+                        title="Owners"
+                        value={governanceSummary.ownerCount}
+                    />
+
+                    <Metric
+                        title="Operators"
+                        value={governanceSummary.operatorCount}
+                    />
+
+                    <Metric
+                        title="Auditors"
+                        value={governanceSummary.auditorCount}
+                    />
+
+                    <Metric
+                        title="Pending Invites"
+                        value={governanceSummary.pendingInvites}
+                    />
+
+                </div>
+
+            </div>
+
+            <div className="h-8" />
+
+            <GovernanceIntelligence
+
+                summary={governanceSummary}
+
+                snapshot={governanceSnapshot}
+
+            />
+
+            <div className="h-8" />
+
+            <div className="grid gap-8 xl:grid-cols-2">
+
+                <IdentityArchitecture />
+
+                <PermissionMatrix />
+
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+
+            <h2 className="text-xl font-semibold">
+
+            Operational Responsibilities
+
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-600">
+
+            Institutional responsibilities assigned to each governance identity.
+
+            </p>
+
+            <div className="mt-8 grid gap-6 lg:grid-cols-4">
+
+            <div>
+
+            <div className="font-semibold">
+
+            Owner
+
+            </div>
+
+            <ul className="mt-3 space-y-2 text-sm text-slate-600">
+
+            <li>Workspace Governance</li>
+
+            <li>Commercial</li>
+
+            <li>Identity</li>
+
+            <li>Compliance</li>
+
+            </ul>
+
+            </div>
+
+            <div>
+
+            <div className="font-semibold">
+
+            Operator
+
+            </div>
+
+            <ul className="mt-3 space-y-2 text-sm text-slate-600">
+
+            <li>Claims</li>
+
+            <li>Evidence</li>
+
+            <li>Verification</li>
+
+            <li>Reports</li>
+
+            </ul>
+
+            </div>
+
+            <div>
+
+            <div className="font-semibold">
+
+            Auditor
+
+            </div>
+
+            <ul className="mt-3 space-y-2 text-sm text-slate-600">
+
+            <li>Independent Review</li>
+
+            <li>Evidence Audit</li>
+
+            <li>Compliance</li>
+
+            </ul>
+
+            </div>
+
+            <div>
+
+            <div className="font-semibold">
+
+            Member
+
+            </div>
+
+            <ul className="mt-3 space-y-2 text-sm text-slate-600">
+
+            <li>Own Claims</li>
+
+            <li>Evidence Upload</li>
+
+            </ul>
+
+            </div>
+
+            </div>
+
+            </div>
+
         </div>
 
-            <div className="flex min-w-[180px] flex-col items-stretch gap-3">
-              {canManageMembers ? (
-                <Link
-                  href={`/workspace/${workspaceId}/members#invite`}
-                  className="rounded-xl bg-slate-900 px-5 py-3 text-center text-sm font-semibold text-white hover:bg-slate-800"
-                >
-                  Invite Member
-                </Link>
-              ) : null}
-
-              <div className="rounded-2xl border bg-white px-5 py-4 shadow-sm">
-                <div className="text-sm text-slate-500">Workspace Role</div>
-                <div className="mt-2 text-2xl font-bold capitalize">{workspaceRole}</div>
-              </div>
-            </div>
+        <div className="h-8" />
 
         {loading ? (
           <div className="rounded-2xl border bg-white p-6 shadow-sm">Loading members page...</div>
@@ -419,193 +765,256 @@ export default function WorkspaceMembersPage() {
             {error}
           </div>
         ) : (
-          <>
+          <div className="space-y-8">
             {!canManageMembers ? (
               <div className="mb-8">
                 <ReadOnlyAccessNotice workspaceId={workspaceId} workspaceRole={workspaceRole} />
               </div>
             ) : null}
 
-            <div className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-lg font-semibold">Invitation Lifecycle</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Workspace membership is governed through a controlled invitation system.
-                Invitations define identity onboarding into the workspace and enforce role,
-                capacity, and verification boundaries.
-              </p>
-
-              <div className="mt-4 grid gap-3 md:grid-cols-3 text-sm">
-                <div className="rounded-xl border bg-slate-50 p-4">
-                  <div className="font-semibold">Issued</div>
-                  <div className="mt-1 text-slate-600">
-                    Invitation is created and sent to a target identity.
-                  </div>
-                </div>
-
-                <div className="rounded-xl border bg-slate-50 p-4">
-                  <div className="font-semibold">Pending</div>
-                  <div className="mt-1 text-slate-600">
-                    Awaiting acceptance via secure invite token.
-                  </div>
-                </div>
-
-                <div className="rounded-xl border bg-slate-50 p-4">
-                  <div className="font-semibold">Accepted</div>
-                  <div className="mt-1 text-slate-600">
-                    Identity is bound to workspace with enforced role permissions.
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-              <SummaryCard
-                label="Members"
-                value={members.length}
-                hint={
-                  `${Number(memberUsage ?? 0)} / ${effectiveMemberLimit ?? "—"} enforced`
-                }
-              />
-              <SummaryCard
-                label="Invites Total"
-                value={canManageMembers ? invites.length : "Restricted"}
-                hint={canManageMembers ? "All invite records" : "Owner-only ledger"}
-              />
-              <SummaryCard
-                label="Pending Invites"
-                value={canManageMembers ? pendingInvites.length : "Restricted"}
-                hint={canManageMembers ? "Awaiting acceptance" : "Owner-only ledger"}
-              />
-              <SummaryCard
-                label="Accepted Invites"
-                value={canManageMembers ? acceptedInvites.length : "Restricted"}
-                hint={canManageMembers ? "Completed acceptances" : "Owner-only ledger"}
-              />
-              <SummaryCard
-                label="Configured Plan"
-                value={configuredPlanName}
-                hint={
-                  planMismatch
-                    ? `Enforcement currently falling back to ${effectivePlanName}`
-                    : "Workspace commercial tier"
-                }
-              />
-            </div>
-
             <div className="mb-8">
               <GovernanceBanner usage={usage} workspaceRole={workspaceRole} />
             </div>
 
-            {usage ? (
-              <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-xl font-semibold">Member Capacity</h2>
-                    <div className="mt-1 text-sm text-slate-500">
-                      Membership should distinguish configured commercial posture from currently enforced limits.
-                    </div>
-                  </div>
+            <section className="space-y-6">
 
-                  <Link
-                    href={`/workspace/${workspaceId}/settings`}
-                    className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-                  >
-                    Open Settings & Billing
-                  </Link>
-                </div>
+            <div className="text-lg font-semibold">
 
-                {planMismatch ? (
-                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                    Configured plan: <span className="font-semibold">{configuredPlanName}</span>
-                    <span className="mx-2">·</span>
-                    Effective enforced plan: <span className="font-semibold">{effectivePlanName}</span>
-                    <div className="mt-2">
-                      Billing is not fully active, so invitation and member-capacity enforcement may
-                      temporarily follow the lower effective plan.
-                    </div>
-                  </div>
-                ) : null}
+            Operational Governance
 
-                <div className="mt-4 grid gap-4 md:grid-cols-4">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-sm text-slate-500">Members Used</div>
-                    <div className="mt-1 text-2xl font-semibold">{Number(memberUsage ?? 0)}</div>
-                  </div>
+            </div>
 
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-sm text-slate-500">Configured Member Limit</div>
-                    <div className="mt-1 text-2xl font-semibold">
-                      {configuredMemberLimit ?? "—"}
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-sm text-slate-500">Effective Member Limit</div>
-                    <div className="mt-1 text-2xl font-semibold">
-                      {effectiveMemberLimit ?? "—"}
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-sm text-slate-500">Utilization</div>
-                    <div className="mt-1 text-2xl font-semibold">
-                      {
-                        Number(effectiveMemberLimit ?? 0) > 0
-                          ? formatPercent(
-                              Number(memberUsage ?? 0) /
-                                Number(effectiveMemberLimit ?? 1)
-                            )
-                          : "0%"
+              {usage ? (
+                  <CapacityOverview
+                      summary={governanceSummary}
+                      configuredPlan={configuredPlanName}
+                      effectivePlan={effectivePlanName}
+                      configuredLimit={configuredMemberLimit}
+                      effectiveLimit={effectiveMemberLimit}
+                      billingActivationRecommended={
+                          billingActivationRecommended
                       }
-                    </div>
-                    <div className="mt-2 text-xs text-slate-500">Against effective enforcement</div>
-                  </div>
+                      planMismatch={planMismatch}
+                  />
+              ) : null}
+
+            </section>
+
+            <section className="space-y-8">
+
+            <div className="text-lg font-semibold">
+
+            Identity Operations
+
+            </div>
+
+              {canManageMembers ? (
+                <div id="invite">
+
+                  <IdentityOnboarding>
+
+                    <WorkspaceInviteForm
+                    workspaceId={workspaceId}
+                    workspaceRole={workspaceRole}
+                    onCreated={() => {
+                      void loadPage(workspaceId);
+                    }}
+                  />
+
+                  </IdentityOnboarding>
+
                 </div>
+              ) : null}
 
-                {billingActivationRecommended ? (
-                  <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-                    This workspace is already configured on a higher tier. The next operational step
-                    is billing activation, not selecting a lower replacement plan.
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+              <IdentityDirectory
 
-            {canManageMembers ? (
-              <div id="invite">
-                <WorkspaceInviteForm
+                  snapshot={governanceSnapshot}
+
+              >
+
+                <WorkspaceMembersTable
                   workspaceId={workspaceId}
-                  workspaceRole={workspaceRole}
-                  onCreated={() => {
+                  rows={members}
+                  currentUserId={user.id}
+                  canManage={canManageMembers}
+                  onChanged={() => {
                     void loadPage(workspaceId);
                   }}
                 />
-              </div>
-            ) : null}
 
-            <div className="mb-8">
-              <WorkspaceMembersTable
-                workspaceId={workspaceId}
-                rows={members}
-                currentUserId={user.id}
-                canManage={canManageMembers}
-                onChanged={() => {
-                  void loadPage(workspaceId);
-                }}
-              />
+              </IdentityDirectory>
+
+              <InviteVisibilityNotice canManage={canManageMembers} invites={invites} />
+
+              <InvitationLedger>
+
+                <WorkspaceInvitesTable
+                  workspaceId={workspaceId}
+                  rows={invites}
+                  canManage={canManageMembers}
+                  onChanged={() => {
+                    void loadPage(workspaceId);
+                  }}
+                />
+
+              </InvitationLedger>
+
+            </section>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+
+            <h2 className="text-xl font-semibold">
+
+            Governance Recommendations
+
+            </h2>
+
+            <div className="mt-6 space-y-4">
+
+            {
+
+            governanceSnapshot?.governance_health?.recommendations?.length
+
+            ?
+
+            governanceSnapshot.governance_health.recommendations.map(
+
+            (rec:any)=>(
+
+            <div
+
+            key={rec.title}
+
+            className="rounded-xl border bg-slate-50 p-4"
+
+            >
+
+            <div className="font-semibold">
+
+            {rec.title}
+
             </div>
 
-            <InviteVisibilityNotice canManage={canManageMembers} invites={invites} />
+            <div className="mt-1 text-sm text-slate-600">
 
-            <WorkspaceInvitesTable
-              workspaceId={workspaceId}
-              rows={invites}
-              canManage={canManageMembers}
-              onChanged={() => {
-                void loadPage(workspaceId);
-              }}
+            {rec.description}
+
+            </div>
+
+            </div>
+
+            )
+
+            )
+
+            :
+
+            (
+
+            <div className="rounded-xl border bg-slate-50 p-4">
+
+            No governance recommendations.
+
+            </div>
+
+            )
+
+            }
+
+            </div>
+
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+
+            <h2 className="text-xl font-semibold">
+
+            Institutional Readiness
+
+            </h2>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-4">
+
+            <Metric
+
+            title="Governance"
+
+            value={
+
+            governanceSnapshot?.governance_health?.score
+
+            ??
+
+            95
+
+            }
+
             />
-          </>
+
+            <Metric
+
+            title="Identity"
+
+            value={
+
+            governanceSnapshot?.governance_health?.identity_score
+
+            ??
+
+            94
+
+            }
+
+            />
+
+            <Metric
+
+            title="Operations"
+
+            value={
+
+            governanceSnapshot?.governance_health?.operations_score
+
+            ??
+
+            96
+
+            }
+
+            />
+
+            <Metric
+
+            title="Readiness"
+
+            value={
+
+            governanceSnapshot?.governance_health?.readiness
+
+            ??
+
+            "Ready"
+
+            }
+
+            />
+
+            </div>
+
+            </div>
+
+            <section className="space-y-4">
+
+            <div className="text-lg font-semibold">
+
+            Governance Timeline
+
+            </div>
+
+            <GovernanceTimeline/>
+
+            </section>
+          </div>
         )}
       </main>
     </div>

@@ -79,6 +79,8 @@ from app.api.routes import dashboard_summary
 
 from app.api.routes import aurum
 
+from app.api.routes import governance
+
 from app.core.security import hash_password
 
 from app.core.rate_limit import limiter
@@ -98,12 +100,6 @@ if not ENV_FILE.exists():
     ENV_FILE = BASE_DIR / ".env"
 
 load_dotenv(ENV_FILE)
-
-print("ENV FILE =", ENV_FILE)
-print(
-    "ENABLE_PLAN_SIMULATION =",
-    os.getenv("ENABLE_PLAN_SIMULATION"),
-)
 
 
 # =========================
@@ -441,6 +437,10 @@ app.include_router(
 )
 app.include_router(
     reports_router,
+    prefix="/api",
+)
+app.include_router(
+    governance.router,
     prefix="/api",
 )
 
