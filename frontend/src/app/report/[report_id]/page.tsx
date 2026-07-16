@@ -1,7 +1,4 @@
-// frontend/src/app/report/[report_id]/page.tsx
-
 import { notFound } from "next/navigation";
-import { headers } from "next/headers";
 
 type Props = {
     params: Promise<{
@@ -16,17 +13,14 @@ export default async function ReportPage(
 ) {
     const { report_id } = await params;
 
-    const host = (await headers()).get("host");
-
-    const protocol =
-        host?.includes("localhost")
-            ? "http"
-            : "https";
-
-    const baseUrl = `${protocol}://${host}`;
+    const backendBase = (
+        process.env.NEXT_PUBLIC_API_BASE ||
+        process.env.NEXT_PUBLIC_API_URL ||
+        "http://127.0.0.1:8001"
+    ).replace(/\/+$/, "");
 
     const response = await fetch(
-        `${baseUrl}/api/report/${report_id}`,
+        `${backendBase}/report/${report_id}`,
         {
             cache: "no-store",
         },
