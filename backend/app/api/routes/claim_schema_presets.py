@@ -3,6 +3,31 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
+
+from app.api.authorization_deps import (
+    require_workspace_context,
+)
+
+from app.api.deps import (
+    get_current_user,
+)
+
+from app.models.user import (
+    User,
+)
+
+from app.services.authorization.engine.authorization_service import (
+    AuthorizationService,
+)
+
+from app.services.authorization.registry.capability_catalog import (
+    REPORT_READ,
+)
+
+from app.services.entitlements import (
+    enforce_workspace_page_access,
+)
+
 from app.models.claim_schema_preset import (
     ClaimSchemaPreset,
 )
@@ -18,8 +43,30 @@ router = APIRouter()
 )
 def get_claim_presets(
     workspace_id: int,
+
     db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        get_current_user,
+    ),
+
+    context = Depends(
+        require_workspace_context(
+            "claim_templates",
+        )
+    ),
 ):
+    AuthorizationService.require_capability(
+        context.access,
+        REPORT_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="claim_templates",
+        action="access Claim Templates",
+    )
 
     ensure_system_presets(
         db,

@@ -54,6 +54,9 @@ from app.models.review_statement import (
 from app.models.workspace_preferences import (
     WorkspacePreferences,
 )
+from app.models.currency_rate import (
+    CurrencyRate,
+)
 
 
 __all__ = [
@@ -83,4 +86,5 @@ __all__ = [
     "TradeTagMap",
     "ReviewStatement",
     "WorkspacePreferences",
+    "CurrencyRate",
 ]

@@ -280,6 +280,48 @@ export default function WorkspaceSettingsPage() {
 
   const [currency, setCurrency] = useState("USD");
 
+  const SUPPORTED_CURRENCIES = [
+
+      "USD",
+      "EUR",
+      "GBP",
+      "JPY",
+      "CHF",
+      "CAD",
+      "AUD",
+      "NZD",
+      "SGD",
+      "HKD",
+      "SEK",
+      "NOK",
+      "DKK",
+
+      // Africa
+
+      "ZAR",
+      "TZS",
+      "KES",
+      "UGX",
+      "NGN",
+      "EGP",
+
+      // Middle East
+
+      "AED",
+      "SAR",
+      "QAR",
+
+      // Asia
+
+      "CNY",
+      "INR",
+      "KRW",
+      "THB",
+      "MYR",
+      "IDR",
+
+  ];
+
   const [dateFormat, setDateFormat] = useState("YYYY-MM-DD");
 
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -305,27 +347,26 @@ export default function WorkspaceSettingsPage() {
 
           platformReadinessRes,
 
-          simulationRes,
-
       ] = await Promise.all([
 
-          api.getWorkspaceSettings(
-              targetWorkspaceId
-          ),
+          api.getWorkspaceSettings(targetWorkspaceId),
 
-          api.getWorkspaceUsage(
-              targetWorkspaceId
-          ),
+          api.getWorkspaceUsage(targetWorkspaceId),
 
-          api.getWorkspacePlatformReadiness(
-              targetWorkspaceId
-          ),
-
-          api.getWorkspacePlanSimulation(
-              targetWorkspaceId
-          ),
+          api.getWorkspacePlatformReadiness(targetWorkspaceId),
 
       ]);
+
+      let simulationRes = null;
+
+      if (settingsRes.is_internal) {
+
+          simulationRes =
+              await api.getWorkspacePlanSimulation(
+                  targetWorkspaceId
+              );
+
+      }
 
       setSettings(settingsRes);
       setUsage(usageRes);
@@ -384,8 +425,7 @@ export default function WorkspaceSettingsPage() {
     void loadPage(workspaceId);
   }, [workspaceId, workspaceMembership]);
 
-  async function handleSave(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleSave() {
 
     if (!workspaceId || !canEdit) return;
 
@@ -522,17 +562,29 @@ export default function WorkspaceSettingsPage() {
                   />
 
                   <WorkspaceProfileCard
+
                       canEdit={canEdit}
+
                       saving={saving}
+
                       name={name}
+
                       description={description}
+
+                      currency={currency}
+
+                      setCurrency={setCurrency}
+
                       setName={setName}
+
                       setDescription={setDescription}
+
                       onSubmit={() => {
-                          void handleSave(
-                              {} as React.FormEvent<HTMLFormElement>
-                          );
+
+                          void handleSave();
+
                       }}
+
                   />
 
                   <WorkspaceDangerZoneCard
@@ -629,36 +681,30 @@ export default function WorkspaceSettingsPage() {
                       readOnly
                   />
 
-                  <InternalPlanSimulationCard
+                  {settings?.is_internal && (
 
-                      workspaceId={
-                          workspaceId
-                      }
+                      <InternalPlanSimulationCard
 
-                      simulation={
-                          simulation
-                      }
+                          workspaceId={workspaceId}
 
-                      onChanged={
-                          async ()=>{
+                          simulation={simulation}
+
+                          onChanged={async () => {
 
                               const snapshot =
                                   await api.getWorkspacePlanSimulation(
                                       workspaceId
                                   );
 
-                              setSimulation(
-                                  snapshot
-                              );
+                              setSimulation(snapshot);
 
-                              await loadPage(
-                                  workspaceId
-                              );
+                              await loadPage(workspaceId);
 
-                          }
-                      }
+                          }}
 
-                  />
+                      />
+
+                  )}
 
                   {!canEdit ? (
                     <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-amber-800 shadow-sm">

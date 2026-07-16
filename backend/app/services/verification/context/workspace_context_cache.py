@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
@@ -50,10 +52,19 @@ def get_workspace_context_cache(
     workspace_id: int,
 ) -> WorkspaceContextCache:
 
+    cache_start = time.perf_counter()
+
+    print()
+    print("=" * 80)
+    print("WORKSPACE CACHE PROFILE")
+    print("=" * 80)
+
     cached = _CACHE.get(workspace_id)
 
     if cached is not None:
         return cached
+
+    workspace_start = time.perf_counter()
 
     workspace = (
         db.query(Workspace)
@@ -63,6 +74,13 @@ def get_workspace_context_cache(
         .first()
     )
 
+    print(
+        f"workspace query = "
+        f"{time.perf_counter()-workspace_start:.4f}s"
+    )
+
+    trades_start = time.perf_counter()
+
     trades = (
         db.query(Trade)
         .filter(
@@ -71,6 +89,13 @@ def get_workspace_context_cache(
         .all()
     )
 
+    print(
+        f"trades query = "
+        f"{time.perf_counter()-trades_start:.4f}s"
+    )
+
+    evidence_start = time.perf_counter()
+
     evidence_records = (
         db.query(EvidenceRecord)
         .filter(
@@ -78,6 +103,13 @@ def get_workspace_context_cache(
         )
         .all()
     )
+
+    print(
+        f"evidence records query = "
+        f"{time.perf_counter()-evidence_start:.4f}s"
+    )
+
+    integrity_scan_start = time.perf_counter()
 
     integrity_scan = (
         db.query(IntegrityScan)
@@ -90,6 +122,13 @@ def get_workspace_context_cache(
         .first()
     )
 
+    print(
+        f"integrity scan query = "
+        f"{time.perf_counter()-integrity_scan_start:.4f}s"
+    )
+
+    integrity_alerts_start = time.perf_counter()
+
     integrity_alerts = (
         db.query(IntegrityAlert)
         .filter(
@@ -98,6 +137,13 @@ def get_workspace_context_cache(
         .all()
     )
 
+    print(
+        f"integrity alerts query = "
+        f"{time.perf_counter()-integrity_alerts_start:.4f}s"
+    )
+
+    audit_events_start = time.perf_counter()
+
     audit_events = (
         db.query(AuditEvent)
         .filter(
@@ -105,6 +151,13 @@ def get_workspace_context_cache(
         )
         .all()
     )
+
+    print(
+        f"audit events query = "
+        f"{time.perf_counter()-audit_events_start:.4f}s"
+    )
+
+
 
     audit_events_by_claim = {}
 
@@ -123,6 +176,8 @@ def get_workspace_context_cache(
             [],
         ).append(event)
 
+    broker_connections_start = time.perf_counter()
+
     broker_connections = (
         db.query(BrokerConnection)
         .filter(
@@ -130,6 +185,13 @@ def get_workspace_context_cache(
         )
         .all()
     )
+
+    print(
+        f"broker connections query = "
+        f"{time.perf_counter()-broker_connections_start:.4f}s"
+    )
+
+    review_statements_start = time.perf_counter()
 
     review_statements = (
         db.query(ReviewStatement)
@@ -143,6 +205,13 @@ def get_workspace_context_cache(
         .all()
     )
 
+    print(
+        f"review statements query = "
+        f"{time.perf_counter()-review_statements_start:.4f}s"
+    )
+
+    claim_disputes_start = time.perf_counter()
+
     claim_disputes = (
         db.query(ClaimDispute)
         .join(
@@ -154,6 +223,13 @@ def get_workspace_context_cache(
         )
         .all()
     )
+
+    print(
+        f"claim disputes query = "
+        f"{time.perf_counter()-claim_disputes_start:.4f}s"
+    )
+
+
 
     claim_disputes_by_claim = {}
 
@@ -180,6 +256,14 @@ def get_workspace_context_cache(
     )
 
     _CACHE[workspace_id] = cached
+
+    print(
+        f"WORKSPACE CACHE TOTAL = "
+        f"{time.perf_counter()-cache_start:.4f}s"
+    )
+
+    print("=" * 80)
+    print()
 
     return cached
 

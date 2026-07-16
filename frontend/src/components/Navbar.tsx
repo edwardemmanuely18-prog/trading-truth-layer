@@ -242,10 +242,44 @@ export default function Navbar({ workspaceId }: Props) {
     startsWithPath(currentPath, `${base}/evidence-analytics`) ||
     startsWithPath(currentPath, `${base}/risk-analytics`) ||
     startsWithPath(currentPath, `${base}/due-diligence`) ||
+    startsWithPath(currentPath, `${base}/report-center`);
+
+  const investigationActive =
     startsWithPath(
-      currentPath,
-      `${base}/report-center`
+        currentPath,
+        `${base}/investigation-overview`,
+    ) ||
+
+    startsWithPath(
+        currentPath,
+        `${base}/investigation-timeline`,
+    ) ||
+
+    startsWithPath(
+        currentPath,
+        `${base}/investigation-evidence`,
+    ) ||
+
+    startsWithPath(
+        currentPath,
+        `${base}/investigation-domains`,
+    ) ||
+
+    startsWithPath(
+        currentPath,
+        `${base}/investigation-findings`,
+    ) ||
+
+    startsWithPath(
+        currentPath,
+        `${base}/investigation-reports`,
+    ) ||
+
+    startsWithPath(
+        currentPath,
+        `${base}/investigations`,
     );
+
 
   const publicActive =
     startsWithPath(currentPath, `${base}/public-records`) ||
@@ -263,25 +297,26 @@ export default function Navbar({ workspaceId }: Props) {
     startsWithPath(currentPath, `${base}/members`) ||
     startsWithPath(currentPath, `${base}/roles`) ||
     startsWithPath(currentPath, `${base}/billing`) ||
-    startsWithPath(currentPath, `${base}/settings`) ||
-    startsWithPath(currentPath, `${base}/audit-logs`);
-
+    startsWithPath(currentPath, `${base}/settings`);
+    
   const activeDomain =
     dashboardActive
-      ? "dashboard"
-      : intakeActive
-        ? "intake"
-        : registryActive
-          ? "registry"
-          : claimOperationsActive
-            ? "claims"
-            : trustActive
-              ? "trust"
-              : publicActive
-                ? "public"
-                : administrationActive
-                  ? "admin"
-                  : "dashboard";
+        ? "dashboard"
+        : intakeActive
+            ? "intake"
+            : registryActive
+                ? "registry"
+                : claimOperationsActive
+                    ? "claims"
+                    : trustActive
+                        ? "trust"
+                        : investigationActive
+                            ? "investigation"
+                            : publicActive
+                                ? "public"
+                                : administrationActive
+                                    ? "admin"
+                                    : "dashboard";
 
   function pageEnabled(
       page: string,
@@ -547,6 +582,72 @@ export default function Navbar({ workspaceId }: Props) {
 
     const visibleTrustLinks = trustLinks;
 
+  const investigationLinks = resolvedWorkspaceId
+    ? [
+
+        {
+            href: `${base}/investigation-overview`,
+            label: "Overview",
+            active: startsWithPath(
+                currentPath,
+                `${base}/investigation-overview`
+            ),
+            feature: "investigations",
+        },
+
+        {
+            href: `${base}/investigation-timeline`,
+            label: "Timeline",
+            active: startsWithPath(
+                currentPath,
+                `${base}/investigation-timeline`
+            ),
+            feature: "investigations",
+        },
+
+        {
+            href: `${base}/investigation-evidence`,
+            label: "Evidence",
+            active: startsWithPath(
+                currentPath,
+                `${base}/investigation-evidence`
+            ),
+            feature: "investigations",
+        },
+
+        {
+            href: `${base}/investigation-domains`,
+            label: "Domains",
+            active: startsWithPath(
+                currentPath,
+                `${base}/investigation-domains`
+            ),
+            feature: "investigations",
+        },
+
+        {
+            href: `${base}/investigation-findings`,
+            label: "Findings",
+            active: startsWithPath(
+                currentPath,
+                `${base}/investigation-findings`
+            ),
+            feature: "investigations",
+        },
+
+        {
+            href: `${base}/investigation-reports`,
+            label: "Reports",
+            active: startsWithPath(
+                currentPath,
+                `${base}/investigation-reports`
+            ),
+            feature: "investigations",
+        },
+
+    ]
+    : [];
+
   const publicLinks = resolvedWorkspaceId
     ? [
         {
@@ -622,13 +723,6 @@ export default function Navbar({ workspaceId }: Props) {
             ),
           feature: "public_profiles",
         },
-
-        {
-          href: `${base}/search`,
-          label: "Search",
-          active: startsWithPath(currentPath, `${base}/search`),
-          feature: "search",
-        },
       ]
     : [];
 
@@ -658,29 +752,25 @@ export default function Navbar({ workspaceId }: Props) {
           active: startsWithPath(currentPath, `${base}/settings`),
           feature: "settings",
         },
-        {
-          href: `${base}/audit-logs`,
-          label: "Audit Logs",
-          active: startsWithPath(currentPath, `${base}/audit-logs`),
-          feature: "audit_logs",
-        },
       ]
     : [];
 
   const contextualLinks =
     activeDomain === "dashboard"
-      ? dashboardLinks
-      : activeDomain === "intake"
-        ? intakeLinks
-        : activeDomain === "registry"
-          ? registryLinks
-          : activeDomain === "claims"
-            ? claimLinks
-            : activeDomain === "trust"
-              ? visibleTrustLinks
-              : activeDomain === "public"
-                ? publicLinks
-                : adminLinks;
+        ? dashboardLinks
+        : activeDomain === "intake"
+            ? intakeLinks
+            : activeDomain === "registry"
+                ? registryLinks
+                : activeDomain === "claims"
+                    ? claimLinks
+                    : activeDomain === "trust"
+                        ? visibleTrustLinks
+                        : activeDomain === "investigation"
+                            ? investigationLinks
+                            : activeDomain === "public"
+                                ? publicLinks
+                                : adminLinks;
 
   function renderTopButton(
 
@@ -932,6 +1022,17 @@ export default function Navbar({ workspaceId }: Props) {
             {
             renderTopButton(
                 [
+                    "investigations",
+                ],
+                `${base}/investigation-overview`,
+                "Investigation Center",
+                activeDomain === "investigation",
+            )
+            }
+
+            {
+            renderTopButton(
+                [
                     "public_records",
                     "verification_routes",
                     "trust_directory",
@@ -939,7 +1040,6 @@ export default function Navbar({ workspaceId }: Props) {
                     "external_reviews",
                     "evidence_graph",
                     "public_profiles",
-                    "search",
                 ],
                 publicClaimsHref,
                 "Public Trust Layer",
@@ -954,7 +1054,6 @@ export default function Navbar({ workspaceId }: Props) {
                     "roles",
                     "billing",
                     "settings",
-                    "audit_logs",
                 ],
                 membersHref,
                 "Administration",

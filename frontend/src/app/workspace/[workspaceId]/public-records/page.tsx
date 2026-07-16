@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Navbar from "../../../../components/Navbar";
+import {
+  apiFetch,
+} from "../../../../lib/api";
 import { useAuth } from "../../../../components/AuthProvider";
 
 type PublicClaimRow = {
@@ -141,30 +144,14 @@ function trustBandBadgeClass(value?: string | null) {
   return "border-slate-200 bg-slate-100 text-slate-700";
 }
 
-function resolveApiBase() {
-  const envBase =
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    process.env.NEXT_PUBLIC_API_BASE ||
-    process.env.NEXT_PUBLIC_BACKEND_URL;
+async function fetchWorkspacePublicClaims(
+  workspaceId: number,
+): Promise<PublicClaimRow[]> {
 
-  return (envBase || "http://localhost:8000").replace(/\/+$/, "");
-}
+  return apiFetch<PublicClaimRow[]>(
+    `/workspaces/${workspaceId}/public-claims`,
+  );
 
-async function fetchWorkspacePublicClaims(workspaceId: number): Promise<PublicClaimRow[]> {
-  const base = resolveApiBase();
-
-  const response = await fetch(`${base}/api/workspaces/${workspaceId}/public-claims`, {
-    method: "GET",
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const raw = await response.text();
-    throw new Error(raw || `Failed to load public records (${response.status})`);
-  }
-
-  const data = await response.json();
-  return Array.isArray(data) ? data : [];
 }
 
 export default function WorkspacePublicRecordsPage() {
@@ -183,6 +170,7 @@ export default function WorkspacePublicRecordsPage() {
   }, [workspaceId, workspaces]);
 
   const [rows, setRows] = useState<PublicClaimRow[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -244,6 +232,49 @@ export default function WorkspacePublicRecordsPage() {
   const publicCount = rows.filter((row) => normalizeText(row.scope?.visibility) === "public").length;
   const validIntegrityCount = rows.filter((row) => normalizeText(row.integrity_status) === "valid").length;
 
+  const filteredRows = rows.filter((row) => {
+
+      const query = searchQuery
+          .trim()
+          .toLowerCase();
+
+      if (!query) {
+          return true;
+      }
+
+      return (
+
+          String(row.claim_schema_id)
+              .includes(query)
+
+          ||
+
+          (row.name ?? "")
+              .toLowerCase()
+              .includes(query)
+
+          ||
+
+          (row.claim_hash ?? "")
+              .toLowerCase()
+              .includes(query)
+
+          ||
+
+          (row.verification_status ?? "")
+              .toLowerCase()
+              .includes(query)
+
+          ||
+
+          (row.integrity_status ?? "")
+              .toLowerCase()
+              .includes(query)
+
+      );
+
+  });
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <Navbar workspaceId={workspaceId} />
@@ -304,15 +335,61 @@ export default function WorkspacePublicRecordsPage() {
           </div>
         </div>
 
+        <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
+
+            <h2 className="text-xl font-semibold">
+
+                Public Record Registry
+
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-500">
+
+                Search workspace public claims.
+
+            </p>
+
+            <input
+
+                type="text"
+
+                value={searchQuery}
+
+                onChange={(e) =>
+
+                    setSearchQuery(
+                        e.target.value,
+                    )
+
+                }
+
+                placeholder="Search claim name, claim id, status or hash..."
+
+                className="
+                    mt-4
+                    w-full
+                    rounded-xl
+                    border
+                    border-slate-300
+                    px-4
+                    py-3
+                    outline-none
+                    focus:border-slate-900
+                "
+
+            />
+
+        </div>
+
         {loading ? (
           <div className="rounded-2xl border bg-white p-6 shadow-sm">Loading workspace public records...</div>
         ) : error ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-700">{error}</div>
-        ) : rows.length === 0 ? (
+        ) : filteredRows.length === 0 ? (
           <div className="rounded-2xl border bg-white p-10 shadow-sm">
-            <h2 className="text-2xl font-semibold">No public records yet</h2>
+            <h2 className="text-2xl font-semibold">No matching public records</h2>
             <p className="mt-3 max-w-2xl text-slate-600">
-              This workspace does not currently have any published or locked public-facing claims.
+              No public records matched your search criteria.
               Create, verify, publish, and lock claims to expose them through the public trust layer.
             </p>
 
@@ -334,7 +411,7 @@ export default function WorkspacePublicRecordsPage() {
           </div>
         ) : (
           <div className="space-y-5">
-            {rows.map((row) => {
+            {filteredRows.map((row) => {
               const publicHref = row.public_view_path || `/claim/${row.claim_schema_id}/public`;
               const verifyHref =
                 row.verify_path || (row.claim_hash ? `/verify/${row.claim_hash}` : null);

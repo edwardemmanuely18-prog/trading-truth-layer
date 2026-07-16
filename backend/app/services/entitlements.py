@@ -366,6 +366,8 @@ PLAN_FEATURES = {
         "external_review": False,
         "team_management": False,
 
+        "investigations": False,
+
     },
 
     "starter": {
@@ -398,6 +400,8 @@ PLAN_FEATURES = {
         "allocator_workflows": False,
         "audit_exports": False,
         "team_management": False,
+
+        "investigations": False,
 
     },
 
@@ -432,6 +436,8 @@ PLAN_FEATURES = {
         "audit_exports": False,
         "team_management": False,
 
+        "investigations": False,
+
     },
 
     "growth": {
@@ -464,6 +470,8 @@ PLAN_FEATURES = {
         "allocator_workflows": True,
         "audit_exports": False,
         "team_management": True,
+
+        "investigations": False,
 
     },
 
@@ -498,6 +506,8 @@ PLAN_FEATURES = {
         "templates": True,
         "report_center": True,
         "team_management": True,
+
+        "investigations": True,
 
     },
 
@@ -544,6 +554,14 @@ PLAN_PAGE_ACCESS = {
         "evidence_analytics": False,
         "risk_analytics": False,
         "allocator_reports": False,
+
+        "investigations": False,
+        "investigation_overview": False,
+        "investigation_timeline": False,
+        "investigation_evidence": False,
+        "investigation_domains": False,
+        "investigation_findings": False,
+        "investigation_reports": False,
 
         # Public Layer
         "public_records": False,
@@ -598,6 +616,14 @@ PLAN_PAGE_ACCESS = {
         "allocator_reports": False,
         "report_center": False,
 
+        "investigations": False,
+        "investigation_overview": False,
+        "investigation_timeline": False,
+        "investigation_evidence": False,
+        "investigation_domains": False,
+        "investigation_findings": False,
+        "investigation_reports": False,
+
         # Public Layer
         "public_records": True,
         "verification_routes": True,
@@ -646,6 +672,14 @@ PLAN_PAGE_ACCESS = {
         "allocator_reports": False,
         "report_center": True,
 
+        "investigations": False,
+        "investigation_overview": False,
+        "investigation_timeline": False,
+        "investigation_evidence": False,
+        "investigation_domains": False,
+        "investigation_findings": False,
+        "investigation_reports": False,
+
         "public_records": True,
         "verification_routes": True,
         "trust_directory": True,
@@ -691,6 +725,14 @@ PLAN_PAGE_ACCESS = {
         "risk_analytics": True,
         "allocator_reports": True,
         "report_center": True,
+
+        "investigations": False,
+        "investigation_overview": False,
+        "investigation_timeline": False,
+        "investigation_evidence": False,
+        "investigation_domains": False,
+        "investigation_findings": False,
+        "investigation_reports": False,
 
         "public_records": True,
         "verification_routes": True,
@@ -776,6 +818,7 @@ PLAN_COMMERCIAL_SERVICES = {
 
         "Institutional Governance Workflow",
         "Allocator Due Diligence Workflow",
+        "Institutional Investigation System",
         "Institutional Reporting Workflow",
         "Audit Export Workflow",
         "Enterprise Administration Workflow",
@@ -1203,11 +1246,24 @@ def get_workspace_usage_counts(workspace_id: int, db: Session) -> dict[str, int]
 
     consumed_trade_count = get_consumed_trade_count(workspace)
 
-    claim_count = (
+    total_claim_count = (
         db.query(ClaimSchema)
         .filter(
             ClaimSchema.workspace_id == workspace_id,
-            ClaimSchema.status.in_(["published", "locked"]),
+        )
+        .count()
+    )
+
+    governed_claim_count = (
+        db.query(ClaimSchema)
+        .filter(
+            ClaimSchema.workspace_id == workspace_id,
+            ClaimSchema.status.in_(
+                [
+                    "published",
+                    "locked",
+                ]
+            ),
         )
         .count()
     )
@@ -1215,16 +1271,25 @@ def get_workspace_usage_counts(workspace_id: int, db: Session) -> dict[str, int]
     storage_mb_used = 0
 
     return {
+
         "members": member_count,
 
-        # LIVE LEDGER
+        # CLAIM METRICS
+
+        "claims": total_claim_count,
+
+        "governed_claims": governed_claim_count,
+
+        # TRADE METRICS
+
         "ledger_trades": active_trade_count,
 
-        # GOVERNANCE / BILLING
         "trades": consumed_trade_count,
 
-        "claims": claim_count,
+        # STORAGE
+
         "storage_mb": storage_mb_used,
+
     }
 
 
@@ -1278,6 +1343,9 @@ def build_entitlement_snapshot(workspace_id: int, db: Session) -> dict[str, Any]
             "active_trades": live_trade_count,
 
             "claims": usage["claims"],
+
+            "governed_claims":
+                usage["governed_claims"],
 
             "storage_mb": usage["storage_mb"],
         },
@@ -1392,18 +1460,30 @@ def enforce_workspace_billing_access(
     if billing_status == "pending_manual_review":
         raise HTTPException(
             status_code=403,
-            detail=(
-                f"Workspace billing is pending manual review. "
-                f"You cannot {action_label} yet."
-            ),
+            detail={
+                "code": "billing_required",
+                "workspace_id": workspace_id,
+                "billing_status": billing_status,
+                "upgrade_required": True,
+                "message": (
+                    f"Workspace billing is pending manual review. "
+                    f"You cannot {action_label} yet."
+                ),
+            },
         )
 
     raise HTTPException(
         status_code=403,
-        detail=(
-            f"Workspace billing status is '{billing_status}'. "
-            f"You cannot {action_label} until billing is active."
-        ),
+        detail={
+            "code": "billing_required",
+            "workspace_id": workspace_id,
+            "billing_status": billing_status,
+            "upgrade_required": True,
+            "message": (
+                f"Workspace billing status is '{billing_status}'. "
+                f"You cannot {action_label} until billing is active."
+            ),
+        },
     )
 
 
@@ -1451,7 +1531,7 @@ def enforce_claim_creation_allowed(
     limits = get_workspace_plan_limits(workspace)
 
     enforce_limit_not_reached(
-        used=usage["claims"],
+        used=usage["governed_claims"],
         limit=limits["claims"],
         resource_label="claim",
         workspace_id=workspace_id,

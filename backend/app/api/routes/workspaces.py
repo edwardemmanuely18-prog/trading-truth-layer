@@ -48,6 +48,28 @@ from app.services.plan_simulation import (
     PlanSimulationService,
 )
 
+from app.services.authorization.registry.capability_catalog import (
+    SETTINGS_UPDATE,
+)
+
+from app.api.authorization_deps import (
+    require_workspace_context,
+)
+
+from app.services.authorization.engine.authorization_service import (
+    AuthorizationService,
+)
+
+from app.services.authorization.registry.capability_catalog import (
+    BROKER_CONNECTION_READ,
+    BROKER_CONNECTION_WRITE,
+    EVIDENCE_IMPORT,
+)
+
+from app.services.entitlements import (
+    enforce_workspace_page_access,
+)
+
 
 from secrets import token_urlsafe
 
@@ -496,18 +518,14 @@ def get_workspace_dashboard(
     workspace_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+
+    context = Depends(
+        require_workspace_context(
+            "dashboard",
+        )
+    ),
 ):
-    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-
-    require_workspace_member(workspace_id, current_user, db)
-
-    enforce_internal_workspace_access(
-        workspace,
-        current_user,
-        db,
-    )
+    workspace = context.workspace
 
     member_count = db.query(WorkspaceMembership).filter(
         WorkspaceMembership.workspace_id == workspace_id
@@ -531,32 +549,14 @@ def get_workspace_snapshot(
     workspace_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+
+    context = Depends(
+        require_workspace_context(
+            "dashboard",
+        )
+    ),
 ):
-    workspace = (
-        db.query(Workspace)
-        .filter(
-            Workspace.id == workspace_id
-        )
-        .first()
-    )
-
-    if workspace is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Workspace not found",
-        )
-
-    require_workspace_member(
-        workspace_id,
-        current_user,
-        db,
-    )
-
-    enforce_internal_workspace_access(
-        workspace,
-        current_user,
-        db,
-    )
+    workspace = context.workspace
 
     trade_count = (
         db.query(Trade)
@@ -597,18 +597,14 @@ def get_workspace_settings(
     workspace_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+
+    context = Depends(
+        require_workspace_context(
+            "settings",
+        )
+    ),
 ):
-    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-
-    require_workspace_member(workspace_id, current_user, db)
-
-    enforce_internal_workspace_access(
-        workspace,
-        current_user,
-        db,
-    )
+    workspace = context.workspace
 
     settings = serialize_workspace_settings(workspace)
 
@@ -681,12 +677,19 @@ def update_workspace_settings(
     payload: UpdateWorkspaceSettingsPayload,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
-    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
 
-    require_workspace_owner(workspace_id, current_user, db)
+    context = Depends(
+        require_workspace_context(
+            "settings",
+        )
+    ),
+):
+    workspace = context.workspace
+
+    AuthorizationService.require_capability(
+        context.access,
+        SETTINGS_UPDATE,
+    )
 
     workspace.name = payload.name.strip()
     workspace.description = (payload.description or "").strip() or None
@@ -768,30 +771,14 @@ def get_workspace_usage(
     workspace_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
-    workspace = (
-        db.query(Workspace)
-        .filter(Workspace.id == workspace_id)
-        .first()
-    )
 
-    if not workspace:
-        raise HTTPException(
-            status_code=404,
-            detail="Workspace not found",
+    context = Depends(
+        require_workspace_context(
+            "billing",
         )
-
-    require_workspace_member(
-        workspace_id,
-        current_user,
-        db,
-    )
-
-    enforce_internal_workspace_access(
-        workspace,
-        current_user,
-        db,
-    )
+    ),
+):
+    workspace = context.workspace
 
     entitlement = build_entitlement_snapshot(
         workspace_id,
@@ -866,30 +853,14 @@ def get_workspace_entitlements(
     workspace_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
-    workspace = (
-        db.query(Workspace)
-        .filter(Workspace.id == workspace_id)
-        .first()
-    )
 
-    if not workspace:
-        raise HTTPException(
-            status_code=404,
-            detail="Workspace not found",
+    context = Depends(
+        require_workspace_context(
+            "billing",
         )
-
-    require_workspace_member(
-        workspace_id,
-        current_user,
-        db,
-    )
-
-    enforce_internal_workspace_access(
-        workspace,
-        current_user,
-        db,
-    )
+    ),
+):
+    workspace = context.workspace
 
     entitlement = build_entitlement_snapshot(
         workspace_id,
@@ -1205,6 +1176,26 @@ def list_broker_connections(
         db,
     )
 
+    context = require_workspace_context(
+        "broker_connections",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        BROKER_CONNECTION_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="broker_connections",
+        action="access Broker Connections",
+    )
+
     enforce_internal_workspace_access(
         workspace,
         current_user,
@@ -1284,6 +1275,26 @@ def create_broker_connection(
         db,
     )
 
+    context = require_workspace_context(
+        "broker_connections",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        BROKER_CONNECTION_WRITE,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="broker_connections",
+        action="create Broker Connection",
+    )
+
     adapter = (
         db.query(BrokerAdapter)
         .filter(
@@ -1337,6 +1348,26 @@ def verify_broker_connection(
         workspace_id,
         current_user,
         db,
+    )
+
+    context = require_workspace_context(
+        "broker_connections",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        BROKER_CONNECTION_WRITE,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="broker_connections",
+        action="verify Broker Connection",
     )
 
     connection = (
@@ -1559,6 +1590,26 @@ def discover_broker_accounts(
         db,
     )
 
+    context = require_workspace_context(
+        "broker_connections",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        BROKER_CONNECTION_WRITE,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="broker_connections",
+        action="discover Broker Accounts",
+    )
+
     connection = (
         db.query(BrokerConnection)
         .filter(
@@ -1659,6 +1710,26 @@ def list_discovered_accounts(
         workspace_id,
         current_user,
         db,
+    )
+
+    context = require_workspace_context(
+        "broker_connections",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        BROKER_CONNECTION_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="broker_connections",
+        action="view Broker Accounts",
     )
 
     rows = (
@@ -1809,6 +1880,26 @@ def list_sync_jobs(
         db,
     )
 
+    context = require_workspace_context(
+        "broker_connections",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        BROKER_CONNECTION_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="broker_connections",
+        action="view Sync Jobs",
+    )
+
     jobs = (
         db.query(SyncJob)
         .filter(
@@ -1877,6 +1968,26 @@ def create_sync_job(
         workspace_id,
         current_user,
         db,
+    )
+
+    context = require_workspace_context(
+        "broker_connections",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        BROKER_CONNECTION_WRITE,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="broker_connections",
+        action="create Sync Job",
     )
 
     connection = (
@@ -1951,6 +2062,26 @@ def execute_sync_job_route(
         db,
     )
 
+    context = require_workspace_context(
+        "broker_connections",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        BROKER_CONNECTION_WRITE,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="broker_connections",
+        action="execute Sync Job",
+    )
+
     from app.services.trade_import.sync_executor import (
         execute_sync_job,
     )
@@ -1994,6 +2125,26 @@ async def create_import_job(
         workspace_id,
         current_user,
         db,
+    )
+
+    context = require_workspace_context(
+        "import_center",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        EVIDENCE_IMPORT,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="import_center",
+        action="upload import file",
     )
 
     job = ImportJob(

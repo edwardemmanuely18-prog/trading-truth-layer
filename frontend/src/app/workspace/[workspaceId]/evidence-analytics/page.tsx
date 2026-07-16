@@ -1,10 +1,14 @@
 "use client";
 
-import { use } from "react";
 import {
-  useEffect,
-  useState,
+    use,
+    useEffect,
+    useState,
 } from "react";
+
+import {
+    useRouter,
+} from "next/navigation";
 
 import Navbar from "../../../../components/Navbar";
 
@@ -29,6 +33,8 @@ export default function Page(
     Number(
       resolved.workspaceId
     );
+
+  const router = useRouter();
 
   const [report, setReport] =
     useState<EvidenceAnalyticsResponse | null>(
@@ -80,19 +86,41 @@ export default function Page(
 
         setReport(data);
 
-      } catch (err) {
+      } catch (err: any) {
 
-        console.error(err);
+          console.error(err);
+
+          if (
+
+              err?.payload?.code === "page_locked" ||
+
+              err?.payload?.upgrade_required === true
+
+          ) {
+
+              router.replace(
+                  `/workspace/${workspaceId}/billing?upgrade=true`
+              );
+
+              return;
+
+          }
+
+          throw err;
 
       } finally {
 
-        setLoading(false);
+          setLoading(false);
 
       }
 
     }
 
-    load();
+    if (!Number.isNaN(workspaceId)) {
+
+        load();
+
+    }
 
   }, [workspaceId]);
 

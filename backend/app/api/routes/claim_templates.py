@@ -6,6 +6,30 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 
+from app.api.authorization_deps import (
+    require_workspace_context,
+)
+
+from app.api.deps import (
+    get_current_user,
+)
+
+from app.models.user import (
+    User,
+)
+
+from app.services.authorization.engine.authorization_service import (
+    AuthorizationService,
+)
+
+from app.services.authorization.registry.capability_catalog import (
+    REPORT_READ,
+)
+
+from app.services.entitlements import (
+    enforce_workspace_page_access,
+)
+
 from app.models.claim_schema_preset import (
     ClaimSchemaPreset,
 )
@@ -42,8 +66,30 @@ class CreateTemplateRequest(BaseModel):
 @router.post("")
 def create_template(
     payload: CreateTemplateRequest,
+
     db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        get_current_user,
+    ),
+
+    context = Depends(
+        require_workspace_context(
+            "claim_templates",
+        )
+    ),
 ):
+    AuthorizationService.require_capability(
+        context.access,
+        REPORT_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=payload.workspace_id,
+        db=db,
+        page="claim_templates",
+        action="create Claim Template",
+    )
 
     preset = ClaimSchemaPreset(
         workspace_id=payload.workspace_id,
@@ -74,9 +120,45 @@ def create_template(
     }
 
 
-@router.get("")
-def list_templates():
-    return []
+@router.get("/workspace/{workspace_id}")
+def list_templates(
+    workspace_id: int,
+
+    db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        get_current_user,
+    ),
+
+    context = Depends(
+        require_workspace_context(
+            "claim_templates",
+        )
+    ),
+):
+
+    AuthorizationService.require_capability(
+        context.access,
+        REPORT_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="claim_templates",
+        action="access Claim Templates",
+    )
+
+    templates = (
+        db.query(ClaimSchemaPreset)
+        .filter(
+            (ClaimSchemaPreset.workspace_id == workspace_id)
+            | (ClaimSchemaPreset.is_system == True)
+        )
+        .all()
+    )
+
+    return templates
 
 
 @router.get("/{template_id}")

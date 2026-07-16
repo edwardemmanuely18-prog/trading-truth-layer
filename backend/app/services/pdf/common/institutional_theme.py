@@ -222,6 +222,8 @@ TTL_RED = colors.HexColor("#DC2626")
 
 TTL_ORANGE = colors.HexColor("#EA580C")
 
+TTL_AMBER = colors.HexColor("#D97706")
+
 TTL_GOLD = colors.HexColor("#C9A227")
 
 TTL_GREY = colors.HexColor("#64748B")
@@ -242,7 +244,9 @@ TTL_BLACK = colors.black
 
 SUCCESS_COLOUR = TTL_GREEN
 
-WARNING_COLOUR = TTL_ORANGE
+WARNING_COLOUR = TTL_AMBER
+
+CAUTION_COLOUR = TTL_ORANGE
 
 CRITICAL_COLOUR = TTL_RED
 
@@ -666,6 +670,7 @@ __all__ = [
     "TTL_GREEN",
     "TTL_RED",
     "TTL_ORANGE",
+    "TTL_AMBER",
     "TTL_GOLD",
     "TTL_GREY",
     "TTL_LIGHT",
@@ -701,6 +706,16 @@ __all__ = [
     "SCORE_STYLE",
     "VERDICT_STYLE",
     "BADGE_STYLE",
+
+    "SUCCESS_COLOUR",
+
+    "WARNING_COLOUR",
+
+    "CAUTION_COLOUR",
+
+    "CRITICAL_COLOUR",
+
+    "INFO_COLOUR",
 
     #
     # Compatibility

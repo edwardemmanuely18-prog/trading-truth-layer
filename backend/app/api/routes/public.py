@@ -185,6 +185,8 @@ def get_public_profile(
         total_pnl += payload["net_pnl"]
         total_trades += payload["trade_count"]
 
+        enriched.append(payload)
+
     ranked = sorted(
         enriched,
         key=lambda x: (x["trust_score"], x["net_pnl"]),

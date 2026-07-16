@@ -3,6 +3,25 @@ from fastapi import (
     Depends,
 )
 
+from app.api.deps import (
+    get_current_user,
+)
+
+from app.models.user import User
+
+from app.services.authorization.engine.authorization_service import (
+    AuthorizationService,
+)
+
+from app.api.authorization_deps import (
+    require_workspace_context,
+)
+
+from app.services.authorization.registry.capability_catalog import (
+    VERIFICATION_READ,
+    VERIFICATION_EXECUTE,
+)
+
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -41,7 +60,21 @@ router = APIRouter(
 def run_integrity_scan(
     workspace_id: int,
     db: Session = Depends(get_db),
-):
+    current_user: User = Depends(get_current_user),
+):  
+    context = require_workspace_context(
+        "integrity_analytics",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        VERIFICATION_EXECUTE,
+    )
+
     claims_scanned = (
         db.query(ClaimSchema)
         .filter(
@@ -121,7 +154,21 @@ def run_integrity_scan(
 def integrity_scan_history(
     workspace_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    context = require_workspace_context(
+        "integrity_analytics",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        VERIFICATION_READ,
+    )
+
     scans = (
         db.query(IntegrityScan)
         .filter(
@@ -164,7 +211,21 @@ def integrity_scan_history(
 def integrity_dashboard(
     workspace_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    context = require_workspace_context(
+        "integrity_analytics",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        VERIFICATION_READ,
+    )
+
     return build_integrity_dashboard(
         db,
         workspace_id,

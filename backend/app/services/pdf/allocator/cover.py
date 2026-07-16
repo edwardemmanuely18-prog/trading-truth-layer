@@ -15,6 +15,7 @@ def build_cover_page(
     report,
     workspace_id: int,
     report_hash: str,
+    verification_url: str,
 ):
     """
     Allocator Report Cover Adapter.
@@ -125,10 +126,8 @@ def build_cover_page(
             ),
 
         "Verification URL":
-            (
-                f"https://tradingtruthlayer.com"
-                f"/workspace/{workspace_id}/report-center"
-            ),
+
+            verification_url,
 
     }
 

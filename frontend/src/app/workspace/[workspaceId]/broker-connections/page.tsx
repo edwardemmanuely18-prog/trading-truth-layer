@@ -288,9 +288,12 @@ export default function BrokerConnectionsPage() {
         )}
 
         {!loading && !error && (
-          <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
-            <table className="w-full">
-              <thead className="border-b bg-slate-50">
+          <div className="rounded-2xl border bg-white shadow-sm">
+
+            <div className="overflow-x-auto">
+
+              <table className="min-w-[1200px] w-full">
+              <thead className="border-b bg-slate-50 sticky top-0">
                 <tr>
                     <th className="px-6 py-4 text-left">
                     Provider
@@ -388,7 +391,10 @@ export default function BrokerConnectionsPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+              </table>
+
+            </div>
+
           </div>
         )}
 

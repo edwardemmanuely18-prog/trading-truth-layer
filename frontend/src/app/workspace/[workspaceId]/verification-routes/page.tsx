@@ -21,6 +21,14 @@ export default function VerificationRoutesPage() {
   const [loading, setLoading] =
     useState(true);
 
+  const [
+
+      searchQuery,
+
+      setSearchQuery,
+
+  ] = useState("");
+
   useEffect(() => {
     async function load() {
       try {
@@ -48,6 +56,55 @@ export default function VerificationRoutesPage() {
     }
   }, [workspaceId]);
 
+  const filteredClaims =
+
+    data?.claims.filter((claim) => {
+
+        const query =
+
+            searchQuery
+                .trim()
+                .toLowerCase();
+
+        if (!query) {
+
+            return true;
+
+        }
+
+        return (
+
+            String(claim.id)
+                .includes(query)
+
+            ||
+
+            (claim.name ?? "")
+                .toLowerCase()
+                .includes(query)
+
+            ||
+
+            (claim.claim_hash ?? "")
+                .toLowerCase()
+                .includes(query)
+
+            ||
+
+            (claim.status ?? "")
+                .toLowerCase()
+                .includes(query)
+
+            ||
+
+            (claim.visibility ?? "")
+                .toLowerCase()
+                .includes(query)
+
+        );
+
+    }) ?? [];
+
   return (
     <div className="min-h-screen bg-slate-50">
       <Navbar />
@@ -70,6 +127,52 @@ export default function VerificationRoutesPage() {
             Loading verification routes...
           </div>
         )}
+
+        <div className="mb-8 rounded-2xl border bg-white p-6">
+
+            <h2 className="text-xl font-semibold">
+
+                Verification Route Registry
+
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-500">
+
+                Search canonical verification routes.
+
+            </p>
+
+            <input
+
+                type="text"
+
+                value={searchQuery}
+
+                onChange={(e) =>
+
+                    setSearchQuery(
+                        e.target.value,
+                    )
+
+                }
+
+                placeholder="Search claim name, claim id, visibility, status or claim hash..."
+
+                className="
+                    mt-4
+                    w-full
+                    rounded-xl
+                    border
+                    border-slate-300
+                    px-4
+                    py-3
+                    outline-none
+                    focus:border-slate-900
+                "
+
+            />
+
+        </div>
 
         {!loading && data && (
           <>
@@ -201,9 +304,30 @@ export default function VerificationRoutesPage() {
 
             </div>
 
+            {filteredClaims.length === 0 ? (
+
+                <div className="rounded-2xl border bg-white p-8">
+
+                    <h2 className="text-2xl font-semibold">
+
+                        No matching verification routes
+
+                    </h2>
+
+                    <p className="mt-2 text-slate-600">
+
+                        No verification routes matched
+                        your search criteria.
+
+                    </p>
+
+                </div>
+
+            ) : (
+
             <div className="space-y-6">
 
-              {data.claims.map((claim) => (
+              {filteredClaims.map((claim) => (
 
                 <div
                   key={claim.id}
@@ -359,6 +483,9 @@ export default function VerificationRoutesPage() {
               ))}
 
             </div>
+
+            )}
+            
           </>
         )}
 

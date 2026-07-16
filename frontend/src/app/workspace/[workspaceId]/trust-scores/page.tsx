@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import {
+    useParams,
+    useRouter,
+} from "next/navigation";
 
 import Navbar from "../../../../components/Navbar";
 
@@ -12,6 +15,8 @@ import {
 
 export default function TrustScoresPage() {
   const params = useParams();
+
+  const router = useRouter();
 
   const workspaceId = Number(
     params.workspaceId
@@ -45,8 +50,25 @@ export default function TrustScoresPage() {
           response.scores || []
         );
 
-      } catch (err) {
-        console.error(err);
+      } catch (err: any) {
+
+          console.error(err);
+
+          if (
+              err?.payload?.code === "page_locked" ||
+              err?.payload?.upgrade_required === true
+          ) {
+
+              router.replace(
+                  `/workspace/${workspaceId}/billing?upgrade=true`
+              );
+
+              return;
+
+          }
+
+          throw err;
+
       } finally {
         setLoading(false);
       }

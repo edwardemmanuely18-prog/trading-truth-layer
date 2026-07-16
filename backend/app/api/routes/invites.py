@@ -7,7 +7,22 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_workspace_owner
+from app.api.deps import get_current_user
+
+from app.api.authorization_deps import (
+    require_workspace_context,
+)
+
+from app.services.authorization.engine.authorization_service import (
+    AuthorizationService,
+)
+
+from app.services.authorization.registry.capability_catalog import (
+    MEMBER_INVITE,
+    MEMBER_READ,
+    MEMBER_REMOVE,
+    WORKSPACE_ASSIGNABLE_ROLES,
+)
 from app.core.db import get_db
 from app.models.user import User
 from app.models.workspace import Workspace
@@ -63,10 +78,17 @@ def normalize_email(value: str | None) -> str:
     return str(value or "").strip().lower()
 
 
-def normalize_invite_role(value: str | None) -> str:
+def normalize_invite_role(
+    value: str | None,
+) -> str:
+
     normalized = str(value or "").strip().lower()
-    allowed_roles = {"member", "operator", "auditor"}
-    return normalized if normalized in allowed_roles else "member"
+
+    return (
+        normalized
+        if normalized in WORKSPACE_ASSIGNABLE_ROLES
+        else "member"
+    )
 
 
 def parse_bool_like(value: str | None) -> bool:
@@ -345,10 +367,20 @@ def create_workspace_invite(
     payload: WorkspaceInviteCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
-    workspace = get_workspace_or_404(workspace_id, db)
 
-    require_workspace_owner(workspace_id, current_user, db)
+    context=Depends(
+        require_workspace_context(
+            "members",
+        )
+    ),
+):
+    workspace = context.workspace
+
+    AuthorizationService.require_capability(
+        context.access,
+        MEMBER_INVITE,
+    )
+
     expire_stale_pending_invites(workspace_id, db)
     enforce_member_invite_allowed(workspace_id, db)
 
@@ -444,14 +476,24 @@ def create_workspace_invite(
     return serialize_invite(invite)
 
 
-@router.get("/workspaces/{workspace_id}/invites")
 def list_workspace_invites(
     workspace_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+
+    context=Depends(
+        require_workspace_context(
+            "members",
+        )
+    ),
 ):
-    get_workspace_or_404(workspace_id, db)
-    require_workspace_owner(workspace_id, current_user, db)
+    workspace = context.workspace
+
+    AuthorizationService.require_capability(
+        context.access,
+        MEMBER_READ,
+    )
+
     expire_stale_pending_invites(workspace_id, db)
 
     invites = (
@@ -470,9 +512,19 @@ def revoke_workspace_invite(
     invite_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+
+    context=Depends(
+        require_workspace_context(
+            "members",
+        )
+    ),
 ):
-    get_workspace_or_404(workspace_id, db)
-    require_workspace_owner(workspace_id, current_user, db)
+    workspace = context.workspace
+
+    AuthorizationService.require_capability(
+        context.access,
+        MEMBER_REMOVE,
+    )
 
     invite = (
         db.query(WorkspaceInvite)

@@ -16,6 +16,10 @@ from app.models.workspace import Workspace
 
 
 from app.api.deps import get_current_user
+from app.api.authorization_deps import (
+    require_page,
+    require_workspace_context,
+)
 from app.core.config import settings
 from app.core.db import get_db
 from app.models.user import User
@@ -90,38 +94,6 @@ class BillingCheckoutPayload(BaseModel):
 class BillingPortalPayload(BaseModel):
     return_url: str | None = None
 
-
-def require_workspace_member(workspace_id: int, current_user: User, db: Session):
-    membership = (
-        db.query(WorkspaceMembership)
-        .filter(
-            WorkspaceMembership.workspace_id == workspace_id,
-            WorkspaceMembership.user_id == current_user.id,
-        )
-        .first()
-    )
-    if not membership:
-        return None
-    return membership
-
-
-def require_workspace_owner(workspace_id: int, current_user: User, db: Session):
-    membership = (
-        db.query(WorkspaceMembership)
-        .filter(
-            WorkspaceMembership.workspace_id == workspace_id,
-            WorkspaceMembership.user_id == current_user.id,
-        )
-        .first()
-    )
-
-    if not membership:
-        raise HTTPException(status_code=403, detail="Not a workspace member")
-
-    if membership.role != "owner":
-        raise HTTPException(status_code=403, detail="Owner role required")
-
-    return membership
 
 
 def normalize_billing_cycle(value: str | None) -> str:
@@ -339,19 +311,18 @@ def get_paddle_price_id(plan_code: str, billing_cycle: str) -> str | None:
 
 
 def get_workspace_for_owner_access(
-    workspace_id: int,
-    db: Session,
-    current_user: User,
-) -> tuple[Workspace | None, str | None]:
-    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
-    if not workspace:
-        return None, "Workspace not found"
+    context,
+):
+    if context.membership.role != "owner":
+        return (
+            None,
+            "Owner role required for this workspace",
+        )
 
-    membership = require_workspace_owner(workspace_id, current_user, db)
-    if not membership:
-        return None, "Owner role required for this workspace"
-
-    return workspace, None
+    return (
+        context.workspace,
+        None,
+    )
 
 
 def stripe_is_ready() -> bool:
@@ -820,14 +791,16 @@ def get_workspace_billing_foundation(
     checkout_session_id: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+
+    context = Depends(
+        require_workspace_context(
+            "billing",
+        )
+    ),
 ):
-    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+    workspace = context.workspace
     if not workspace:
         return {"detail": "Workspace not found"}
-
-    membership = require_workspace_member(workspace_id, current_user, db)
-    if not membership:
-        return {"detail": "User is not a member of this workspace"}
 
     if checkout_session_id and stripe_is_ready():
         sync_workspace_from_checkout_session_id(workspace, checkout_session_id, db)
@@ -971,8 +944,16 @@ def create_billing_checkout_session(
     payload: BillingCheckoutPayload,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+
+    context = Depends(
+        require_workspace_context(
+            "billing",
+        )
+    ),
 ):
-    workspace, access_error = get_workspace_for_owner_access(workspace_id, db, current_user)
+    workspace, access_error = get_workspace_for_owner_access(
+        context,
+    )
     if not workspace:
         return {
             "mode": "access_error",
@@ -1377,8 +1358,16 @@ def create_billing_portal_session(
     payload: BillingPortalPayload | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+
+    context = Depends(
+        require_workspace_context(
+            "billing",
+        )
+    ),
 ):
-    workspace, access_error = get_workspace_for_owner_access(workspace_id, db, current_user)
+    workspace, access_error = get_workspace_for_owner_access(
+        context,
+    )
     if not workspace:
         return {
             "mode": "access_error",
@@ -1484,6 +1473,12 @@ def get_latest_invoice(
     workspace_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+
+    _context=Depends(
+        require_page(
+            "billing",
+        )
+    ),
 ):
 
     workspace, access_error = get_workspace_for_owner_access(
@@ -1797,12 +1792,16 @@ async def lemon_webhook(
 def get_workspace_usage(
     workspace_id: int,
     db: Session = Depends(get_db),
+
+    current_user: User = Depends(get_current_user),
+
+    context = Depends(
+        require_workspace_context(
+            "billing",
+        )
+    ),
 ):
-    workspace = (
-        db.query(Workspace)
-        .filter(Workspace.id == workspace_id)
-        .first()
-    )
+    workspace = context.workspace
 
     if not workspace:
         raise HTTPException(
@@ -1828,12 +1827,16 @@ def get_workspace_usage(
 def get_billing_diagnostics(
     workspace_id: int,
     db: Session = Depends(get_db),
+
+    current_user: User = Depends(get_current_user),
+
+    context = Depends(
+        require_workspace_context(
+            "billing",
+        )
+    ),
 ):
-    workspace = (
-        db.query(Workspace)
-        .filter(Workspace.id == workspace_id)
-        .first()
-    )
+    workspace = context.workspace
 
     if not workspace:
         raise HTTPException(
@@ -1861,12 +1864,16 @@ def get_billing_diagnostics(
 def get_commercial_summary(
     workspace_id: int,
     db: Session = Depends(get_db),
+
+    current_user: User = Depends(get_current_user),
+
+    context = Depends(
+        require_workspace_context(
+            "billing",
+        )
+    ),
 ):
-    workspace = (
-        db.query(Workspace)
-        .filter(Workspace.id == workspace_id)
-        .first()
-    )
+    workspace = context.workspace
 
     if not workspace:
         raise HTTPException(
@@ -1916,12 +1923,16 @@ def get_commercial_summary(
 def get_commercial_services(
     workspace_id: int,
     db: Session = Depends(get_db),
+
+    current_user: User = Depends(get_current_user),
+
+    context = Depends(
+        require_workspace_context(
+            "billing",
+        )
+    ),
 ):
-    workspace = (
-        db.query(Workspace)
-        .filter(Workspace.id == workspace_id)
-        .first()
-    )
+    workspace = context.workspace
 
     if not workspace:
         raise HTTPException(
@@ -1955,12 +1966,16 @@ def get_commercial_services(
 def get_commercial_capabilities(
     workspace_id: int,
     db: Session = Depends(get_db),
+
+    current_user: User = Depends(get_current_user),
+
+    context = Depends(
+        require_workspace_context(
+            "billing",
+        )
+    ),
 ):
-    workspace = (
-        db.query(Workspace)
-        .filter(Workspace.id == workspace_id)
-        .first()
-    )
+    workspace = context.workspace
 
     if not workspace:
         raise HTTPException(
@@ -2002,12 +2017,16 @@ def get_commercial_capabilities(
 def get_commercial_actions(
     workspace_id: int,
     db: Session = Depends(get_db),
+
+    current_user: User = Depends(get_current_user),
+
+    context = Depends(
+        require_workspace_context(
+            "billing",
+        )
+    ),
 ):
-    workspace = (
-        db.query(Workspace)
-        .filter(Workspace.id == workspace_id)
-        .first()
-    )
+    workspace = context.workspace
 
     if not workspace:
         raise HTTPException(
@@ -2036,12 +2055,16 @@ def get_commercial_actions(
 def get_invoice_history(
     workspace_id: int,
     db: Session = Depends(get_db),
+
+    current_user: User = Depends(get_current_user),
+
+    context = Depends(
+        require_workspace_context(
+            "billing",
+        )
+    ),
 ):
-    workspace = (
-        db.query(Workspace)
-        .filter(Workspace.id == workspace_id)
-        .first()
-    )
+    workspace = context.workspace
 
     if not workspace:
         raise HTTPException(

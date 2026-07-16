@@ -40,7 +40,11 @@ from app.models.user import User
 from app.models.workspace import Workspace
 from app.services.audit_service import log_audit_event
 from app.services.claim_service import compute_claim_hash
-from app.services.entitlements import enforce_claim_creation_allowed
+from app.services.entitlements import (
+    enforce_claim_creation_allowed,
+    enforce_workspace_page_access,
+    enforce_workspace_feature,
+)
 from app.services.evidence_pack_service import build_evidence_zip
 from app.services.report_service import build_claim_pdf
 from app.services.claim_governance_service import (
@@ -110,6 +114,9 @@ from app.services.performance.performance_service import (
 from app.services.performance.member_performance import (
     get_workspace_member_performance,
 )
+from app.services.analytics.workspace_analytics_context import (
+    get_workspace_analytics_context,
+)
 from app.services.public_records.list_service import (
     build_workspace_public_records,
 )
@@ -127,6 +134,30 @@ from app.services.verification.context.workspace_context_cache import (
 from app.services.public_profile_cache import (
     get_workspace_public_profile,
     store_workspace_public_profile,
+)
+
+from app.services.currency.normalized_claim_trade_service import (
+    get_normalized_claim_trades,
+    get_normalized_workspace_trades,
+    resolve_normalized_claim_trades,
+)
+
+from app.api.authorization_deps import (
+    require_workspace_context,
+)
+
+from app.services.authorization.engine.authorization_service import (
+    AuthorizationService,
+)
+
+from app.services.authorization.registry.capability_catalog import (
+    CLAIM_READ,
+    CLAIM_CREATE,
+    CLAIM_UPDATE,
+    CLAIM_DELETE,
+    CLAIM_VERIFY,
+    REPORT_READ,
+    VERIFICATION_READ,
 )
 
 
@@ -978,29 +1009,69 @@ def build_public_trust_profile_for_workspace(workspace_id: int, db: Session):
         if schema.status == "locked"
     ]
 
-    trust_scores = []
-    network_scores = []
+    analytics_context = (
+
+        get_workspace_analytics_context(
+
+            db=db,
+
+            workspace_id=workspace_id,
+
+        )
+
+    )
+
+    claim_metrics_map = {
+
+        item.claim.id: item
+
+        for item in analytics_context.claim_metrics
+
+    }
+
     total_net_pnl = 0.0
+
     contested_claims_count = 0
 
     for schema in locked_claims:
-        filtered_trades = resolve_schema_trades(
-            schema,
-            db,
-            workspace_trades=workspace_cache.trades,
+
+        claim_analytics = (
+
+            claim_metrics_map.get(
+                schema.id,
+            )
+
         )
-        trade_metrics = compute_trade_metrics(filtered_trades)
-        dispute_ctx = resolve_claim_dispute_context(
-            schema,
-            db,
-            workspace_cache.claim_disputes_by_claim,
-        )
-    
-        total_net_pnl += float(
-            trade_metrics.get("net_pnl", 0.0) or 0.0
+
+        if claim_analytics:
+
+            total_net_pnl += float(
+
+                claim_analytics.metrics.get(
+                    "net_pnl",
+                    0.0,
+                )
+
+                or 0.0
+
+            )
+
+        dispute_ctx = (
+
+            resolve_claim_dispute_context(
+
+                schema,
+
+                db,
+
+                workspace_cache.claim_disputes_by_claim,
+
+            )
+
         )
 
         if dispute_ctx["has_active_dispute"]:
+
             contested_claims_count += 1
 
     claims_count = len(public_claims)
@@ -1075,6 +1146,7 @@ def build_claim_list_row(
     db: Session,
     issuer_profile: dict | None = None,
     workspace_cache: WorkspaceContextCache | None = None,
+    normalized_workspace_trades: list[Trade] | None = None,
 ):
 
     profile = {}
@@ -1095,11 +1167,36 @@ def build_claim_list_row(
     #
     t = time.perf_counter()
 
-    filtered_trades = resolve_schema_trades(
-        schema,
-        db,
-        workspace_trades=workspace_cache.trades,
-    )
+    if normalized_workspace_trades is not None:
+
+        filtered_trades = (
+
+            resolve_normalized_claim_trades(
+
+                db=db,
+
+                claim=schema,
+
+                normalized_workspace_trades=
+                normalized_workspace_trades,
+
+            )
+
+        )
+
+    else:
+
+        filtered_trades = (
+
+            get_normalized_claim_trades(
+
+                db=db,
+
+                claim=schema,
+
+            )
+
+        )
 
     profile["resolve_schema_trades"] = time.perf_counter() - t
 
@@ -1346,10 +1443,16 @@ def build_public_claim_payload(schema: ClaimSchema, db: Session):
         schema.workspace_id,
     )
 
-    filtered_trades = resolve_schema_trades(
-        schema,
-        db,
-        workspace_trades=workspace_cache.trades,
+    filtered_trades = (
+
+        get_normalized_claim_trades(
+
+            db=db,
+
+            claim=schema,
+
+        )
+
     )
     trade_metrics = compute_trade_metrics(filtered_trades)
     dispute_ctx = resolve_claim_dispute_context(
@@ -1586,10 +1689,16 @@ def build_evidence_pack_payload(schema: ClaimSchema, db: Session):
         schema.workspace_id,
     )
 
-    filtered_trades = resolve_schema_trades(
-        schema,
-        db,
-        workspace_trades=workspace_cache.trades,
+    filtered_trades = (
+
+        get_normalized_claim_trades(
+
+            db=db,
+
+            claim=schema,
+
+        )
+
     )
     trade_metrics = compute_trade_metrics(filtered_trades)
 
@@ -2331,7 +2440,19 @@ def get_latest_claim_schema(
     if not schema:
         raise HTTPException(status_code=404, detail="No claim schemas found")
 
-    require_workspace_member(schema.workspace_id, current_user, db)
+    context = require_workspace_context(
+        "claims",
+    )(
+        workspace_id=schema.workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        CLAIM_READ,
+    )
+
     return serialize_schema(schema)
 
 
@@ -2341,7 +2462,27 @@ def list_workspace_claim_schemas(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    require_workspace_member(workspace_id, current_user, db)
+    context = require_workspace_context(
+        "claims",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        CLAIM_READ,
+    )
+
+    endpoint_start = time.perf_counter()
+
+    print("\n")
+    print("=" * 80)
+    print("CLAIM LIBRARY ENDPOINT STARTED")
+    print("=" * 80)
+
+    rows_query_start = time.perf_counter()
 
     rows = (
         db.query(ClaimSchema)
@@ -2350,25 +2491,91 @@ def list_workspace_claim_schemas(
         .all()
     )
 
+    print(
+        f"Claim schemas query = "
+        f"{time.perf_counter()-rows_query_start:.4f}s"
+    )
+
+    cache_start = time.perf_counter()
+
     workspace_cache = get_workspace_context_cache(
         db,
         workspace_id,
     )
+
+    normalization_start = time.perf_counter()
+
+    normalized_workspace_trades = (
+
+        get_normalized_workspace_trades(
+
+            db=db,
+
+            workspace_id=workspace_id,
+
+        )
+
+    )
+
+    print(
+        f"Workspace trade normalization = "
+        f"{time.perf_counter()-normalization_start:.4f}s"
+    )
+
+    print(
+        f"Workspace cache = "
+        f"{time.perf_counter()-cache_start:.4f}s"
+    )
+
+    profile_start = time.perf_counter()
 
     issuer_profile = build_public_trust_profile_for_workspace(
         workspace_id,
         db,
     )
 
-    return [
+    print(
+        f"Issuer profile = "
+        f"{time.perf_counter()-profile_start:.4f}s"
+    )
+
+    response_start = time.perf_counter()
+
+    response = [
+
         build_claim_list_row(
+
             schema,
+
             db,
+
             issuer_profile=issuer_profile,
+
             workspace_cache=workspace_cache,
+
+            normalized_workspace_trades=
+            normalized_workspace_trades,
+
         )
+
         for schema in rows
+
     ]
+
+    print(
+        f"Building claim rows = "
+        f"{time.perf_counter()-response_start:.4f}s"
+    )
+
+    print(
+        f"ENDPOINT TOTAL = "
+        f"{time.perf_counter()-endpoint_start:.4f}s"
+    )
+
+    print("=" * 80)
+    print("\n")
+
+    return response
 
 
 @router.post("/claim-schemas")
@@ -2386,7 +2593,18 @@ def create_claim_schema(
     workspace = get_workspace_or_404(payload.workspace_id, db)
 
     # ✅ permissions
-    require_workspace_operator_or_owner(payload.workspace_id, current_user, db)
+    context = require_workspace_context(
+        "claim_builder",
+    )(
+        workspace_id=payload.workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        CLAIM_CREATE,
+    )
 
     if not workspace_limits_disabled():
         enforce_claim_creation_allowed(payload.workspace_id, db)
@@ -2476,7 +2694,18 @@ def update_claim_schema(
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
-    require_workspace_operator_or_owner(schema.workspace_id, current_user, db)
+    context = require_workspace_context(
+        "claim_update",
+    )(
+        workspace_id=schema.workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        CLAIM_UPDATE,
+    )
 
     if not workspace_limits_disabled():
         enforce_claim_creation_allowed(schema.workspace_id, db)
@@ -2671,7 +2900,18 @@ def verify_claim_schema(
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
-    require_workspace_operator_or_owner(schema.workspace_id, current_user, db)
+    context = require_workspace_context(
+        "claim_review",
+    )(
+        workspace_id=schema.workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        CLAIM_VERIFY,
+    )
     if not workspace_limits_disabled():
         enforce_claim_creation_allowed(schema.workspace_id, db)
 
@@ -2726,7 +2966,18 @@ def publish_claim_schema(
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
-    require_workspace_owner(schema.workspace_id, current_user, db)
+    context = require_workspace_context(
+        "claim_publish",
+    )(
+        workspace_id=schema.workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        CLAIM_UPDATE,
+    )
     if not workspace_limits_disabled():
         enforce_claim_creation_allowed(schema.workspace_id, db)
     workspace = get_workspace_or_404(schema.workspace_id, db)
@@ -2838,7 +3089,18 @@ def lock_claim_schema(
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
-    require_workspace_owner(schema.workspace_id, current_user, db)
+    context = require_workspace_context(
+        "claim_lock",
+    )(
+        workspace_id=schema.workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        CLAIM_UPDATE,
+    )
     if not workspace_limits_disabled():
         enforce_claim_creation_allowed(schema.workspace_id, db)
 
@@ -3085,7 +3347,19 @@ def get_evidence_pack(
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
-    require_workspace_member(schema.workspace_id, current_user, db)
+    context = require_workspace_context(
+        "claim_export",
+    )(
+        workspace_id=schema.workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        CLAIM_READ,
+    )
+
     payload = build_evidence_pack_payload(schema, db)
 
     elapsed = time.perf_counter() - request_start
@@ -3113,7 +3387,25 @@ def download_evidence_pack(
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
-    require_workspace_member(schema.workspace_id, current_user, db)
+    context = require_workspace_context(
+        "claim_export",
+    )(
+        workspace_id=schema.workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        CLAIM_READ,
+    )
+
+    enforce_workspace_feature(
+        workspace_id=schema.workspace_id,
+        db=db,
+        feature="json_export",
+        action="download Evidence JSON",
+    )
 
     payload = build_evidence_pack_payload(schema, db)
     filename = f'evidence_pack_claim_{schema.id}_{compute_claim_hash(schema)[:12]}.json'
@@ -3144,7 +3436,19 @@ def get_evidence_bundle(
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
-    require_workspace_member(schema.workspace_id, current_user, db)
+    context = require_workspace_context(
+        "claim_export",
+    )(
+        workspace_id=schema.workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        CLAIM_READ,
+    )
+
     return build_evidence_bundle_payload(schema, db)
 
 
@@ -3158,7 +3462,25 @@ def download_evidence_bundle(
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
-    require_workspace_member(schema.workspace_id, current_user, db)
+    context = require_workspace_context(
+        "claim_export",
+    )(
+        workspace_id=schema.workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        CLAIM_READ,
+    )
+
+    enforce_workspace_feature(
+        workspace_id=schema.workspace_id,
+        db=db,
+        feature="zip_export",
+        action="download Evidence ZIP",
+    )
 
     zip_buffer, filename = build_evidence_bundle_zip_bytes(schema, db)
 
@@ -3179,7 +3501,25 @@ def download_internal_claim_report(
     if not schema:
         raise HTTPException(status_code=404, detail="Claim schema not found")
 
-    require_workspace_member(schema.workspace_id, current_user, db)
+    context = require_workspace_context(
+        "claim_export",
+    )(
+        workspace_id=schema.workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        CLAIM_READ,
+    )
+
+    enforce_workspace_feature(
+        workspace_id=schema.workspace_id,
+        db=db,
+        feature="pdf_reports",
+        action="download Claim Report PDF",
+    )
 
     claim_hash = schema.claim_hash or compute_claim_hash(schema)
 
@@ -3354,8 +3694,35 @@ def get_public_profile(
 
 
 @router.get("/workspaces/{workspace_id}/public-claims")
-def get_workspace_public_claims(workspace_id: int, db: Session = Depends(get_db)):
+def get_workspace_public_claims(
+    workspace_id: int,
+
+    db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        get_current_user,
+    ),
+
+    context = Depends(
+        require_workspace_context(
+            "public_records",
+        )
+    ),
+):
     request_start = time.perf_counter()
+
+    AuthorizationService.require_capability(
+        context.access,
+        VERIFICATION_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="public_records",
+        action="access Public Records",
+    )
+
     workspace = (
         db.query(Workspace)
         .filter(
@@ -3523,7 +3890,37 @@ def publish_claim(
 
 @router.get("/claim-schemas/{claim_id}/evidence-bundle/download")
 def download_evidence_zip(claim_id: int, db: Session = Depends(get_db)):
-    schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_id).first()
+    schema = (
+        db.query(ClaimSchema)
+        .filter(ClaimSchema.id == claim_id)
+        .first()
+    )
+
+    if not schema:
+        raise HTTPException(
+            status_code=404,
+            detail="Claim schema not found",
+        )
+
+    context = require_workspace_context(
+        "claim_export",
+    )(
+        workspace_id=schema.workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        CLAIM_READ,
+    )
+
+    enforce_workspace_feature(
+        workspace_id=schema.workspace_id,
+        db=db,
+        feature="zip_export",
+        action="download Evidence ZIP",
+    )
 
     trades = db.query(Trade).filter(Trade.workspace_id == schema.workspace_id).all()
     audit_events = db.query(AuditEvent).filter(AuditEvent.workspace_id == schema.workspace_id).all()
@@ -3538,8 +3935,34 @@ def download_evidence_zip(claim_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/claim-schemas/{claim_id}/report/download")
-def download_claim_pdf(claim_id: int, db: Session = Depends(get_db)):
+def download_claim_pdf(
+    claim_id: int,
+
+    db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        get_current_user,
+    ),
+
+    context = Depends(
+        require_workspace_context(
+            "report_center",
+        )
+    ),
+):
     schema = db.query(ClaimSchema).filter(ClaimSchema.id == claim_id).first()
+
+    AuthorizationService.require_capability(
+        context.access,
+        REPORT_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=schema.workspace_id,
+        db=db,
+        page="report_center",
+        action="download Claim Report",
+    )
 
     trades = db.query(Trade).filter(Trade.workspace_id == schema.workspace_id).all()
 
@@ -3563,7 +3986,28 @@ def download_claim_pdf(claim_id: int, db: Session = Depends(get_db)):
 def get_verification_analytics(
     workspace_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
+    context = require_workspace_context(
+        "verification_analytics",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        VERIFICATION_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="verification_analytics",
+        action="access Verification Analytics",
+    )
+
     return get_verification_network(
         db=db,
         workspace_id=workspace_id,
@@ -3576,7 +4020,29 @@ def get_verification_analytics(
 def get_trust_scores(
     workspace_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
+
+    context = require_workspace_context(
+        "trust_scores",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        VERIFICATION_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="trust_scores",
+        action="access Trust Scores",
+    )
+
     profile = (
         build_public_trust_profile_for_workspace(
             workspace_id,
@@ -3626,123 +4092,145 @@ def get_trust_scores(
 def get_leaderboard_analytics(
     workspace_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    schemas = (
-        db.query(ClaimSchema)
-        .filter(
-            ClaimSchema.workspace_id
-            == workspace_id
+
+    start = time.perf_counter()
+
+    context = require_workspace_context(
+        "leaderboard",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        REPORT_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="leaderboard",
+        action="access Leaderboard Analytics",
+    )
+
+    analytics_start = time.perf_counter()
+
+    analytics_context = (
+        get_workspace_analytics_context(
+
+            db=db,
+
+            workspace_id=workspace_id,
+
         )
-        .all()
     )
 
     workspace_metrics = (
-        get_workspace_performance_metrics(
-            db=db,
-            workspace_id=workspace_id,
-        )
+        analytics_context.workspace_metrics.metrics
     )
 
-    member_metrics = (
-        get_workspace_member_performance(
-            db=db,
-            workspace_id=workspace_id,
-        )
+    print(
+
+        f"workspace analytics context = "
+
+        f"{time.perf_counter()-analytics_start:.4f}s"
+
     )
 
-    claim_rankings = []
+    claim_rankings = [
 
-    for schema in schemas:
+        {
 
-        claim_metrics = (
-            get_claim_performance_metrics(
-                db=db,
-                claim=schema,
-            )
-        )
+            "claim_schema_id":
+                c.claim.id,
 
-        trades = resolve_schema_trades(
-            schema,
-            db,
-        )
+            "name":
+                c.claim.name,
 
-        claim_rankings.append(
-            {
+            "status":
+                c.claim.status,
 
-                "claim_schema_id":
-                    schema.id,
+            "trade_count":
+                c.metrics["trade_count"],
 
-                "name":
-                    schema.name,
+            "net_pnl":
+                c.metrics["net_profit"],
 
-                "status":
-                    schema.status,
+            "profit_factor":
+                c.metrics["profit_factor"],
 
-                "trade_count":
-                    claim_metrics.trade_count,
+            "win_rate":
+                c.metrics["win_rate"],
 
-                "net_pnl":
-                    claim_metrics.net_profit,
+        }
 
-                "profit_factor":
-                    claim_metrics.profit_factor,
+        for c in analytics_context.claim_metrics
 
-                "win_rate":
-                    claim_metrics.win_rate,
-
-            }
-        )
-
-    claim_rankings.sort(
-        key=lambda x: x["net_pnl"],
-        reverse=True,
-    )
+    ]
 
     member_rankings = [
 
         {
 
-            "member": m.member_name,
+            "member":
+                m.metrics["member_id"],
 
-            "net_pnl": m.net_profit,
+            "net_pnl":
+                m.metrics["net_profit"],
 
-            "trade_count": m.trade_count,
+            "trade_count":
+                m.metrics["trade_count"],
 
-            "claim_count": m.claim_count,
+            "claim_count":
+                m.metrics["claim_count"],
 
-            "profit_factor": m.profit_factor,
+            "profit_factor":
+                m.metrics["profit_factor"],
 
-            "win_rate": m.win_rate,
+            "win_rate":
+                m.metrics["win_rate"],
 
         }
 
-        for m in member_metrics
+        for m in analytics_context.member_metrics
 
     ]
 
+    print(
+
+        f"TOTAL = "
+
+        f"{time.perf_counter()-start:.4f}s"
+
+    )
+
     return {
-        "summary": {
+        "summary":{
 
             "claims":
-                workspace_metrics.claim_count,
+                workspace_metrics["claim_count"],
 
             "members":
                 len(member_rankings),
 
             "trade_count":
-                workspace_metrics.trade_count,
+                workspace_metrics["trade_count"],
 
             "net_profit":
-                workspace_metrics.net_profit,
+                workspace_metrics["net_profit"],
 
             "profit_factor":
-                workspace_metrics.profit_factor,
+                workspace_metrics["profit_factor"],
 
             "win_rate":
-                workspace_metrics.win_rate,
+                workspace_metrics["win_rate"],
 
             "max_drawdown":
-                workspace_metrics.max_drawdown,
+                workspace_metrics["max_drawdown"],
 
         },
         "claim_rankings":
@@ -3758,60 +4246,76 @@ def get_leaderboard_analytics(
 def get_risk_analytics(
     workspace_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    schemas = (
-        db.query(ClaimSchema)
-        .filter(
-            ClaimSchema.workspace_id
-            == workspace_id
+    context = require_workspace_context(
+        "risk_analytics",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        REPORT_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="risk_analytics",
+        action="access Risk Analytics",
+    )
+
+    analytics_context = (
+
+        get_workspace_analytics_context(
+
+            db=db,
+
+            workspace_id=workspace_id,
+
         )
-        .all()
+
     )
 
     workspace_metrics = (
-        get_workspace_performance_metrics(
-            db=db,
-            workspace_id=workspace_id,
-        )
+
+        analytics_context.workspace_metrics.metrics
+
     )
 
-    recent_claims = []
+    recent_claims = [
 
-    for schema in schemas:
+        {
 
-        claim_metrics = (
-            get_claim_performance_metrics(
-                db=db,
-                claim=schema,
-            )
-        )
+            "claim_schema_id":
+                claim.claim.id,
 
-        recent_claims.append(
-            {
+            "name":
+                claim.claim.name,
 
-                "claim_schema_id":
-                    schema.id,
+            "status":
+                claim.claim.status,
 
-                "name":
-                    schema.name,
+            "trade_count":
+                claim.metrics["trade_count"],
 
-                "status":
-                    schema.status,
+            "net_pnl":
+                claim.metrics["net_profit"],
 
-                "trade_count":
-                    claim_metrics.trade_count,
+            "profit_factor":
+                claim.metrics["profit_factor"],
 
-                "net_pnl":
-                    claim_metrics.net_profit,
+            "max_drawdown":
+                claim.metrics["max_drawdown"],
 
-                "profit_factor":
-                    claim_metrics.profit_factor,
+        }
 
-                "max_drawdown":
-                    claim_metrics.max_drawdown,
+        for claim in analytics_context.claim_metrics
 
-            }
-        )
+    ]
 
     recent_claims.sort(
         key=lambda x:
@@ -3823,28 +4327,28 @@ def get_risk_analytics(
         "overview": {
 
             "trades":
-                workspace_metrics.trade_count,
+                workspace_metrics["trade_count"],
 
             "net_pnl":
-                workspace_metrics.net_profit,
+                workspace_metrics["net_profit"],
 
             "wins":
-                workspace_metrics.winning_trades,
+                workspace_metrics["winning_trades"],
 
             "losses":
-                workspace_metrics.losing_trades,
+                workspace_metrics["losing_trades"],
 
             "win_rate":
                 round(
-                    workspace_metrics.win_rate * 100,
+                    workspace_metrics["win_rate"],
                     2,
                 ),
 
             "profit_factor":
-                workspace_metrics.profit_factor,
+                workspace_metrics["profit_factor"],
 
             "max_drawdown":
-                workspace_metrics.max_drawdown,
+                workspace_metrics["max_drawdown"],
 
         },
 
@@ -3859,7 +4363,35 @@ def get_risk_analytics(
 def get_due_diligence(
     workspace_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    context = require_workspace_context(
+        "allocator_reports",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        REPORT_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="allocator_reports",
+        action="generate Due Diligence Report",
+    )
+
+    enforce_workspace_feature(
+        workspace_id=workspace_id,
+        db=db,
+        feature="allocator_workflows",
+        action="generate Due Diligence Report",
+    )
+
     workspace = (
         db.query(Workspace)
         .filter(
@@ -3885,13 +4417,22 @@ def get_due_diligence(
         workspace_verification.metrics
     )
 
-    claims = (
-        db.query(ClaimSchema)
-        .filter(
-            ClaimSchema.workspace_id
-            == workspace_id
+    analytics_context = (
+
+        get_workspace_analytics_context(
+
+            db=db,
+
+            workspace_id=workspace_id,
+
         )
-        .all()
+
+    )
+
+    workspace_metrics = (
+
+        analytics_context.workspace_metrics.metrics
+
     )
 
     evidence_records = (
@@ -3929,29 +4470,24 @@ def get_due_diligence(
         integrity_dashboard["compromised_claims"]
     )
 
-    claim_count = len(claims)
+    claim_count = (
+        workspace_metrics["claim_count"]
+    )
 
     coverage = (
         verification_metrics.verification_coverage
     )
 
-    workspace_performance = (
-        get_workspace_performance_metrics(
-            db=db,
-            workspace_id=workspace_id,
-        )
-    )
-
     risk_profit_factor = (
-        workspace_performance.profit_factor
+        workspace_metrics["profit_factor"]
     )
 
     risk_win_rate = (
-        workspace_performance.win_rate
+        workspace_metrics["win_rate"]
     )
 
     risk_max_drawdown = (
-        workspace_performance.max_drawdown
+        workspace_metrics["max_drawdown"]
     )
 
     integrity_score = (
@@ -4123,7 +4659,35 @@ def get_due_diligence(
 def get_integrity_alerts(
     workspace_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
+    context = require_workspace_context(
+        "integrity_analytics",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        VERIFICATION_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="integrity_analytics",
+        action="access Integrity Alerts",
+    )
+
+    enforce_workspace_feature(
+        workspace_id=workspace_id,
+        db=db,
+        feature="evidence_analytics",
+        action="access Integrity Alerts",
+    )
+
     scan_locked_claims(
         db,
         workspace_id,
@@ -4187,7 +4751,35 @@ def get_integrity_alerts(
 def run_integrity_scan(
     workspace_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
+    context = require_workspace_context(
+        "integrity_analytics",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        VERIFICATION_EXECUTE,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="integrity_analytics",
+        action="run Integrity Scan",
+    )
+
+    enforce_workspace_feature(
+        workspace_id=workspace_id,
+        db=db,
+        feature="evidence_analytics",
+        action="run Integrity Scan",
+    )
+
     scanned_claims = (
         db.query(ClaimSchema)
         .filter(
@@ -4323,7 +4915,35 @@ def run_integrity_scan(
 def get_integrity_scan_history(
     workspace_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
+    context = require_workspace_context(
+        "integrity_analytics",
+    )(
+        workspace_id=workspace_id,
+        db=db,
+        current_user=current_user,
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        VERIFICATION_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="integrity_analytics",
+        action="view Integrity Scan History",
+    )
+
+    enforce_workspace_feature(
+        workspace_id=workspace_id,
+        db=db,
+        feature="evidence_analytics",
+        action="view Integrity Scan History",
+    )
+
     scans = (
         db.query(
             IntegrityScan

@@ -388,10 +388,10 @@ export default function WorkspaceClaimDetailPage() {
               {preview.leaderboard.length === 0 ? (
                 <div className="mt-4 text-sm text-slate-500">No leaderboard data available.</div>
               ) : (
-                <div className="mt-4 overflow-x-auto">
+                <div className="mt-4 max-h-[700px] overflow-auto">
                   <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-slate-500">
+                    <thead className="sticky top-0 z-10 bg-white">
+                      <tr className="border-b bg-white text-left text-slate-500">
                         <th className="px-3 py-2">Rank</th>
                         <th className="px-3 py-2">Member</th>
                         <th className="px-3 py-2">Net PnL</th>

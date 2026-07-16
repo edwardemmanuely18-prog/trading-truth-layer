@@ -908,46 +908,49 @@ export default function ImportCenterPage() {
           </div>
 
           {loading ? (
-            <div className="p-8">
-              Loading jobs...
-            </div>
+              <div className="p-8">
+                Loading jobs...
+              </div>
           ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="p-4 text-left">
-                    Adapter
-                  </th>
 
-                  <th className="p-4 text-left">
-                    File
-                  </th>
+            <div className="max-h-[600px] overflow-auto">
 
-                  <th className="p-4 text-left">
-                    Status
-                  </th>
+              <table className="w-full min-w-[1000px]">
+                <thead className="sticky top-0 bg-white z-10">
+                  <tr className="border-b bg-slate-50">
+                    <th className="p-4 text-left">
+                      Adapter
+                    </th>
 
-                  <th className="p-4 text-left">
-                    Received
-                  </th>
+                    <th className="p-4 text-left">
+                      File
+                    </th>
 
-                  <th className="p-4 text-left">
-                    Imported
-                  </th>
+                    <th className="p-4 text-left">
+                      Status
+                    </th>
 
-                  <th className="p-4 text-left">
-                    Rejected
-                  </th>
+                    <th className="p-4 text-left">
+                      Received
+                    </th>
 
-                  <th className="p-4 text-left">
-                    Duplicates
-                  </th>
+                    <th className="p-4 text-left">
+                      Imported
+                    </th>
 
-                  <th className="p-4 text-left">
-                    Created
-                  </th>
-                </tr>
-              </thead>
+                    <th className="p-4 text-left">
+                      Rejected
+                    </th>
+
+                    <th className="p-4 text-left">
+                      Duplicates
+                    </th>
+
+                    <th className="p-4 text-left">
+                      Created
+                    </th>
+                  </tr>
+                </thead>
 
               <tbody>
 
@@ -1011,7 +1014,10 @@ export default function ImportCenterPage() {
 
               </tbody>
             </table>
-          )}
+
+            </div>
+
+            )}
         </div>
 
       </div>

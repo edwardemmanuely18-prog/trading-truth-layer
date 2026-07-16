@@ -168,11 +168,13 @@ export default function Page(
 
         <div className="rounded-xl border bg-white overflow-hidden">
 
+          <div className="max-h-[700px] overflow-auto">
+
           <table className="w-full">
 
-            <thead className="bg-slate-100">
+            <thead className="sticky top-0 z-10 bg-slate-100">
 
-              <tr>
+              <tr className="bg-slate-100">
 
                 <th className="p-4 text-left">
                   Trade
@@ -302,6 +304,8 @@ export default function Page(
             </tbody>
 
           </table>
+
+          </div>
 
         </div>
 

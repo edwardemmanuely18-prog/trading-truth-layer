@@ -2,13 +2,23 @@
 
 import {
   api,
+  apiFetch,
+  apiDownload,
   type PublicClaimDirectoryItem,
   downloadClaimReportPdf,
   downloadEvidenceZip,
   downloadEvidenceJson,
 } from "../../../../lib/api";
 
-import { use, useEffect, useState } from "react";
+import {
+    use,
+    useEffect,
+    useState,
+} from "react";
+
+import {
+    useRouter,
+} from "next/navigation";
 
 import Navbar from "../../../../components/Navbar";
 
@@ -27,6 +37,9 @@ export default function Page(
     Number(
       resolved.workspaceId
     );
+
+  const router =
+    useRouter();
 
   const [
     claims,
@@ -90,12 +103,30 @@ export default function Page(
           }
 
         } catch (
-          error
+          error: any
         ) {
 
           console.error(
             error
           );
+
+          if (
+
+            error?.payload?.code === "page_locked" ||
+
+            error?.payload?.upgrade_required === true
+
+          ) {
+
+            router.replace(
+              `/workspace/${workspaceId}/billing?upgrade=true`
+            );
+
+            return;
+
+          }
+
+          throw error;
 
         }
       };
@@ -104,57 +135,45 @@ export default function Page(
 
   }, [workspaceId]);
 
-  const downloadJson =
-    async (
+  const downloadJson = async (
       url: string,
       filename: string,
-    ) => {
+  ) => {
 
-      const response =
-        await fetch(
-          url
-        );
+      const data = await apiFetch<any>(url);
 
-      const data =
-        await response.json();
-
-      const blob =
-        new Blob(
+      const blob = new Blob(
           [
-            JSON.stringify(
-              data,
-              null,
-              2,
-            ),
+              JSON.stringify(
+                  data,
+                  null,
+                  2,
+              ),
           ],
           {
-            type:
-              "application/json",
-          }
-        );
+              type: "application/json",
+          },
+      );
 
       const objectUrl =
-        URL.createObjectURL(
-          blob
-        );
+          URL.createObjectURL(blob);
 
       const link =
-        document.createElement(
-          "a"
-        );
+          document.createElement("a");
 
-      link.href =
-        objectUrl;
+      link.href = objectUrl;
 
-      link.download =
-        filename;
+      link.download = filename;
+
+      document.body.appendChild(link);
 
       link.click();
 
-      URL.revokeObjectURL(
-        objectUrl
-      );
-    };
+      document.body.removeChild(link);
+
+      URL.revokeObjectURL(objectUrl);
+
+  };
 
   const runDownload = async (
     actionId: string,
@@ -186,12 +205,30 @@ export default function Page(
       );
 
     } catch (
-      error
+      error: any
     ) {
 
       console.error(
         error
       );
+
+      if (
+
+        error?.payload?.code === "page_locked" ||
+
+        error?.payload?.upgrade_required === true
+
+      ) {
+
+        router.replace(
+          `/workspace/${workspaceId}/billing?upgrade=true`
+        );
+
+        return;
+
+      }
+
+      throw error;
 
     } finally {
 
@@ -270,40 +307,10 @@ export default function Page(
                     "allocator-pdf",
                     async () => {
 
-                      const backend =
-                        process.env.NEXT_PUBLIC_API_URL ||
-                        process.env.NEXT_PUBLIC_API_BASE_URL ||
-                        "http://127.0.0.1:8001";
-
-                      const response = await fetch(
-                        `${backend}/api/reports/workspace/${workspaceId}/allocator/download`
+                      await apiDownload(
+                          `/reports/workspace/${workspaceId}/allocator/download`,
+                          `allocator_report_${workspaceId}.pdf`,
                       );
-
-                      if (!response.ok) {
-                        throw new Error(
-                          "Allocator report download failed."
-                        );
-                      }
-
-                      const blob = await response.blob();
-
-                      const url = URL.createObjectURL(blob);
-
-                      const link =
-                        document.createElement("a");
-
-                      link.href = url;
-
-                      link.download =
-                        `allocator_report_${workspaceId}.pdf`;
-
-                      document.body.appendChild(link);
-
-                      link.click();
-
-                      document.body.removeChild(link);
-
-                      URL.revokeObjectURL(url);
 
                     }
                   )

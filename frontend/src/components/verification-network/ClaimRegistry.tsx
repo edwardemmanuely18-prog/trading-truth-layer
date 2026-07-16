@@ -42,11 +42,11 @@ export default function ClaimRegistry({
 
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="max-h-[700px] overflow-auto">
 
-                <table className="min-w-full">
+                <table className="min-w-full border-separate border-spacing-0">
 
-                    <thead className="bg-slate-100">
+                    <thead className="sticky top-0 z-10 bg-slate-100">
 
                         <tr className="text-left text-xs uppercase tracking-wider text-slate-500">
 

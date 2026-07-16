@@ -3,6 +3,10 @@
 import { use } from "react";
 import { useEffect, useState } from "react";
 
+import {
+    useRouter,
+} from "next/navigation";
+
 import Navbar from "../../../../components/Navbar";
 
 import {
@@ -27,6 +31,8 @@ export default function Page(
       resolvedParams.workspaceId
     );
 
+  const router = useRouter();
+
   const [data, setData] =
     useState<any>(null);
 
@@ -35,9 +41,6 @@ export default function Page(
 
   const [feedLimit, setFeedLimit] =
     useState(20);
-
-  const [exporting, setExporting] =
-    useState(false);
 
   useEffect(() => {
 
@@ -52,19 +55,41 @@ export default function Page(
 
         setData(response);
 
-      } catch (err) {
+      } catch (err: any) {
 
-        console.error(err);
+          console.error(err);
+
+          if (
+
+              err?.payload?.code === "page_locked" ||
+
+              err?.payload?.upgrade_required === true
+
+          ) {
+
+              router.replace(
+                  `/workspace/${workspaceId}/billing?upgrade=true`
+              );
+
+              return;
+
+          }
+
+          throw err;
 
       } finally {
 
-        setLoading(false);
+          setLoading(false);
 
       }
 
     }
 
-    load();
+    if (!Number.isNaN(workspaceId)) {
+
+      load();
+
+    }
 
   }, [workspaceId]);
 
@@ -94,66 +119,6 @@ export default function Page(
             and Trading Verification System (TVS)
             adoption across the workspace.
           </p>
-
-          <div className="mt-6 flex flex-wrap gap-3">
-
-            <button
-                onClick={async () => {
-
-                    try {
-
-                        setExporting(true);
-
-                        const response = await fetch(
-                            `/api/reports/workspace/${workspaceId}/verification`
-                        );
-
-                        const blob =
-                            await response.blob();
-
-                        const url =
-                            window.URL.createObjectURL(
-                                blob
-                            );
-
-                        const link =
-                            document.createElement("a");
-
-                        link.href = url;
-
-                        link.download =
-                            `verification-report-${workspaceId}.json`;
-
-                        document.body.appendChild(link);
-
-                        link.click();
-
-                        link.remove();
-
-                        window.URL.revokeObjectURL(
-                            url
-                        );
-
-                    } finally {
-
-                        setExporting(false);
-
-                    }
-
-                }}
-                disabled={exporting}
-                className="rounded-lg border bg-white px-4 py-2 disabled:opacity-60"
-            >
-
-                {
-                    exporting
-                        ? "Exporting..."
-                        : "Export Verification JSON"
-                }
-
-            </button>
-
-          </div>
 
         </div>
 

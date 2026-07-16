@@ -25,6 +25,14 @@ export default function Page() {
       null
     );
 
+  const [
+
+    searchQuery,
+
+    setSearchQuery,
+
+  ] = useState("");
+
   useEffect(() => {
     async function load() {
       try {
@@ -45,6 +53,55 @@ export default function Page() {
       load();
     }
   }, [workspaceId]);
+
+  const filteredClaims =
+
+    data?.claims.filter((claim) => {
+
+        const query =
+
+            searchQuery
+                .trim()
+                .toLowerCase();
+
+        if (!query) {
+
+            return true;
+
+        }
+
+        return (
+
+            String(claim.id)
+                .includes(query)
+
+            ||
+
+            (claim.name ?? "")
+                .toLowerCase()
+                .includes(query)
+
+            ||
+
+            (claim.claim_hash ?? "")
+                .toLowerCase()
+                .includes(query)
+
+            ||
+
+            (claim.status ?? "")
+                .toLowerCase()
+                .includes(query)
+
+            ||
+
+            (claim.visibility ?? "")
+                .toLowerCase()
+                .includes(query)
+
+        );
+
+    }) ?? [];
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -115,6 +172,54 @@ export default function Page() {
 
             <div className="mb-8 rounded-2xl border bg-white p-6">
 
+                <h2 className="text-xl font-semibold">
+
+                    Trust Directory Search
+
+                </h2>
+
+                <p className="mt-2 text-sm text-slate-500">
+
+                    Search publicly exposed trust records,
+                    verification routes and governance-ready
+                    claims.
+
+                </p>
+
+                <input
+
+                    type="text"
+
+                    value={searchQuery}
+
+                    onChange={(e) =>
+
+                        setSearchQuery(
+                            e.target.value,
+                        )
+
+                    }
+
+                    placeholder="Search claim name, claim id, status, visibility or claim hash..."
+
+                    className="
+                        mt-4
+                        w-full
+                        rounded-xl
+                        border
+                        border-slate-300
+                        px-4
+                        py-3
+                        outline-none
+                        focus:border-slate-900
+                    "
+
+                />
+
+            </div>
+
+            <div className="mb-8 rounded-2xl border bg-white p-6">
+
               <div className="text-xs uppercase tracking-widest text-slate-500">
                 Trust Registry
               </div>
@@ -134,9 +239,30 @@ export default function Page() {
 
             </div>
 
+            {filteredClaims.length === 0 ? (
+
+                <div className="rounded-2xl border bg-white p-8">
+
+                    <h2 className="text-2xl font-semibold">
+
+                        No matching trust records
+
+                    </h2>
+
+                    <p className="mt-2 text-slate-600">
+
+                        No trust directory entries matched
+                        your search criteria.
+
+                    </p>
+
+                </div>
+
+            ) : (
+
             <div className="space-y-6">
 
-              {data.claims.map(
+              {filteredClaims.map(
                 (claim) => (
 
                   <div
@@ -310,6 +436,8 @@ export default function Page() {
               )}
 
             </div>
+
+            )}
 
           </>
 

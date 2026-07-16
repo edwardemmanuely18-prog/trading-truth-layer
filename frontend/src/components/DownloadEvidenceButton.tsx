@@ -1,7 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { API_BASE_URL, getStoredAccessToken } from "../lib/api";
+import {
+    apiDownload,
+}
+from "../lib/api";
 
 type Props = {
   claimSchemaId: number;
@@ -11,13 +14,6 @@ type Props = {
 
 type DownloadKind = "json" | "zip" | "pdf";
 
-function tryParseJson(text: string) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-}
 
 function resolveDevUserId(): string | null {
   if (typeof window === "undefined") return null;
@@ -28,88 +24,8 @@ function resolveDevUserId(): string | null {
   return "1";
 }
 
-function buildAuthenticatedUrl(path: string) {
-  const token = getStoredAccessToken();
-
-  // ✅ FORCE API PREFIX
-  const normalizedPath = path.startsWith("/api") ? path : `/api${path}`;
-
-  if (token) {
-    return `${API_BASE_URL}${normalizedPath}`;
-  }
-
-  const userId = resolveDevUserId();
-  if (!userId) {
-    return `${API_BASE_URL}${normalizedPath}`;
-  }
-
-  const separator = normalizedPath.includes("?") ? "&" : "?";
-  return `${API_BASE_URL}${normalizedPath}${separator}user_id=${encodeURIComponent(userId)}`;
-}
-
-function buildHeaders() {
-  const headers = new Headers();
-  const token = getStoredAccessToken();
-
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
-  return headers;
-}
-
 function safeHashPrefix(claimHash?: string | null) {
   return claimHash ? `_${claimHash.slice(0, 12)}` : "";
-}
-
-function triggerBlobDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-async function downloadFromResponse(response: Response, fallbackFilename: string) {
-  if (!response.ok) {
-    let detail = "Download failed";
-
-    try {
-      const contentType = response.headers.get("content-type") || "";
-
-      if (contentType.includes("application/json")) {
-        const data = await response.json();
-        if (typeof data?.detail === "string") {
-          detail = data.detail;
-        } else {
-          detail = JSON.stringify(data);
-        }
-      } else {
-        const text = await response.text();
-        const parsed = tryParseJson(text);
-
-        if (typeof parsed?.detail === "string") {
-          detail = parsed.detail;
-        } else if (text) {
-          detail = text;
-        }
-      }
-    } catch {
-      detail = "Download failed";
-    }
-
-    throw new Error(detail);
-  }
-
-  const blob = await response.blob();
-  const disposition = response.headers.get("Content-Disposition");
-  const match = disposition?.match(/filename="(.+)"/);
-  const filename = match?.[1] || fallbackFilename;
-
-  triggerBlobDownload(blob, filename);
 }
 
 function DownloadCard({
@@ -178,55 +94,36 @@ export default function DownloadEvidenceButton({ claimSchemaId, claimHash, paylo
   }
 
   async function handleDownloadJson() {
-    await runDownload("json", async () => {
-      if (payload) {
-        const json = JSON.stringify(payload, null, 2);
-        const blob = new Blob([json], { type: "application/json" });
-        triggerBlobDownload(blob, fileHints.json);
-        return;
-      }
-
-      const response = await fetch(
-        buildAuthenticatedUrl(`/claim-schemas/${claimSchemaId}/evidence-pack/download`),
-        {
-          method: "GET",
-          headers: buildHeaders(),
-          credentials: "include",
-        }
+      await runDownload(
+          "json",
+          () =>
+              apiDownload(
+                  `/claim-schemas/${claimSchemaId}/evidence-pack/download`,
+                  fileHints.json,
+              ),
       );
-
-      await downloadFromResponse(response, fileHints.json);
-    });
   }
 
   async function handleDownloadZip() {
-    await runDownload("zip", async () => {
-      const response = await fetch(
-        buildAuthenticatedUrl(`/api/claim-schemas/${claimSchemaId}/evidence-bundle/download`),
-        {
-          method: "GET",
-          headers: buildHeaders(),
-          credentials: "include",
-        }
+      await runDownload(
+          "zip",
+          () =>
+              apiDownload(
+                  `/claim-schemas/${claimSchemaId}/evidence-bundle/download`,
+                  fileHints.zip,
+              ),
       );
-
-      await downloadFromResponse(response, fileHints.zip);
-    });
   }
 
   async function handleDownloadPdf() {
-    await runDownload("pdf", async () => {
-      const response = await fetch(
-        buildAuthenticatedUrl(`/claim-schemas/${claimSchemaId}/claim-report/download`),
-        {
-          method: "GET",
-          headers: buildHeaders(),
-          credentials: "include",
-        }
+      await runDownload(
+          "pdf",
+          () =>
+              apiDownload(
+                  `/claim-schemas/${claimSchemaId}/claim-report/download`,
+                  fileHints.pdf,
+              ),
       );
-
-      await downloadFromResponse(response, fileHints.pdf);
-    });
   }
 
   const anyLoading = loadingKind !== null;

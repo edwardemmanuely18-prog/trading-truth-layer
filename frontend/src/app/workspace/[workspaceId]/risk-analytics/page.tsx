@@ -3,6 +3,10 @@
 import { use } from "react";
 import { useEffect, useState } from "react";
 
+import {
+    useRouter,
+} from "next/navigation";
+
 import Navbar from "../../../../components/Navbar";
 
 import {
@@ -27,6 +31,8 @@ export default function Page(
       resolvedParams.workspaceId
     );
 
+  const router = useRouter();
+
   const [data, setData] =
     useState<RiskAnalytics | null>(
       null
@@ -47,14 +53,42 @@ export default function Page(
           );
 
         setData(response);
-      } catch (err) {
-        console.error(err);
+
+      } catch (err: any) {
+
+          console.error(err);
+
+          if (
+
+              err?.payload?.code === "page_locked" ||
+
+              err?.payload?.upgrade_required === true
+
+          ) {
+
+              router.replace(
+                  `/workspace/${workspaceId}/billing?upgrade=true`
+              );
+
+              return;
+
+          }
+
+          throw err;
+
       } finally {
-        setLoading(false);
+
+          setLoading(false);
+
       }
     }
 
-    load();
+    if (!Number.isNaN(workspaceId)) {
+
+        load();
+
+    }
+
   }, [workspaceId]);
 
   if (loading) {
@@ -108,7 +142,7 @@ export default function Page(
 
         </div>
 
-        <div className="mb-8 grid gap-4 md:grid-cols-6">
+        <div className="mb-8 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
 
           <MetricCard
             title="Trades"
@@ -306,13 +340,22 @@ function MetricCard({
   value: string | number;
 }) {
   return (
-    <div className="rounded-xl border bg-white p-5">
+    <div className="rounded-xl border bg-white p-5 min-w-0">
 
       <div className="text-sm text-slate-500">
         {title}
       </div>
 
-      <div className="mt-2 text-3xl font-bold">
+      <div
+        className="
+          mt-2
+          font-bold
+          text-3xl
+          leading-tight
+          break-words
+          overflow-hidden
+        "
+      >
         {value}
       </div>
 

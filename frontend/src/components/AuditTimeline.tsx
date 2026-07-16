@@ -299,7 +299,7 @@ export default function AuditTimeline({ events }: Props) {
           No audit events recorded yet.
         </div>
       ) : (
-        <div className="mt-6">
+        <div className="mt-6 max-h-[850px] overflow-y-auto rounded-2xl border border-slate-200 p-4">
           <div className="relative ml-3 border-l border-slate-200">
             {sortedEvents.map((event, index) => {
               const expanded = expandedIds.includes(event.id);

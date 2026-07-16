@@ -636,10 +636,10 @@ function ScopeTradesTable({
           {emptyText}
         </div>
       ) : (
-        <div className="mt-4 overflow-x-auto">
+        <div className="mt-4 max-h-[650px] overflow-auto rounded-xl border border-slate-200">
           <table className="min-w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-slate-500">
+            <thead className="sticky top-0 z-20 bg-white shadow-sm">
+              <tr className="border-b bg-white text-left text-slate-500">
                 <th className="px-3 py-2">#</th>
                 <th className="px-3 py-2">Trade ID</th>
                 <th className="px-3 py-2">Opened</th>
@@ -731,7 +731,8 @@ function UpgradeContextCard({
     currentPlanName;
 
   const recommendedPlanName =
-    usage?.upgrade_recommendation?.recommended_plan_name || "Pro or Team";
+      usage?.upgrade_recommendation?.recommended_plan_name ??
+      null;
 
   const breachedDimensions = usage?.upgrade_recommendation?.breached_dimensions ?? [];
   const nearLimitDimensions = usage?.upgrade_recommendation?.near_limit_dimensions ?? [];
@@ -760,7 +761,7 @@ function UpgradeContextCard({
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold text-slate-900">Claim Capacity & Upgrade</h3>
+          <h3 className="text-base font-semibold text-slate-900">Governed Claim Capacity & Billing</h3>
           <div className="mt-1 text-sm text-slate-500">
             Action gating should feel predictable before users click into blocked workflow steps.
           </div>
@@ -786,7 +787,7 @@ function UpgradeContextCard({
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Claim usage</div>
+          <div className="text-xs uppercase tracking-wide text-slate-500">Governed Claim Usage</div>
           <div className="mt-1 text-lg font-semibold text-slate-900">
             {claimUsage
               ? `${Number(claimUsage ?? 0)} / ${Number(
@@ -806,20 +807,57 @@ function UpgradeContextCard({
               </div>
             ) : null}
           </div>
+
+          <div className="mt-2 text-xs text-slate-500">
+              Only trust-bearing claims consume governed workspace
+              capacity. Draft claims do not affect entitlement usage.
+          </div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Recommended plan</div>
-          <div className="mt-1 text-lg font-semibold text-slate-900">{recommendedPlanName}</div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+
+              <div className="text-xs uppercase tracking-wide text-slate-500">
+                  Recommended Plan
+              </div>
+
+              <div className="mt-1 text-lg font-semibold text-slate-900">
+                  {recommendedPlanName ?? "No upgrade required"}
+              </div>
+
+              <div className="mt-2 text-xs text-slate-500">
+                  Review available plans and billing options.
+              </div>
+
+              <Link
+                  href={`/workspace/${workspaceId}/billing`}
+                  className="
+                  mt-3
+                  inline-flex
+                  rounded-lg
+                  border
+                  border-slate-300
+                  bg-white
+                  px-3
+                  py-2
+                  text-xs
+                  font-semibold
+                  text-slate-700
+                  hover:bg-slate-50"
+              >
+                  View Billing Plans
+              </Link>
+
+          </div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
           <div className="text-xs uppercase tracking-wide text-slate-500">Governance signal</div>
           <div className="mt-1 text-lg font-semibold text-slate-900">
             {claimLimitReached
-              ? "New versions blocked"
+              ? "Governed capacity exceeded"
               : usage?.governance?.upgrade_recommended_soon
-                ? "Capacity getting tight"
+                ? "Governed capacity approaching limit"
                 : "Actions available"}
           </div>
         </div>
@@ -865,9 +903,11 @@ function UpgradeContextCard({
           <>
             <div className="font-medium text-slate-900">Why actions are blocked</div>
             <div className="mt-2">
-              Claim version creation changes governed capacity, so it is controlled by plan
-              entitlements and current usage. Users can still inspect records, but cannot create
-              additional claim lineage without upgrading.
+              Claim version creation consumes governed claim capacity.
+              Additional trust-bearing claims and version lineage are
+              controlled by workspace entitlements and billing posture.
+              Upgrade the workspace plan to unlock additional governed
+              capacity.
             </div>
           </>
         ) : (
@@ -884,17 +924,27 @@ function UpgradeContextCard({
       {canManageActions ? (
         <div className="mt-4 flex flex-wrap gap-3">
           <Link
-            href={`/workspace/${workspaceId}/settings?tab=billing`}
+            href={`/workspace/${workspaceId}/billing`}
             className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
           >
             Open Billing & Upgrade
           </Link>
 
           <Link
-            href={`/workspace/${workspaceId}/settings?tab=billing`}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              href={`/workspace/${workspaceId}/billing`}
+              className="
+              rounded-xl
+              border
+              border-slate-300
+              bg-white
+              px-4
+              py-2
+              text-sm
+              font-semibold
+              text-slate-700
+              hover:bg-slate-50"
           >
-            Review Plan Details
+              Billing & Plan Details
           </Link>
         </div>
       ) : (
@@ -1084,6 +1134,8 @@ export default function WorkspaceClaimDetailPage() {
   const [checkingIntegrity, setCheckingIntegrity] = useState(false);
   const [integrityMessage, setIntegrityMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] =
+    useState<string | null>(null);
 
   const claimUsage = usage?.usage?.claims;
   const claimLimitReached =
@@ -1283,14 +1335,29 @@ export default function WorkspaceClaimDetailPage() {
   const handleResolveDispute = useCallback(
     async (id: number) => {
       try {
-        await api.updateClaimDisputeStatus(id, {
-          status: "resolved",
-          resolution_note: "Resolved via internal review",
-        });
 
-        await loadClaimPage();
-      } catch {
-        setError("Failed to resolve dispute");
+      await api.updateClaimDisputeStatus(id, {
+          status:"resolved",
+          resolution_note:
+          "Resolved via internal review",
+      });
+
+      await loadClaimPage();
+
+      setActionMessage(
+          "Dispute resolved successfully."
+      );
+
+      }
+
+      catch (err) {
+
+      setActionMessage(
+          err instanceof Error
+              ? err.message
+              : "Failed to resolve dispute."
+      );
+
       }
     },
     [loadClaimPage],
@@ -1299,14 +1366,29 @@ export default function WorkspaceClaimDetailPage() {
   const handleRejectDispute = useCallback(
     async (id: number) => {
       try {
-        await api.updateClaimDisputeStatus(id, {
-          status: "rejected",
-          resolution_note: "Rejected after review",
-        });
 
-        await loadClaimPage();
-      } catch {
-        setError("Failed to reject dispute");
+      await api.updateClaimDisputeStatus(id,{
+          status:"rejected",
+          resolution_note:
+          "Rejected after review",
+      });
+
+      await loadClaimPage();
+
+      setActionMessage(
+          "Dispute rejected successfully."
+      );
+
+      }
+
+      catch (err) {
+
+      setActionMessage(
+          err instanceof Error
+              ? err.message
+              : "Failed to reject dispute."
+      );
+
       }
     },
     [loadClaimPage],
@@ -1438,6 +1520,26 @@ export default function WorkspaceClaimDetailPage() {
             <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
               {integrityMessage}
             </div>
+          ) : null}
+
+          {actionMessage ? (
+
+          <div
+          className="
+          mt-4
+          rounded-xl
+          border
+          border-green-200
+          bg-green-50
+          p-4
+          text-sm
+          text-green-700"
+          >
+
+          {actionMessage}
+
+          </div>
+
           ) : null}
 
           {error ? (
@@ -1957,9 +2059,9 @@ export default function WorkspaceClaimDetailPage() {
               {preview.leaderboard.length === 0 ? (
                 <div className="mt-4 text-sm text-slate-500">No leaderboard data available.</div>
               ) : (
-                <div className="mt-4 overflow-x-auto">
+                <div className="mt-4 max-h-[700px] overflow-auto rounded-xl border border-slate-200">
                   <table className="min-w-full text-sm">
-                    <thead>
+                    <thead className="sticky top-0 z-20 bg-white shadow-sm">
                       <tr className="border-b text-left text-slate-500">
                         <th className="px-3 py-2">Rank</th>
                         <th className="px-3 py-2">Member</th>

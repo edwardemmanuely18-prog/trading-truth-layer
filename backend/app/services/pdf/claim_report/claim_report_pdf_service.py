@@ -25,6 +25,7 @@ from app.services.pdf.common.institutional_header_footer import (
 
 from app.services.pdf.common.institutional_watermark import (
     draw_watermark,
+    draw_verified_stamp,
 )
 
 from app.services.pdf.common.institutional_qr import (
@@ -67,6 +68,14 @@ from app.services.pdf.claim_report.verdict import (
     build_verdict_section,
 )
 
+from app.services.report_registry.models import (
+    ReportType,
+)
+
+from app.services.report_registry.report_registry_service import (
+    ReportRegistryService,
+)
+
 
 # ==========================================================
 # DOCUMENT CALLBACK
@@ -95,6 +104,10 @@ def _decorate_page(
         canvas,
         doc,
         report_hash=report_hash,
+    )
+
+    draw_verified_stamp(
+        canvas,
     )
 
 # ==========================================================
@@ -263,32 +276,28 @@ def generate_claim_report_pdf(
     )
 
     #
-    # Canonical verification URL
+    # ------------------------------------------------------
+    # Reserve Institutional Report
+    # ------------------------------------------------------
     #
 
-    verification_url = (
-        verification_url
-        or context["metadata"].get("verification_url")
+    registry = ReportRegistryService(
+        db,
+    )
+
+    reserved_report = registry.reserve_report(
+
+        report_type=ReportType.CLAIM,
+
+        workspace_id=schema.workspace_id,
+
     )
 
     #
-    # Older certificates may still expose /public/verify/.
-    # Convert every legacy URL to the canonical Verify endpoint.
+    # Canonical verification URL
     #
 
-    if verification_url:
-
-        verification_url = verification_url.replace(
-            "/public/verify/",
-            "/verify/",
-        )
-
-        if verification_url.startswith("/"):
-
-            verification_url = (
-                "https://www.tradingtruthlayer.com"
-                + verification_url
-            )
+    verification_url = reserved_report.verification_url
 
     context["metadata"]["verification_url"] = verification_url
 
@@ -310,31 +319,13 @@ def generate_claim_report_pdf(
     # ------------------------------------------------------
     #
 
-    report_hash = hashlib.sha256(
-        json.dumps(
-            {
-                "claim_id":
-                    context["claim"]["id"],
+    #
+    # Report hash will be assigned after the
+    # report has been finalized by the
+    # Report Registry.
+    #
 
-                "claim_hash":
-                    context["metadata"]["claim_hash"],
-
-                "certificate_hash":
-                    context["metadata"]["certificate_hash"],
-
-                "verification_score":
-                    context["verification"].verification_score,
-
-                "verification_band":
-                    context["verification"].verification_band,
-
-                "verification_tier":
-                    context["verification"].verification_tier,
-            },
-            sort_keys=True,
-            default=str,
-        ).encode("utf-8")
-    ).hexdigest()
+    report_hash = ""
 
 
     context["report"] = {
@@ -453,6 +444,101 @@ def generate_claim_report_pdf(
         onLaterPages=decorate,
 
     )
+
+    pdf_bytes = buffer.getvalue()
+
+    registered_report = registry.finalize_report(
+
+        reserved_report=reserved_report,
+
+        report_title="Institutional Claim Report",
+
+        file_name=f"claim_report_{schema.id}.pdf",
+
+        pdf_bytes=pdf_bytes,
+
+        claim_id=schema.id,
+
+        metadata={
+
+            #
+            # Identity
+            #
+
+            "claim_id": schema.id,
+
+            "claim_name": schema.name,
+
+            "classification":
+                "Institutional Verification Document",
+
+            #
+            # Registry
+            #
+
+            "registry_state":
+                "REGISTERED",
+
+            #
+            # Verification
+            #
+
+            "verification_status":
+                context["verification"].verification_status,
+
+            "verification_score":
+                context["verification"].verification_score,
+
+            "verification_band":
+                context["verification"].verification_band,
+
+            "verification_tier":
+                context["verification"].verification_tier,
+
+            #
+            # Evidence
+            #
+
+            "primary_evidence":
+                context["verification"].primary_tier,
+
+            "evidence_source":
+                context["verification"].primary_source,
+
+            #
+            # Versions
+            #
+
+            "certificate_version":
+                context["metadata"]["certificate_version"],
+
+            "tvs_version":
+                context["metadata"]["tvs_version"],
+
+            #
+            # Visibility
+            #
+
+            "visibility":
+                schema.visibility,
+
+            #
+            # Cryptographic Identity
+            #
+
+            "certificate_hash":
+                context["metadata"]["certificate_hash"],
+
+            "claim_hash":
+                context["metadata"]["claim_hash"],
+
+        },
+
+    )
+
+    report_hash = registered_report.sha256
+
+    context["report"]["hash"] = report_hash
 
     context["report"]["generated"] = (
         datetime.now(UTC).strftime(

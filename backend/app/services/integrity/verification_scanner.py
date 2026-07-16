@@ -2,6 +2,7 @@ from app.models.claim_schema import ClaimSchema
 
 from app.services.integrity.common import (
     create_alert,
+    resolve_alert,
     SEVERITY_WARNING,
 )
 

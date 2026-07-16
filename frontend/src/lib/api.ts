@@ -590,6 +590,7 @@ export type WorkspaceSettings = {
   };
   created_at?: string | null;
   updated_at?: string | null;
+  is_internal: boolean;
 };
 
 export type WorkspaceSettingsUpdatePayload = {
@@ -1753,6 +1754,8 @@ export type ApiErrorPayload = {
   code?: string;
   message?: string;
   detail?: string;
+  page?: string;
+  plan?: string;
   resource?: string;
   workspace_id?: number;
   used?: number;
@@ -1990,6 +1993,254 @@ export type TrustScoreResponse = {
   scores: TrustScore[];
 
 };
+
+/* ===========================================================
+   INSTITUTIONAL INVESTIGATION SYSTEM (IIS)
+=========================================================== */
+
+export interface InvestigationNode {
+
+    id: string;
+
+    type: string;
+
+    node_type: string;
+
+    label: string;
+
+    score: number;
+
+    severity?: string;
+
+    metadata?: Record<string, any>;
+
+}
+
+export interface InvestigationRelationship {
+
+    source: string;
+
+    target: string;
+
+    relationship: string;
+
+    weight: number;
+
+    confidence: number;
+
+    metadata: Record<string, any>;
+
+}
+
+export interface InvestigationTimelineEvent {
+
+    timestamp: string;
+
+    category: string;
+
+    title: string;
+
+    description: string;
+
+    severity: string;
+
+    evidence_reference?: string;
+
+    metadata?: Record<string, any>;
+
+}
+
+export interface InvestigationFinding {
+
+    id: string;
+
+    title: string;
+
+    description: string;
+
+    severity: string;
+
+    confidence: number;
+
+    affected_claims: number[];
+
+    affected_trades: number[];
+
+    affected_members: number[];
+
+    affected_accounts: number[];
+
+    affected_sync_jobs: number[];
+
+    evidence: string[];
+
+    recommendation: string;
+
+}
+
+export interface InvestigationRecommendation {
+
+    priority: number;
+
+    title: string;
+
+    rationale: string;
+
+    action: string;
+
+    automated?: boolean;
+
+}
+
+export interface InvestigationCriticalPathStep {
+    order: number;
+    title: string;
+    category: string;
+    severity: string;
+    description: string;
+    metadata: Record<string, unknown>;
+}
+
+export interface InvestigationCriticalPath {
+    score: number;
+    root_cause: string;
+    steps: InvestigationCriticalPathStep[];
+    recommendations: string[];
+}
+
+export interface InvestigationSummary {
+
+    investigation_confidence: number;
+
+    total_findings: number;
+
+    critical_findings: number;
+
+    high_findings: number;
+
+    medium_findings: number;
+
+    low_findings: number;
+
+    informational_findings: number;
+
+    evidence_nodes: number;
+
+    relationships: number;
+
+    timeline_events: number;
+
+    affected_claims: number;
+
+    affected_members: number;
+
+    affected_accounts: number;
+
+    affected_sync_jobs: number;
+
+    overall_risk: string;
+
+    executive_summary: string;
+
+}
+
+export interface InvestigationReport {
+
+    workspace_id: number;
+
+    scope: string;
+
+    scope_id: number;
+
+    status: string;
+
+    generated_at: string;
+
+    metadata?: Record<string, unknown>;
+
+    summary: InvestigationSummary;
+
+    findings: InvestigationFinding[];
+
+    nodes: InvestigationNode[];
+
+    relationships: InvestigationRelationship[];
+
+    timeline: InvestigationTimelineEvent[];
+
+    recommendations: InvestigationRecommendation[];
+
+    critical_path?: InvestigationCriticalPath;
+
+    execution?: InvestigationDomain;
+
+    evidence?: InvestigationDomain;
+
+    governance?: InvestigationDomain;
+
+    broker?: InvestigationDomain;
+
+    synchronization?: InvestigationDomain;
+
+    review?: InvestigationDomain;
+
+    behavior?: InvestigationDomain;
+
+    verification?: InvestigationDomain;
+
+    allocator?: InvestigationDecision;
+
+}
+
+export interface InvestigationDomain {
+
+    name: string;
+
+    confidence: number;
+
+    findings: InvestigationFinding[];
+
+    metadata: Record<string, any>;
+
+}
+
+export interface InvestigationDecision {
+
+    decision: string;
+
+    confidence: number;
+
+    rationale: string;
+
+    residual_risk: string;
+
+    required_actions: string[];
+
+    metadata: Record<string, unknown>;
+
+}
+
+export interface InvestigationDomains {
+
+    execution: InvestigationDomain;
+
+    evidence: InvestigationDomain;
+
+    governance: InvestigationDomain;
+
+    broker: InvestigationDomain;
+
+    synchronization: InvestigationDomain;
+
+    review: InvestigationDomain;
+
+    behavior: InvestigationDomain;
+
+    verification: InvestigationDomain;
+
+    allocator: InvestigationDomain;
+
+}
 
 export type LeaderboardAnalytics = {
   summary: {
@@ -2422,6 +2673,90 @@ export async function getTrustScores(
   );
 }
 
+// ============================================================
+// COMMERCIAL ACCESS GATEWAY
+// ============================================================
+
+type AuthorizationFailurePayload = {
+
+    code?: string;
+
+    page?: string;
+
+    feature?: string;
+
+    plan?: string;
+
+    upgrade_required?: boolean;
+
+    message?: string;
+
+};
+
+function handleAuthorizationFailure(
+
+    payload: AuthorizationFailurePayload | undefined,
+
+): never {
+
+    if (!payload) {
+
+        throw new Error(
+            "Authorization failed."
+        );
+
+    }
+
+    const code =
+        payload.code ?? "";
+
+    const commercialFailure =
+
+        code === "page_locked" ||
+
+        code === "feature_locked" ||
+
+        code === "billing_required" ||
+
+        code === "plan_limit_reached" ||
+
+        payload.upgrade_required === true;
+
+    if (!commercialFailure) {
+
+        throw new Error(
+            payload.message ??
+            "Authorization failed."
+        );
+
+    }
+
+    const workspaceId =
+        getStoredActiveWorkspaceId();
+
+    const target =
+
+        workspaceId
+
+            ? `/workspace/${workspaceId}/billing?upgrade=true`
+
+            : "/";
+
+    if (typeof window !== "undefined") {
+
+        window.location.replace(
+            target,
+        );
+
+    }
+
+    throw new Error(
+        payload.message ??
+        "Upgrade required.",
+    );
+
+}
+
 import type {
 
     EvidenceGraphNode,
@@ -2448,6 +2783,250 @@ export async function getEvidenceGraph(
   return apiFetch<EvidenceGraphResponse>(
       `/evidence-graph/workspace/${workspaceId}`
   );
+
+}
+
+/* ===========================================================
+   IIS API
+=========================================================== */
+
+export async function getWorkspaceInvestigation(
+    workspaceId: number,
+): Promise<InvestigationReport> {
+
+    const raw = await apiFetch<any>(
+        `/investigations/workspaces/${workspaceId}`,
+    );
+
+    return adaptInvestigationReport(raw);
+}
+
+function adaptInvestigationReport(
+    raw: any,
+): InvestigationReport {
+
+    const graph = raw.graph ?? {};
+
+    const nodes = graph.nodes ?? [];
+
+    const relationships = graph.relationships ?? [];
+
+    const findings = raw.findings ?? [];
+
+    const recommendations = raw.recommendations ?? [];
+
+    return {
+
+        workspace_id: raw.workspace_id,
+
+        scope: raw.scope,
+
+        scope_id: raw.scope_id,
+
+        status: raw.status,
+
+        generated_at: raw.generated_at,
+
+        metadata: raw.metadata ?? {},
+
+        execution: raw.execution,
+
+        evidence: raw.evidence,
+
+        governance: raw.governance,
+
+        broker: raw.broker,
+
+        synchronization: raw.synchronization,
+
+        review: raw.review,
+
+        behavior: raw.behavior,
+
+        verification: raw.verification,
+
+        allocator: raw.allocator,
+
+        summary: raw.summary,
+
+        findings,
+
+        nodes,
+
+        relationships,
+
+        timeline:
+            raw.timeline ??
+            [],
+
+        recommendations,
+
+        critical_path:
+            raw.critical_path,
+
+    };
+
+}
+
+export async function getClaimInvestigation(
+    workspaceId: number,
+    claimId: number,
+): Promise<InvestigationReport> {
+
+    return apiFetch<InvestigationReport>(
+        `/investigations/workspaces/${workspaceId}/claims/${claimId}`,
+    );
+
+}
+
+export async function getMemberInvestigation(
+    workspaceId: number,
+    memberId: number,
+): Promise<InvestigationReport> {
+
+    return apiFetch<InvestigationReport>(
+        `/investigations/workspaces/${workspaceId}/members/${memberId}`,
+    );
+
+}
+
+export async function getAccountInvestigation(
+    workspaceId: number,
+    accountId: number,
+): Promise<InvestigationReport> {
+
+    return apiFetch<InvestigationReport>(
+        `/investigations/workspaces/${workspaceId}/accounts/${accountId}`,
+    );
+
+}
+
+export async function getBrokerInvestigation(
+    workspaceId: number,
+    brokerId: number,
+): Promise<InvestigationReport> {
+
+    return apiFetch<InvestigationReport>(
+        `/investigations/workspaces/${workspaceId}/brokers/${brokerId}`,
+    );
+
+}
+
+export async function getSyncJobInvestigation(
+    workspaceId: number,
+    syncJobId: number,
+): Promise<InvestigationReport> {
+
+    return apiFetch<InvestigationReport>(
+        `/investigations/workspaces/${workspaceId}/sync-jobs/${syncJobId}`,
+    );
+
+}
+
+export async function getStrategyInvestigation(
+    workspaceId: number,
+    strategy: string,
+): Promise<InvestigationReport> {
+
+    return apiFetch<InvestigationReport>(
+        `/investigations/workspaces/${workspaceId}/strategies/${encodeURIComponent(strategy)}`,
+    );
+
+}
+
+export interface InvestigationOverview {
+
+    score: number;
+
+    total_findings: number;
+
+    critical_findings: number;
+
+    relationships: number;
+
+    timeline_events: number;
+
+    generated_at: string;
+
+}
+
+export async function getInvestigationOverview(
+    workspaceId: number,
+): Promise<InvestigationOverview> {
+
+    return apiFetch<InvestigationOverview>(
+        `/investigations/workspaces/${workspaceId}/overview`,
+    );
+
+}
+
+export async function getInvestigationDomains(
+    workspaceId: number,
+): Promise<InvestigationDomains> {
+
+    return apiFetch<InvestigationDomains>(
+        `/investigations/workspaces/${workspaceId}/domains`,
+    );
+
+}
+
+export async function getAllocatorInvestigation(
+    workspaceId: number,
+): Promise<InvestigationDomain> {
+
+    return apiFetch<InvestigationDomain>(
+        `/investigations/workspaces/${workspaceId}/allocator`,
+    );
+
+}
+
+export async function getVerificationInvestigation(
+    workspaceId: number,
+): Promise<InvestigationDomain> {
+
+    return apiFetch<InvestigationDomain>(
+        `/investigations/workspaces/${workspaceId}/verification`,
+    );
+
+}
+
+export async function getInstitutionalInvestigation(
+    workspaceId: number,
+) {
+
+    const [
+
+        report,
+
+        overview,
+
+        domains,
+
+    ] = await Promise.all([
+
+        getWorkspaceInvestigation(
+            workspaceId,
+        ),
+
+        getInvestigationOverview(
+            workspaceId,
+        ),
+
+        getInvestigationDomains(
+            workspaceId,
+        ),
+
+    ]);
+
+    return {
+
+        report,
+
+        overview,
+
+        domains,
+
+    };
 
 }
 
@@ -2859,6 +3438,31 @@ export async function getAllocatorReport(
   );
 }
 
+export async function downloadInstitutionalInvestigationReport(
+    workspaceId: number,
+): Promise<void> {
+
+    return apiDownload(
+        `/reports/workspace/${workspaceId}/investigation/download`,
+        `institutional_investigation_report_${workspaceId}.pdf`,
+    );
+
+}
+
+export async function downloadExecutiveReport(
+    workspaceId: number,
+): Promise<void> {
+
+    return apiDownload(
+
+        `/reports/workspace/${workspaceId}/executive/download`,
+
+        `executive_report_${workspaceId}.pdf`,
+
+    );
+
+}
+
 export async function getEvidenceAnalytics(
   workspaceId: number
 ): Promise<EvidenceAnalyticsResponse> {
@@ -3036,7 +3640,7 @@ function withApiPrefix(path: string) {
     return path.startsWith("/api") ? path : `/api${path}`;
   }
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = getAuthHeaders(options?.headers);
 
   const baseUrl = getApiBaseUrl();
@@ -3081,55 +3685,56 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 
     if (!res.ok) {
 
-      if (
-        res.status === 401 ||
-        res.status === 403
-      ) {
-        clearStoredAccessToken();
-        clearStoredActiveWorkspaceId();
+      if (res.status === 401) {
+
+          clearStoredAccessToken();
+
+          clearStoredActiveWorkspaceId();
+
       }
 
       const rawText = await res.text();
       const payload = parseApiErrorPayload(rawText);
 
-      const isLimitError =
-        payload?.code === "LIMIT_EXCEEDED" ||
-        payload?.code === "PLAN_LIMIT_REACHED" ||
-        payload?.upgrade_required === true ||
-        payload?.recommended_action === "upgrade";
+      const message =
+          payload?.message ||
+          payload?.detail ||
+          rawText ||
+          `API request failed with status ${res.status}`;
 
-      if (isLimitError) {
-        const workspaceId = payload?.workspace_id;
+      if (
 
-        if (typeof window !== "undefined" && workspaceId) {
-          throw new ApiError(
-            payload?.message || "Workspace limit reached",
-            res.status,
-            payload,
-            rawText,
-            {
-              redirectTo: workspaceId
-                ? `/workspace/${workspaceId}/settings?upgrade=true`
-                : undefined,
-            }
+          payload?.code === "page_locked" ||
+
+          payload?.code === "feature_locked" ||
+
+          payload?.code === "billing_required" ||
+
+          payload?.code === "plan_limit_reached" ||
+
+          payload?.code === "PLAN_LIMIT_REACHED" ||
+
+          payload?.upgrade_required === true
+
+      ) {
+
+          handleAuthorizationFailure(
+              payload,
           );
-        }
 
-        throw new ApiError(
-          payload?.message || "Workspace limit reached",
-          res.status,
-          payload,
-          rawText
-        );
       }
 
-      const message =
-        payload?.message ||
-        payload?.detail ||
-        rawText ||
-        `API request failed with status ${res.status}`;
+      throw new ApiError(
 
-      throw new ApiError(message, res.status, payload, rawText);
+          message,
+
+          res.status,
+
+          payload,
+
+          rawText,
+
+      );
     }
 
     const text = await res.text();
@@ -3166,7 +3771,7 @@ if (
 return requestPromise;
 }
 
-async function apiDownload(path: string, filename: string): Promise<void> {
+export async function apiDownload(path: string, filename: string): Promise<void> {
   const headers = getAuthHeaders();
   const baseUrl = getApiBaseUrl();
 
@@ -3178,15 +3783,51 @@ async function apiDownload(path: string, filename: string): Promise<void> {
   });
 
   if (!res.ok) {
-    const rawText = await res.text();
-    const payload = parseApiErrorPayload(rawText);
 
-    throw new ApiError(
-      payload?.message || "Download failed",
-      res.status,
-      payload,
-      rawText
-    );
+      if (res.status === 401) {
+
+          clearStoredAccessToken();
+
+          clearStoredActiveWorkspaceId();
+
+      }
+
+      const rawText = await res.text();
+
+      const payload = parseApiErrorPayload(rawText);
+
+      if (
+
+          payload?.code === "page_locked" ||
+
+          payload?.code === "feature_locked" ||
+
+          payload?.code === "billing_required" ||
+
+          payload?.code === "plan_limit_reached" ||
+
+          payload?.code === "PLAN_LIMIT_REACHED" ||
+
+          payload?.upgrade_required === true
+
+      ) {
+
+          handleAuthorizationFailure(payload);
+
+      }
+
+      throw new ApiError(
+
+          payload?.message || "Download failed",
+
+          res.status,
+
+          payload,
+
+          rawText,
+
+      );
+
   }
 
   const blob = await res.blob();

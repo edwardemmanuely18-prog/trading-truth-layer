@@ -14,6 +14,10 @@ from app.services.verification.verification_service import (
     get_workspace_verification_metrics,
 )
 
+from app.services.analytics.workspace_analytics_context import (
+    get_workspace_analytics_context,
+)
+
 
 def build_allocator_report_payload(
     workspace_id: int,
@@ -26,6 +30,30 @@ def build_allocator_report_payload(
             == workspace_id
         )
         .all()
+    )
+
+    claim_statuses = [
+
+        (c.status or "").lower()
+
+        for c in claims
+
+    ]
+
+    locked_claims = claim_statuses.count(
+        "locked"
+    )
+
+    published_claims = claim_statuses.count(
+        "published"
+    )
+
+    verified_claims = claim_statuses.count(
+        "verified"
+    )
+
+    draft_claims = claim_statuses.count(
+        "draft"
     )
 
     reviews = (
@@ -44,40 +72,41 @@ def build_allocator_report_payload(
         )
     )
 
-    from app.services.verification.verification_service import (
-        get_workspace_claim_verification_certificates,
+    analytics_context = (
+
+        get_workspace_analytics_context(
+
+            db=db,
+
+            workspace_id=workspace_id,
+
+        )
+
     )
 
-    workspace_certificates = (
-        get_workspace_claim_verification_certificates(
-            db=db,
-            workspace_id=workspace_id,
-        )
-    )
 
     performance = (
-        get_workspace_performance_metrics(
-            db=db,
-            workspace_id=workspace_id,
-        )
+
+        analytics_context.workspace_metrics.metrics
+
     )
 
     gross_profit = float(
-        performance.gross_profit
+        performance["gross_profit"]
     )
 
     gross_loss = abs(
         float(
-            performance.gross_loss
+            performance["gross_loss"]
         )
     )
 
     wins = int(
-        performance.winning_trades
+        performance["winning_trades"]
     )
 
     losses = int(
-        performance.losing_trades
+        performance["losing_trades"]
     )
 
     average_win = round(
@@ -97,24 +126,13 @@ def build_allocator_report_payload(
 
     loss_rate = round(
         100 -
-        performance.win_rate,
+        performance["win_rate"],
         2,
     )
 
     net_profit = round(
-        performance.net_profit,
+        performance["net_profit"],
         2,
-    )
-
-    locked_claims = len(
-        [
-            c
-            for c in claims
-            if (
-                c.status or ""
-            ).lower()
-            == "locked"
-        ]
     )
 
     review_count = len(reviews)
@@ -167,17 +185,17 @@ def build_allocator_report_payload(
     # INSTITUTIONAL BANDS
     # ==========================================
 
-    if performance.profit_factor >= 2:
+    if performance["profit_factor"] >= 2:
         performance_band = "STRONG"
-    elif performance.profit_factor >= 1.2:
+    elif performance["profit_factor"] >= 1.2:
         performance_band = "MODERATE"
     else:
         performance_band = "WEAK"
 
 
-    if performance.max_drawdown <= 10:
+    if performance["max_drawdown"] <= 10:
         risk_band = "LOW"
-    elif performance.max_drawdown <= 20:
+    elif performance["max_drawdown"] <= 20:
         risk_band = "MODERATE"
     else:
         risk_band = "HIGH"
@@ -259,7 +277,7 @@ def build_allocator_report_payload(
 
     allocator_risks = []
 
-    if performance.max_drawdown > 20:
+    if performance["max_drawdown"] > 20:
         allocator_risks.append(
             "drawdown_present"
         )
@@ -316,9 +334,6 @@ def build_allocator_report_payload(
         "workspace_verification":
             workspace_verification,
 
-        "workspace_certificates":
-            workspace_certificates,
-
         #
         # Temporary compatibility alias
         #
@@ -347,28 +362,28 @@ def build_allocator_report_payload(
         "performance": {
 
             "trade_count":
-                performance.trade_count,
+                performance["trade_count"],
 
             "total_pnl":
-                performance.net_profit,
+                performance["net_profit"],
 
             "net_profit":
-                f"${performance.net_profit:,.2f}",
+                f"${performance["net_profit"]:,.2f}",
 
             "gross_profit":
-                f"${performance.gross_profit:,.2f}",
+                f"${performance["gross_profit"]:,.2f}",
 
             "gross_loss":
-                f"${performance.gross_loss:,.2f}",
+                f"${performance["gross_loss"]:,.2f}",
 
             "profit_factor":
-                f"{performance.profit_factor:.2f}",
+                f"{performance["profit_factor"]:.2f}",
 
             "expectancy":
-                f"{performance.expectancy:.2f}",
+                f"{performance["expectancy"]:.2f}",
 
             "win_rate":
-                f"{performance.win_rate:.2f}%",
+                f"{performance["win_rate"]:.2f}%",
 
             "loss_rate":
                 f"{loss_rate:.2f}%",
@@ -380,7 +395,7 @@ def build_allocator_report_payload(
                 f"${average_loss:,.2f}",
 
             "payoff_ratio":
-                f"{performance.payoff_ratio:.2f}",
+                f"{performance["payoff_ratio"]:.2f}",
 
             "performance_band":
                 performance_band,
@@ -392,10 +407,10 @@ def build_allocator_report_payload(
                 operational_risk,
 
            "max_drawdown":
-                f"{performance.max_drawdown:,.2f}",
+                f"{performance["max_drawdown"]:,.2f}",
 
             "max_drawdown":
-                f"{performance.max_drawdown:.2f}%",
+                f"{performance["max_drawdown"]:.2f}%",
 
             "wins":
                 wins,
@@ -404,10 +419,10 @@ def build_allocator_report_payload(
                 losses,
 
             "recovery_factor":
-                f"{performance.recovery_factor:.2f}",
+                f"{performance["recovery_factor"]:.2f}",
 
             "payoff_ratio":
-                f"{performance.payoff_ratio:.2f}",
+                f"{performance["payoff_ratio"]:.2f}",
 
             "risk_band":
                 risk_band,

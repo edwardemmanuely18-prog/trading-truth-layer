@@ -3,6 +3,11 @@
 import { use } from "react";
 import { useEffect, useState } from "react";
 
+import {
+    useParams,
+    useRouter,
+} from "next/navigation";
+
 import Navbar from "../../../../components/Navbar";
 
 import {
@@ -42,6 +47,8 @@ export default function Page(
       resolvedParams.workspaceId
     );
 
+  const router = useRouter();
+
   const [loading, setLoading] =
     useState(true);
 
@@ -58,28 +65,52 @@ export default function Page(
 
     async function load() {
 
-      try {
+        try {
 
-        const response =
-          await getLeaderboardAnalytics(
-            workspaceId
-          );
+            const response =
+                await getLeaderboardAnalytics(
+                    workspaceId,
+                );
 
-        setData(response);
+            setData(
+                response,
+            );
 
-      } catch (err) {
+        } catch (err: any) {
 
-        console.error(err);
+            console.error(err);
 
-      } finally {
+            if (
 
-        setLoading(false);
+                err?.payload?.code === "page_locked" ||
 
-      }
+                err?.payload?.upgrade_required === true
+
+            ) {
+
+                router.replace(
+                    `/workspace/${workspaceId}/billing?upgrade=true`
+                );
+
+                return;
+
+            }
+
+            throw err;
+
+        } finally {
+
+            setLoading(false);
+
+        }
 
     }
 
-    load();
+    if (!Number.isNaN(workspaceId)) {
+
+      load();
+
+    }
 
   }, [workspaceId]);
 

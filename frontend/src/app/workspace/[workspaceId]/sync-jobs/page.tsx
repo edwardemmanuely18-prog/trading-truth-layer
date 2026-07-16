@@ -301,10 +301,13 @@ export default function SyncJobsPage() {
               Loading sync jobs...
             </div>
           ) : (
-            <table className="w-full">
 
-              <thead className="border-b bg-slate-50">
-                <tr>
+            <div className="max-h-[600px] overflow-auto">
+
+              <table className="w-full min-w-[1000px]">
+
+              <thead className="sticky top-0 z-10 border-b bg-slate-50">
+                <tr className="bg-slate-50">
 
                   <th className="px-6 py-4 text-left">
                     Provider
@@ -412,7 +415,10 @@ export default function SyncJobsPage() {
 
               </tbody>
 
-            </table>
+              </table>
+
+            </div>
+
           )}
 
         </div>

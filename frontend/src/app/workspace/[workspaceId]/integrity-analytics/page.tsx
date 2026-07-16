@@ -3,6 +3,10 @@
 import { use } from "react";
 import { useEffect, useState } from "react";
 
+import {
+    useRouter,
+} from "next/navigation";
+
 import Navbar from "../../../../components/Navbar";
 
 import {
@@ -38,6 +42,8 @@ export default function Page(
     Number(
       resolvedParams.workspaceId
     );
+
+  const router = useRouter();
 
   const [records, setRecords] =
     useState<IntegrityRecord[]>([]);
@@ -138,32 +144,58 @@ export default function Page(
         history
       );
 
-    } catch (err) {
+    } catch (err: any) {
 
       console.error(err);
 
-    } finally {
+      if (
+
+          err?.payload?.code === "page_locked" ||
+
+          err?.payload?.upgrade_required === true
+
+      ) {
+
+          router.replace(
+              `/workspace/${workspaceId}/billing?upgrade=true`
+          );
+
+          return;
+
+      }
+
+      throw err;
+
+  } finally {
 
       setLoading(false);
 
-    }
+  }
 
   };
 
   useEffect(() => {
 
-    load();
+      if (!Number.isNaN(workspaceId)) {
+
+          load();
+
+      }
 
   }, [workspaceId]);
 
   useEffect(() => {
 
     const interval =
-      setInterval(() => {
+        setInterval(() => {
 
-        load();
+            if (!Number.isNaN(workspaceId)) {
 
-      }, 30000);
+                load();
+
+            }
+
+        }, 30000);
 
     return () =>
       clearInterval(interval);
@@ -385,7 +417,27 @@ export default function Page(
                     );
 
                   })
-                  .catch(console.error);
+                  .catch((err: any) => {
+
+                      console.error(err);
+
+                      if (
+
+                          err?.payload?.code === "page_locked" ||
+
+                          err?.payload?.upgrade_required === true
+
+                      ) {
+
+                          router.replace(
+                              `/workspace/${workspaceId}/billing?upgrade=true`
+                          );
+
+                          return;
+
+                      }
+
+                  });
 
                 setTimeout(() => {
                   setActionMessage("");

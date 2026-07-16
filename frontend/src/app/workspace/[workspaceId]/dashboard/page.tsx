@@ -32,7 +32,7 @@ function formatPercent(value?: number | null) {
     return "—";
   }
 
-  return `${Number(value).toFixed(1)}%`;
+  return `${(Number(value) * 100).toFixed(1)}%`;
 }
 
 function normalizeText(value?: string | null) {
@@ -1323,7 +1323,7 @@ export default function WorkspaceDashboardPage() {
               )}`}
             />
             <SummaryCard
-              label="Evidence Records"
+              label="Trade Records"
               value={formatNumber(tradesUsage.used)}
               hint={`${formatNumber(tradesUsage.used)} / ${formatNumber(
                 tradesUsage.limit
@@ -1332,7 +1332,7 @@ export default function WorkspaceDashboardPage() {
             <SummaryCard
                 label="Governed Claims"
                 value={formatNumber(claimCount)}
-                hint={`${formatNumber(claimCount)} governed verification records`}
+                hint={`${formatNumber(claimCount)} governed claims`}
             />
             <SummaryCard
                 label="Public Trust Records"

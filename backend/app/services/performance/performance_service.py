@@ -49,6 +49,10 @@ from app.services.performance.workspace_performance import (
     build_workspace_performance_metrics,
 )
 
+from app.services.currency.trade_normalization_service import (
+    TradeNormalizationService,
+)
+
 
 # ============================================================
 # INTERNAL ANALYTICS ENTRY POINT
@@ -88,8 +92,22 @@ def _build_claim_analytics(
         db,
     )
 
+    normalized_trades = (
+
+        TradeNormalizationService.normalize(
+
+            db=db,
+
+            workspace_id=claim.workspace_id,
+
+            trades=trades,
+
+        )
+
+    )
+
     return compute_trade_metrics(
-        trades,
+        normalized_trades,
     )
 
 

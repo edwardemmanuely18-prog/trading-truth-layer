@@ -96,6 +96,7 @@ def build_workspace_verification_metrics(
     certificates: list[
         VerificationCertificate
     ],
+    claims,
 ) -> WorkspaceVerificationMetrics:
     """
     Aggregates claim verification certificates
@@ -107,7 +108,7 @@ def build_workspace_verification_metrics(
     Every value originates from TVS.
     """
 
-    if not certificates:
+    if not claims:
 
         return WorkspaceVerificationMetrics(
 
@@ -171,11 +172,7 @@ def build_workspace_verification_metrics(
 
         )
 
-    workspace_id = (
-        certificates[0]
-        .identity
-        .workspace_id
-    )
+    workspace_id = claims[0].workspace_id
 
     status_distribution = Counter()
 
@@ -185,7 +182,13 @@ def build_workspace_verification_metrics(
 
     tier_distribution = Counter()
 
-    draft_claim_count = 0
+    draft_claim_count = sum(
+
+        (claim.status or "").lower() == "draft"
+
+        for claim in claims
+
+    )
 
     verified_claim_count = 0
 
@@ -235,10 +238,7 @@ def build_workspace_verification_metrics(
 
         tier_distribution[tier] += 1
 
-        if status == "draft":
-            draft_claim_count += 1
-
-        elif status == "verified":
+        if status == "verified":
             verified_claim_count += 1
 
         elif status == "published":
@@ -264,13 +264,13 @@ def build_workspace_verification_metrics(
 
         /
 
-        len(certificates)
+        len(claims)
 
         * 100,
 
         2,
 
-    ) if certificates else 0.0
+    ) if claims else 0.0
 
     # Highest certification band currently
     # represented in the workspace.
@@ -285,7 +285,7 @@ def build_workspace_verification_metrics(
 
         workspace_id=workspace_id,
 
-        claim_count=len(certificates),
+        claim_count=len(claims),
 
         draft_claim_count=draft_claim_count,
 

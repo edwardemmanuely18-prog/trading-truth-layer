@@ -31,3 +31,12 @@ class AcceptInviteResponse(BaseModel):
     message: str
     workspace_id: int
     role: str
+
+from pydantic import BaseModel
+
+
+class AddWorkspaceMemberRequest(BaseModel):
+
+    user_id: int
+
+    role: str = "member"

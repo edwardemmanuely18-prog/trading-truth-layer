@@ -842,10 +842,10 @@ export default function WorkspaceLedgerPage() {
         <div className="mb-8 rounded-2xl border bg-white p-5 shadow-sm">
           <h2 className="text-xl font-semibold mb-4">Strategy Performance</h2>
 
-          <div className="overflow-x-auto">
+          <div className="max-h-[450px] overflow-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-left text-slate-600">
-                <tr>
+              <thead className="sticky top-0 z-10 bg-slate-50 text-left text-slate-600">
+                <tr className="bg-slate-50">
                   <th className="px-4 py-3">Strategy</th>
                   <th className="px-4 py-3">Trades</th>
                   <th className="px-4 py-3">Win Rate</th>
@@ -1417,10 +1417,10 @@ export default function WorkspaceLedgerPage() {
           {workspaceAuditEvents.length === 0 ? (
             <div className="mt-4 text-sm text-slate-500">No audit events found.</div>
           ) : (
-            <div className="mt-4 overflow-x-auto">
+            <div className="mt-4 max-h-[600px] overflow-auto">
               <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-slate-500">
+                <thead className="sticky top-0 z-10 bg-white">
+                  <tr className="border-b bg-white text-left text-slate-500">
                     <th className="px-3 py-2">Event</th>
                     <th className="px-3 py-2">Entity</th>
                     <th className="px-3 py-2">Summary</th>

@@ -10,6 +10,14 @@ from sqlalchemy import inspect, text
 
 from app.core.db import Base, engine, SessionLocal
 
+from app.services.currency.currency_bootstrap_service import (
+    CurrencyBootstrapService,
+)
+
+from app.services.currency.currency_synchronization_service import (
+    CurrencySynchronizationService,
+)
+
 # Import models so SQLAlchemy registers them
 from app.models import (
     Workspace,
@@ -80,6 +88,12 @@ from app.api.routes import dashboard_summary
 from app.api.routes import aurum
 
 from app.api.routes import governance
+
+from app.api.routes.authorization import (
+    router as authorization_router,
+)
+
+from app.api.routes import investigations
 
 from app.core.security import hash_password
 
@@ -167,6 +181,8 @@ app.add_middleware(
 )
 
 from app.api.routes import public
+
+from app.api.routes import report_registry
 
 
 
@@ -265,7 +281,61 @@ def on_startup():
     finally:
         db.close()
 
+    # ===================================================
+    # CURRENCY BOOTSTRAP
+    # ===================================================
+
     db = SessionLocal()
+
+    try:
+
+        requires_sync = (
+
+            CurrencyBootstrapService
+            .requires_synchronization(
+                db,
+            )
+
+        )
+
+        if requires_sync:
+
+            synced_rates = (
+
+                CurrencySynchronizationService
+                .synchronize(
+                    db=db,
+                )
+
+            )
+
+            print(
+
+                f"Currency synchronization complete."
+
+                f" Loaded {synced_rates} rates.",
+
+                flush=True,
+
+            )
+
+        else:
+
+            print(
+
+                "Currency rates already up to date.",
+
+                flush=True,
+
+            )
+
+    finally:
+
+        db.close()
+
+
+    db = SessionLocal()
+
     try:
         # -------------------------
         # Ensure default workspace
@@ -359,6 +429,9 @@ app.include_router(auth_router)
 app.include_router(
     dashboard_summary_router
 )
+app.include_router(
+    authorization_router,
+)
 
 
 # ALL WORKSPACE APIs MUST BE UNDER /api
@@ -373,6 +446,12 @@ app.include_router(platform_router, prefix="/api")
 app.include_router(claim_disputes_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
 app.include_router(public.router, prefix="/api")
+#
+# Canonical Institutional Report Registry
+#
+app.include_router(
+    report_registry.router,
+)
 app.include_router(aurum.router)
 app.include_router(
     evidence_registry.router,
@@ -441,6 +520,10 @@ app.include_router(
 )
 app.include_router(
     governance.router,
+    prefix="/api",
+)
+app.include_router(
+    investigations.router,
     prefix="/api",
 )
 

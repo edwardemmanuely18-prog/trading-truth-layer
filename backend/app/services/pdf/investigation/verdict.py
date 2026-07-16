@@ -1,0 +1,274 @@
+from __future__ import annotations
+
+from typing import Any
+
+from reportlab.platypus import (
+    PageBreak,
+)
+
+from app.services.investigations.models import (
+    InvestigationReport,
+)
+
+from app.services.pdf.common.institutional_sections import (
+    build_section_title,
+    build_narrative,
+)
+
+from app.services.pdf.common.institutional_tables import (
+    build_key_value_table,
+)
+
+
+# ==========================================================
+# Helpers
+# ==========================================================
+
+def _value(value):
+
+    if value is None:
+        return "Not Available"
+
+    if hasattr(value, "value"):
+        value = value.value
+
+    return str(value).replace("_", " ").title()
+
+
+# ==========================================================
+# Institutional Verdict
+# ==========================================================
+
+def build_institutional_verdict(
+    story: list[Any],
+    report: InvestigationReport,
+    verification_url: str,
+) -> None:
+
+    #
+    # Always starts on its own page.
+    #
+
+    story.append(PageBreak())
+
+    story.extend(
+
+        build_section_title(
+
+            "Institutional Verdict",
+
+        )
+
+    )
+
+    story.extend(
+
+        build_narrative(
+
+            [
+
+                (
+                    "This page represents the official institutional "
+                    "conclusion of the Investigation Intelligence "
+                    "System (IIS)."
+                ),
+
+                (
+                    "Every conclusion presented below is derived "
+                    "from the canonical Investigation Context and "
+                    "is fully reproducible from the underlying "
+                    "evidence graph."
+                ),
+
+            ]
+
+        )
+
+    )
+
+    allocator = report.allocator
+
+    metadata = report.metadata or {}
+
+    provider_count = metadata.get(
+        "provider_count",
+        0,
+    )
+
+    evidence_nodes = metadata.get(
+        "evidence_nodes",
+        "Not Available",
+    )
+
+    relationships = metadata.get(
+        "relationship_count",
+        "Not Available",
+    )
+
+    story.append(
+
+        build_key_value_table(
+
+            {
+
+                "Investigation Status":
+                    _value(report.status),
+
+                "Institutional Decision":
+                    _value(allocator.decision),
+
+                "Overall Confidence":
+                    f"{allocator.confidence:.2f}%",
+
+                "Residual Risk":
+                    _value(allocator.residual_risk),
+
+                "Completed Domains":
+                    str(
+                        allocator.metadata.get(
+                            "completed_domains",
+                            0,
+                        )
+                    ),
+
+                "Evidence Nodes":
+                    str(evidence_nodes),
+
+                "Relationships":
+                    str(relationships),
+
+                "Providers":
+                    str(provider_count),
+
+            }
+
+        )
+
+    )
+
+    story.extend(
+
+        build_section_title(
+
+            "Allocator Assessment",
+
+        )
+
+    )
+
+    story.extend(
+
+        build_narrative(
+
+            [
+
+                allocator.rationale
+
+                if allocator.rationale
+
+                else (
+
+                    "The allocator completed institutional synthesis "
+
+                    "using the canonical Investigation Context."
+
+                ),
+
+            ]
+
+        )
+
+    )
+
+    actions = allocator.required_actions or []
+
+    if actions:
+
+        story.extend(
+
+            build_section_title(
+
+                "Required Before Institutional Approval",
+
+            )
+
+        )
+
+        story.extend(
+
+            build_narrative(
+
+                [
+
+                    *[
+                        f"• {action}"
+                        for action in actions
+                    ]
+
+                ]
+
+            )
+
+        )
+
+    story.extend(
+
+        build_section_title(
+
+            "Institutional Statement",
+
+        )
+
+    )
+
+    story.extend(
+
+        build_narrative(
+
+            [
+
+                (
+                    "The Institutional Investigation System has "
+                    "completed reconstruction of the investigation "
+                    "using the canonical Investigation Context."
+                ),
+
+                (
+                    "Every finding remains permanently traceable "
+                    "to validated evidence, analytical reasoning "
+                    "and allocator decision."
+                ),
+
+                (
+                    "The investigation is independently "
+                    "reproducible and suitable for allocator "
+                    "review, institutional governance and "
+                    "regulatory inspection."
+                ),
+
+            ]
+
+        )
+
+    )
+
+    story.append(
+
+        build_key_value_table(
+
+            {
+
+                "Generated By":
+                    "Trading Truth Layer",
+
+                "System":
+                    "Institutional Investigation System",
+
+                "Verification":
+                    verification_url,
+
+            }
+
+        )
+
+    )

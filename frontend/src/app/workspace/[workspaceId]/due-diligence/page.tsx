@@ -1,7 +1,14 @@
 "use client";
 
-import { use } from "react";
-import { useEffect, useState } from "react";
+import {
+    use,
+    useEffect,
+    useState,
+} from "react";
+
+import {
+    useRouter,
+} from "next/navigation";
 
 import Navbar from "../../../../components/Navbar";
 
@@ -27,6 +34,9 @@ export default function Page(
       resolved.workspaceId
     );
 
+  const router =
+    useRouter();
+
   const [report, setReport] =
     useState<DueDiligenceResponse | null>(
       null
@@ -37,22 +47,63 @@ export default function Page(
 
   useEffect(() => {
     async function load() {
+
       try {
-        const data =
-          await getDueDiligence(
-            workspaceId
+
+          const data =
+              await getDueDiligence(
+                  workspaceId
+              );
+
+          setReport(
+              data
           );
 
-        setReport(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }
+      } catch (err: any) {
 
-    load();
-  }, [workspaceId]);
+          console.error(err);
+
+          if (
+
+              err?.payload?.code ===
+                  "page_locked" ||
+
+              err?.payload?.upgrade_required ===
+                  true
+
+          ) {
+
+              router.replace(
+                  `/workspace/${workspaceId}/billing?upgrade=true`
+              );
+
+              return;
+
+          }
+
+          throw err;
+
+      } finally {
+
+          setLoading(false);
+
+      }
+
+  }
+
+    if (
+        !Number.isNaN(
+            workspaceId
+        )
+    ) {
+
+        load();
+
+    }
+  }, [
+      workspaceId,
+      router,
+  ]);
 
   if (loading) {
     return (

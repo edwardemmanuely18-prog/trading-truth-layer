@@ -3,6 +3,26 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 
+from app.api.deps import get_current_user
+
+from app.api.authorization_deps import (
+    require_workspace_context,
+)
+
+from app.models.user import User
+
+from app.services.authorization.engine.authorization_service import (
+    AuthorizationService,
+)
+
+from app.services.authorization.registry.capability_catalog import (
+    VERIFICATION_READ,
+)
+
+from app.services.entitlements import (
+    enforce_workspace_page_access,
+)
+
 from app.services.verification.verification_service import (
     get_workspace_claim_verification_certificates,
     get_workspace_verification_metrics,
@@ -21,7 +41,18 @@ router = APIRouter(
 )
 def get_workspace_trust_scores(
     workspace_id: int,
+
     db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        get_current_user,
+    ),
+
+    context = Depends(
+        require_workspace_context(
+            "trust_scores",
+        )
+    ),
 ):
     certificates = (
         get_workspace_claim_verification_certificates(
@@ -29,6 +60,18 @@ def get_workspace_trust_scores(
             workspace_id=workspace_id,
             include_draft=True,
         )
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        VERIFICATION_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=context.workspace.id,
+        db=db,
+        page="trust_scores",
+        action="access Trust Scores",
     )
 
     workspace_metrics = (

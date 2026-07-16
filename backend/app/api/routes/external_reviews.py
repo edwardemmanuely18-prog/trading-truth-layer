@@ -8,6 +8,30 @@ from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 
+from app.api.authorization_deps import (
+    require_workspace_context,
+)
+
+from app.api.deps import (
+    get_current_user,
+)
+
+from app.models.user import (
+    User,
+)
+
+from app.services.authorization.engine.authorization_service import (
+    AuthorizationService,
+)
+
+from app.services.authorization.registry.capability_catalog import (
+    VERIFICATION_READ,
+)
+
+from app.services.entitlements import (
+    enforce_workspace_page_access,
+)
+
 from app.models.review_statement import (
     ReviewStatement,
 )
@@ -31,7 +55,18 @@ router = APIRouter(
 )
 def get_workspace_reviews(
     workspace_id: int,
+
     db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        get_current_user,
+    ),
+
+    context = Depends(
+        require_workspace_context(
+            "external_reviews",
+        )
+    ),
 ):
     reviews = (
         db.query(ReviewStatement)
@@ -43,6 +78,18 @@ def get_workspace_reviews(
             ReviewStatement.id.desc()
         )
         .all()
+    )
+
+    AuthorizationService.require_capability(
+        context.access,
+        VERIFICATION_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="external_reviews",
+        action="access External Reviews",
     )
 
     return {
@@ -144,9 +191,34 @@ def get_claim_reviews(
 )
 def create_review(
     workspace_id: int,
+
     payload: ReviewStatementCreate,
+
     db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        get_current_user,
+    ),
+
+    context = Depends(
+        require_workspace_context(
+            "external_reviews",
+        )
+    ),
 ):
+
+    AuthorizationService.require_capability(
+        context.access,
+        VERIFICATION_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="external_reviews",
+        action="submit External Review",
+    )
+
     statement = (
         payload.statement or ""
     ).lower()
@@ -308,8 +380,31 @@ def create_review(
 )
 def get_review_analytics(
     workspace_id: int,
+
     db: Session = Depends(get_db),
+
+    current_user: User = Depends(
+        get_current_user,
+    ),
+
+    context = Depends(
+        require_workspace_context(
+            "external_reviews",
+        )
+    ),
 ):
+    AuthorizationService.require_capability(
+        context.access,
+        VERIFICATION_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="external_reviews",
+        action="access External Review Analytics",
+    )
+
     reviews = (
         db.query(ReviewStatement)
         .filter(

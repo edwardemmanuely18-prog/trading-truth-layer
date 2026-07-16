@@ -7,6 +7,9 @@ import {
   type PublicTrustProfile,
 } from "../../../lib/api";
 
+import ProfileClaimSearch
+from "../../../components/profile/ProfileClaimSearch";
+
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL || "https://trading-truth-layer.vercel.app";
 
@@ -17,7 +20,15 @@ type ExtendedProfile = PublicProfileResponse & {
 };
 
 type PageProps = {
-  params: { id: string };
+
+    params: Promise<{
+        id:string;
+    }>;
+
+    searchParams?: Promise<{
+        q?:string;
+    }>;
+
 };
 
 function getDisputeLabel(profile: any): string {
@@ -179,11 +190,27 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
 }
 
   export default async function Page({
-    params,
-  }: {
-  params: Promise<{ id: string }>;
-  }) {
-    const { id } = await params;
+
+      params,
+
+      searchParams,
+
+  }: PageProps) {
+    const { id } =
+      await params;
+
+    const resolvedSearchParams =
+        searchParams
+            ? await searchParams
+            : {};
+
+    const searchQuery =
+
+        resolvedSearchParams.q
+            ?.toLowerCase()
+            .trim()
+
+        ?? "";
     const workspaceId = Number(id);
 
   if (!workspaceId || isNaN(workspaceId)) {
@@ -256,6 +283,36 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
       },
     }))
   );
+
+  const filteredClaims = claims.filter((claim) => {
+
+    if (!searchQuery) {
+
+      return true;
+
+    }
+
+    return (
+
+      claim.name
+        ?.toLowerCase()
+        .includes(searchQuery)
+
+      ||
+
+      String(
+        claim.claim_schema_id
+      ).includes(searchQuery)
+
+      ||
+
+      claim.claim_hash
+        ?.toLowerCase()
+        .includes(searchQuery)
+
+    );
+
+  });
 
   const profile = data
   ? {
@@ -468,16 +525,33 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
 
             <div className="rounded-2xl border bg-white p-6 shadow-sm">
               <h2 className="text-2xl font-semibold">Claims Under This Profile</h2>
+
+              <div className="mt-6">
+
+                  <ProfileClaimSearch
+
+                      workspaceId={
+                          workspaceId
+                      }
+
+                      initialValue={
+                          searchQuery
+                      }
+
+                  />
+
+              </div>
+
               <div className="mt-2 text-sm text-slate-500">
                 Locked public claims ranked here by trust first, then net pnl.
               </div>
 
-              {!Array.isArray(claims) || claims.length === 0 ? (
+              {!Array.isArray(claims) || filteredClaims.length === 0 ? (
                 <div className="mt-4 text-slate-600">No public claims available for this profile.</div>
               ) : (
-                <div className="mt-4 overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
+                <div className="mt-4 max-h-[700px] overflow-auto">
+                  <table className="min-w-full border-separate border-spacing-0 text-sm">
+                    <thead className="sticky top-0 z-10 bg-white">
                       <tr className="border-b text-left text-slate-500">
                         <th className="px-3 py-3">Claim</th>
                         <th className="px-3 py-3">Status</th>
@@ -491,7 +565,7 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
                       </tr>
                     </thead>
                     <tbody>
-                      {claims.map((claim) => {
+                      {filteredClaims.map((claim) => {
                         const trustBand = resolveClaimTrustBand(claim);
                         const hasActiveDispute = Boolean((claim as ExtendedClaim)?.has_active_dispute ?? false);
                         const trustScore = Number((claim as ExtendedClaim)?.trust_score ?? 0);
@@ -509,9 +583,6 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
                         const verifyPath =
                           (claim as any)?.verify_path ??
                           `/verify/${claim.claim_hash}`;
-
-                        const proofPath =
-                          publicViewPath.replace("/public", "/proof");
 
                         return (
                           <tr
@@ -600,12 +671,6 @@ function sortClaims(claims: PublicClaimDirectoryItem[]) {
                                   Verify
                                 </Link>
 
-                                <Link
-                                  href={publicViewPath}
-                                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
-                                >
-                                  Claim Proof
-                                </Link>
                               </div>
                             </td>
                           </tr>

@@ -72,8 +72,9 @@ export default function WorkspacePreferencesCard({
 
             <p className="mt-2 text-sm text-slate-500">
 
-                Default workspace behaviour and regional
-                configuration.
+                Configure how performance analytics,
+                reports and verification data are
+                presented across your workspace.
 
             </p>
 
@@ -86,8 +87,7 @@ export default function WorkspacePreferencesCard({
                     onChange={onTimezoneChange}
                 />
 
-                <Field
-                    label="Currency"
+                <CurrencySelector
                     value={currency}
                     readOnly={readOnly}
                     onChange={onCurrencyChange}
@@ -196,6 +196,114 @@ function Field({
                 }
 
             />
+
+        </div>
+
+    );
+
+}
+
+function CurrencySelector({
+
+    value,
+
+    readOnly,
+
+    onChange,
+
+}:{
+
+    value:string;
+
+    readOnly?:boolean;
+
+    onChange?:(v:string)=>void;
+
+}){
+
+    const currencies = [
+
+        "USD",
+        "EUR",
+        "GBP",
+        "JPY",
+        "CHF",
+        "AUD",
+        "CAD",
+        "NZD",
+        "SGD",
+        "HKD",
+        "ZAR",
+        "TZS",
+
+    ];
+
+    return(
+
+        <div>
+
+            <div className="mb-2 text-sm font-medium">
+
+                Reporting Currency
+
+            </div>
+
+            <select
+
+                className="w-full rounded-xl border bg-slate-50 px-4 py-3"
+
+                value={value}
+
+                disabled={readOnly}
+
+                onChange={(e)=>
+
+                    onChange?.(
+
+                        e.target.value
+
+                    )
+
+                }
+
+            >
+
+                {
+
+                    currencies.map(
+
+                        (currency)=>(
+
+                            <option
+
+                                key={currency}
+
+                                value={currency}
+
+                            >
+
+                                {currency}
+
+                            </option>
+
+                        )
+
+                    )
+
+                }
+
+            </select>
+
+            <p className="mt-2 text-xs text-slate-500">
+
+                All analytics, reports and
+                verification metrics will be
+                normalized into the selected
+                reporting currency while
+                preserving the original trade
+                currency in the Ledger.
+
+            </p>
 
         </div>
 

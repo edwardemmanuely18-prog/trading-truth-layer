@@ -48,6 +48,8 @@ class WorkspaceVerificationContext:
     Canonical TVS context for an entire workspace.
     """
 
+    claims: list
+
     certificates: list
 
     metrics: object
@@ -137,6 +139,23 @@ def get_claim_verification_context(
     return ClaimVerificationContext(
         certificate=certificate,
         metrics=metrics,
+    )
+
+
+def get_workspace_claims(
+    db: Session,
+    workspace_id: int,
+):
+    return (
+
+        db.query(ClaimSchema)
+
+        .filter(
+            ClaimSchema.workspace_id == workspace_id
+        )
+
+        .all()
+
     )
 
 
@@ -231,8 +250,25 @@ def get_workspace_verification_metrics(
         )
     )
 
+    claims = (
+
+        db.query(ClaimSchema)
+
+        .filter(
+            ClaimSchema.workspace_id
+            == workspace_id
+        )
+
+        .all()
+
+    )
+
     return build_workspace_verification_metrics(
-        certificates
+
+        certificates,
+
+        claims,
+
     )
 
 
@@ -254,6 +290,13 @@ def get_workspace_verification_context(
     reporting modules.
     """
 
+    claims = get_workspace_claims(
+
+        db=db,
+        workspace_id=workspace_id,
+
+    )
+
     certificates = (
         get_workspace_claim_verification_certificates(
             db=db,
@@ -262,11 +305,33 @@ def get_workspace_verification_context(
         )
     )
 
+    claims = (
+
+        db.query(ClaimSchema)
+
+        .filter(
+            ClaimSchema.workspace_id
+            == workspace_id
+        )
+
+        .all()
+
+    )
+
     metrics = build_workspace_verification_metrics(
+
         certificates,
+
+        claims,
+
     )
 
     return WorkspaceVerificationContext(
+
         certificates=certificates,
+
+        claims=claims,
+
         metrics=metrics,
+
     )
