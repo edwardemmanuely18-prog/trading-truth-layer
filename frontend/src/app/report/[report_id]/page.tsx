@@ -14,8 +14,7 @@ export default async function ReportPage(
     const { report_id } = await params;
 
     const backendBase = (
-        process.env.NEXT_PUBLIC_API_BASE ||
-        process.env.NEXT_PUBLIC_API_URL ||
+        process.env.NEXT_PUBLIC_BACKEND_URL ||
         "http://127.0.0.1:8001"
     ).replace(/\/+$/, "");
 
