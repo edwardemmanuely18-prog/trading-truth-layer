@@ -23,7 +23,7 @@ VERIFY_BASE_URL = os.getenv(
 
     "REPORT_VERIFY_BASE_URL",
 
-    "http://localhost:8001",
+    "https://www.tradingtruthlayer.com",
 
 ).rstrip("/")
 
