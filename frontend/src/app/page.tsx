@@ -48,12 +48,12 @@ export default function HomePage() {
     {
       title: "Institutional Investigation System (IIS)",
       description:
-        "Institutional reasoning engine that evaluates verified trading records across multiple investigation domains to produce allocator decisions, findings, recommendations and institutional readiness assessments.",
+        "Institutional investigation infrastructure that evaluates verified trading performance across multiple allocator-grade investigation domains including governance, behavior, capital efficiency, broker integrity, execution quality and institutional readiness.",
     },
     {
-      title: "Verification Engine",
+      title: "Institutional Verification Engine",
       description:
-        "Produces institutional verification certificates, trust metrics, governance scores, and verification coverage.",
+        "Produces institutional verification certificates, trust metrics, verification bands, network scores and allocator-grade verification outputs.",
     },
     {
       title: "Evidence Graph",
@@ -63,7 +63,7 @@ export default function HomePage() {
     {
       title: "Institutional Reporting",
       description:
-        "Generate allocator reports, claim reports, governance reports, and due-diligence documentation directly from verified evidence.",
+        "Generate allocator reports, institutional investigations, claim reports, governance reports and due diligence documentation from canonical evidence and verified performance records.",
     },
     {
       title: "Governance & Audit Trail",
@@ -126,18 +126,15 @@ export default function HomePage() {
       <section className="mx-auto max-w-7xl px-6 py-16">
         <div className="max-w-4xl">
           <div className="inline-flex rounded-full border px-4 py-2 text-xs uppercase text-slate-600">
-            Trust infrastructure for trading
+            Institutional Trading Trust Infrastructure
           </div>
 
           <h1 className="mt-6 text-5xl font-bold leading-tight">
-            Turn trading activity into institutional verification,
-            governed evidence and independently verifiable trust.
+            Turn trading performance into institutional-grade trust, due diligence, allocator readiness and independently verifiable proof.
           </h1>
 
           <p className="mt-6 text-lg text-slate-600">
-            Trading Truth Layer transforms raw trading activity into governed evidence,
-            institutional reports, public verification records and cryptographically
-            verifiable proof suitable for investors, allocators, regulators and external reviewers.
+            Trading Truth Layer is an institutional trust infrastructure that transforms trading performance into verified claims, allocator-ready due diligence reports, institutional investigations, governance records and public trust profiles suitable for allocators, investors, funds, brokers and institutions.
           </p>
 
           {/* CTA */}
@@ -177,7 +174,7 @@ export default function HomePage() {
       {/* 🔥 NEW: PROOF OUTPUTS */}
       <section className="mx-auto max-w-7xl px-6 pb-16">
         <h2 className="text-2xl font-semibold">
-          Institutional Outputs
+          Institutional Trust Outputs
         </h2>
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
@@ -209,24 +206,28 @@ export default function HomePage() {
             title="Canonical Evidence Graph"
             description="Relationship graph connecting evidence, claims, reports and verification history into a single trust network."
           />
+          <SurfaceCard
+            title="Public Trust Profile"
+            description="Institutional trust profile containing verification, integrity, governance and network metrics suitable for public disclosure and allocator review."
+          />
         </div>
       </section>
 
       {/* PROBLEM */}
       <section className="mx-auto max-w-7xl px-6 pb-16">
         <h2 className="text-2xl font-semibold">
-          The problem: trading has no trust infrastructure
+          The global trading industry lacks trust infrastructure.
         </h2>
 
         <div className="mt-4 space-y-2 text-slate-600">
-          <div>• Performance claims are easy to fake</div>
-          <div>• Screenshots are not verifiable</div>
-          <div>• Results are inconsistent</div>
-          <div>• Disputes are expensive</div>
+          <div>• Trading performance is difficult to verify independently.</div>
+          <div>• Institutional due diligence is expensive and fragmented.</div>
+          <div>• Allocator readiness standards are inconsistent.</div>
+          <div>• Trading reputation is largely ungoverned.</div>
         </div>
 
         <div className="mt-6 font-semibold text-slate-900">
-          Trading Truth Layer turns trading activity into verifiable proof.
+          Trading Truth Layer establishes institutional trust infrastructure for trading performance.
         </div>
       </section>
 
@@ -242,7 +243,7 @@ export default function HomePage() {
       <section className="mx-auto max-w-7xl px-6 pb-16">
 
         <h2 className="text-2xl font-semibold">
-          Why institutions use Trading Truth Layer
+          Why allocators, institutions and brokers use Trading Truth Layer
         </h2>
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
@@ -258,8 +259,8 @@ export default function HomePage() {
           />
 
           <SurfaceCard
-            title="Allocator ready"
-            description="Generate professional due-diligence documentation directly from verified claims."
+            title="Allocator infrastructure"
+            description="Generate allocator-grade due diligence documentation and institutional investigations directly from verified performance records."
           />
 
           <SurfaceCard
@@ -278,8 +279,8 @@ export default function HomePage() {
           />
 
           <SurfaceCard
-              title="Institutional investigation"
-              description="Institutional reasoning engines investigate verified claims across multiple domains before allocator decisions are produced."
+              title="Institutional Intelligence"
+              description="Allocator-grade investigation engines evaluate trading performance before investment decisions are produced."
           />
 
         </div>
@@ -290,11 +291,11 @@ export default function HomePage() {
       <section className="mx-auto max-w-7xl px-6 pb-20">
         <div className="rounded-3xl border bg-white p-8">
           <h2 className="text-2xl font-semibold">
-            Institutional Verification Lifecycle
+            Institutional Trading Trust Lifecycle
           </h2>
 
           <div className="mt-4 text-sm text-slate-600">
-            Import → Verify → Govern → Investigate → Report → Publish
+            Import → Verify → Govern → Investigate → Report → Publish → Trust
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">

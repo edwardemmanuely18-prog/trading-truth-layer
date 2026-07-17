@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   },
 
   description:
-    "Institutional verification infrastructure for trading records, canonical ledgers, governance workflows and audit-ready trading proof systems.",
+    "Institutional Trading Trust Infrastructure for verification, governance, due diligence, allocator readiness and independently verifiable trading performance.",
 
   icons: {
     icon: "/favicon.ico",
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     title: "Trading Truth Layer",
 
     description:
-      "Institutional verification infrastructure for trading records, canonical ledgers, governance workflows and audit-ready trading proof systems.",
+      "Institutional Trading Trust Infrastructure for verification, governance, due diligence, allocator readiness and independently verifiable trading performance.",
 
     url: "https://www.tradingtruthlayer.com",
 
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     title: "Trading Truth Layer",
 
     description:
-      "Institutional verification infrastructure for trading records, canonical ledgers, governance workflows and audit-ready trading proof systems.",
+      "Institutional Trading Trust Infrastructure for verification, governance, due diligence, allocator readiness and independently verifiable trading performance.",
 
     images: ["/logo.png"],
   },
@@ -78,7 +78,7 @@ export default function RootLayout({
                 "https://www.tradingtruthlayer.com/logo.png",
 
               description:
-                "Institutional trading verification infrastructure.",
+                "Institutional Trading Trust Infrastructure providing verification, governance, due diligence, allocator reports, investigation systems and independently verifiable trading performance.",
 
               email:
                 "support@tradingtruthlayer.com",
