@@ -50,21 +50,21 @@ PLAN_DEFAULTS = {
         "trades": 1000,
         "members": 1,
         "storage_mb": 100,
+
         "infrastructure": [
-            "Evidence Engine",
-            "Claim Engine",
-            "PDF Engine",
+
+            "Evidence Collection Engine",
+
+            "Claim Governance Engine",
+
+            "Verification PDF Engine",
+
             "Verification Ledger",
-            "Workspace Core",
+
+            "Workspace Core Infrastructure",
+
         ],
 
-        "commercial_services": [
-            "Historical Trade Verification",
-            "Manual Evidence Collection",
-            "Governed Claim Submission",
-            "Verification Report Generation",
-            "Workspace Evaluation Workflow",
-        ],
 
         "workflow_outcomes": [
 
@@ -126,20 +126,21 @@ PLAN_DEFAULTS = {
         "trades": 5000,
         "members": 1,
         "storage_mb": 500,
-        "infrastructure": [
-            "Public Verification Engine",
-            "Verification Registry",
-            "Trust Directory",
-            "Evidence Publishing",
-            "Governance Engine",
-        ],
 
-        "commercial_services": [
-            "Everything in Sandbox",
-            "Public Verification Workflow",
-            "Public Trust Profile",
-            "Public Verification Sharing",
-            "Trust Publishing",
+        "infrastructure": [
+
+            "Public Verification Engine",
+
+            "Verification Registry",
+
+            "Trust Directory",
+
+            "Public Profile Infrastructure",
+
+            "Verification Routes Infrastructure",
+
+            "Claim Governance Engine",
+
         ],
 
         "workflow_outcomes": [
@@ -182,20 +183,21 @@ PLAN_DEFAULTS = {
         "trades": 50000,
         "members": 1,
         "storage_mb": 2048,
-        "infrastructure": [
-            "Broker Connector Framework",
-            "Synchronization Engine",
-            "Verification Intelligence",
-            "Institutional Reporting",
-            "Verification Network",
-        ],
 
-        "commercial_services": [
-            "Everything in Starter",
-            "Broker Synchronization Workflow",
-            "Continuous Verification",
-            "Institutional Verification",
-            "Trust Intelligence",
+        "infrastructure": [
+
+            "Broker Connector Framework",
+
+            "Broker Synchronization Engine",
+
+            "Verification Intelligence Infrastructure",
+
+            "Verification Network",
+
+            "Trust Analytics Infrastructure",
+
+            "Report Center Infrastructure",
+
         ],
 
         "workflow_outcomes": [
@@ -238,20 +240,23 @@ PLAN_DEFAULTS = {
         "trades": 250000,
         "members": 25,
         "storage_mb": 10240,
-        "infrastructure": [
-            "Continuous Sync Engine",
-            "Automation Engine",
-            "API Gateway",
-            "Evidence Analytics",
-            "Multi-user Governance",
-        ],
 
-        "commercial_services": [
-            "Everything in Pro",
-            "Team Verification",
-            "External Review Workflow",
-            "Automation Workflow",
-            "API Integration",
+        "infrastructure": [
+
+            "Continuous Synchronization Engine",
+
+            "Automation Infrastructure",
+
+            "API Gateway",
+
+            "Evidence Analytics Infrastructure",
+
+            "External Review Infrastructure",
+
+            "Trust Intelligence Infrastructure",
+
+            "Multi-user Governance",
+
         ],
 
         "workflow_outcomes": [
@@ -294,20 +299,27 @@ PLAN_DEFAULTS = {
         "trades": 1000000,
         "members": 250,
         "storage_mb": 51200,
-        "infrastructure": [
-            "Enterprise Governance",
-            "Allocator Infrastructure",
-            "Institutional APIs",
-            "Compliance Framework",
-            "Priority Processing",
-        ],
 
-        "commercial_services": [
-            "Everything in Growth",
-            "Institutional Governance",
-            "Allocator Due Diligence",
-            "Enterprise Verification",
-            "Enterprise Compliance",
+        "infrastructure": [
+
+            "Enterprise Governance",
+
+            "Allocator Infrastructure",
+
+            "Institutional Investigation System",
+
+            "Institutional Reporting Infrastructure",
+
+            "Institutional API Gateway",
+
+            "Verification Network Infrastructure",
+
+            "Trust Intelligence Infrastructure",
+
+            "Compliance Framework",
+
+            "Priority Processing",
+
         ],
 
         "workflow_outcomes": [
@@ -358,6 +370,8 @@ PLAN_FEATURES = {
 
         "multi_user": False,
 
+        "allocator_report_pdf": False,
+
         "templates": False,
         "report_center": False,
         "institutional_reports": False,
@@ -394,6 +408,8 @@ PLAN_FEATURES = {
 
         "multi_user": False,
 
+        "allocator_report_pdf": False,
+
         "templates": False,
         "report_center": False,
         "institutional_reports": False,
@@ -421,6 +437,7 @@ PLAN_FEATURES = {
         "pdf_reports": True,
         "json_export": True,
         "zip_export": True,
+        "allocator_report_pdf": False,
 
         "external_review": False,
         "trust_intelligence": True,
@@ -457,6 +474,8 @@ PLAN_FEATURES = {
         "json_export": True,
         "zip_export": True,
 
+        "allocator_report_pdf": True,
+
         "external_review": True,
         "trust_intelligence": True,
         "evidence_analytics": True,
@@ -491,6 +510,8 @@ PLAN_FEATURES = {
         "pdf_reports": True,
         "json_export": True,
         "zip_export": True,
+
+        "allocator_report_pdf": True,
 
         "external_review": True,
         "trust_intelligence": True,
@@ -536,14 +557,14 @@ PLAN_PAGE_ACCESS = {
         "ledger": True,
         "evidence_records": True,
         "import_batches": True,
-        "audit_timeline": True,
+        "audit_timeline": False,
         "integrity_registry": False,
 
         # Claim Operations
         "claims": True,
         "claim_builder": True,
         "claim_review": False,
-        "schema_registry": False,
+        "schema_registry": True,
         "templates": False,
 
         # Trust Intelligence
@@ -590,14 +611,14 @@ PLAN_PAGE_ACCESS = {
         "broker_connections": False,
         "import_center": True,
         "sync_jobs": False,
-        "adapter_registry": False,
+        "adapter_registry": True,
 
         # Evidence Registry
         "ledger": True,
         "evidence_records": True,
         "import_batches": True,
         "audit_timeline": True,
-        "integrity_registry": False,
+        "integrity_registry": True,
 
         # Claim Operations
         "claims": True,
@@ -685,7 +706,7 @@ PLAN_PAGE_ACCESS = {
         "trust_directory": True,
         "verification_network": True,
         "external_reviews": False,
-        "evidence_graph": True,
+        "evidence_graph": False,
         "public_profiles": True,
         "search": True,
 
@@ -762,66 +783,127 @@ PLAN_PAGE_ACCESS = {
 }
 
 
+NAVBAR_DOMAIN_MAPPING = {
+
+    "dashboard": [
+        "dashboard",
+    ],
+
+    "intake": [
+        "broker_connections",
+        "import_center",
+        "sync_jobs",
+        "adapter_registry",
+    ],
+
+    "registry": [
+        "ledger",
+        "evidence_records",
+        "import_batches",
+        "audit_timeline",
+        "integrity_registry",
+    ],
+
+    "claims": [
+        "claims",
+        "claim_builder",
+        "claim_review",
+        "schema_registry",
+        "templates",
+    ],
+
+    "trust": [
+        "trust_scores",
+        "leaderboard",
+        "verification_analytics",
+        "integrity_analytics",
+        "evidence_analytics",
+        "risk_analytics",
+        "allocator_reports",
+        "report_center",
+    ],
+
+    "investigation": [
+        "investigations",
+        "investigation_overview",
+        "investigation_timeline",
+        "investigation_evidence",
+        "investigation_domains",
+        "investigation_findings",
+        "investigation_reports",
+    ],
+
+    "public": [
+        "public_records",
+        "verification_routes",
+        "trust_directory",
+        "verification_network",
+        "external_reviews",
+        "evidence_graph",
+        "public_profiles",
+    ],
+
+    "administration": [
+        "members",
+        "roles",
+        "billing",
+        "settings",
+    ],
+
+}
+
+
 PLAN_COMMERCIAL_SERVICES = {
 
     "sandbox": [
 
-        "Evidence Collection Workflow",
-        "Manual Trade Import Workflow",
-        "CSV Import Workflow",
-        "Claim Preparation Workflow",
-        "Evidence Report Workflow",
+        "Product Evaluation Access",
+        "Sandbox Environment Access",
+        "Manual Trade Import Services",
+        "CSV Import Services",
+        "Institutional Report Preview Services",
 
     ],
 
     "starter": [
 
-        "Everything in Sandbox",
-
-        "Public Verification Workflow",
-        "Verification Publication Workflow",
-        "Public Trust Profile Workflow",
-        "Evidence Sharing Workflow",
-        "Claim Governance Workflow",
+        "Public Verification Publishing",
+        "Verification Record Hosting",
+        "Verification Link Distribution",
+        "Public Trust Profile Services",
+        "Governed Claim Operations",
 
     ],
 
     "pro": [
 
-        "Everything in Starter",
-
-        "Broker Integration Workflow",
-        "Broker Synchronization Workflow",
-        "Incremental Synchronization Workflow",
-        "Account Snapshot Workflow",
-        "Verification Intelligence Workflow",
-        "Trust Analytics Workflow",
+        "Native Broker Connection Services",
+        "Broker Synchronization Services",
+        "Verification Intelligence Services",
+        "Trust Analytics Services",
+        "Institutional Report Services",
+        "Verification Network Services",
 
     ],
 
     "growth": [
 
-        "Everything in Pro",
-
-        "Continuous Synchronization Workflow",
-        "Multi-Workspace Collaboration",
-        "External Review Workflow",
-        "Evidence Analytics Workflow",
-        "Automation Workflow",
-        "API Integration Workflow",
+        "Continuous Synchronization Services",
+        "Workflow Automation Services",
+        "Evidence Analytics Services",
+        "External Review Services",
+        "API Access Services",
+        "Collaborative Governance Services",
 
     ],
 
     "business": [
 
-        "Everything in Growth",
-
-        "Institutional Governance Workflow",
-        "Allocator Due Diligence Workflow",
-        "Institutional Investigation System",
-        "Institutional Reporting Workflow",
-        "Audit Export Workflow",
-        "Enterprise Administration Workflow",
+        "Institutional Investigation Services",
+        "Allocator Due Diligence Services",
+        "Institutional Reporting Services",
+        "Compliance Services",
+        "Enterprise Governance Services",
         "Priority Operational Support",
 
     ],
@@ -829,10 +911,10 @@ PLAN_COMMERCIAL_SERVICES = {
     "internal": [
 
         "Complete Platform Access",
-        "Internal Platform Administration",
         "Commercial Plan Simulation",
         "Platform Diagnostics",
-        "Development Infrastructure",
+        "Internal Administration Services",
+        "Development Infrastructure Services",
 
     ],
 
@@ -903,6 +985,48 @@ def get_workspace_page_access(
     pages = PLAN_PAGE_ACCESS.get(
         plan,
         {},
+    )
+
+    if pages.get("__all__"):
+
+        return {
+            "__all__": True,
+        }
+
+    return pages.copy()
+
+
+def get_workspace_navigation_domains(
+    workspace: Workspace,
+) -> dict[str, bool]:
+
+    pages = get_workspace_page_access(
+        workspace
+    )
+
+    if pages.get("__all__"):
+
+        return {
+            "__all__": True,
+        }
+
+    domains = {}
+
+    for domain, members in NAVBAR_DOMAIN_MAPPING.items():
+
+        domains[domain] = any(
+            pages.get(page, False)
+            for page in members
+        )
+
+    return domains
+
+def get_workspace_navigation_items(
+    workspace: Workspace,
+) -> dict[str, bool]:
+
+    pages = get_workspace_page_access(
+        workspace
     )
 
     if pages.get("__all__"):
@@ -1328,11 +1452,30 @@ def build_entitlement_snapshot(workspace_id: int, db: Session) -> dict[str, Any]
             workspace
         ),
 
+        "navigation_domains":
+            get_workspace_navigation_domains(
+                workspace
+            ),
+
+        "navigation_items":
+            get_workspace_navigation_items(
+                workspace
+            ),
+
         "commercial_services":
             PLAN_COMMERCIAL_SERVICES.get(
                 resolved_plan_code,
                 []
             ),
+
+        "infrastructure":
+            PLAN_DEFAULTS[
+                resolved_plan_code
+            ].get(
+                "infrastructure",
+                [],
+            ),
+
         "usage": {
             "members": usage["members"],
 

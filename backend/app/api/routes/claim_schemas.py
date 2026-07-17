@@ -2912,8 +2912,6 @@ def verify_claim_schema(
         context.access,
         CLAIM_VERIFY,
     )
-    if not workspace_limits_disabled():
-        enforce_claim_creation_allowed(schema.workspace_id, db)
 
     if schema.status != "draft":
         raise HTTPException(status_code=400, detail="Only draft claims can be verified")
@@ -2978,8 +2976,7 @@ def publish_claim_schema(
         context.access,
         CLAIM_UPDATE,
     )
-    if not workspace_limits_disabled():
-        enforce_claim_creation_allowed(schema.workspace_id, db)
+    
     workspace = get_workspace_or_404(schema.workspace_id, db)
     effective_plan_code = resolve_effective_workspace_plan_code(workspace)
 
@@ -3101,8 +3098,7 @@ def lock_claim_schema(
         context.access,
         CLAIM_UPDATE,
     )
-    if not workspace_limits_disabled():
-        enforce_claim_creation_allowed(schema.workspace_id, db)
+    
 
     if schema.status == "locked":
         return serialize_schema(schema)

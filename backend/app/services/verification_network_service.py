@@ -12,6 +12,10 @@ from app.services.verification.verification_service import (
     get_workspace_verification_context,
 )
 
+from app.services.integrity.integrity_dashboard_service import (
+    build_integrity_dashboard,
+)
+
 
 def get_verification_network(
     db: Session,
@@ -201,38 +205,82 @@ def get_verification_network(
 
     #
     # ----------------------------------------------------------
-    # Integrity
+    # Canonical Integrity Dashboard
     # ----------------------------------------------------------
     #
 
+    integrity_dashboard = (
+
+        build_integrity_dashboard(
+            db,
+            workspace_id,
+        )
+
+    )
+
     integrity = {
 
-        "total_alerts":
+        "integrity_score":
 
-            len(alerts),
+            integrity_dashboard.get(
+                "integrity_score",
+                0,
+            ),
 
-        "critical":
+        "open_findings":
 
-            sum(
-
-                a.severity.lower() == "critical"
-
-                for a in alerts
-
+            integrity_dashboard.get(
+                "open_findings",
+                0,
             ),
 
         "resolved":
 
-            sum(
+            integrity_dashboard.get(
+                "resolved_findings",
+                0,
+            ),
 
-                getattr(
-                    a,
-                    "resolved",
-                    False,
-                )
+        "claims_scanned":
 
-                for a in alerts
+            integrity_dashboard.get(
+                "claims_scanned",
+                0,
+            ),
 
+        "critical":
+
+            integrity_dashboard.get(
+                "critical",
+                0,
+            ),
+
+        "high":
+
+            integrity_dashboard.get(
+                "high",
+                0,
+            ),
+
+        "warning":
+
+            integrity_dashboard.get(
+                "warning",
+                0,
+            ),
+
+        "fatal":
+
+            integrity_dashboard.get(
+                "fatal",
+                0,
+            ),
+
+        "total_alerts":
+
+            integrity_dashboard.get(
+                "total_alerts",
+                0,
             ),
 
         "audit_events":
@@ -241,13 +289,12 @@ def get_verification_network(
 
     }
 
-    integrity_score = max(
+    integrity_score = (
 
-        0,
-
-        100 - integrity["total_alerts"] * 5,
+        integrity["integrity_score"]
 
     )
+
 
     audit_score = min(
 

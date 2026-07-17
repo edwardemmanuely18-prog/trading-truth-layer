@@ -381,6 +381,15 @@ export default function WorkspaceSettingsPage() {
           simulationRes
       );
 
+      console.log("WORKSPACE SETTINGS");
+      console.log(settingsRes);
+
+      console.log("IS INTERNAL");
+      console.log(settingsRes.is_internal);
+
+      console.log("SIMULATION");
+      console.log(simulationRes);
+
       setName(settingsRes.name || "");
       setDescription(settingsRes.description || "");
       setTimezone(

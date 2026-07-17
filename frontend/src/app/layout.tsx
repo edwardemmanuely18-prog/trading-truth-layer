@@ -5,8 +5,53 @@ import PaddleLoader from "../components/PaddleLoader";
 
 
 export const metadata: Metadata = {
-  title: "Trading Truth Layer",
-  description: "Verified Trading Claims OS",
+  title: {
+    default: "Trading Truth Layer",
+    template: "%s | Trading Truth Layer",
+  },
+
+  description:
+    "Institutional verification infrastructure for trading records, canonical ledgers, governance workflows and audit-ready trading proof systems.",
+
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/icon.png",
+  },
+
+  openGraph: {
+    title: "Trading Truth Layer",
+
+    description:
+      "Institutional verification infrastructure for trading records, canonical ledgers, governance workflows and audit-ready trading proof systems.",
+
+    url: "https://www.tradingtruthlayer.com",
+
+    siteName: "Trading Truth Layer",
+
+    images: [
+      {
+        url: "/logo.png",
+        width: 1200,
+        height: 630,
+        alt: "Trading Truth Layer Logo",
+      },
+    ],
+
+    locale: "en_US",
+
+    type: "website",
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title: "Trading Truth Layer",
+
+    description:
+      "Institutional verification infrastructure for trading records, canonical ledgers, governance workflows and audit-ready trading proof systems.",
+
+    images: ["/logo.png"],
+  },
 };
 
 export default function RootLayout({
@@ -16,15 +61,40 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body
-        style={{
-          margin: 0,
-          background: "#f8fafc",
-          color: "#0f172a",
-          fontFamily:
-            "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
-        }}
-      >
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+
+              "@type": "Organization",
+
+              name: "Trading Truth Layer",
+
+              url: "https://www.tradingtruthlayer.com",
+
+              logo:
+                "https://www.tradingtruthlayer.com/logo.png",
+
+              description:
+                "Institutional trading verification infrastructure.",
+
+              email:
+                "support@tradingtruthlayer.com",
+            }),
+          }}
+        />
+      </head>
+        <body
+            style={{
+                margin: 0,
+                background: "#f8fafc",
+                color: "#0f172a",
+                fontFamily:
+                    "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            }}
+        >
         <AuthProvider>
           <PaddleLoader />
           

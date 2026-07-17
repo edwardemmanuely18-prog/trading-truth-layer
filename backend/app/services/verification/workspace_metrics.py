@@ -196,21 +196,27 @@ def build_workspace_verification_metrics(
 
     locked_claim_count = 0
 
-    average_score = round(
+    if certificates:
 
-        mean(
+        average_score = round(
 
-            c.summary.verification_score
+            mean(
 
-            for c
+                c.summary.verification_score
 
-            in certificates
+                for c
 
-        ),
+                in certificates
 
-        2,
+            ),
 
-    )
+            2,
+
+        )
+
+    else:
+
+        average_score = 0.0
 
     for certificate in certificates:
 
@@ -275,11 +281,17 @@ def build_workspace_verification_metrics(
     # Highest certification band currently
     # represented in the workspace.
 
-    verification_band = (
-        determine_verification_band(
-            average_score
-        ).label
-    )
+    if certificates:
+
+        verification_band = (
+            determine_verification_band(
+                average_score
+            ).label
+        )
+
+    else:
+
+        verification_band = "Unavailable"
 
     return WorkspaceVerificationMetrics(
 
@@ -432,14 +444,16 @@ def build_workspace_verification_metrics(
         metadata={
 
             "aggregation":
-
                 "Claim Verification Certificates",
 
             "tvs_version":
-
-                certificates[
-                    0
-                ].identity.tvs_version,
+                (
+                    certificates[0]
+                    .identity
+                    .tvs_version
+                )
+                if certificates
+                else None,
 
         },
 

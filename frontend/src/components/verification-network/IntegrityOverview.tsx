@@ -16,13 +16,7 @@ export default function IntegrityOverview({
 
     const integrity = data.integrity;
 
-    const score = Math.max(
-
-        0,
-
-        100 - integrity.total_alerts * 5,
-
-    );
+    const score = integrity.integrity_score;
 
     const status =
 
@@ -113,43 +107,27 @@ export default function IntegrityOverview({
             <div className="mt-8 grid gap-5 md:grid-cols-4">
 
                 <Metric
-
                     title="Integrity Score"
-
                     value={`${score}%`}
-
                     subtitle="Overall Health"
-
                 />
 
                 <Metric
-
-                    title="Total Alerts"
-
-                    value={integrity.total_alerts}
-
-                    subtitle="Detected"
-
-                />
-
-                <Metric
-
-                    title="Critical Alerts"
-
-                    value={integrity.critical}
-
+                    title="Open Findings"
+                    value={integrity.open_findings}
                     subtitle="Requires Action"
-
                 />
 
                 <Metric
-
-                    title="Resolved"
-
+                    title="Resolved Findings"
                     value={integrity.resolved}
-
                     subtitle="Successfully Closed"
+                />
 
+                <Metric
+                    title="Claims Scanned"
+                    value={integrity.claims_scanned}
+                    subtitle="Integrity Coverage"
                 />
 
             </div>

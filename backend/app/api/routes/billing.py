@@ -31,6 +31,7 @@ from app.services.entitlements import (
     normalize_billing_status,
     resolve_workspace_plan_code,
     PLAN_DEFAULTS,
+    PLAN_COMMERCIAL_SERVICES,
     build_entitlement_snapshot,
     get_public_plan_codes,
 )
@@ -284,8 +285,8 @@ def get_public_plan_catalog() -> dict:
             "annual_price_usd": defaults["pricing"]["annual"],
 
             "commercial_services":
-                defaults.get(
-                    "commercial_services",
+                PLAN_COMMERCIAL_SERVICES.get(
+                    code,
                     [],
                 ),
 
@@ -1947,18 +1948,18 @@ def get_commercial_services(
 
     plan = snapshot["plan_code"]
 
-    catalog = PLAN_DEFAULTS.get(
-        plan,
-        PLAN_DEFAULTS["starter"],
-    )
-
     return {
+
         "workspace_id": workspace.id,
+
         "plan": plan,
-        "commercial_services": catalog.get(
-            "commercial_services",
-            []
-        ),
+
+        "commercial_services":
+            PLAN_COMMERCIAL_SERVICES.get(
+                plan,
+                [],
+            ),
+
     }
 
 

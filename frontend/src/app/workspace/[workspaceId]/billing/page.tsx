@@ -344,27 +344,6 @@ export default function BillingPage() {
 
         "—";
 
-    const commercialCapabilities = useMemo(() => {
-        if (!diagnostics) {
-            return [];
-        }
-
-        const enabled = Object.entries(
-            (diagnostics as any).enabled_features ?? {}
-        )
-            .filter(([, value]) => value === true)
-            .map(([key]) => key);
-
-        return [
-            {
-                title: "Enabled Commercial Workflows",
-                description:
-                    "Commercial infrastructure currently enabled for this workspace.",
-                services: enabled,
-            },
-        ];
-    }, [diagnostics]);
-
     const plans = useMemo(() => {
 
         const rawPlans = billingFoundation?.public_plans;
@@ -914,58 +893,7 @@ export default function BillingPage() {
                                 {selected ? "Selected Plan" : "Select Plan"}
                             </button>
 
-                            <div className="mt-8 rounded-2xl border border-indigo-200 bg-indigo-50 p-6">
-
-                                <div className="font-semibold uppercase tracking-wide text-indigo-700">
-
-                                    Commercial Outcomes
-
-                                </div>
-
-                                <div className="mt-4 space-y-3">
-
-                                    {(plan.workflow_outcomes ?? []).length === 0 ? (
-
-                                        <div className="text-slate-500">
-
-                                            Standard commercial outcomes.
-
-                                        </div>
-
-                                    ) : (
-
-                                        plan.workflow_outcomes.map(
-                                            (workflow: string) => (
-
-                                                <div
-                                                    key={workflow}
-                                                    className="flex gap-3"
-                                                >
-
-                                                    <span className="font-bold text-indigo-700">
-
-                                                        ✓
-
-                                                    </span>
-
-                                                    <span>
-
-                                                        {workflow}
-
-                                                    </span>
-
-                                                </div>
-
-                                            )
-                                        )
-
-                                    )}
-
-                                </div>
-
-                            </div>
-
-                            <div className="mt-8 grid gap-6 lg:grid-cols-2">
+                            <div className="mt-8 space-y-6">
 
                                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
 
@@ -1077,90 +1005,6 @@ export default function BillingPage() {
 
         </section>
 
-        <section className="rounded-3xl border bg-white p-8 shadow-sm">
-
-            <h2 className="text-4xl font-bold">
-
-            Currently Enabled Commercial Infrastructure
-
-            </h2>
-
-            <p className="mt-3 text-slate-600">
-
-            The commercial infrastructure currently available to this workspace based on its effective subscription plan and entitlement configuration.
-
-            </p>
-
-            <div className="mt-8 grid gap-6 lg:grid-cols-2">
-
-                {commercialCapabilities.map(
-                     (
-                         group: {
-                             title: string;
-                             description: string;
-                             services: string[];
-                         },
-                     ) => (
-
-                    <div
-                        key={group.title}
-                        className="rounded-2xl border p-6"
-                    >
-
-                        <h3 className="text-xl font-bold">
-
-                            {group.title}
-
-                        </h3>
-
-                        <div className="mt-5 space-y-3">
-
-                            {group.services.length === 0 ? (
-
-                                <div className="text-slate-400">
-
-                                    No commercial services enabled.
-
-                                </div>
-
-                            ) : (
-
-                                group.services.map((service: string) => (
-
-                                    <div
-                                        key={service}
-                                        className="flex items-center gap-3 rounded-xl bg-slate-50 p-3"
-                                    >
-
-                                        <div className="font-bold text-emerald-600">
-
-                                            ✓
-
-                                        </div>
-
-                                        <div className="font-medium">
-
-                                            {service.replaceAll("_", " ")}
-
-                                        </div>
-
-                                    </div>
-
-                                ))
-
-                            )}
-
-                        </div>
-
-                    </div>
-
-                ))}
-
-            </div>
-
-        </section>
-
-            
         {/* =======================================================
             CHECKOUT CONSOLE
         ======================================================= */}
@@ -1411,7 +1255,7 @@ export default function BillingPage() {
 
                     </div>
 
-                    <div className="mt-8 grid gap-6 lg:grid-cols-2">
+                    <div className="mt-8 space-y-6">
 
                     <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6">
 

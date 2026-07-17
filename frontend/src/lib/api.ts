@@ -593,6 +593,26 @@ export type WorkspaceSettings = {
   is_internal: boolean;
 };
 
+export type WorkspacePlanSimulation = {
+    workspace_id: number;
+
+    current_plan: string;
+
+    available_plans: {
+        code: string;
+        name: string;
+        entitled: boolean;
+        limitations: string[];
+        capabilities: string[];
+    }[];
+
+    simulated_plan?: string | null;
+
+    simulation_enabled: boolean;
+
+    internal_workspace: boolean;
+};
+
 export type WorkspaceSettingsUpdatePayload = {
 
     name: string;
@@ -1825,11 +1845,25 @@ export type VerificationAnalytics = {
 
     integrity: {
 
-        total_alerts: number;
+        integrity_score: number;
+
+        open_findings: number;
+
+        resolved: number;
+
+        claims_scanned: number;
 
         critical: number;
 
-        resolved: number;
+        high: number;
+
+        warning: number;
+
+        fatal: number;
+
+        total_alerts: number;
+
+        audit_events: number;
 
     };
 

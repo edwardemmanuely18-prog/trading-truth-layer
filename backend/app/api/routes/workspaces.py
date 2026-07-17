@@ -298,6 +298,84 @@ def serialize_workspace_settings(workspace: Workspace):
             workspace
         ),
 
+        # --------------------------------------------------
+        # Plan Simulation Compatibility
+        # --------------------------------------------------
+
+        "is_internal": bool(
+            getattr(
+                workspace,
+                "is_internal_workspace",
+                False,
+            )
+        ),
+
+        "effective_plan_code":
+            resolve_workspace_plan_code(
+                workspace
+            ),
+
+        "effective_plan_detail": None,
+
+        "effective_limits": {
+
+            "claim_limit":
+                limits.get(
+                    "claims",
+                    0,
+                ),
+
+            "trade_limit":
+                limits.get(
+                    "trades",
+                    0,
+                ),
+
+            "member_limit":
+                limits.get(
+                    "members",
+                    0,
+                ),
+
+            "storage_limit_mb":
+                limits.get(
+                    "storage_mb",
+                    0,
+                ),
+
+        },
+
+        "plan_governance": {
+
+            "configured_plan_code":
+                normalize_plan_code(
+                    workspace.plan_code
+                ),
+
+            "effective_plan_code":
+                resolve_workspace_plan_code(
+                    workspace
+                ),
+
+            "billing_status":
+                normalize_billing_status(
+                    workspace.billing_status
+                ),
+
+            "paid_access_active":
+                True,
+
+            "plan_mismatch":
+                False,
+
+            "reason":
+                "internal",
+
+            "message":
+                "Internal workspace plan.",
+
+        },
+
         "billing_provider": (
             workspace.billing_provider
             or "manual"

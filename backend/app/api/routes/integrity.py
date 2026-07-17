@@ -48,6 +48,11 @@ from app.services.integrity.integrity_dashboard_service import (
     build_integrity_dashboard,
 )
 
+from app.services.entitlements import (
+    enforce_workspace_page_access,
+    enforce_workspace_feature,
+)
+
 router = APIRouter(
     prefix="/integrity",
     tags=["integrity"],
@@ -73,6 +78,20 @@ def run_integrity_scan(
     AuthorizationService.require_capability(
         context.access,
         VERIFICATION_EXECUTE,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="integrity_analytics",
+        action="<appropriate action>",
+    )
+
+    enforce_workspace_feature(
+        workspace_id=workspace_id,
+        db=db,
+        feature="evidence_analytics",
+        action="<appropriate action>",
     )
 
     claims_scanned = (
@@ -169,6 +188,20 @@ def integrity_scan_history(
         VERIFICATION_READ,
     )
 
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="integrity_analytics",
+        action="<appropriate action>",
+    )
+
+    enforce_workspace_feature(
+        workspace_id=workspace_id,
+        db=db,
+        feature="evidence_analytics",
+        action="<appropriate action>",
+    )
+
     scans = (
         db.query(IntegrityScan)
         .filter(
@@ -224,6 +257,20 @@ def integrity_dashboard(
     AuthorizationService.require_capability(
         context.access,
         VERIFICATION_READ,
+    )
+
+    enforce_workspace_page_access(
+        workspace_id=workspace_id,
+        db=db,
+        page="integrity_analytics",
+        action="<appropriate action>",
+    )
+
+    enforce_workspace_feature(
+        workspace_id=workspace_id,
+        db=db,
+        feature="evidence_analytics",
+        action="<appropriate action>",
     )
 
     return build_integrity_dashboard(

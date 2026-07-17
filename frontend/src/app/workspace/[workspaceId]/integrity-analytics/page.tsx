@@ -103,6 +103,9 @@ export default function Page(
   const [actionMessage, setActionMessage] =
     useState("");
 
+  const [actionLoading, setActionLoading] =
+    useState(false);
+
   const [loading, setLoading] =
     useState(true);
 
@@ -785,34 +788,58 @@ export default function Page(
                       <button
                         onClick={async () => {
 
-                          setActionMessage(
-                            "Acknowledging alert..."
-                          );
+                            try {
 
-                          await acknowledgeAlert(
-                            alert.id
-                          );
+                                setActionLoading(true);
 
-                          await load();
+                                setActionMessage(
+                                    "Acknowledging alert..."
+                                );
 
-                          setActionMessage(
-                            "Alert acknowledged."
-                          );
+                                await acknowledgeAlert(
+                                    alert.id
+                                );
 
-                          setTimeout(() => {
-                            setActionMessage("");
-                          }, 3000);
+                                await load();
+
+                                setActionMessage(
+                                    "Alert acknowledged successfully."
+                                );
+
+                            } catch (error) {
+
+                                console.error(error);
+
+                                setActionMessage(
+                                    "Failed to acknowledge alert."
+                                );
+
+                            } finally {
+
+                                setActionLoading(false);
+
+                                setTimeout(() => {
+
+                                    setActionMessage("");
+
+                                }, 3000);
+
+                            }
 
                         }}
+                        disabled={actionLoading}
+
                         className="
-                          rounded-lg
-                          border
-                          px-4
-                          py-2
-                          text-sm
-                          font-medium
-                          transition
-                          hover:bg-slate-50
+                        rounded-lg
+                        border
+                        px-4
+                        py-2
+                        text-sm
+                        font-medium
+                        transition
+                        hover:bg-slate-50
+                        disabled:opacity-50
+                        disabled:cursor-not-allowed
                         "
                       >
                         Acknowledge
@@ -821,25 +848,48 @@ export default function Page(
                       <button
                         onClick={async () => {
 
-                          setActionMessage(
-                            "Starting investigation..."
-                          );
+                            try {
 
-                          await investigateAlert(
-                            alert.id
-                          );
+                                setActionLoading(true);
 
-                          await load();
+                                setActionMessage(
+                                    "Starting investigation..."
+                                );
 
-                          setActionMessage(
-                            "Investigation started."
-                          );
+                                await investigateAlert(
+                                    alert.id
+                                );
 
-                          setTimeout(() => {
-                            setActionMessage("");
-                          }, 3000);
+                                await load();
+
+                                setActionMessage(
+                                    "Investigation started successfully."
+                                );
+
+                            } catch (error) {
+
+                                console.error(error);
+
+                                setActionMessage(
+                                    "Failed to start investigation."
+                                );
+
+                            } finally {
+
+                                setActionLoading(false);
+
+                                setTimeout(() => {
+
+                                    setActionMessage("");
+
+                                }, 3000);
+
+                            }
 
                         }}
+
+                        disabled={actionLoading}
+
                         className="
                           rounded-lg
                           border
@@ -849,6 +899,8 @@ export default function Page(
                           font-medium
                           transition
                           hover:bg-slate-50
+                          disabled:opacity-50
+                          disabled:cursor-not-allowed
                         "
                       >
                         Investigate
@@ -857,25 +909,48 @@ export default function Page(
                       <button
                         onClick={async () => {
 
-                          setActionMessage(
-                            "Resolving alert..."
-                          );
+                            try {
 
-                          await resolveAlert(
-                            alert.id
-                          );
+                                setActionLoading(true);
 
-                          await load();
+                                setActionMessage(
+                                    "Resolving alert..."
+                                );
 
-                          setActionMessage(
-                            "Alert resolved."
-                          );
+                                await resolveAlert(
+                                    alert.id
+                                );
 
-                          setTimeout(() => {
-                            setActionMessage("");
-                          }, 3000);
+                                await load();
+
+                                setActionMessage(
+                                    "Alert resolved successfully."
+                                );
+
+                            } catch (error) {
+
+                                console.error(error);
+
+                                setActionMessage(
+                                    "Failed to resolve alert."
+                                );
+
+                            } finally {
+
+                                setActionLoading(false);
+
+                                setTimeout(() => {
+
+                                    setActionMessage("");
+
+                                }, 3000);
+
+                            }
 
                         }}
+
+                        disabled={actionLoading}
+
                         className="
                           rounded-lg
                           border
@@ -885,6 +960,8 @@ export default function Page(
                           font-medium
                           transition
                           hover:bg-slate-50
+                          disabled:opacity-50
+                          disabled:cursor-not-allowed
                         "
                       >
                         Resolve

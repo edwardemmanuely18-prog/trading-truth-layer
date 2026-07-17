@@ -27,6 +27,7 @@ from app.services.authorization.registry.capability_catalog import (
 
 from app.services.entitlements import (
     enforce_workspace_page_access,
+    enforce_workspace_feature,
 )
 
 from app.services.reports.due_diligence_report_service import (
@@ -369,6 +370,13 @@ def download_allocator_report(
         db=db,
         page="report_center",
         action="access Report Center",
+    )
+
+    enforce_workspace_feature(
+        workspace_id=workspace_id,
+        db=db,
+        feature="allocator_report_pdf",
+        action="download Allocator Report PDF",
     )
     
     pdf_buffer, filename = (

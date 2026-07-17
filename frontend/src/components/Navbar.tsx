@@ -327,13 +327,23 @@ export default function Navbar({ workspaceId }: Props) {
       }
 
       if (
+          entitlements.navigation_items?.__all__
+      ) {
+          return true;
+      }
+
+      if (
           entitlements.pages?.__all__
       ) {
           return true;
       }
 
       return Boolean(
+
+          entitlements.navigation_items?.[page] ??
+
           entitlements.pages?.[page]
+
       );
 
   }
@@ -346,15 +356,36 @@ export default function Navbar({ workspaceId }: Props) {
           return true;
       }
 
-      if (entitlements.pages?.__all__) {
+      if (
+          entitlements.navigation_domains?.__all__
+      ) {
+          return true;
+      }
+
+      if (
+          entitlements.pages?.__all__
+      ) {
           return true;
       }
 
       return pages.some(
+
           page =>
+
               Boolean(
-                  entitlements.pages?.[page]
+
+                  entitlements.navigation_domains?.[
+                      page
+                  ]
+
+                  ??
+
+                  entitlements.pages?.[
+                      page
+                  ]
+
               )
+
       );
 
   }
