@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "../components/AuthProvider";
+import { useRouter } from "next/navigation";
 
 function SurfaceCard({
   title,
@@ -22,6 +23,10 @@ function SurfaceCard({
 export default function HomePage() {
   const { user, workspaces, loading, logout } = useAuth();
 
+  const router = useRouter();
+
+  const [isExploring, setIsExploring] = useState(false);
+
   const firstWorkspace = workspaces[0] ?? null;
 
   const primaryWorkspaceHref = useMemo(() => {
@@ -39,6 +44,11 @@ export default function HomePage() {
       title: "Trading Verification System (TVS)",
       description:
         "The canonical verification engine that computes every claim, metric, report, and public verification surface from a single source of truth.",
+    },
+    {
+      title: "Institutional Investigation System (IIS)",
+      description:
+        "Institutional reasoning engine that evaluates verified trading records across multiple investigation domains to produce allocator decisions, findings, recommendations and institutional readiness assessments.",
     },
     {
       title: "Verification Engine",
@@ -148,12 +158,18 @@ export default function HomePage() {
               </Link>
             )}
 
-            <Link
-              href="/public/claims"
-              className="rounded-xl border px-6 py-3"
+            <button
+                disabled={isExploring}
+                onClick={() => {
+                    setIsExploring(true);
+                    router.push("/leaderboard");
+                }}
+                className="rounded-xl border px-6 py-3 transition hover:bg-slate-100 disabled:opacity-60"
             >
-              Explore Public Proof
-            </Link>
+                {isExploring
+                    ? "Exploring Public Proof..."
+                    : "Explore Public Proof"}
+            </button>
           </div>
         </div>
       </section>
@@ -172,6 +188,10 @@ export default function HomePage() {
           <SurfaceCard
             title="Allocator Due-Diligence Report"
             description="Institutional allocator report generated directly from governed evidence and verification output."
+          />
+          <SurfaceCard
+            title="Institutional Investigation Report"
+            description="Institutional allocator investigation output containing findings, recommendations, confidence scores and final investment decisions generated from canonical investigation domains."
           />
           <SurfaceCard
             title="Institutional Claim Report"
@@ -257,6 +277,11 @@ export default function HomePage() {
             description="Every verification event is permanently traceable through canonical governance records."
           />
 
+          <SurfaceCard
+              title="Institutional investigation"
+              description="Institutional reasoning engines investigate verified claims across multiple domains before allocator decisions are produced."
+          />
+
         </div>
 
       </section>
@@ -269,7 +294,7 @@ export default function HomePage() {
           </h2>
 
           <div className="mt-4 text-sm text-slate-600">
-            Import → Verify → Govern → Report → Publish
+            Import → Verify → Govern → Investigate → Report → Publish
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -277,7 +302,7 @@ export default function HomePage() {
               Import trading activity into the canonical Evidence Registry.
             </div>
             <div className="border p-4 rounded-xl">
-              Generate institutional reports and publish independently verifiable trust records.
+              Perform institutional investigations, generate allocator decisions, produce institutional reports and publish independently verifiable trust records.
             </div>
           </div>
         </div>

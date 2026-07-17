@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import Navbar from "../../components/Navbar";
 import {
   api,
   type PublicClaimDirectoryItem,
 } from "../../lib/api";
+
+import VerifyButton from "../../components/VerifyButton";
 
 type PageProps = {
   searchParams?: Promise<{
@@ -78,11 +79,6 @@ function parsePositiveInt(value?: string) {
   const num = Number(value);
   if (!Number.isFinite(num) || num < 0) return 0;
   return Math.floor(num);
-}
-
-function buildQrImageUrl(value: string) {
-  const encoded = encodeURIComponent(value);
-  return `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encoded}`;
 }
 
 type ClaimOriginType = "independent" | "derived" | "versioned";
@@ -642,7 +638,6 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <Navbar />
 
       <main className="mx-auto max-w-[1400px] px-6 py-10">
         <div className="mb-8">
@@ -837,26 +832,6 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
         </div>
 
         <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-slate-500">Trust Distribution Context</div>
-          <h2 className="mt-2 text-2xl font-semibold text-slate-950">Intended Trust Consumers</h2>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4 text-sm text-slate-600">
-            <div className="rounded-2xl bg-slate-50 p-4">
-              Trading communities and educator-led evaluation programs
-            </div>
-            <div className="rounded-2xl bg-slate-50 p-4">
-              Investors and capital allocators reviewing verifiable records
-            </div>
-            <div className="rounded-2xl bg-slate-50 p-4">
-              Prop firms and verification platforms requiring canonical proof
-            </div>
-            <div className="rounded-2xl bg-slate-50 p-4">
-              Audit, dispute, and challenge-review workflows
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-8 rounded-2xl border bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-semibold">Claim Rankings</h2>
           <div className="mt-2 text-xs text-slate-400">
             Each row represents a verified claim entity linked to an issuer profile.
@@ -873,9 +848,9 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
           {claimRows.length === 0 ? (
             <div className="mt-4 text-slate-600">No claims match the selected leaderboard filters.</div>
           ) : (
-            <div className="mt-4 overflow-x-auto">
+            <div className="mt-4 max-h-[700px] overflow-auto rounded-xl border">
               <table className="min-w-full text-sm">
-                <thead>
+                <thead className="sticky top-0 z-10 bg-white">
                   <tr className="border-b text-left text-slate-500">
                     <th className="px-3 py-3">Rank</th>
                     <th className="px-3 py-3">Claim</th>
@@ -890,11 +865,9 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                     <th className="px-3 py-3">Win Rate</th>
                     <th className="px-3 py-3">Trust</th>
                     <th className="px-3 py-3">Score</th>
-                    <th className="px-3 py-3">Network</th>
-                    <th className="px-3 py-3">Network Score</th>
+                    <th className="px-3 py-3">Network</th>        
                     <th className="px-3 py-3">Locked At</th>
                     <th className="px-3 py-3">Exposure</th>
-                    <th className="px-3 py-3">Distribution</th>
                     <th className="px-3 py-3">Verification</th>
                   </tr>
                 </thead>
@@ -908,7 +881,6 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                       : resolveTrustBand(row.trust_score);
                     const verificationPath = `/verify/${row.claim_hash}`;
                     const publicViewPath = `/claim/${row.claim_schema_id}/public`;
-                    const qrImageUrl = buildQrImageUrl(verificationPath);
 
                     const profileWorkspaceId =
                       row.profile?.workspace_id ??
@@ -1073,18 +1045,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                               graph-aware lineage scoring
                             </div>
                           </div>
-                        </td>
-
-                        <td className="px-3 py-3">
-                          <div className="font-semibold tabular-nums text-slate-950">
-                            {formatNumber(row.network_score)}
-                          </div>
-                          <div className="mt-1 text-[11px] leading-5 text-slate-500">
-                            <div>indep: {formatNumber(row.independence_weight, 2)}</div>
-                            <div>lineage: {formatNumber(row.lineage_penalty, 2)}</div>
-                            <div>decay: {formatNumber(row.version_decay, 2)}</div>
-                          </div>
-                        </td>
+                        </td>              
 
                         <td className="px-3 py-3 text-sm text-slate-700">
                           {formatDateTime(row.locked_at)}
@@ -1105,64 +1066,15 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
                         </td>
 
                         <td className="px-3 py-3">
-                          <div className="flex flex-col gap-3">
-                            <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2">
-                              <img
-                                src={qrImageUrl}
-                                alt="QR code for verification link"
-                                className="mx-auto h-auto w-full max-w-[90px]"
-                              />
-                            </div>
 
-                            <div className="flex flex-wrap gap-2">
-                              <Link
-                                href={verificationPath}
-                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
-                              >
-                                Verify Route
-                              </Link>
+                          <div className="flex flex-wrap gap-2">
 
-                              <Link
-                                href={publicViewPath}
-                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
-                              >
-                                Public Record
-                              </Link>
-                            </div>
+                          <VerifyButton
+                              href={verificationPath}
+                          />
+
                           </div>
-                        </td>
 
-                        <td className="px-3 py-3">
-                          <div className="flex flex-col gap-2">
-                            <div className="flex flex-wrap gap-2">
-                              <Link
-                                href={verificationPath}
-                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
-                              >
-                                Canonical Verify
-                              </Link>
-
-                              <Link
-                                href={publicViewPath}
-                                className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium hover:bg-slate-50"
-                              >
-                                Public Record
-                              </Link>
-
-                              <Link
-                                href={profileHref}
-                                className={`rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium ${
-                                  profileWorkspaceId ? "hover:bg-slate-50" : "cursor-not-allowed opacity-50"
-                                }`}
-                              >
-                                Profile
-                              </Link>
-                            </div>
-
-                            <div className="text-[11px] text-slate-400">
-                              portable · api-addressable · canonical
-                            </div>
-                          </div>
                         </td>
                       </tr>
                     );
@@ -1182,9 +1094,9 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
           {memberRows.length === 0 ? (
             <div className="mt-4 text-slate-600">No public member rows available.</div>
           ) : (
-            <div className="mt-4 overflow-x-auto">
+            <div className="mt-4 max-h-[500px] overflow-auto rounded-xl border">
               <table className="min-w-full text-sm">
-                <thead>
+                <thead className="sticky top-0 z-10 bg-white">
                   <tr className="border-b text-left text-slate-500">
                     <th className="px-3 py-3">Rank</th>
                     <th className="px-3 py-3">Member</th>
