@@ -78,6 +78,14 @@ from app.services.pdf.guidebooks.volume_1.volume_1_pdf_service import (
     generate_volume_1_pdf,
 )
 
+from app.services.pdf.guidebooks.volume_2.volume_2_pdf_service import (
+    generate_volume_2_pdf,
+)
+
+from app.services.pdf.guidebooks.volume_3.volume_3_pdf_service import (
+    generate_volume_3_pdf,
+)
+
 
 router = APIRouter(
     prefix="/reports",
@@ -556,3 +564,119 @@ def view_guidebook_volume_1():
                 f'inline; filename="{filename}"'
         },
     )
+
+
+# ==========================================================
+# TTL GUIDEBOOK SERIES - VOLUME II DOWNLOAD
+# ==========================================================
+
+
+@router.get(
+    "/guidebooks/volume-2/download",
+)
+def download_guidebook_volume_2():
+
+    """
+    Public endpoint for downloading
+    Trading Truth Layer Guidebook Series
+    Volume II.
+
+    No authentication or workspace
+    context is required.
+    """
+
+    pdf_buffer, filename = (
+        generate_volume_2_pdf()
+    )
+
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="{filename}"'
+        },
+    )
+
+
+# ==========================================================
+# TTL GUIDEBOOK SERIES - VOLUME II VIEW
+# ==========================================================
+
+
+@router.get(
+    "/guidebooks/volume-2/view",
+)
+def view_guidebook_volume_2():
+
+    """
+    Public endpoint for viewing
+    Trading Truth Layer Guidebook Series
+    Volume II directly in the browser.
+
+    No authentication or workspace
+    context is required.
+    """
+
+    pdf_buffer, filename = (
+        generate_volume_2_pdf()
+    )
+
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+                f'inline; filename="{filename}"'
+        },
+    )
+
+
+# ==========================================================
+# TTL GUIDEBOOK SERIES - VOLUME III DOWNLOAD
+# ==========================================================
+
+
+@router.get(
+    "/guidebooks/volume-3/download",
+)
+def download_guidebook_volume_3():
+
+    pdf_buffer, filename = (
+        generate_volume_3_pdf()
+    )
+
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="{filename}"'
+        },
+    )
+
+
+# ==========================================================
+# TTL GUIDEBOOK SERIES - VOLUME III VIEW
+# ==========================================================
+
+
+@router.get(
+    "/guidebooks/volume-3/view",
+)
+def view_guidebook_volume_3():
+
+    pdf_buffer, filename = (
+        generate_volume_3_pdf()
+    )
+
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+                f'inline; filename="{filename}"'
+        },
+    )
+
+

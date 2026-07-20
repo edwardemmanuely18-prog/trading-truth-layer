@@ -4,6 +4,7 @@ const BACKEND_URL =
 
 
 export const GUIDEBOOKS = [
+
   {
     volume: "VOLUME I",
 
@@ -16,34 +17,46 @@ export const GUIDEBOOKS = [
     status: "AVAILABLE" as const,
 
     downloadUrl:
-    `${BACKEND_URL}/api/reports/guidebooks/volume-1/download`,
+      `${BACKEND_URL}/api/reports/guidebooks/volume-1/download`,
 
     readUrl:
-    `${BACKEND_URL}/api/reports/guidebooks/volume-1/view`,
+      `${BACKEND_URL}/api/reports/guidebooks/volume-1/view`,
   },
 
   {
     volume: "VOLUME II",
 
     title:
-      "Verification Infrastructure",
+      "Institutional Verification Infrastructure",
 
     description:
-      "Institutional verification standards, evidence systems and canonical trust infrastructure.",
+      "Volume II introduces the institutional verification standards, verification infrastructure, evidence systems and institutional workflows required to independently establish trust in trading performance.",
 
-    status: "COMING SOON" as const,
+    status: "AVAILABLE" as const,
+
+    downloadUrl:
+      `${BACKEND_URL}/api/reports/guidebooks/volume-2/download`,
+
+    readUrl:
+      `${BACKEND_URL}/api/reports/guidebooks/volume-2/view`,
   },
 
   {
-    volume: "VOLUME III",
+      volume: "VOLUME III",
 
-    title:
-      "Institutional Due Diligence Infrastructure",
+      title:
+      "Trading Verification Infrastructure",
 
-    description:
-      "Allocator readiness, due diligence systems and institutional investigation architecture.",
+      description:
+      "Institutional verification standards, institutional trust artifacts and allocator-ready verification infrastructure.",
 
-    status: "COMING SOON" as const,
+      status: "AVAILABLE" as const,
+
+      downloadUrl:
+      `${BACKEND_URL}/api/reports/guidebooks/volume-3/download`,
+
+      readUrl:
+      `${BACKEND_URL}/api/reports/guidebooks/volume-3/view`,
   },
 
   {
@@ -57,4 +70,5 @@ export const GUIDEBOOKS = [
 
     status: "COMING SOON" as const,
   },
+
 ];

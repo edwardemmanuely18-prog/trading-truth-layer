@@ -132,7 +132,7 @@ export default function GuidebooksPage() {
                       fontWeight: 600,
                     }}
                   >
-                    Download Volume I
+                    {`Download ${guidebook.volume}`}
                   </a>
 
                   <a
