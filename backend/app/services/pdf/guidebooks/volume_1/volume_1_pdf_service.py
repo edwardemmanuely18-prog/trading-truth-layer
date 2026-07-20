@@ -66,6 +66,10 @@ from app.services.pdf.guidebooks.volume_1.introduction import (
     build_introduction,
 )
 
+from app.services.pdf.guidebooks.volume_1.the_missing_institutional_infrastructure import (
+    build_missing_institutional_infrastructure,
+)
+
 from app.services.pdf.guidebooks.volume_1.why_trust_infrastructure_matters import (
     build_why_trust_infrastructure_matters,
 )
@@ -124,6 +128,10 @@ from app.services.pdf.guidebooks.volume_1.part_3.five_problems_ttl_solves import
 
 from app.services.pdf.guidebooks.volume_1.part_4.from_performance_to_trust import (
     build_from_performance_to_trust,
+)
+
+from app.services.pdf.guidebooks.volume_1.part_4.the_institutional_realization import (
+    build_institutional_realization,
 )
 
 from app.services.pdf.guidebooks.volume_1.part_4.trading_trust_infrastructure_thesis import (
@@ -185,8 +193,18 @@ def _build_story():
     # VOLUME I
 
     story.extend(build_four_questions())
-    story.extend(build_introduction())
-    story.extend(build_why_trust_infrastructure_matters())
+
+    story.extend(
+        build_introduction()
+    )
+
+    story.extend(
+        build_missing_institutional_infrastructure()
+    )
+
+    story.extend(
+        build_why_trust_infrastructure_matters()
+    )
 
     # PART I
 
@@ -212,14 +230,20 @@ def _build_story():
     )
 
     story.extend(
+        build_institutional_realization()
+    )
+
+    story.extend(
         build_evolution_of_capital_allocation()
     )
 
     story.extend(
         build_trading_trust_infrastructure_thesis()
     )
-    
-    story.extend(build_institutional_positioning())
+
+    story.extend(
+        build_institutional_positioning()
+    )
 
     # PART V
 
