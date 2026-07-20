@@ -74,6 +74,10 @@ from app.services.pdf.executive_pdf_service import (
     build_executive_pdf,
 )
 
+from app.services.pdf.guidebooks.volume_1.volume_1_pdf_service import (
+    generate_volume_1_pdf,
+)
+
 
 router = APIRouter(
     prefix="/reports",
@@ -484,5 +488,71 @@ def download_executive_report(
         headers={
             "Content-Disposition":
                 f'attachment; filename="{filename}"'
+        },
+    )
+
+
+# ==========================================================
+# TTL GUIDEBOOK SERIES
+# ==========================================================
+
+
+@router.get(
+    "/guidebooks/volume-1/download",
+)
+def download_guidebook_volume_1():
+
+    """
+    Public endpoint for downloading
+    Trading Truth Layer Guidebook Series
+    Volume I.
+
+    No authentication or workspace
+    context is required.
+    """
+
+    pdf_buffer, filename = (
+        generate_volume_1_pdf()
+    )
+
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="{filename}"'
+        },
+    )
+
+
+# ==========================================================
+# TTL GUIDEBOOK SERIES - VIEW
+# ==========================================================
+
+
+@router.get(
+    "/guidebooks/volume-1/view",
+)
+def view_guidebook_volume_1():
+
+    """
+    Public endpoint for viewing
+    Trading Truth Layer Guidebook Series
+    Volume I directly in the browser.
+
+    No authentication or workspace
+    context is required.
+    """
+
+    pdf_buffer, filename = (
+        generate_volume_1_pdf()
+    )
+
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+                f'inline; filename="{filename}"'
         },
     )

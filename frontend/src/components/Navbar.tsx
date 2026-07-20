@@ -33,6 +33,7 @@ function isPublicTrustPath(currentPath: string) {
     currentPath === "/claims" ||
     currentPath === "/leaderboard" ||
     currentPath === "/how-it-works" ||
+    currentPath === "/guidebooks" ||
     startsWithPath(currentPath, "/claim") ||
     startsWithPath(currentPath, "/verify") ||
     startsWithPath(currentPath, "/profile") ||
@@ -139,6 +140,7 @@ export default function Navbar({ workspaceId }: Props) {
 
   const homeHref = "/";
   const howItWorksHref = "/how-it-works";
+  const guidebooksHref = "/guidebooks";
   const base = resolvedWorkspaceId ? `/workspace/${resolvedWorkspaceId}` : "";
 
   const publicClaimsHref = resolvedWorkspaceId
@@ -176,7 +178,10 @@ export default function Navbar({ workspaceId }: Props) {
   const settingsHref = resolvedWorkspaceId ? `${base}/settings` : "/";
 
   const homeActive = currentPath === "/";
-  const howItWorksActive = currentPath === "/how-it-works";
+  const howItWorksActive =
+      currentPath === "/how-it-works";
+  const guidebooksActive =
+      currentPath === "/guidebooks";
 
   const publicClaimsActive = resolvedWorkspaceId
     ? startsWithPath(currentPath, publicClaimsHref) || startsWithPath(currentPath, "/claim")
@@ -870,29 +875,82 @@ export default function Navbar({ workspaceId }: Props) {
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto max-w-7xl px-6 py-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-4">
-            <Link href={homeHref} className="text-lg font-bold text-slate-900">
-              Trading Truth Layer
-            </Link>
+          <div className="flex flex-col gap-3">
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Link href={homeHref} className={utilityNavClass(homeActive)}>
-                Home
-              </Link>
-              <Link href={howItWorksHref} className={utilityNavClass(howItWorksActive)}>
-                How It Works
-              </Link>
-            </div>
+              {/* ROW 1 */}
 
-            <WorkspaceSwitcher />
+              <div className="flex flex-wrap items-center gap-4">
 
-            <div className="hidden rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600 md:block">
-              {publicTrustActive
-                ? "Public Trust Layer"
-                : resolvedWorkspaceId
-                  ? `Workspace #${resolvedWorkspaceId}`
-                  : "Workspace"}
-            </div>
+                  <Link
+                      href={homeHref}
+                      className="text-lg font-bold text-slate-900"
+                  >
+                      Trading Truth Layer
+                  </Link>
+
+                  <div className="flex flex-wrap items-center gap-2">
+
+                      <Link
+                          href={homeHref}
+                          className={utilityNavClass(
+                              homeActive,
+                          )}
+                      >
+                          Home
+                      </Link>
+
+                      <Link
+                          href={howItWorksHref}
+                          className={utilityNavClass(
+                              howItWorksActive,
+                          )}
+                      >
+                          How It Works
+                      </Link>
+
+                      <Link
+                          href={guidebooksHref}
+                          className={utilityNavClass(
+                              guidebooksActive,
+                          )}
+                      >
+                          Guidebooks
+                      </Link>
+
+                  </div>
+
+              </div>
+
+
+              {/* ROW 2 */}
+
+              <div className="flex flex-wrap items-center gap-4">
+
+                  <WorkspaceSwitcher />
+
+                  <div
+                      className="
+                      hidden
+                      rounded-lg
+                      border
+                      border-slate-200
+                      bg-slate-50
+                      px-3
+                      py-1
+                      text-xs
+                      text-slate-600
+                      md:block
+                      "
+                  >
+                      {publicTrustActive
+                          ? "Public Trust Layer"
+                          : resolvedWorkspaceId
+                          ? `Workspace #${resolvedWorkspaceId}`
+                          : "Workspace"}
+                  </div>
+
+              </div>
+
           </div>
 
           <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">

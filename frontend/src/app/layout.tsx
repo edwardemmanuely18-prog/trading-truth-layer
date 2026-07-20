@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   },
 
   description:
-    "Institutional Trading Trust Infrastructure for verification, governance, due diligence, allocator readiness and independently verifiable trading performance.",
+    "Institutional Trading Trust Infrastructure for verification, investigations, governance, due diligence, capital allocation readiness, public trust systems, and independently verifiable trading performance.",
 
   icons: {
     icon: "/favicon.ico",
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     title: "Trading Truth Layer",
 
     description:
-      "Institutional Trading Trust Infrastructure for verification, governance, due diligence, allocator readiness and independently verifiable trading performance.",
+      "Institutional Trading Trust Infrastructure for verification, investigations, governance, due diligence, capital allocation readiness, public trust systems, and independently verifiable trading performance.",
 
     url: "https://www.tradingtruthlayer.com",
 
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     title: "Trading Truth Layer",
 
     description:
-      "Institutional Trading Trust Infrastructure for verification, governance, due diligence, allocator readiness and independently verifiable trading performance.",
+      "Institutional Trading Trust Infrastructure for verification, investigations, governance, due diligence, capital allocation readiness, public trust systems, and independently verifiable trading performance.",
 
     images: ["/logo.png"],
   },
@@ -128,6 +128,7 @@ export default function RootLayout({
                 }}
               >
                 {/* Brand */}
+
                 <div>
                   <div
                     style={{
@@ -144,10 +145,15 @@ export default function RootLayout({
                       fontSize: 14,
                       color: "#475569",
                       lineHeight: 1.7,
-                      maxWidth: 900,
+                      maxWidth: 950,
                     }}
                   >
-                    Verification infrastructure for trading records, canonical ledgers, auditability, governance workflows, and dispute-ready proof systems.
+                    Institutional Trading Trust Infrastructure
+                    for verification, investigations,
+                    governance, due diligence, capital
+                    allocation readiness, public trust
+                    systems, and independently verifiable
+                    trading performance.
                   </div>
                 </div>
 
@@ -160,6 +166,28 @@ export default function RootLayout({
                     fontSize: 14,
                   }}
                 >
+                  <a
+                    href="/"
+                    style={{
+                      textDecoration: "none",
+                      color: "#0f172a",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Home
+                  </a>
+
+                  <a
+                    href="/guidebooks"
+                    style={{
+                      textDecoration: "none",
+                      color: "#0f172a",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Guidebooks
+                  </a>
+
                   <a
                     href="/pricing"
                     style={{
@@ -226,27 +254,50 @@ export default function RootLayout({
                     paddingTop: 18,
                   }}
                 >
-                  Trading Truth Layer is operated by Aurum Hybrid,
-                  Tanzania. The platform provides infrastructure
-                  software for operational verification, canonical
-                  ledger systems, governance workflows, evidence
-                  generation, and auditability infrastructure.
+                  Trading Truth Layer is Institutional Trading
+                  Trust Infrastructure designed for global
+                  capital markets. The platform provides
+                  institutional infrastructure for trading
+                  verification, evidence intelligence,
+                  investigations, governance workflows,
+                  due diligence systems, allocator readiness,
+                  public trust infrastructure, and canonical
+                  trading records.
 
                   <br />
                   <br />
 
-                  Trading Truth Layer does not provide brokerage,
-                  investment advisory, portfolio management,
-                  custody, financial advice, or trade execution
+                  Trading Truth Layer operates as
+                  infrastructure software and does not provide
+                  brokerage services, investment advisory,
+                  portfolio management, asset custody,
+                  financial advice, or trade execution
                   services.
 
                   <br />
                   <br />
 
-                  Contact: support@tradingtruthlayer.com
+                  The Trading Truth Layer Guidebook Series
+                  publishes institutional frameworks and
+                  infrastructure doctrines governing the
+                  Trading Truth Layer ecosystem.
 
                   <br />
-                  Website: https://www.tradingtruthlayer.com
+                  <br />
+
+                  Copyright © 2026 Trading Truth Layer.
+                  All rights reserved.
+
+                  <br />
+                  <br />
+
+                  Contact:
+                  support@tradingtruthlayer.com
+
+                  <br />
+
+                  Website:
+                  https://www.tradingtruthlayer.com
                 </div>
               </div>
             </footer>
