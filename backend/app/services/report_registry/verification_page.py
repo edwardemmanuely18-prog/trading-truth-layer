@@ -4,6 +4,8 @@ from html import escape
 
 from app.models.report_registry import ReportRegistry
 
+import os
+
 
 # ==========================================================
 # Helpers
@@ -105,6 +107,18 @@ def build_verification_page(
 ) -> str:
 
     metadata = report.metadata_json or {}
+
+    backend_url = (
+        os.getenv(
+            "PUBLIC_BACKEND_URL",
+            "http://127.0.0.1:8001",
+        )
+    ).rstrip("/")
+
+    download_url = (
+        f"{backend_url}/report/"
+        f"{report.report_id}/download"
+    )
 
     classification = metadata.get(
 
@@ -1101,15 +1115,12 @@ else ""
 }
 
 <a
-
-class="download"
-
-href="/report/{report.report_id}/download"
-
+    class="download"
+    href="{download_url}"
+    target="_blank"
+    rel="noopener noreferrer"
 >
-
-Download Registered PDF
-
+    Download Registered PDF
 </a>
 
 </div>
