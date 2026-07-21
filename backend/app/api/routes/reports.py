@@ -86,6 +86,10 @@ from app.services.pdf.guidebooks.volume_3.volume_3_pdf_service import (
     generate_volume_3_pdf,
 )
 
+from app.services.pdf.guidebooks.volume_4.volume_4_pdf_service import (
+    generate_volume_4_pdf,
+)
+
 
 router = APIRouter(
     prefix="/reports",
@@ -680,3 +684,49 @@ def view_guidebook_volume_3():
     )
 
 
+# ==========================================================
+# TTL GUIDEBOOK SERIES - VOLUME IV DOWNLOAD
+# ==========================================================
+
+
+@router.get(
+    "/guidebooks/volume-4/download",
+)
+def download_guidebook_volume_4():
+
+    pdf_buffer, filename = (
+        generate_volume_4_pdf()
+    )
+
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="{filename}"'
+        },
+    )
+
+
+# ==========================================================
+# TTL GUIDEBOOK SERIES - VOLUME IV VIEW
+# ==========================================================
+
+
+@router.get(
+    "/guidebooks/volume-4/view",
+)
+def view_guidebook_volume_4():
+
+    pdf_buffer, filename = (
+        generate_volume_4_pdf()
+    )
+
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition":
+                f'inline; filename="{filename}"'
+        },
+    )

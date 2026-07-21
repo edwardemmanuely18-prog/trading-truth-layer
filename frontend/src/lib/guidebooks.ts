@@ -60,15 +60,21 @@ export const GUIDEBOOKS = [
   },
 
   {
-    volume: "VOLUME IV",
+      volume: "VOLUME IV",
 
-    title:
-      "Institutional Capital Allocation Infrastructure",
+      title:
+        "Institutional Capital Allocation Infrastructure",
 
-    description:
-      "The evolution of capital allocation through evidence-based trust infrastructure.",
+      description:
+        "Institutional trust infrastructure for evidence-based capital allocation across the entire Trading Truth Layer workspace and public trust ecosystem.",
 
-    status: "COMING SOON" as const,
+      status: "AVAILABLE" as const,
+
+      downloadUrl:
+        `${BACKEND_URL}/api/reports/guidebooks/volume-4/download`,
+
+      readUrl:
+        `${BACKEND_URL}/api/reports/guidebooks/volume-4/view`,
   },
 
 ];
