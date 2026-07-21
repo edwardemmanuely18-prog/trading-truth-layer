@@ -5,6 +5,14 @@ import PaddleLoader from "../components/PaddleLoader";
 
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    "https://www.tradingtruthlayer.com"
+  ),
+
+  alternates: {
+    canonical: "https://www.tradingtruthlayer.com",
+  },
+
   title: {
     default: "Trading Truth Layer",
     template: "%s | Trading Truth Layer",
