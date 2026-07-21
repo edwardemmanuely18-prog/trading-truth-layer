@@ -17,10 +17,10 @@ export const GUIDEBOOKS = [
     status: "AVAILABLE" as const,
 
     downloadUrl:
-      `${BACKEND_URL}/api/reports/guidebooks/volume-1/download`,
+      "/api/reports/guidebooks/volume-1/download",
 
     readUrl:
-      `${BACKEND_URL}/api/reports/guidebooks/volume-1/view`,
+      "/api/reports/guidebooks/volume-1/view",
   },
 
   {
@@ -35,46 +35,46 @@ export const GUIDEBOOKS = [
     status: "AVAILABLE" as const,
 
     downloadUrl:
-      `${BACKEND_URL}/api/reports/guidebooks/volume-2/download`,
+      "/api/reports/guidebooks/volume-2/download",
 
     readUrl:
-      `${BACKEND_URL}/api/reports/guidebooks/volume-2/view`,
+      "/api/reports/guidebooks/volume-2/view",
   },
 
   {
-      volume: "VOLUME III",
+    volume: "VOLUME III",
 
-      title:
+    title:
       "Trading Verification Infrastructure",
 
-      description:
+    description:
       "Institutional verification standards, institutional trust artifacts and allocator-ready verification infrastructure.",
 
-      status: "AVAILABLE" as const,
+    status: "AVAILABLE" as const,
 
-      downloadUrl:
-      `${BACKEND_URL}/api/reports/guidebooks/volume-3/download`,
+    downloadUrl:
+      "/api/reports/guidebooks/volume-3/download",
 
-      readUrl:
-      `${BACKEND_URL}/api/reports/guidebooks/volume-3/view`,
+    readUrl:
+      "/api/reports/guidebooks/volume-3/view",
   },
 
   {
-      volume: "VOLUME IV",
+    volume: "VOLUME IV",
 
-      title:
-        "Institutional Capital Allocation Infrastructure",
+    title:
+      "Institutional Capital Allocation Infrastructure",
 
-      description:
-        "Institutional trust infrastructure for evidence-based capital allocation across the entire Trading Truth Layer workspace and public trust ecosystem.",
+    description:
+      "Institutional trust infrastructure for evidence-based capital allocation across the entire Trading Truth Layer workspace and public trust ecosystem.",
 
-      status: "AVAILABLE" as const,
+    status: "AVAILABLE" as const,
 
-      downloadUrl:
-        `${BACKEND_URL}/api/reports/guidebooks/volume-4/download`,
+    downloadUrl:
+      "/api/reports/guidebooks/volume-4/download",
 
-      readUrl:
-        `${BACKEND_URL}/api/reports/guidebooks/volume-4/view`,
+    readUrl:
+      "/api/reports/guidebooks/volume-4/view",
   },
 
 ];
