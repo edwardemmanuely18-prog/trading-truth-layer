@@ -1,0 +1,52 @@
+import { NextResponse } from "next/server";
+
+type Props = {
+    params: Promise<{
+        report_id: string;
+    }>;
+};
+
+export const dynamic = "force-dynamic";
+
+export async function GET(
+    request: Request,
+    { params }: Props,
+) {
+    const { report_id } = await params;
+
+    const backendBase = (
+        process.env.NEXT_PUBLIC_BACKEND_URL ||
+        "http://127.0.0.1:8001"
+    ).replace(/\/+$/, "");
+
+    const response = await fetch(
+        `${backendBase}/report/${report_id}/download`,
+        {
+            cache: "no-store",
+        },
+    );
+
+    if (!response.ok) {
+        return NextResponse.json(
+            {
+                detail: "Report not found.",
+            },
+            {
+                status: 404,
+            },
+        );
+    }
+
+    const pdfBuffer = await response.arrayBuffer();
+
+    return new Response(
+        pdfBuffer,
+        {
+            headers: {
+                "Content-Type": "application/pdf",
+                "Content-Disposition":
+                    `inline; filename="${report_id}.pdf"`,
+            },
+        },
+    );
+}
