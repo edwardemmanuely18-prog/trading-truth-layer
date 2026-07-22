@@ -1115,12 +1115,10 @@ else ""
 }
 
 <a
-    class="download"
-    href="{download_url}"
-    target="_blank"
-    rel="noopener noreferrer"
+class="download"
+href="{download_url}"
 >
-    Download Registered PDF
+Download Registered PDF
 </a>
 
 </div>
