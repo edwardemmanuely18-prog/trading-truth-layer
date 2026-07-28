@@ -85,21 +85,35 @@ _OPERATOR = {
 
 _AUDITOR = {
 
+    # Dashboard
     DASHBOARD_READ,
 
+    # Workspace
     MEMBER_READ,
 
+    # Claims
     CLAIM_READ,
 
+    # Evidence
     EVIDENCE_READ,
 
+    # Reports
     REPORT_READ,
 
+    # Verification
     VERIFICATION_READ,
 
+    # Investigations
     INVESTIGATION_READ,
 
+    # Governance
     GOVERNANCE_READ,
+
+    # Settings inspection
+    SETTINGS_READ,
+
+    # Billing inspection
+    BILLING_READ,
 }
 
 

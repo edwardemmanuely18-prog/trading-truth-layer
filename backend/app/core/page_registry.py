@@ -127,6 +127,7 @@ PAGE_REGISTRY = {
 
             "owner",
             "operator",
+            "auditor",
 
         ),
 
@@ -163,6 +164,7 @@ PAGE_REGISTRY = {
 
             "owner",
             "operator",
+            "auditor",
 
         ),
 
@@ -198,6 +200,7 @@ PAGE_REGISTRY = {
 
             "owner",
             "operator",
+            "auditor",
 
         ),
 
@@ -232,6 +235,7 @@ PAGE_REGISTRY = {
         allowed_roles=(
 
             "owner",
+            "auditor",
 
         ),
 
@@ -898,7 +902,10 @@ PAGE_REGISTRY = {
         title="Risk Analytics",
         urls=("/workspace/{workspace_id}/risk-analytics",),
         api_prefixes=("/risk-analytics",),
-        allowed_roles=("owner",),
+        allowed_roles=(
+            "owner",
+            "auditor",
+        ),
         required_capabilities=(
             MEMBER_READ,
         ),
@@ -910,7 +917,10 @@ PAGE_REGISTRY = {
         title="Allocator Reports",
         urls=("/workspace/{workspace_id}/due-diligence",),
         api_prefixes=("/allocator",),
-        allowed_roles=("owner",),
+        allowed_roles=(
+            "owner",
+            "auditor",
+        ),
         required_capabilities=(
             MEMBER_READ,
         ),
@@ -922,7 +932,10 @@ PAGE_REGISTRY = {
         title="Report Center",
         urls=("/workspace/{workspace_id}/report-center",),
         api_prefixes=("/report-center",),
-        allowed_roles=("owner",),
+        allowed_roles=(
+            "owner",
+            "auditor",
+        ),  
         required_capabilities=(
             MEMBER_READ,
         ),
@@ -938,7 +951,10 @@ PAGE_REGISTRY = {
         title="Members",
         urls=("/workspace/{workspace_id}/members",),
         api_prefixes=("/members",),
-        allowed_roles=("owner",),
+        allowed_roles=(
+            "owner",
+            "auditor",
+        ),
         required_capabilities=(
             MEMBER_READ,
         ),
