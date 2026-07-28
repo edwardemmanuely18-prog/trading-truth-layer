@@ -130,7 +130,10 @@ export default function Navbar({ workspaceId }: Props) {
     return null;
   }
 
-  const canSeeImport = workspaceRole === "owner" || workspaceRole === "operator";
+  const canSeeImport =
+    workspaceRole === "owner" ||
+    workspaceRole === "operator" ||
+    workspaceRole === "auditor";
   const canSeeSchema = workspaceRole === "owner" || workspaceRole === "operator";
   const canSeeMembers =
     workspaceRole === "owner" ||

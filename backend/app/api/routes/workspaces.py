@@ -188,7 +188,12 @@ def enforce_internal_workspace_access(
         .filter(
             WorkspaceMembership.workspace_id == workspace.id,
             WorkspaceMembership.user_id == current_user.id,
-            WorkspaceMembership.role == "owner",
+            WorkspaceMembership.role.in_(
+                [
+                    "owner",
+                    "auditor",
+                ]
+            ),
         )
         .first()
     )
