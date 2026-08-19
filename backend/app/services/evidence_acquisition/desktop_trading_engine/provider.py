@@ -16,6 +16,10 @@ from .synchronizer import (
     DesktopSynchronizer,
     SynchronizationSession,
 )
+from .verification import (
+    VerificationResult,
+    desktop_verification_engine,
+)
 
 
 # ============================================================================
@@ -173,6 +177,36 @@ class DesktopEvidenceProvider:
         """
 
         return self.connector.is_connected()
+
+    # ------------------------------------------------------------------
+    # Verification
+    # ------------------------------------------------------------------
+
+    def verify(
+        self,
+        *,
+        expected_account_id: str | None = None,
+        expected_server: str | None = None,
+        expected_provider: str | None = None,
+    ) -> VerificationResult:
+        """
+        Execute the canonical Desktop Verification Engine.
+
+        Provider-specific observation remains inside the adapter.
+        Verification policy remains inside DesktopVerificationEngine.
+        """
+
+        snapshot = (
+            self.connector.adapter
+            .get_verification_snapshot()
+        )
+
+        return desktop_verification_engine.verify(
+            snapshot,
+            expected_account_id=expected_account_id,
+            expected_server=expected_server,
+            expected_provider=expected_provider,
+        )
 
     def __enter__(self) -> "DesktopEvidenceProvider":
         """

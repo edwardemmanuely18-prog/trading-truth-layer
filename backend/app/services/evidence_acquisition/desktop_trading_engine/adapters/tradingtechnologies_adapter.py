@@ -12,6 +12,7 @@ from typing import Any, Dict
 
 from .base_adapter import BaseDesktopAdapter
 from ..normalizer import desktop_evidence_normalizer
+from ..verification import VerificationSnapshot
 
 
 class TradingTechnologiesAdapter(BaseDesktopAdapter):
@@ -177,6 +178,140 @@ class TradingTechnologiesAdapter(BaseDesktopAdapter):
     def _build_activity(self):
 
         return self.client.activity()
+
+    # ------------------------------------------------------------------
+    # Verification
+    # ------------------------------------------------------------------
+
+    def get_verification_snapshot(
+        self,
+    ) -> VerificationSnapshot:
+        """
+        Return provider-neutral verification facts.
+
+        This method performs provider-native observation only.
+        Verification decisions remain in the shared
+        Desktop Verification Engine.
+        """
+
+        terminal = self._build_terminal()
+        user = self._build_user()
+        broker = self._build_broker()
+        server = self._build_server()
+        account = self._build_account()
+
+        connected = self.is_connected()
+
+        def read_value(source, *keys):
+            if source is None:
+                return None
+
+            if isinstance(source, dict):
+                for key in keys:
+                    value = source.get(key)
+                    if value is not None:
+                        return value
+
+            for key in keys:
+                value = getattr(source, key, None)
+                if value is not None:
+                    return value
+
+            if isinstance(source, (str, int)):
+                return source
+
+            return None
+
+        account_id = read_value(
+            account,
+            "account_id",
+            "account_number",
+            "login",
+            "id",
+            "number",
+        )
+
+        if account_id is None:
+            account_id = read_value(
+                user,
+                "account_id",
+                "account_number",
+                "login",
+                "id",
+                "number",
+            )
+
+        broker_value = read_value(
+            broker,
+            "name",
+            "company",
+            "broker",
+            "broker_name",
+        )
+
+        if broker_value is None and isinstance(
+            broker,
+            (str, int),
+        ):
+            broker_value = str(broker)
+
+        server_value = read_value(
+            server,
+            "name",
+            "server",
+            "server_name",
+        )
+
+        if server_value is None and isinstance(
+            server,
+            (str, int),
+        ):
+            server_value = str(server)
+
+        terminal_version = read_value(
+            terminal,
+            "version",
+            "version_string",
+            "terminal_version",
+            "build",
+        )
+
+        if terminal_version is None:
+            terminal_version = self.provider_version
+
+        return VerificationSnapshot(
+            provider=self.provider_name,
+            provider_version=self.provider_version,
+            connected=connected,
+            account_id=(
+                str(account_id)
+                if account_id is not None
+                else None
+            ),
+            broker=(
+                str(broker_value)
+                if broker_value is not None
+                else None
+            ),
+            server=(
+                str(server_value)
+                if server_value is not None
+                else None
+            ),
+            terminal=self.provider_name,
+            terminal_version=(
+                str(terminal_version)
+                if terminal_version is not None
+                else None
+            ),
+            metadata={
+                "terminal_available": terminal is not None,
+                "user_available": user is not None,
+                "broker_available": broker is not None,
+                "server_available": server is not None,
+                "account_available": account is not None,
+            },
+        )
 
     # ------------------------------------------------------------------
     # Evidence Acquisition

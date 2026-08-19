@@ -24,7 +24,7 @@ Business logic remains inside the synchronization stages.
 """
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Iterable
@@ -485,6 +485,22 @@ class EvidenceSynchronizer:
             )
         )
 
+        # ----------------------------------------------------------
+        # Canonical identity authority
+        # ----------------------------------------------------------
+        #
+        # The V2 Evidence Registry is the authoritative issuer
+        # of canonical evidence identity.
+        #
+        # All downstream stages MUST consume the registry-issued
+        # CE-... identifier rather than the provisional identifier
+        # created when the synchronization context was initialized.
+        # ----------------------------------------------------------
+
+        context.canonical_evidence_id = (
+            context.registry_record.canonical_evidence_id
+        )
+
         metrics.registered += 1
 
     # ------------------------------------------------------------------
@@ -556,9 +572,131 @@ class EvidenceSynchronizer:
 
     # ------------------------------------------------------------------
 
+    def _build_persistence_item(
+        self,
+        *,
+        evidence: RawEvidence,
+        result: SynchronizationResult,
+    ):
+        """
+        Build the durable V2 registry persistence item for one
+        synchronization result.
+
+        Runtime registry identity remains authoritative for the
+        registry stage; canonical and provenance payloads are
+        persisted when those stages have completed.
+        """
+
+        if not result.registry_records:
+            return None
+
+        from app.services.evidence_registry_v2.persistence.base import (
+            EvidenceRegistryPersistenceItem,
+        )
+
+        record = result.registry_records[0]
+
+        canonical_payload = None
+
+        if result.published:
+            canonical_payload = asdict(
+                result.published[0]
+            )
+
+        provenance_payload = None
+
+        if result.provenance_records:
+            provenance_payload = asdict(
+                result.provenance_records[0]
+            )
+
+        return EvidenceRegistryPersistenceItem(
+            record=record,
+            canonical_payload=canonical_payload,
+            provenance_payload=provenance_payload,
+            payload_hash=(
+                evidence.metadata.transport.payload_hash
+            ),
+            evidence_payload_size=(
+                evidence.metadata.transport.payload_size
+            ),
+        )
+
+    # ------------------------------------------------------------------
+
+    def _persist_result(
+        self,
+        *,
+        evidence: RawEvidence,
+        result: SynchronizationResult,
+    ) -> None:
+        """
+        Persist one synchronization result durably.
+        """
+
+        item = self._build_persistence_item(
+            evidence=evidence,
+            result=result,
+        )
+
+        if item is None:
+            return
+
+        from app.services.evidence_registry_v2.persistence.database import (
+            database_evidence_registry_persistence,
+        )
+
+        database_evidence_registry_persistence.save(
+            item.record,
+            canonical_payload=item.canonical_payload,
+            provenance_payload=item.provenance_payload,
+            payload_hash=item.payload_hash,
+            evidence_payload_size=item.evidence_payload_size,
+        )
+
+    # ------------------------------------------------------------------
+
+    def _persist_batch_results(
+        self,
+        results: list[tuple[RawEvidence, SynchronizationResult]],
+    ) -> None:
+        """
+        Persist all registered evidence from a synchronization batch
+        using one database transaction.
+        """
+
+        from app.services.evidence_registry_v2.persistence.database import (
+            database_evidence_registry_persistence,
+        )
+
+        from app.services.evidence_registry_v2.persistence.base import (
+            EvidenceRegistryPersistenceItem,
+        )
+
+        items: list[EvidenceRegistryPersistenceItem] = []
+
+        for evidence, result in results:
+
+            item = self._build_persistence_item(
+                evidence=evidence,
+                result=result,
+            )
+
+            if item is not None:
+                items.append(item)
+
+        if items:
+            database_evidence_registry_persistence.save_many(
+                items
+            )
+
+    # ------------------------------------------------------------------
+
     def synchronize_one(
         self,
         evidence: RawEvidence,
+        *,
+        persist: bool = True,
     ) -> SynchronizationResult:
         """
         Synchronize a single RawEvidence object through the
@@ -719,6 +857,12 @@ class EvidenceSynchronizer:
                 )
             )
 
+        if persist:
+            self._persist_result(
+                evidence=evidence,
+                result=result,
+            )
+
         return result
 
     # ------------------------------------------------------------------
@@ -756,12 +900,24 @@ class EvidenceSynchronizer:
             metrics=metrics,
         )
 
+        item_results: list[
+            tuple[RawEvidence, SynchronizationResult]
+        ] = []
+
         for evidence in evidences:
 
             metrics.received += 1
 
             item_result = self.synchronize_one(
-                evidence
+                evidence,
+                persist=False,
+            )
+
+            item_results.append(
+                (
+                    evidence,
+                    item_result,
+                )
             )
 
             metrics.buffered += (
@@ -816,6 +972,10 @@ class EvidenceSynchronizer:
                 item_result.errors
             )
 
+        self._persist_batch_results(
+            item_results
+        )
+
         self._finish_metrics(
             metrics,
             started=started,
@@ -847,3 +1007,41 @@ class EvidenceSynchronizer:
         """
 
         return self.synchronize_batch(stream)
+
+
+
+class UniversalEvidenceSynchronizer(EvidenceSynchronizer):
+    """
+    Canonical composition root for the Universal Evidence Adapter.
+
+    DesktopTradingEngine should instantiate only this class.
+    """
+
+    def __init__(self) -> None:
+
+        from .evidence_buffer import EvidenceBuffer
+        from .deduplicator import EvidenceDeduplicator
+        from .evidence_registry import EvidenceRegistry
+        from .provenance_builder import EvidenceProvenanceBuilder
+        from .canonicalizer import EvidenceCanonicalizer
+        from .publisher import EvidencePublisher
+
+        super().__init__(
+            buffer=EvidenceBuffer(),
+            deduplicator=EvidenceDeduplicator(),
+            registry=EvidenceRegistry(),
+            provenance_builder=EvidenceProvenanceBuilder(),
+            canonicalizer=EvidenceCanonicalizer(),
+            publisher=EvidencePublisher(),
+        )
+
+
+__all__ = [
+    "SynchronizationStatus",
+    "SynchronizationError",
+    "SynchronizationMetrics",
+    "SynchronizationResult",
+    "SynchronizationContext",
+    "EvidenceSynchronizer",
+    "UniversalEvidenceSynchronizer",
+]

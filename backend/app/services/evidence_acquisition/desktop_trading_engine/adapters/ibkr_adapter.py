@@ -16,6 +16,7 @@ from ibapi.wrapper import EWrapper
 
 from .base_adapter import BaseDesktopAdapter
 from ..normalizer import desktop_evidence_normalizer
+from ..verification import VerificationSnapshot
 
 
 class _IBKRApplication(EWrapper, EClient):
@@ -267,6 +268,55 @@ class IBKRAdapter(BaseDesktopAdapter):
     def is_connected(self) -> bool:
 
         return self.app.isConnected()
+
+    # ------------------------------------------------------------------
+    # Verification
+    # ------------------------------------------------------------------
+
+    def get_verification_snapshot(
+        self,
+    ) -> VerificationSnapshot:
+        """
+        Return provider-neutral verification facts from IBKR.
+
+        This method performs provider-native observation only.
+        Verification decisions remain in the shared
+        Desktop Verification Engine.
+        """
+
+        terminal = self._build_terminal()
+        account = self._build_account()
+
+        connected = self.is_connected()
+
+        account_id = None
+
+        if isinstance(account, dict) and account:
+            account_id = next(iter(account.keys()))
+
+        return VerificationSnapshot(
+            provider=self.provider_name,
+            provider_version=self.provider_version,
+            connected=connected,
+            account_id=(
+                str(account_id)
+                if account_id is not None
+                else None
+            ),
+            broker=None,
+            server=None,
+            terminal="Interactive Brokers TWS / Gateway",
+            terminal_version=self.provider_version,
+            metadata={
+                "terminal_available": terminal is not None,
+                "account_available": bool(account),
+                "host": self.host,
+                "port": self.port,
+                "client_id": self.client_id,
+                "server_version": self.provider_version,
+            },
+        )
+
 
     # ------------------------------------------------------------------
     # Native Requests

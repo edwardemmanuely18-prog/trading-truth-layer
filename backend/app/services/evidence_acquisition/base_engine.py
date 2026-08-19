@@ -81,21 +81,34 @@ class AcquisitionEngine(ABC):
         """
         raise NotImplementedError
 
-        @abstractmethod
-        def acquire(
-            self,
-            *args,
-            **kwargs,
-        ) -> Any:
-            """
-            Execute a canonical evidence acquisition cycle.
+    @property
+    @abstractmethod
+    def providers(self) -> list[Any]:
+        """
+        Return the providers registered by this acquisition engine.
 
-            Every Evidence Acquisition engine must expose a single
-            acquisition entry point regardless of its internal
-            synchronization implementation.
+        The Runtime uses this during provider discovery to populate
+        the canonical Runtime Provider Registry.
 
-            Returns
-            -------
-            Engine-specific canonical acquisition package.
-            """
-            raise NotImplementedError
+        The returned provider objects remain owned by the engine.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def acquire(
+        self,
+        *args,
+        **kwargs,
+    ) -> Any:
+        """
+        Execute a canonical evidence acquisition cycle.
+
+        Every Evidence Acquisition engine must expose a single
+        acquisition entry point regardless of its internal
+        synchronization implementation.
+
+        Returns
+        -------
+        Engine-specific canonical acquisition package.
+        """
+        raise NotImplementedError

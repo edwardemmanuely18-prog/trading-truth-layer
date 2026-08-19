@@ -77,11 +77,6 @@ def validate_identity(evidence: Evidence) -> None:
         "identity.evidence_id",
     )
 
-    require_not_empty(
-        evidence.identity.evidence_type,
-        "identity.evidence_type",
-    )
-
 
 def validate_metadata(evidence: Evidence) -> None:
     """

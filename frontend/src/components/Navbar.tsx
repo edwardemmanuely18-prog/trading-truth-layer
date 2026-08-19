@@ -166,7 +166,13 @@ export default function Navbar({ workspaceId }: Props) {
     resolvedWorkspaceId
       ? `${base}/import-center`
       : "/";
-  const ledgerHref = resolvedWorkspaceId ? `${base}/ledger` : "/";
+  const evidenceExplorerHref = resolvedWorkspaceId
+    ? `${base}/evidence-explorer`
+    : "/";
+  const ledgerHref =
+    resolvedWorkspaceId
+      ? `${base}/ledger`
+      : "/";
   const workspaceSchemaHref =
     resolvedWorkspaceId
       ? `${base}/claims`
@@ -222,13 +228,28 @@ export default function Navbar({ workspaceId }: Props) {
   const membersActive = resolvedWorkspaceId ? startsWithPath(currentPath, membersHref) : false;
   const settingsActive = resolvedWorkspaceId ? startsWithPath(currentPath, settingsHref) : false;
   const intakeActive =
+    startsWithPath(currentPath, `${base}/evidence-acquisition`) ||
+    startsWithPath(currentPath, `${base}/sources`) ||
     startsWithPath(currentPath, `${base}/broker-connections`) ||
-    startsWithPath(currentPath, `${base}/import`) ||
+    startsWithPath(currentPath, `${base}/provider-connections`) ||
+    startsWithPath(currentPath, `${base}/gateway`) ||
+    startsWithPath(currentPath, `${base}/desktop`) ||
+    startsWithPath(currentPath, `${base}/documents`) ||
     startsWithPath(currentPath, `${base}/import-center`) ||
-    startsWithPath(currentPath, `${base}/sync-jobs`) ||
-    startsWithPath(currentPath, `${base}/adapter-registry`);
+    startsWithPath(currentPath, `${base}/sync-center`) ||
+    startsWithPath(currentPath, `${base}/adapter-registry`) ||
+    startsWithPath(currentPath, `${base}/diagnostics`);
 
   const registryActive =
+    startsWithPath(currentPath, `${base}/evidence-explorer`) ||
+    startsWithPath(currentPath, `${base}/trading-records`) ||
+    startsWithPath(currentPath, `${base}/account-records`) ||
+    startsWithPath(currentPath, `${base}/document-records`) ||
+    startsWithPath(currentPath, `${base}/system-records`) ||
+    startsWithPath(currentPath, `${base}/evidence-packages`) ||
+    startsWithPath(currentPath, `${base}/audit-integrity`) ||
+
+    // V1 compatibility surfaces
     startsWithPath(currentPath, `${base}/ledger`) ||
     startsWithPath(currentPath, `${base}/evidence-records`) ||
     startsWithPath(currentPath, `${base}/import-batches`) ||
@@ -438,84 +459,163 @@ export default function Navbar({ workspaceId }: Props) {
       ]
     : [];
 
-  const intakeLinks =
-      resolvedWorkspaceId && canSeeImport
-          ? [
-              {
-                  href: `${base}/broker-connections`,
-                  label: "Broker Connections",
-                  feature: "broker_connections",
-                  active: startsWithPath(
-                      currentPath,
-                      `${base}/broker-connections`
-                  ),
-              },
-              {
-                  href: `${base}/import-center`,
-                  label: "Import Center",
-                  feature: "import_center",
-                  active:
-                      startsWithPath(
-                          currentPath,
-                          `${base}/import-center`
-                      ) ||
-                      startsWithPath(
-                          currentPath,
-                          `${base}/import`
-                      ),
-              },
-              {
-                  href: `${base}/sync-jobs`,
-                  label: "Sync Jobs",
-                  feature: "sync_jobs",
-                  active: startsWithPath(
-                      currentPath,
-                      `${base}/sync-jobs`
-                  ),
-              },
-              {
-                  href: `${base}/adapter-registry`,
-                  label: "Adapter Registry",
-                  feature: "adapter_registry",
-                  active: startsWithPath(
-                      currentPath,
-                      `${base}/adapter-registry`
-                  ),
-              },
-          ]
-          : [];
+  const acquisitionLinks =
+    resolvedWorkspaceId && canSeeImport
+        ? [
+            {
+                href: `${base}/evidence-acquisition`,
+                label: "Overview",
+                feature: "evidence_acquisition",
+                active: startsWithPath(
+                    currentPath,
+                    `${base}/evidence-acquisition`
+                ),
+            },
+
+            {
+                href: `${base}/sources`,
+                label: "Sources",
+                feature: "sources",
+                active: startsWithPath(
+                    currentPath,
+                    `${base}/sources`
+                ),
+            },
+
+            {
+                href: `${base}/provider-connections`,
+                label: "Provider Connections",
+                feature: "provider_connections",
+                active: startsWithPath(
+                    currentPath,
+                    `${base}/provider-connections`,
+                ),
+            },
+
+            {
+                href: `${base}/import-center`,
+                label: "Import Center",
+                feature: "import_center",
+                active: startsWithPath(
+                    currentPath,
+                    `${base}/import-center`
+                ),
+            },
+
+            {
+                href: `${base}/sync-center`,
+                label: "Synchronization Center",
+                feature: "sync_center",
+                active: startsWithPath(
+                    currentPath,
+                    `${base}/sync-center`
+                ),
+            },
+
+            {
+                href: `${base}/adapter-registry`,
+                label: "Adapter Registry",
+                feature: "adapter_registry",
+                active: startsWithPath(
+                    currentPath,
+                    `${base}/adapter-registry`
+                ),
+            },
+
+            {
+                href: `${base}/diagnostics`,
+                label: "Diagnostics",
+                feature: "diagnostics",
+                active: startsWithPath(
+                    currentPath,
+                    `${base}/diagnostics`
+                ),
+            },
+        ]
+        : [];
 
   const registryLinks = resolvedWorkspaceId
     ? [
         {
+          href: `${base}/evidence-explorer`,
+          label: "Evidence Explorer",
+          active: startsWithPath(
+            currentPath,
+            `${base}/evidence-explorer`
+          ),
+          feature: "evidence_explorer",
+        },
+
+        {
+          href: `${base}/trading-records`,
+          label: "Trading Records",
+          active: startsWithPath(
+            currentPath,
+            `${base}/trading-records`
+          ),
+          feature: "trading_records",
+        },
+
+        {
+          href: `${base}/account-records`,
+          label: "Account Records",
+          active: startsWithPath(
+            currentPath,
+            `${base}/account-records`
+          ),
+          feature: "account_records",
+        },
+
+        {
+          href: `${base}/document-records`,
+          label: "Document Records",
+          active: startsWithPath(
+            currentPath,
+            `${base}/document-records`
+          ),
+          feature: "document_records",
+        },
+
+        {
+          href: `${base}/system-records`,
+          label: "System Records",
+          active: startsWithPath(
+            currentPath,
+            `${base}/system-records`
+          ),
+          feature: "system_records",
+        },
+
+        {
+          href: `${base}/evidence-packages`,
+          label: "Evidence Packages",
+          active: startsWithPath(
+            currentPath,
+            `${base}/evidence-packages`
+          ),
+          feature: "evidence_packages",
+        },
+
+        {
+          href: `${base}/audit-integrity`,
+          label: "Audit & Integrity",
+          active: startsWithPath(
+            currentPath,
+            `${base}/audit-integrity`
+          ),
+          feature: "audit_integrity",
+        },
+
+        // V1 compatibility surface.
+        // Retained for historical-trade and entitlement workflows.
+        {
           href: `${base}/ledger`,
-          label: "Trade Ledger",
-          active: startsWithPath(currentPath, `${base}/ledger`),
-          feature: "ledger"
-        },
-        {
-          href: `${base}/evidence-records`,
-          label: "Evidence Records",
-          active: startsWithPath(currentPath, `${base}/evidence-records`),
-          feature: "evidence_records"
-        },
-        {
-          href: `${base}/import-batches`,
-          label: "Import Batches",
-          active: startsWithPath(currentPath, `${base}/import-batches`),
-          feature: "import_batches"
-        },
-        {
-          href: `${base}/audit-timeline`,
-          label: "Audit Timeline",
-          active: startsWithPath(currentPath, `${base}/audit-timeline`),
-          feature: "audit_timeline"
-        },
-        {
-          href: `${base}/integrity-registry`,
-          label: "Integrity Registry",
-          active: startsWithPath(currentPath, `${base}/integrity-registry`),
-          feature: "integrity_registry"
+          label: "Historical Trade Ledger",
+          active: startsWithPath(
+            currentPath,
+            `${base}/ledger`
+          ),
+          feature: "ledger",
         },
       ]
     : [];
@@ -798,7 +898,7 @@ export default function Navbar({ workspaceId }: Props) {
     activeDomain === "dashboard"
         ? dashboardLinks
         : activeDomain === "intake"
-            ? intakeLinks
+            ? acquisitionLinks
             : activeDomain === "registry"
                 ? registryLinks
                 : activeDomain === "claims"
@@ -1053,12 +1153,13 @@ export default function Navbar({ workspaceId }: Props) {
             renderTopButton(
                 [
                     "broker_connections",
+                    "provider_connections",
                     "import_center",
                     "sync_jobs",
                     "adapter_registry",
                 ],
                 importHref,
-                "Evidence Intake",
+                "Evidence Acquisition",
                 activeDomain==="intake",
             )
             }
@@ -1066,13 +1167,18 @@ export default function Navbar({ workspaceId }: Props) {
             {
             renderTopButton(
                 [
-                    "ledger",
-                    "evidence_records",
-                    "import_batches",
-                    "audit_timeline",
-                    "integrity_registry",
+                  "evidence_explorer",
+                  "trading_records",
+                  "account_records",
+                  "document_records",
+                  "system_records",
+                  "evidence_packages",
+                  "audit_integrity",
+
+                  // V1 compatibility
+                  "ledger",
                 ],
-                ledgerHref,
+                evidenceExplorerHref,
                 "Evidence Registry",
                 activeDomain==="registry",
             )

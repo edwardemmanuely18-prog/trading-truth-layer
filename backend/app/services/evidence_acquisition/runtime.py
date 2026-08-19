@@ -23,7 +23,10 @@ from typing import Dict, Optional
 
 from .base_engine import AcquisitionEngine
 
-from .provider_registry import ProviderRegistry
+from .provider_registry import (
+    ProviderRecord,
+    ProviderRegistry,
+)
 from .lifecycle import Lifecycle
 from .startup import StartupSequence
 from .shutdown import ShutdownSequence
@@ -255,16 +258,45 @@ class EvidenceAcquisitionRuntime:
     def register_provider(
         self,
         name: str,
+        engine: str,
         provider: object,
+        *,
+        certified: bool = False,
+        active: bool = False,
+        connected: bool = False,
+        metadata: Optional[Dict[str, object]] = None,
     ) -> None:
         """
-        Register a certified provider.
+        Register a runtime provider.
+
+        The Runtime owns the construction of the ProviderRecord.
+        Engine registries remain the owners of the provider objects.
         """
 
-        self._provider_registry.register(provider)
+        record = ProviderRecord(
+
+            name=name,
+
+            engine=engine,
+
+            provider=provider,
+
+            certified=certified,
+
+            active=active,
+
+            connected=connected,
+
+            metadata=metadata or {},
+
+        )
+
+        self._provider_registry.register(record)
 
         self.statistics.registered_providers = (
+
             self._provider_registry.statistics().total
+
         )
 
     def unregister_provider(
@@ -345,6 +377,40 @@ class EvidenceAcquisitionRuntime:
         """
 
         return self._certification_engine
+
+    # ============================================================
+    # Provider Discovery
+    # ============================================================
+
+    def _discover_providers(self) -> None:
+        """
+        Discover providers exposed by every registered
+        acquisition engine and populate the Runtime
+        Provider Registry.
+
+        Provider ownership remains inside the engine.
+        The Runtime stores only runtime records.
+        """
+
+        #
+        # Fresh discovery every initialization.
+        #
+
+        self._provider_registry.clear()
+
+        for engine in self._engines.values():
+
+            for provider in engine.providers:
+
+                self.register_provider(
+
+                    name=provider,
+
+                    engine=engine.name,
+
+                    provider=provider,
+
+                )
 
 
     # ============================================================
@@ -439,6 +505,16 @@ class EvidenceAcquisitionRuntime:
                 engine.initialize()
 
             self._startup.complete("engines")
+
+            #
+            # Provider Discovery
+            #
+
+            self._startup.start("providers")
+
+            self._discover_providers()
+
+            self._startup.complete("providers")
 
             self._health.update(
                 "runtime",

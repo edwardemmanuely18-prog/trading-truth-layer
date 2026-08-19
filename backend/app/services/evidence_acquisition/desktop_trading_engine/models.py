@@ -161,6 +161,8 @@ class PlatformType(str, Enum):
 
     MATCHTRADER = "matchtrader"
 
+    MOTIVEWAVE = "motivewave"
+
     UNKNOWN = "unknown"
 
 
@@ -915,6 +917,8 @@ class ExecutionEvidence(PricedEvidence):
 
     order_id: Optional[str] = None
 
+    side: Optional[str] = None
+
     execution_type: Optional[str] = None
 
     execution_price: float = 0.0
@@ -998,11 +1002,21 @@ class TradeEvidence(PricedEvidence):
 
     deal_id: Optional[str] = None
 
+    position_id: Optional[str] = None
+
     parent_trade_id: Optional[str] = None
 
     side: Optional[str] = None
 
     trade_status: Optional[str] = None
+
+    opened_at: Optional[datetime] = None
+
+    contract_size: Optional[float] = None
+
+    point_size: Optional[float] = None
+
+    volume: float = 0.0
 
     entry_price: Optional[float] = None
 
@@ -1023,6 +1037,8 @@ class TradeEvidence(PricedEvidence):
     gross_pnl: float = 0.0
 
     net_pnl: float = 0.0
+
+    net_profit: float = 0.0
 
     commission: float = 0.0
 
@@ -1249,6 +1265,76 @@ class DesktopEvidencePackage:
     connector_version: Optional[str] = None
 
     schema_version: str = EVIDENCE_SCHEMA_VERSION
+
+    # ------------------------------------------------------------------------
+    # Synchronization Context
+    # ------------------------------------------------------------------------
+
+    def iter_evidence(self):
+        """
+        Iterate over every evidence object contained in this package.
+
+        The package is the canonical synchronization boundary.
+        """
+
+        singleton_evidence = (
+            self.terminal,
+            self.user,
+            self.broker,
+            self.server,
+            self.account,
+            self.balance,
+            self.margin,
+            self.equity,
+            self.buying_power,
+            self.history,
+        )
+
+        for evidence in singleton_evidence:
+            if evidence is not None:
+                yield evidence
+
+        collections = (
+            self.symbols,
+            self.prices,
+            self.orders,
+            self.executions,
+            self.deals,
+            self.trades,
+            self.positions,
+            self.activities,
+        )
+
+        for collection in collections:
+            for evidence in collection:
+                if evidence is not None:
+                    yield evidence
+
+    def apply_synchronization_context(
+        self,
+        *,
+        status: SynchronizationStatus = SynchronizationStatus.RUNNING,
+        synchronized_at: Optional[datetime] = None,
+    ) -> None:
+        """
+        Propagate the package synchronization context to every
+        contained evidence object.
+
+        The DesktopEvidencePackage owns the canonical
+        synchronization_id for the entire acquisition cycle.
+        """
+
+        timestamp = synchronized_at or self.synchronized_at
+
+        for evidence in self.iter_evidence():
+
+            evidence.metadata.synchronization_id = (
+                self.synchronization_id
+            )
+
+            evidence.metadata.synchronization_status = status
+
+            evidence.metadata.synchronized_at = timestamp
 
 
 # ============================================================================

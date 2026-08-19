@@ -234,3 +234,18 @@ class ProvenanceBuilder:
             canonical_evidence_id=canonical_evidence_id,
             evidence=evidence,
         )
+
+
+# ============================================================================
+# Backwards Compatibility
+# ============================================================================
+
+EvidenceProvenanceBuilder = ProvenanceBuilder
+
+
+__all__ = [
+    "IntegrityScores",
+    "ProvenanceRecord",
+    "ProvenanceBuilder",
+    "EvidenceProvenanceBuilder",
+]

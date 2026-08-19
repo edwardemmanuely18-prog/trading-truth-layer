@@ -21,8 +21,10 @@ from .models import DesktopEvidencePackage
 from .models import Evidence
 from .models import (
     AccountEvidence,
+    AccountState,
     BrokerEvidence,
     ConnectionStatus,
+    PlatformType,
     ServerEvidence,
     TerminalEvidence,
     UserEvidence,
@@ -173,6 +175,41 @@ class TranslationHelper:
         return str(value)
 
     @staticmethod
+    def as_identifier(
+        value: Any,
+    ) -> Optional[str]:
+        """
+        Normalize broker/provider identifiers.
+
+        Empty values and numeric/string zero sentinels are treated
+        as absent identifiers. Genuine identifier values are preserved.
+        """
+
+        if value is None:
+            return None
+
+        if isinstance(value, str):
+            normalized = value.strip()
+
+            if not normalized or normalized == "0":
+                return None
+
+            return normalized
+
+        if isinstance(value, (int, float)):
+            if value == 0:
+                return None
+
+            return str(value)
+
+        normalized = str(value).strip()
+
+        if not normalized or normalized == "0":
+            return None
+
+        return normalized
+
+    @staticmethod
     def as_float(
         value: Any,
     ) -> Optional[float]:
@@ -208,6 +245,28 @@ class TranslationHelper:
                 f"Unable to convert '{value}' to int."
             ) from exc
 
+    @classmethod
+    def as_datetime(
+        cls,
+        source: Any,
+        attribute: str,
+        default: Any = None,
+    ) -> Any:
+        """
+        Return a canonical datetime value from the acquisition contract.
+
+        Provider-specific adapters are responsible for normalizing native
+        timestamp representations before the shared translation layer.
+        """
+
+        value = cls.get(
+            source,
+            attribute,
+            default,
+        )
+
+        return value
+
     @staticmethod
     def as_bool(
         value: Any,
@@ -237,6 +296,7 @@ class TranslationHelper:
         raise TranslationError(
             f"Unable to convert '{value}' to bool."
         )
+
 
     @staticmethod
     def as_dict(
@@ -310,6 +370,22 @@ class TranslationAccessor:
         return TranslationHelper.as_string(value)
 
     @classmethod
+    def as_identifier(
+        cls,
+        source: Any,
+        attribute: str,
+        default: str | None = None,
+    ) -> str | None:
+
+        value = cls.get(
+            source,
+            attribute,
+            default,
+        )
+
+        return TranslationHelper.as_identifier(value)
+
+    @classmethod
     def as_float(
         cls,
         source: Any,
@@ -340,6 +416,28 @@ class TranslationAccessor:
         )
 
         return TranslationHelper.as_int(value)
+
+    @classmethod
+    def as_datetime(
+        cls,
+        source: Any,
+        attribute: str,
+        default: Any = None,
+    ) -> Any:
+        """
+        Return a canonical datetime value from the acquisition contract.
+
+        Provider-specific adapters are responsible for normalizing native
+        timestamp representations before the shared translation layer.
+        """
+
+        value = cls.get(
+            source,
+            attribute,
+            default,
+        )
+
+        return value
 
     @classmethod
     def as_bool(
@@ -484,6 +582,240 @@ class DesktopTranslator(BaseTranslator):
 
     provider_version = "1.0"
 
+    @staticmethod
+    def _resolve_platform(
+        *,
+        provider_name: str | None,
+        terminal: dict[str, Any],
+    ) -> PlatformType:
+        """
+        Resolve the canonical desktop platform from the normalized
+        acquisition contract.
+
+        Provider-specific acquisition remains outside the translator.
+        This method only interprets canonical connector/platform identity.
+        """
+
+        values = [
+            provider_name or "",
+            terminal.get("terminal_name") or "",
+            terminal.get("platform_build") or "",
+        ]
+
+        normalized = " ".join(
+            str(value).strip().lower()
+            for value in values
+            if value
+        )
+
+        if (
+            "metatrader 5" in normalized
+            or "meta trader 5" in normalized
+            or "mt5" in normalized
+        ):
+            return PlatformType.MT5
+
+        if (
+            "metatrader 4" in normalized
+            or "meta trader 4" in normalized
+            or "mt4" in normalized
+        ):
+            return PlatformType.MT4
+
+        if "ctrader" in normalized or "c trader" in normalized:
+            return PlatformType.CTRADER
+
+        if "ninjatrader" in normalized:
+            return PlatformType.NINJATRADER
+
+        if "tradestation" in normalized:
+            return PlatformType.TRADESTATION
+
+        if "sierra chart" in normalized:
+            return PlatformType.SIERRA_CHART
+
+        if "multicharts" in normalized:
+            return PlatformType.MULTICHARTS
+
+        if "quantower" in normalized:
+            return PlatformType.QUANTOWER
+
+        if "cqg" in normalized:
+            return PlatformType.CQG
+
+        if "dxtrade" in normalized:
+            return PlatformType.DXTRADE
+
+        if "matchtrader" in normalized:
+            return PlatformType.MATCHTRADER
+
+        if "motivewave" in normalized:
+            return PlatformType.MOTIVEWAVE
+
+        return PlatformType.UNKNOWN
+
+    def _apply_identity_context(
+        self,
+        package: DesktopEvidencePackage,
+        payload: Dict[str, Any],
+    ) -> None:
+        """
+        Populate the canonical EvidenceIdentity for every evidence
+        object produced during this translation cycle.
+
+        Identity is derived from the canonical desktop acquisition
+        contract and applied once at the package boundary.
+
+        This does not create synchronization IDs. Synchronization
+        identity is owned by DesktopEvidencePackage.
+        """
+
+        account = TranslationHelper.as_dict(
+            payload.get("account"),
+        )
+
+        terminal = TranslationHelper.as_dict(
+            payload.get("terminal"),
+        )
+
+        provider_name = (
+            TranslationAccessor.as_string(
+                payload,
+                "connector_name",
+            )
+            or self.provider_name
+        )
+
+        provider_version = (
+            TranslationAccessor.as_string(
+                payload,
+                "connector_version",
+            )
+            or self.provider_version
+        )
+
+        account_id = TranslationAccessor.as_string(
+            account,
+            "broker_account_id",
+        )
+
+        account_number = (
+            TranslationAccessor.as_string(
+                account,
+                "broker_account_id",
+            )
+            or account_id
+        )
+
+        server = TranslationHelper.as_dict(
+            payload.get("server"),
+        )
+
+        server_name = TranslationAccessor.as_string(
+            server,
+            "server_name",
+        )
+
+        platform_name = self._resolve_platform(
+            provider_name=provider_name,
+            terminal=terminal,
+        )
+
+        account_state = AccountState.UNKNOWN
+
+        explicit_account_state = TranslationAccessor.as_string(
+            account,
+            "account_state",
+        )
+
+        if explicit_account_state:
+            normalized_state = (
+                explicit_account_state.strip().lower()
+            )
+
+            if normalized_state in {
+                "live",
+                "real",
+                "production",
+            }:
+                account_state = AccountState.LIVE
+
+            elif normalized_state in {
+                "demo",
+                "paper",
+                "simulation",
+            }:
+                account_state = AccountState.DEMO
+
+        else:
+            trade_mode = TranslationAccessor.as_int(
+                account,
+                "account_type",
+            )
+
+            if trade_mode == 2:
+                account_state = AccountState.LIVE
+
+            elif trade_mode in {0, 1}:
+                account_state = AccountState.DEMO
+
+        # --------------------------------------------------------------
+        # Provider connection-context fallback
+        #
+        # MotiveWave does not currently expose a native account-state
+        # value through the acquisition surface. Therefore, when the
+        # native account does not provide an explicit state, use the
+        # canonical TTL connection environment supplied by the adapter.
+        #
+        # This is derived connection context, not fabricated native
+        # account evidence.
+        # --------------------------------------------------------------
+
+        if account_state == AccountState.UNKNOWN:
+            connection_context = TranslationHelper.as_dict(
+                payload.get("connection_context"),
+            )
+
+            connection_environment = (
+                TranslationAccessor.as_string(
+                    connection_context,
+                    "environment",
+                )
+                or ""
+            ).strip().lower()
+
+            if connection_environment in {
+                "production",
+                "prod",
+                "live",
+            }:
+                account_state = AccountState.LIVE
+
+            elif connection_environment in {
+                "development",
+                "dev",
+                "demo",
+                "sandbox",
+                "paper",
+            }:
+                account_state = AccountState.DEMO
+
+        for evidence in package.iter_evidence():
+
+            evidence.identity.provider_name = provider_name
+
+            evidence.identity.platform_name = platform_name
+
+            evidence.identity.platform_version = provider_version
+
+            evidence.identity.account_id = account_id
+
+            evidence.identity.account_number = account_number
+
+            evidence.identity.account_state = account_state
+
+            evidence.identity.server_name = server_name
+
     def translate(
         self,
         source: Any,
@@ -525,8 +857,20 @@ class DesktopTranslator(BaseTranslator):
             payload.get("financial"),
         )
 
+        connection_context = TranslationHelper.as_dict(
+            payload.get("connection_context"),
+        )
+
+        connection_environment = (
+            TranslationAccessor.as_string(
+                connection_context,
+                "environment",
+            )
+        )
+
         package.account = self._translate_account(
             payload.get("account"),
+            connection_environment=connection_environment,
         )
 
         package.balance = self._translate_balance(
@@ -579,6 +923,15 @@ class DesktopTranslator(BaseTranslator):
 
         package.activities = self._translate_activities(
             payload.get("activity", [])
+        )
+
+        # --------------------------------------------------------------
+        # Canonical Evidence Identity
+        # --------------------------------------------------------------
+
+        self._apply_identity_context(
+            package,
+            payload,
         )
 
         return package
@@ -808,13 +1161,78 @@ class DesktopTranslator(BaseTranslator):
     def _translate_account(
         self,
         account: dict | None,
+        *,
+        connection_environment: str | None = None,
     ) -> AccountEvidence | None:
 
         if not account:
             return None
 
-        return AccountEvidence(
+        account_type = TranslationAccessor.as_string(
+            account,
+            "account_type",
+        )
 
+        explicit_account_state = TranslationAccessor.as_string(
+            account,
+            "account_state",
+        )
+
+        account_state = AccountState.UNKNOWN
+
+        if explicit_account_state:
+            normalized_state = (
+                explicit_account_state.strip().lower()
+            )
+
+            if normalized_state in {
+                "live",
+                "real",
+                "production",
+            }:
+                account_state = AccountState.LIVE
+
+            elif normalized_state in {
+                "demo",
+                "paper",
+                "simulation",
+            }:
+                account_state = AccountState.DEMO
+
+        else:
+            trade_mode = TranslationAccessor.as_int(
+                account,
+                "account_type",
+            )
+
+            if trade_mode == 2:
+                account_state = AccountState.LIVE
+
+            elif trade_mode in {0, 1}:
+                account_state = AccountState.DEMO
+
+            if account_state == AccountState.UNKNOWN:
+                normalized_environment = (
+                    connection_environment or ""
+                ).strip().lower()
+
+                if normalized_environment in {
+                    "production",
+                    "prod",
+                    "live",
+                }:
+                    account_state = AccountState.LIVE
+
+                elif normalized_environment in {
+                    "development",
+                    "dev",
+                    "demo",
+                    "sandbox",
+                    "paper",
+                }:
+                    account_state = AccountState.DEMO
+
+        return AccountEvidence(
             broker_account_id=TranslationAccessor.as_string(
                 account,
                 "broker_account_id",
@@ -825,10 +1243,9 @@ class DesktopTranslator(BaseTranslator):
                 "account_name",
             ),
 
-            account_type=TranslationAccessor.as_string(
-                account,
-                "account_type",
-            ),
+            account_type=account_type,
+
+            account_state=account_state,
 
             currency=TranslationAccessor.as_string(
                 account,
@@ -857,33 +1274,24 @@ class DesktopTranslator(BaseTranslator):
         balance = TranslationAccessor.as_float(
             financial,
             "balance",
-            0.0,
         )
 
         equity = TranslationAccessor.as_float(
             financial,
             "equity",
-            0.0,
         )
 
         buying_power = TranslationAccessor.as_float(
             financial,
             "buying_power",
-            0.0,
         )
 
         return BalanceEvidence(
-
             balance=balance,
-
             equity=equity,
-
             buying_power=buying_power,
-
             available_funds=buying_power,
-
             cash=balance,
-
             account_value=equity,
         )
 
@@ -898,21 +1306,16 @@ class DesktopTranslator(BaseTranslator):
         margin_used = TranslationAccessor.as_float(
             financial,
             "margin",
-            0.0,
         )
 
         free_margin = TranslationAccessor.as_float(
             financial,
             "buying_power",
-            0.0,
         )
 
         return MarginEvidence(
-
             margin_used=margin_used,
-
             free_margin=free_margin,
-
             available_margin=free_margin,
         )
 
@@ -927,21 +1330,16 @@ class DesktopTranslator(BaseTranslator):
         balance = TranslationAccessor.as_float(
             financial,
             "balance",
-            0.0,
         )
 
         equity = TranslationAccessor.as_float(
             financial,
             "equity",
-            0.0,
         )
 
         return EquityEvidence(
-
             opening_balance=balance,
-
             current_balance=balance,
-
             current_equity=equity,
         )
 
@@ -956,21 +1354,16 @@ class DesktopTranslator(BaseTranslator):
         buying_power = TranslationAccessor.as_float(
             financial,
             "buying_power",
-            0.0,
         )
 
         equity = TranslationAccessor.as_float(
             financial,
             "equity",
-            0.0,
         )
 
         return BuyingPowerEvidence(
-
             buying_power=buying_power,
-
             available_margin=buying_power,
-
             available_equity=equity,
         )
 
@@ -989,19 +1382,32 @@ class DesktopTranslator(BaseTranslator):
 
         for value in values:
 
+            symbol = (
+                TranslationAccessor.as_string(
+                    value,
+                    "name",
+                )
+                or TranslationAccessor.as_string(
+                    value,
+                    "symbol",
+                )
+                or TranslationAccessor.as_string(
+                    value,
+                    "symbol_name",
+                )
+                or TranslationAccessor.as_string(
+                    value,
+                    "code",
+                )
+            )
+
             symbols.append(
-
                 SymbolEvidence(
+                    symbol=symbol,
 
-                    symbol_id=TranslationAccessor.as_string(
-                        value,
-                        "name",
-                    ),
+                    symbol_id=symbol,
 
-                    display_name=TranslationAccessor.as_string(
-                        value,
-                        "name",
-                    ),
+                    display_name=symbol,
 
                     description=TranslationAccessor.as_string(
                         value,
@@ -1159,32 +1565,66 @@ class DesktopTranslator(BaseTranslator):
             volume = TranslationAccessor.as_float(
                 value,
                 "volume_initial",
-                0.0,
             )
 
-            filled = volume - TranslationAccessor.as_float(
+            current_volume = TranslationAccessor.as_float(
                 value,
                 "volume_current",
-                0.0,
+            )
+
+            filled = (
+                volume - current_volume
+                if volume is not None and current_volume is not None
+                else None
             )
 
             orders.append(
-
                 OrderEvidence(
-
-                    order_id=TranslationAccessor.as_string(
+                    order_id=TranslationAccessor.as_identifier(
+                        value,
+                        "order_id",
+                    )
+                    or TranslationAccessor.as_identifier(
                         value,
                         "ticket",
                     ),
 
+                    client_order_id=TranslationAccessor.as_identifier(
+                        value,
+                        "client_order_id",
+                    ),
+
+                    parent_order_id=TranslationAccessor.as_identifier(
+                        value,
+                        "parent_order_id",
+                    ),
+
                     order_type=TranslationAccessor.as_string(
+                        value,
+                        "order_type",
+                    )
+                    or TranslationAccessor.as_string(
                         value,
                         "type",
                     ),
 
+                    side=TranslationAccessor.as_string(
+                        value,
+                        "side",
+                    ),
+
                     status=TranslationAccessor.as_string(
                         value,
+                        "status",
+                    )
+                    or TranslationAccessor.as_string(
+                        value,
                         "state",
+                    ),
+
+                    time_in_force=TranslationAccessor.as_string(
+                        value,
+                        "time_in_force",
                     ),
 
                     symbol=TranslationAccessor.as_string(
@@ -1196,25 +1636,49 @@ class DesktopTranslator(BaseTranslator):
 
                     filled_quantity=filled,
 
-                    remaining_quantity=TranslationAccessor.as_float(
-                        value,
-                        "volume_current",
-                        0.0,
-                    ),
+                    remaining_quantity=current_volume,
 
                     limit_price=TranslationAccessor.as_float(
+                        value,
+                        "limit_price",
+                    )
+                    or TranslationAccessor.as_float(
                         value,
                         "price_open",
                     ),
 
                     stop_price=TranslationAccessor.as_float(
                         value,
+                        "stop_price",
+                    )
+                    or TranslationAccessor.as_float(
+                        value,
                         "price_stoplimit",
+                    ),
+
+                    average_fill_price=TranslationAccessor.as_float(
+                        value,
+                        "average_fill_price",
+                    ),
+
+                    commission=TranslationAccessor.as_float(
+                        value,
+                        "commission",
+                    ),
+
+                    swap=TranslationAccessor.as_float(
+                        value,
+                        "swap",
                     ),
 
                     comment=TranslationAccessor.as_string(
                         value,
                         "comment",
+                    ),
+
+                    strategy_id=TranslationAccessor.as_string(
+                        value,
+                        "strategy_id",
                     ),
                 )
             )
@@ -1234,41 +1698,92 @@ class DesktopTranslator(BaseTranslator):
         for value in values:
 
             executions.append(
-
                 ExecutionEvidence(
-
-                    execution_id=TranslationAccessor.as_string(
+                    execution_id=TranslationAccessor.as_identifier(
+                        value,
+                        "execution_id",
+                    )
+                    or TranslationAccessor.as_identifier(
                         value,
                         "ticket",
                     ),
 
-                    order_id=TranslationAccessor.as_string(
+                    order_id=TranslationAccessor.as_identifier(
+                        value,
+                        "order_id",
+                    )
+                    or TranslationAccessor.as_identifier(
                         value,
                         "order",
                     ),
 
+                    execution_type=TranslationAccessor.as_string(
+                        value,
+                        "execution_type",
+                    ),
+
                     execution_price=TranslationAccessor.as_float(
                         value,
+                        "execution_price",
+                    )
+                    or TranslationAccessor.as_float(
+                        value,
                         "price",
-                        0.0,
                     ),
 
                     execution_quantity=TranslationAccessor.as_float(
                         value,
+                        "execution_quantity",
+                    )
+                    or TranslationAccessor.as_float(
+                        value,
                         "volume",
-                        0.0,
+                    ),
+
+                    execution_time=(
+                        TranslationAccessor.get(
+                            value,
+                            "execution_time",
+                        )
+                        or TranslationAccessor.get(
+                            value,
+                            "time",
+                        )
+                    ),
+
+                    liquidity=TranslationAccessor.as_string(
+                        value,
+                        "liquidity",
+                    ),
+
+                    venue=TranslationAccessor.as_string(
+                        value,
+                        "venue",
+                    ),
+
+                    execution_reference=TranslationAccessor.as_identifier(
+                        value,
+                        "execution_reference",
                     ),
 
                     commission=TranslationAccessor.as_float(
                         value,
                         "commission",
-                        0.0,
                     ),
 
                     fees=TranslationAccessor.as_float(
                         value,
+                        "fees",
+                    )
+                    if TranslationAccessor.get(value, "fees") is not None
+                    else TranslationAccessor.as_float(
+                        value,
                         "fee",
-                        0.0,
+                    ),
+
+                    slippage=TranslationAccessor.as_float(
+                        value,
+                        "slippage",
                     ),
                 )
             )
@@ -1288,17 +1803,38 @@ class DesktopTranslator(BaseTranslator):
         for value in values:
 
             deals.append(
-
                 DealEvidence(
-
-                    deal_id=TranslationAccessor.as_string(
+                    deal_id=TranslationAccessor.as_identifier(
+                        value,
+                        "deal_id",
+                    )
+                    or TranslationAccessor.as_identifier(
                         value,
                         "ticket",
                     ),
 
-                    order_id=TranslationAccessor.as_string(
+                    execution_id=TranslationAccessor.as_identifier(
+                        value,
+                        "execution_id",
+                    ),
+
+                    order_id=TranslationAccessor.as_identifier(
+                        value,
+                        "order_id",
+                    )
+                    or TranslationAccessor.as_identifier(
                         value,
                         "order",
+                    ),
+
+                    deal_type=TranslationAccessor.as_string(
+                        value,
+                        "deal_type",
+                    ),
+
+                    side=TranslationAccessor.as_string(
+                        value,
+                        "side",
                     ),
 
                     symbol=TranslationAccessor.as_string(
@@ -1309,37 +1845,56 @@ class DesktopTranslator(BaseTranslator):
                     quantity=TranslationAccessor.as_float(
                         value,
                         "volume",
-                        0.0,
                     ),
 
                     price=TranslationAccessor.as_float(
                         value,
                         "price",
-                        0.0,
                     ),
 
                     realized_pnl=TranslationAccessor.as_float(
                         value,
+                        "realized_pnl",
+                    )
+                    or TranslationAccessor.as_float(
+                        value,
                         "profit",
-                        0.0,
                     ),
 
                     commission=TranslationAccessor.as_float(
                         value,
                         "commission",
-                        0.0,
                     ),
 
                     swap=TranslationAccessor.as_float(
                         value,
                         "swap",
-                        0.0,
                     ),
 
                     fee=TranslationAccessor.as_float(
                         value,
                         "fee",
-                        0.0,
+                    )
+                    if TranslationAccessor.get(value, "fee") is not None
+                    else TranslationAccessor.as_float(
+                        value,
+                        "fees",
+                    ),
+
+                    deal_time=(
+                        TranslationAccessor.get(
+                            value,
+                            "deal_time",
+                        )
+                        or TranslationAccessor.get(
+                            value,
+                            "time",
+                        )
+                    ),
+
+                    external_reference=TranslationAccessor.as_identifier(
+                        value,
+                        "external_reference",
                     ),
                 )
             )
@@ -1359,15 +1914,41 @@ class DesktopTranslator(BaseTranslator):
         for value in values:
 
             trades.append(
-
                 TradeEvidence(
-
-                    trade_id=TranslationAccessor.as_string(
+                    trade_id=TranslationAccessor.as_identifier(
+                        value,
+                        "trade_id",
+                    )
+                    or TranslationAccessor.as_identifier(
                         value,
                         "ticket",
                     ),
 
-                    broker_ticket=TranslationAccessor.as_string(
+                    broker_trade_id=TranslationAccessor.as_identifier(
+                        value,
+                        "broker_trade_id",
+                    ),
+
+                    order_id=TranslationAccessor.as_identifier(
+                        value,
+                        "order_id",
+                    ),
+
+                    execution_id=TranslationAccessor.as_identifier(
+                        value,
+                        "execution_id",
+                    ),
+
+                    deal_id=TranslationAccessor.as_identifier(
+                        value,
+                        "deal_id",
+                    ),
+
+                    broker_ticket=TranslationAccessor.as_identifier(
+                        value,
+                        "broker_ticket",
+                    )
+                    or TranslationAccessor.as_identifier(
                         value,
                         "ticket",
                     ),
@@ -1377,33 +1958,117 @@ class DesktopTranslator(BaseTranslator):
                         "symbol",
                     ),
 
+                    side=TranslationAccessor.as_string(
+                        value,
+                        "side",
+                    ),
+
+                    trade_status=TranslationAccessor.as_string(
+                        value,
+                        "trade_status",
+                    ),
+
                     quantity=TranslationAccessor.as_float(
                         value,
                         "volume",
-                        0.0,
                     ),
 
                     entry_price=TranslationAccessor.as_float(
                         value,
+                        "entry_price",
+                    )
+                    or TranslationAccessor.as_float(
+                        value,
                         "price",
+                    ),
+
+                    exit_price=TranslationAccessor.as_float(
+                        value,
+                        "exit_price",
+                    ),
+
+                    average_entry_price=TranslationAccessor.as_float(
+                        value,
+                        "average_entry_price",
+                    ),
+
+                    average_exit_price=TranslationAccessor.as_float(
+                        value,
+                        "average_exit_price",
+                    ),
+
+                    stop_loss=TranslationAccessor.as_float(
+                        value,
+                        "stop_loss",
+                    ),
+
+                    take_profit=TranslationAccessor.as_float(
+                        value,
+                        "take_profit",
                     ),
 
                     realized_pnl=TranslationAccessor.as_float(
                         value,
+                        "realized_pnl",
+                    )
+                    or TranslationAccessor.as_float(
+                        value,
                         "profit",
-                        0.0,
+                    ),
+
+                    unrealized_pnl=TranslationAccessor.as_float(
+                        value,
+                        "unrealized_pnl",
+                    ),
+
+                    gross_pnl=TranslationAccessor.as_float(
+                        value,
+                        "gross_pnl",
+                    ),
+
+                    net_pnl=TranslationAccessor.as_float(
+                        value,
+                        "net_pnl",
                     ),
 
                     commission=TranslationAccessor.as_float(
                         value,
                         "commission",
-                        0.0,
                     ),
 
                     swap=TranslationAccessor.as_float(
                         value,
                         "swap",
-                        0.0,
+                    ),
+
+                    fees=TranslationAccessor.as_float(
+                        value,
+                        "fees",
+                    )
+                    if TranslationAccessor.get(value, "fees") is not None
+                    else TranslationAccessor.as_float(
+                        value,
+                        "fee",
+                    ),
+
+                    slippage=TranslationAccessor.as_float(
+                        value,
+                        "slippage",
+                    ),
+
+                    strategy_id=TranslationAccessor.as_identifier(
+                        value,
+                        "strategy_id",
+                    ),
+
+                    strategy_name=TranslationAccessor.as_string(
+                        value,
+                        "strategy_name",
+                    ),
+
+                    trade_reference=TranslationAccessor.as_identifier(
+                        value,
+                        "trade_reference",
                     ),
                 )
             )
@@ -1423,17 +2088,38 @@ class DesktopTranslator(BaseTranslator):
         for value in values:
 
             positions.append(
-
                 PositionEvidence(
-
-                    position_id=TranslationAccessor.as_string(
+                    position_id=TranslationAccessor.as_identifier(
+                        value,
+                        "position_id",
+                    )
+                    or TranslationAccessor.as_identifier(
                         value,
                         "ticket",
                     ),
 
-                    broker_position_id=TranslationAccessor.as_string(
+                    broker_position_id=TranslationAccessor.as_identifier(
+                        value,
+                        "broker_position_id",
+                    )
+                    or TranslationAccessor.as_identifier(
                         value,
                         "identifier",
+                    ),
+
+                    trade_id=TranslationAccessor.as_identifier(
+                        value,
+                        "trade_id",
+                    ),
+
+                    side=TranslationAccessor.as_string(
+                        value,
+                        "side",
+                    ),
+
+                    position_status=TranslationAccessor.as_string(
+                        value,
+                        "position_status",
                     ),
 
                     symbol=TranslationAccessor.as_string(
@@ -1444,41 +2130,129 @@ class DesktopTranslator(BaseTranslator):
                     quantity=TranslationAccessor.as_float(
                         value,
                         "volume",
-                        0.0,
                     ),
 
                     open_price=TranslationAccessor.as_float(
                         value,
+                        "open_price",
+                    )
+                    or TranslationAccessor.as_float(
+                        value,
                         "price_open",
-                        0.0,
                     ),
 
                     current_price=TranslationAccessor.as_float(
                         value,
+                        "current_price",
+                    )
+                    or TranslationAccessor.as_float(
+                        value,
                         "price_current",
-                        0.0,
+                    ),
+
+                    average_price=TranslationAccessor.as_float(
+                        value,
+                        "average_price",
                     ),
 
                     stop_loss=TranslationAccessor.as_float(
+                        value,
+                        "stop_loss",
+                    )
+                    or TranslationAccessor.as_float(
                         value,
                         "sl",
                     ),
 
                     take_profit=TranslationAccessor.as_float(
                         value,
+                        "take_profit",
+                    )
+                    or TranslationAccessor.as_float(
+                        value,
                         "tp",
                     ),
 
                     unrealized_pnl=TranslationAccessor.as_float(
                         value,
+                        "unrealized_pnl",
+                    )
+                    or TranslationAccessor.as_float(
+                        value,
                         "profit",
-                        0.0,
+                    ),
+
+                    realized_pnl=TranslationAccessor.as_float(
+                        value,
+                        "realized_pnl",
+                    ),
+
+                    gross_pnl=TranslationAccessor.as_float(
+                        value,
+                        "gross_pnl",
+                    ),
+
+                    net_pnl=TranslationAccessor.as_float(
+                        value,
+                        "net_pnl",
+                    ),
+
+                    margin_used=TranslationAccessor.as_float(
+                        value,
+                        "margin_used",
+                    ),
+
+                    exposure=TranslationAccessor.as_float(
+                        value,
+                        "exposure",
                     ),
 
                     overnight_swap=TranslationAccessor.as_float(
                         value,
+                        "overnight_swap",
+                    )
+                    if TranslationAccessor.get(
+                        value,
+                        "overnight_swap",
+                    ) is not None
+                    else TranslationAccessor.as_float(
+                        value,
                         "swap",
-                        0.0,
+                    ),
+
+                    liquidation_price=TranslationAccessor.as_float(
+                        value,
+                        "liquidation_price",
+                    ),
+
+                    risk_percentage=TranslationAccessor.as_float(
+                        value,
+                        "risk_percentage",
+                    ),
+
+                    account_exposure_pct=TranslationAccessor.as_float(
+                        value,
+                        "account_exposure_pct",
+                    ),
+
+                    floating_drawdown=TranslationAccessor.as_float(
+                        value,
+                        "floating_drawdown",
+                    ),
+
+                    highest_profit=TranslationAccessor.as_float(
+                        value,
+                        "highest_profit",
+                    ),
+
+                    maximum_drawdown=TranslationAccessor.as_float(
+                        value,
+                        "maximum_drawdown",
+                    ),
+
+                    hedge_group=TranslationAccessor.as_string(
+                        value,
+                        "hedge_group",
                     ),
                 )
             )
@@ -1493,10 +2267,30 @@ class DesktopTranslator(BaseTranslator):
 
         values = values or []
 
+        if not values:
+            return None
+
+        order_ids: list[str] = []
+
+        for value in values:
+            identifier = (
+                TranslationAccessor.as_identifier(
+                    value,
+                    "order_id",
+                )
+                or
+                TranslationAccessor.as_identifier(
+                    value,
+                    "ticket",
+                )
+            )
+
+            if identifier:
+                order_ids.append(identifier)
+
         return HistoryEvidence(
-
-            total_orders=len(values),
-
+            orders=order_ids,
+            total_orders=len(order_ids),
             history_status="synchronized",
         )
 

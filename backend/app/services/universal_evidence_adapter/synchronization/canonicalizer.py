@@ -142,9 +142,19 @@ class FinancialInformation:
 @dataclass(slots=True)
 class CanonicalEvidence:
 
+    #
+    # Required fields
+    #
+
     identity: CanonicalIdentity
 
     provider: ProviderInformation
+
+    evidence_type: EvidenceType
+
+    #
+    # Optional fields
+    #
 
     instrument: InstrumentInformation = field(
         default_factory=InstrumentInformation
@@ -160,14 +170,13 @@ class CanonicalEvidence:
 
     provenance: ProvenanceRecord | None = None
 
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(
+        default_factory=dict
+    )
 
     synchronized_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
-
-    evidence_type: EvidenceType
-
 
 # ============================================================================
 # Evidence Canonicalizer

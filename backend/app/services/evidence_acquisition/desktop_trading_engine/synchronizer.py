@@ -133,6 +133,14 @@ class DesktopSynchronizer:
             return session
 
         except Exception as exc:
+
+            import traceback
+
+            print("=" * 80)
+            print("ORIGINAL EXCEPTION")
+            traceback.print_exc()
+            print("=" * 80)
+
             session.fail(exc)
 
             if isinstance(exc, SynchronizationError):

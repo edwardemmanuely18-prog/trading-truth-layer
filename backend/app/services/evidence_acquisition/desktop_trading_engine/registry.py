@@ -14,6 +14,7 @@ from typing import Optional
 
 from .exceptions import RegistryError
 from .translators import BaseTranslator
+from .translators import DesktopTranslator
 
 
 # ============================================================================
@@ -194,6 +195,66 @@ provider_registry = ProviderRegistry()
 
 
 # ============================================================================
+# Canonical Desktop Provider Catalogue
+# ============================================================================
+
+def register_default_providers(
+    registry: ProviderRegistry | None = None,
+) -> ProviderRegistry:
+    """
+    Register every provider supported by the Desktop Trading Engine.
+
+    This catalogue contains provider descriptors only.
+
+    Provider-specific adapters remain outside the registry and are
+    resolved by the Desktop Provider Connection composition layer.
+
+    Provider runtime versions are intentionally not resolved here because
+    those values belong to the live provider adapter/connection boundary.
+    """
+
+    target = registry or provider_registry
+
+    translator = DesktopTranslator()
+
+    providers = (
+        "MetaTrader 4",
+        "MetaTrader 5",
+        "Interactive Brokers",
+        "cTrader",
+        "MotiveWave",
+        "MultiCharts",
+        "NinjaTrader",
+        "Quantower",
+        "Sierra Chart",
+        "TradeStation",
+        "Trading Technologies",
+    )
+
+    for provider_name in providers:
+        if target.exists(provider_name):
+            continue
+
+        target.register(
+            ProviderDescriptor(
+                name=provider_name,
+                version="integration",
+                translator=translator,
+                description=(
+                    "Supported provider integration for the "
+                    "Desktop Trading Engine."
+                ),
+            )
+        )
+
+    return target
+
+
+# Populate the canonical Desktop provider catalogue at module load.
+register_default_providers()
+
+
+# ============================================================================
 # Public Exports
 # ============================================================================
 
@@ -201,4 +262,5 @@ __all__ = [
     "ProviderDescriptor",
     "ProviderRegistry",
     "provider_registry",
+    "register_default_providers",
 ]

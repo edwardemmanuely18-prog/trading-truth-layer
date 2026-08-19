@@ -57,6 +57,8 @@ from app.models.workspace_preferences import (
 from app.models.currency_rate import (
     CurrencyRate,
 )
+from app.models.provider_connection import ProviderConnectionModel
+from app.models.evidence_registry import EvidenceRegistryModel
 
 
 __all__ = [
@@ -87,4 +89,6 @@ __all__ = [
     "ReviewStatement",
     "WorkspacePreferences",
     "CurrencyRate",
+    "ProviderConnectionModel",
+    "EvidenceRegistryModel",
 ]

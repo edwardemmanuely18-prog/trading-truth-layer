@@ -13,6 +13,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
+from ..verification import VerificationSnapshot
+
 
 # ============================================================================
 # Canonical Desktop Acquisition Contract
@@ -143,6 +145,29 @@ class BaseDesktopAdapter(ABC):
         """
 
         raise NotImplementedError
+
+    # ------------------------------------------------------------------
+    # Verification
+    # ------------------------------------------------------------------
+
+    def get_verification_snapshot(
+        self,
+    ) -> VerificationSnapshot:
+        """
+        Return provider-neutral facts required by the
+        Desktop Verification Engine.
+
+        Provider-specific implementations belong in concrete adapters.
+
+        Adapters that do not yet support verification must explicitly
+        raise NotImplementedError rather than silently reporting
+        an unverified connection.
+        """
+
+        raise NotImplementedError(
+            f"Verification is not implemented for "
+            f"{self.provider_name}."
+        )
 
     # ------------------------------------------------------------------
     # Context Manager

@@ -2318,6 +2318,725 @@ export async function getRiskAnalytics(
   );
 }
 
+/* ===========================================================
+   EVIDENCE ACQUISITION
+=========================================================== */
+
+export interface EvidenceAcquisitionOverview {
+
+    summary: {
+
+        connected_sources: number;
+
+        registered_adapters: number;
+
+        active_synchronizations: number;
+
+        evidence_packages: number;
+
+    };
+
+    runtime: {
+
+        state: string;
+
+        registered_engines: number;
+
+        running_engines: number;
+
+        active_connections: number;
+
+        synchronization_jobs: number;
+
+    };
+
+    providers: {
+
+        total: number;
+
+        certified: number;
+
+        active: number;
+
+        synchronizing: number;
+
+        failed: number;
+
+    };
+
+    bridge: {
+
+        registered_engines: number;
+
+        desktop_registered: boolean;
+
+        financial_registered: boolean;
+
+        gateway_registered: boolean;
+
+        healthy: boolean;
+
+        desktop: boolean;
+
+        financial: boolean;
+
+        gateway: boolean;
+
+    };
+
+    engines: {
+
+        gateway: {
+
+            registered: boolean;
+
+            healthy: boolean;
+
+        };
+
+        desktop: {
+
+            registered: boolean;
+
+            healthy: boolean;
+
+        };
+
+        financial: {
+
+            registered: boolean;
+
+            healthy: boolean;
+
+        };
+
+    };
+
+}
+
+export interface EvidenceAcquisitionSource {
+    name: string;
+    engine: string;
+    provider_type: string;
+    certified: boolean;
+    active: boolean;
+    connected: boolean;
+    state: string;
+
+    configured_connections?: number;
+    connected_connections?: number;
+    healthy_connections?: number;
+    verified_connections?: number;
+}
+
+/* ===========================================================
+   V2 EVIDENCE REGISTRY
+   =========================================================== */
+
+export interface V2EvidenceRegistryProvider {
+  provider_name: string;
+  provider_platform: string;
+  broker_server: string | null;
+  broker_account_id: string | null;
+  broker_account_name: string | null;
+  account_state: string | null;
+  account_currency: string | null;
+  original_ticket_id: string | null;
+  original_deal_id: string | null;
+  original_order_id: string | null;
+  original_position_id: string | null;
+  original_execution_id: string | null;
+}
+
+export interface V2EvidenceRegistryRecord {
+  canonical_evidence_id: string;
+  evidence_type: string;
+  workspace_id: number | null;
+  provider_id: string | null;
+  evidence_hash: string;
+  evidence_version: number;
+  lifecycle: string;
+  synchronization_batch: string | null;
+  synchronization_session: string | null;
+  registered_at: string | null;
+  registered_at_utc: string | null;
+  registered_at_timezone: string;
+
+  provider: V2EvidenceRegistryProvider;
+
+  metadata: Record<string, unknown>;
+}
+
+export interface V2EvidenceRegistryDetail
+  extends V2EvidenceRegistryRecord {
+  registered_at_utc: string | null;
+  registered_at_timezone: string;
+
+  canonical_payload: Record<string, unknown> | null;
+  provenance_payload: Record<string, unknown> | null;
+
+  payload_hash: string | null;
+  evidence_payload_size: number | null;
+}
+
+export interface V2EvidenceRegistryPagination {
+  page: number;
+  page_size: number;
+  total_records: number;
+  total_pages: number;
+  has_previous: boolean;
+  has_next: boolean;
+}
+
+export interface V2EvidenceRegistryPage {
+  workspace_id: number;
+  evidence_type: string | null;
+  evidence_types: string[] | null;
+  records: V2EvidenceRegistryRecord[];
+  pagination: V2EvidenceRegistryPagination;
+}
+
+export interface V2EvidencePackage {
+  synchronization_batch: string;
+  record_count: number;
+  synchronization_session: string | null;
+  provider_name: string | null;
+  provider_platform: string | null;
+  broker_account_id: string | null;
+  first_registered_at: string | null;
+  last_registered_at: string | null;
+}
+
+export interface V2EvidencePackagePage {
+  workspace_id: number;
+  packages: V2EvidencePackage[];
+  pagination: {
+    page: number;
+    page_size: number;
+    total_packages: number;
+    total_pages: number;
+    has_previous: boolean;
+    has_next: boolean;
+  };
+}
+
+export interface V2EvidenceRegistryResponse {
+  workspace_id: number;
+  records: V2EvidenceRegistryRecord[];
+}
+
+export interface V2EvidenceRegistrySummary {
+  workspace_id: number;
+  total_records: number;
+  lifecycle_counts: Record<string, number>;
+  provider_counts: Record<string, number>;
+  evidence_type_counts: Record<string, number>;
+}
+
+export interface V2EvidenceRegistrySearchResponse {
+  workspace_id: number;
+  query: string;
+  results: V2EvidenceRegistryRecord[];
+}
+
+export interface V2EvidencePackage {
+    synchronization_batch: string;
+    record_count: number;
+    synchronization_session: string | null;
+    provider_name: string | null;
+    provider_platform: string | null;
+    broker_account_id: string | null;
+    first_registered_at: string | null;
+    last_registered_at: string | null;
+}
+
+export interface V2EvidencePackagePage {
+    workspace_id: number;
+    packages: V2EvidencePackage[];
+    pagination: {
+        page: number;
+        page_size: number;
+        total_packages: number;
+        total_pages: number;
+        has_previous: boolean;
+        has_next: boolean;
+    };
+}
+
+export async function getV2EvidencePackagesPage(
+    workspaceId: number,
+    page = 1,
+    pageSize = 25,
+): Promise<V2EvidencePackagePage> {
+    return apiFetch<V2EvidencePackagePage>(
+        `/workspaces/${workspaceId}/evidence-registry/v2/packages?page=${page}&page_size=${pageSize}`,
+    );
+}
+
+export interface EvidenceAcquisitionSynchronization {
+
+    id: string;
+
+    provider: string;
+
+    status: string;
+
+    progress: number;
+
+    started_at?: string | null;
+
+    completed_at?: string | null;
+
+}
+
+export interface EvidenceAcquisitionDiagnostics {
+
+    runtime_state: string;
+
+    runtime_health: string;
+
+    registered_engines: number;
+
+    registered_providers: number;
+
+    active_connections: number;
+
+    synchronization_jobs: number;
+
+}
+
+/* -----------------------------------------------------------
+   Overview
+------------------------------------------------------------ */
+
+export async function getEvidenceAcquisitionOverview(
+    workspaceId: number,
+): Promise<EvidenceAcquisitionOverview> {
+
+    return apiFetch<EvidenceAcquisitionOverview>(
+        `/workspaces/${workspaceId}/evidence-acquisition/overview`,
+    );
+
+}
+
+/* -----------------------------------------------------------
+   Sources
+------------------------------------------------------------ */
+
+export async function getEvidenceAcquisitionSources(
+    workspaceId: number,
+): Promise<EvidenceAcquisitionSource[]> {
+
+    return apiFetch<EvidenceAcquisitionSource[]>(
+        `/workspaces/${workspaceId}/evidence-acquisition/sources`,
+    );
+
+}
+
+/* -----------------------------------------------------------
+   Synchronization Center
+------------------------------------------------------------ */
+
+export async function getEvidenceAcquisitionSynchronizations(
+    workspaceId: number,
+): Promise<EvidenceAcquisitionSynchronization[]> {
+
+    return apiFetch<EvidenceAcquisitionSynchronization[]>(
+        `/workspaces/${workspaceId}/evidence-acquisition/synchronizations`,
+    );
+
+}
+
+/* -----------------------------------------------------------
+   Diagnostics
+------------------------------------------------------------ */
+
+export async function getEvidenceAcquisitionDiagnostics(
+    workspaceId: number,
+): Promise<EvidenceAcquisitionDiagnostics> {
+
+    return apiFetch<EvidenceAcquisitionDiagnostics>(
+        `/workspaces/${workspaceId}/evidence-acquisition/diagnostics`,
+    );
+
+}
+
+export async function testDesktopConnection(
+    workspaceId: number,
+    payload: DesktopConnectionTestRequest,
+): Promise<DesktopConnectionTestResponse> {
+
+    return apiFetch<DesktopConnectionTestResponse>(
+        `/api/workspaces/${workspaceId}/provider-connections/desktop/test`,
+        {
+            method: "POST",
+            body: JSON.stringify(payload),
+        },
+    );
+}
+
+export async function createDesktopConnection(
+    workspaceId: number,
+    payload: DesktopConnectionCreateRequest,
+): Promise<DesktopConnectionCreateResponse> {
+
+    return apiFetch<DesktopConnectionCreateResponse>(
+        `/api/workspaces/${workspaceId}/provider-connections/desktop/create`,
+        {
+            method: "POST",
+            body: JSON.stringify(payload),
+        },
+    );
+}
+
+/* ===========================================================
+   PROVIDER CONNECTIONS
+=========================================================== */
+
+export interface ProviderConnectionsOverview {
+
+    summary: {
+        supported_providers: number;
+        configured_connections: number;
+        verified_connections: number;
+        healthy_connections: number;
+        synchronizing: number;
+        evidence_packages: number;
+    };
+
+    engines: {
+
+        desktop: {
+            name: string;
+            display_name?: string;
+            supported_providers: number;
+            configured_connections: number;
+            active_connections: number;
+            synchronizing_connections: number;
+            healthy_connections: number;
+            initialized: boolean;
+            running: boolean;
+            healthy: boolean;
+        };
+
+        gateway: {
+            name: string;
+            display_name?: string;
+            supported_providers: number;
+            configured_connections: number;
+            active_connections: number;
+            synchronizing_connections: number;
+            healthy_connections: number;
+            initialized: boolean;
+            running: boolean;
+            healthy: boolean;
+        };
+
+        financial: {
+            name: string;
+            display_name?: string;
+            supported_providers: number;
+            configured_connections: number;
+            active_connections: number;
+            synchronizing_connections: number;
+            healthy_connections: number;
+            initialized: boolean;
+            running: boolean;
+            healthy: boolean;
+        };
+
+    };
+
+}
+
+export interface ProviderConnectionEngine {
+
+    id: string;
+
+    name: string;
+
+    supported_providers: number;
+
+    configured_connections: number;
+
+    healthy_connections: number;
+
+    status: string;
+
+}
+
+export interface ProviderConnectionRecord {
+    id: string;
+    workspace_id: number;
+    connection_name: string;
+    provider: string;
+    engine: string;
+    environment: string;
+    status: string;
+    health: string;
+    connected: boolean;
+    verified: boolean;
+}
+
+export interface ProviderConnectionStatistics {
+    synchronization_count: number;
+    successful_synchronizations: number;
+    failed_synchronizations: number;
+    evidence_packages: number;
+    last_synchronization: string | null;
+}
+
+export interface ProviderConnectionDetail {
+    id: string;
+    workspace_id: number;
+    connection_name: string;
+    provider: string;
+    engine: string;
+    environment: string;
+    status: string;
+    health: string;
+    verified: boolean;
+    connected: boolean;
+    created_at: string;
+    updated_at: string;
+    statistics: ProviderConnectionStatistics;
+}
+
+export interface DesktopConnectionVerificationCheck {
+    name: string;
+    passed: boolean;
+    message: string;
+    observed: any;
+    expected: any;
+}
+
+export interface DesktopConnectionVerificationResponse {
+    provider: string;
+    verified: boolean;
+    checks: DesktopConnectionVerificationCheck[];
+    error: string | null;
+    snapshot: {
+        provider: string;
+        provider_version?: string | null;
+        connected: boolean;
+        account_id?: string | null;
+        broker?: string | null;
+        server?: string | null;
+        terminal?: string | null;
+        terminal_version?: string | null;
+        metadata?: Record<string, any>;
+    } | null;
+}
+
+export interface ProviderConnectionActivity {
+
+    total: number;
+
+    connected: number;
+
+    disconnected: number;
+
+    failed: number;
+
+    synchronizing: number;
+
+}
+
+export async function getProviderConnectionsOverview(
+    workspaceId: number,
+): Promise<ProviderConnectionsOverview> {
+
+    return apiFetch<ProviderConnectionsOverview>(
+        `/api/workspaces/${workspaceId}/provider-connections/overview`,
+    );
+
+}
+
+export async function getProviderConnectionEngines(
+    workspaceId: number,
+): Promise<ProviderConnectionEngine[]> {
+
+    return apiFetch<ProviderConnectionEngine[]>(
+        `/api/workspaces/${workspaceId}/provider-connections/engines`,
+    );
+
+}
+
+export async function getProviderConnections(
+    workspaceId: number,
+): Promise<ProviderConnectionRecord[]> {
+
+    return apiFetch<ProviderConnectionRecord[]>(
+        `/api/workspaces/${workspaceId}/provider-connections/connections`,
+    );
+
+}
+
+export async function getProviderConnectionActivity(
+    workspaceId: number,
+): Promise<ProviderConnectionActivity> {
+
+    return apiFetch<ProviderConnectionActivity>(
+        `/api/workspaces/${workspaceId}/provider-connections/activity`,
+    );
+
+}
+
+export async function getProviderConnection(
+    workspaceId: number,
+    connectionId: string,
+): Promise<ProviderConnectionDetail> {
+    return apiFetch<ProviderConnectionDetail>(
+        `/api/workspaces/${workspaceId}/provider-connections/${encodeURIComponent(connectionId)}`,
+        {
+            cache: "no-store",
+        },
+    );
+}
+
+// ============================================================================
+// Provider Connections
+// ============================================================================
+
+export async function synchronizeProviderConnection(
+    workspaceId: number,
+    connectionId: string,
+) {
+    return apiFetch(
+
+        `/api/workspaces/${workspaceId}/provider-connections/${connectionId}/synchronize`,
+
+        {
+            method: "POST",
+        },
+
+    );
+}
+
+export async function verifyProviderConnection(
+    workspaceId: number,
+    connectionId: string,
+): Promise<DesktopConnectionVerificationResponse> {
+    return apiFetch<DesktopConnectionVerificationResponse>(
+        `/api/workspaces/${workspaceId}/provider-connections/${encodeURIComponent(connectionId)}/verify`,
+        {
+            method: "POST",
+        },
+    );
+}
+
+/* ===========================================================
+   DESKTOP TRADING ENGINE
+=========================================================== */
+
+export interface DesktopConnectionTestRequest {
+    provider: string;
+
+    connection_name: string;
+
+    environment: "live" | "demo";
+
+    evidence_categories: string[];
+
+    synchronization_profile: string;
+
+    credentials: Record<string, any>;
+}
+
+export interface DesktopConnectionConnection {
+    workspace_id: number;
+    provider: string;
+    connection_name: string;
+    environment: string;
+    synchronization_profile: string;
+    verification_status: string;
+    connection_status: string;
+    evidence_categories: string[];
+}
+
+export interface DesktopConnectionDiscovery {
+    provider: string;
+    provider_registered: boolean;
+    engine_version: string;
+    engine_running: boolean;
+    engine_initialized: boolean;
+
+    provider_version?: string | null;
+
+    broker_name?: string | null;
+
+    terminal_company?: string | null;
+    terminal_version?: string | null;
+    terminal_build?: string | null;
+    terminal_architecture?: string | null;
+    terminal_path?: string | null;
+
+    account_number?: string | null;
+    server?: string | null;
+
+    supported_evidence: string[];
+
+    healthy: boolean;
+}
+
+export interface DesktopConnectionSynchronization {
+    engine: string;
+    initialized: boolean;
+    running: boolean;
+    healthy: boolean;
+    synchronization_profile: string;
+    synchronization_state: string;
+    synchronized_categories: string[];
+    evidence_packages: number;
+    synchronized_at?: string | null;
+}
+
+export interface DesktopConnectionRuntime {
+    initialized: boolean;
+    running: boolean;
+    healthy: boolean;
+    statistics: Record<string, any>;
+}
+
+export interface DesktopConnectionResponse {
+    success: boolean;
+    message: string;
+
+    connection: DesktopConnectionConnection;
+
+    discovery: DesktopConnectionDiscovery;
+
+    synchronization: DesktopConnectionSynchronization;
+
+    runtime: DesktopConnectionRuntime;
+}
+
+export type DesktopConnectionTestResponse =
+    DesktopConnectionResponse;
+
+export interface DesktopConnectionCreateRequest {
+    provider: string;
+
+    connection_name: string;
+
+    environment: "live" | "demo";
+
+    synchronization_profile: string;
+
+    evidence_categories: string[];
+
+    credentials: Record<string, any>;
+}
+
+export interface DesktopConnectionCreateResponse {
+    id: string;
+    provider: string;
+    connection_name: string;
+    status: string;
+    synchronization_profile: string;
+    created_at: string;
+}
+
 export class ApiError extends Error {
   status: number;
   payload: ApiErrorPayload | null;
@@ -5077,6 +5796,116 @@ export const api = {
       withDevUser(
         `/workspaces/${workspaceId}/dashboard`
       ),
+      {
+        cache: "no-store",
+      }
+    );
+  },
+
+    /* ===========================================================
+     V2 EVIDENCE REGISTRY
+     =========================================================== */
+
+  getV2EvidenceRegistry: async (
+    workspaceId: number
+  ): Promise<V2EvidenceRegistryResponse> => {
+    return apiFetch<V2EvidenceRegistryResponse>(
+      `/workspaces/${workspaceId}/evidence-registry/v2`,
+      {
+        cache: "no-store",
+      }
+    );
+  },
+
+  getV2EvidenceRegistryPage: async (
+    workspaceId: number,
+    page = 1,
+    pageSize = 50,
+    evidenceType?: string,
+    evidenceTypes?: string[],
+  ): Promise<V2EvidenceRegistryPage> => {
+    const params = new URLSearchParams();
+
+    params.set("page", String(page));
+    params.set("page_size", String(pageSize));
+
+    if (evidenceType) {
+      params.set(
+        "evidence_type",
+        evidenceType,
+      );
+    }
+
+    if (evidenceTypes?.length) {
+      params.set(
+        "evidence_types",
+        evidenceTypes.join(","),
+      );
+    }
+
+    return apiFetch<V2EvidenceRegistryPage>(
+      `/workspaces/${workspaceId}/evidence-registry/v2?${params.toString()}`,
+    );
+  },
+
+  getV2EvidencePackagesPage: async (
+    workspaceId: number,
+    page = 1,
+    pageSize = 25,
+  ): Promise<V2EvidencePackagePage> => {
+    const params = new URLSearchParams();
+
+    params.set(
+      "page",
+      String(page),
+    );
+
+    params.set(
+      "page_size",
+      String(pageSize),
+    );
+
+    return apiFetch<V2EvidencePackagePage>(
+      `/workspaces/${workspaceId}/evidence-registry/v2/packages?${params.toString()}`,
+      {
+        cache: "no-store",
+      },
+    );
+  },
+
+  getV2EvidenceRegistrySummary: async (
+    workspaceId: number
+  ): Promise<V2EvidenceRegistrySummary> => {
+    return apiFetch<V2EvidenceRegistrySummary>(
+      `/workspaces/${workspaceId}/evidence-registry/v2/summary`,
+      {
+        cache: "no-store",
+      }
+    );
+  },
+
+  searchV2EvidenceRegistry: async (
+    workspaceId: number,
+    query: string
+  ): Promise<V2EvidenceRegistrySearchResponse> => {
+    return apiFetch<V2EvidenceRegistrySearchResponse>(
+      `/workspaces/${workspaceId}/evidence-registry/v2/search?query=${encodeURIComponent(
+        query
+      )}`,
+      {
+        cache: "no-store",
+      }
+    );
+  },
+
+  getV2EvidenceRecord: async (
+    workspaceId: number,
+    canonicalEvidenceId: string
+  ): Promise<V2EvidenceRegistryDetail> => {
+    return apiFetch<V2EvidenceRegistryDetail>(
+      `/workspaces/${workspaceId}/evidence-registry/v2/${encodeURIComponent(
+        canonicalEvidenceId
+      )}`,
       {
         cache: "no-store",
       }

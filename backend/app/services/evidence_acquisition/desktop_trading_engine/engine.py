@@ -24,6 +24,14 @@ from .synchronizer import (
     SynchronizationSession,
 )
 
+from .raw_evidence_adapter import (
+    DesktopPackageRawEvidenceAdapter,
+)
+
+from app.services.universal_evidence_adapter.synchronization.synchronizer import (
+    UniversalEvidenceSynchronizer,
+)
+
 
 # ============================================================================
 # Desktop Trading Engine
@@ -44,6 +52,18 @@ class DesktopTradingEngine(AcquisitionEngine):
     ) -> None:
 
         self.registry = registry or provider_registry
+
+        #
+        # Desktop → RawEvidence translator
+        #
+
+        self.adapter = DesktopPackageRawEvidenceAdapter()
+
+        #
+        # Universal Evidence Adapter synchronizer
+        #
+
+        self.uea = UniversalEvidenceSynchronizer()
 
         self._initialized = False
         self._running = False
@@ -204,7 +224,7 @@ class DesktopTradingEngine(AcquisitionEngine):
 
         return self.synchronize(connector).package
 
-        # =======================================================================
+    # =======================================================================
     # Canonical Acquisition
     # =======================================================================
 
@@ -218,6 +238,54 @@ class DesktopTradingEngine(AcquisitionEngine):
 
         return self.synchronize_package(
             connector,
+        )
+
+    def acquire_raw_evidence(
+        self,
+        connector: BaseConnector,
+        *,
+        workspace_id: int | None = None,
+    ):
+        """
+        Acquire broker-neutral RawEvidence objects.
+
+        This is the canonical transport boundary between
+        the Desktop Trading Engine and the Universal
+        Evidence Adapter.
+        """
+
+        package = self.acquire(connector)
+
+        return self.adapter.adapt(
+            package,
+            workspace_id=workspace_id,
+        )
+
+    def synchronize_evidence(
+        self,
+        connector: BaseConnector,
+        *,
+        workspace_id: int,
+    ):
+        """
+        Execute the complete synchronization pipeline.
+
+            Broker
+                ↓
+            Desktop Package
+                ↓
+            RawEvidence
+                ↓
+            Universal Evidence Adapter
+        """
+
+        raw_evidence = self.acquire_raw_evidence(
+            connector,
+            workspace_id=workspace_id,
+        )
+
+        return self.uea.synchronize_batch(
+            raw_evidence,
         )
 
     # =======================================================================

@@ -93,6 +93,8 @@ class EvidenceRegistryRecord:
 
     evidence_hash: str
 
+    evidence_type: str
+
     evidence_version: int = 1
 
     lifecycle: EvidenceLifecycle = EvidenceLifecycle.REGISTERED
@@ -152,6 +154,7 @@ class EvidenceRegistry:
         *,
         provider: ProviderIdentity,
         evidence_hash: str,
+        evidence_type: str,
         workspace_id: int | None = None,
         provider_id: str | None = None,
         synchronization_batch: str | None = None,
@@ -170,6 +173,7 @@ class EvidenceRegistry:
             workspace_id=workspace_id,
             provider_id=provider_id,
             evidence_hash=evidence_hash,
+            evidence_type=evidence_type,
             synchronization_batch=synchronization_batch,
             synchronization_session=synchronization_session,
             metadata=metadata or {},
@@ -328,6 +332,11 @@ class EvidenceRegistry:
                 original_execution_id=evidence.provider_ids.execution_id,
             ),
             evidence_hash=evidence_hash,
+            evidence_type=(
+                evidence.evidence_type.value
+                if hasattr(evidence.evidence_type, "value")
+                else str(evidence.evidence_type)
+            ),
             workspace_id=evidence.metadata.workspace.workspace_id,
             provider_id=evidence.metadata.workspace.provider_id,
             synchronization_batch=evidence.metadata.synchronization.synchronization_batch,

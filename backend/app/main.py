@@ -95,6 +95,12 @@ from app.api.routes.authorization import (
 
 from app.api.routes import investigations
 
+from app.api.routes import evidence_acquisition
+
+from app.api.routes import evidence_registry_v2
+
+from app.api.routes import provider_connections
+
 from app.core.security import hash_password
 
 from app.core.rate_limit import limiter
@@ -524,6 +530,22 @@ app.include_router(
 )
 app.include_router(
     investigations.router,
+    prefix="/api",
+)
+app.include_router(
+    evidence_acquisition.router,
+    prefix="/api",
+)
+app.include_router(
+    evidence_acquisition.bridge_router,
+    prefix="/api",
+)
+app.include_router(
+    evidence_registry_v2.router,
+    prefix="/api",
+)
+app.include_router(
+    provider_connections.router,
     prefix="/api",
 )
 

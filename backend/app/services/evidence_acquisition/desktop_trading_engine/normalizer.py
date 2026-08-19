@@ -108,6 +108,14 @@ class DesktopEvidenceNormalizer:
             normalized.get("positions"),
         )
 
+        normalized["account"] = self._enrich_account_identity(
+            normalized.get("account"),
+            normalized.get("orders"),
+            normalized.get("executions"),
+            normalized.get("trades"),
+            normalized.get("positions"),
+        )
+
         normalized["history"] = self.normalize_history(
             normalized.get("history"),
         )
@@ -394,6 +402,72 @@ class DesktopEvidenceNormalizer:
             ),
         }
 
+    @staticmethod
+    def _enrich_account_identity(
+        account: Any,
+        orders: Any,
+        executions: Any,
+        trades: Any,
+        positions: Any,
+    ) -> dict[str, Any]:
+        """
+        Enrich account identity from provider-observed trading evidence.
+
+        MotiveWave does not expose the account identifier through the
+        active account metadata surface, but the provider exposes the
+        same account identifier on native orders/executions and the
+        derived position/trade evidence.
+
+        Identity is therefore observed, never hardcoded.
+        """
+
+        account = dict(account or {})
+
+        # Preserve an identity already supplied directly by the provider.
+        existing_id = (
+            account.get("broker_account_id")
+            or account.get("account_id")
+            or account.get("login")
+        )
+
+        if existing_id is not None:
+            account["broker_account_id"] = str(existing_id)
+            return account
+
+        candidates = (
+            ("execution", executions),
+            ("order", orders),
+            ("trade", trades),
+            ("position", positions),
+        )
+
+        for source_name, values in candidates:
+            for value in values or []:
+                if not isinstance(value, dict):
+                    continue
+
+                observed_id = (
+                    value.get("account_id")
+                    or value.get("broker_account_id")
+                )
+
+                if observed_id is None:
+                    continue
+
+                account["broker_account_id"] = str(observed_id)
+                account["account_identity_source"] = (
+                    f"MotiveWave {source_name.title()}"
+                )
+                account["account_identity_confidence"] = "observed"
+
+                return account
+
+        account["account_identity_source"] = None
+        account["account_identity_confidence"] = "unavailable"
+
+        return account
+
+
     def normalize_account(
         self,
         account: Any,
@@ -419,6 +493,11 @@ class DesktopEvidenceNormalizer:
             "account_type": self._get(
                 account,
                 "trade_mode",
+            ),
+
+            "account_state": self._get(
+                account,
+                "account_state",
             ),
 
             "currency": self._get(
@@ -482,6 +561,51 @@ class DesktopEvidenceNormalizer:
 
         return dict(financial)
 
+
+    @staticmethod
+    def _normalize_collection(
+        value: Any,
+    ) -> list[Any]:
+        """
+        Normalize provider collection responses without
+        accidentally converting dictionary metadata into
+        a list of dictionary keys.
+
+        Supported provider response forms:
+
+            list/tuple:
+                [item, item, ...]
+
+            dict with data:
+                {
+                    "supported": True,
+                    "data": [...]
+                }
+
+            dict with no data:
+                metadata/status object; return [] because
+                there is no evidence collection to normalize.
+        """
+
+        if value is None:
+            return []
+
+        if isinstance(value, dict):
+            data = value.get("data")
+
+            if data is None:
+                return []
+
+            if isinstance(data, (list, tuple)):
+                return list(data)
+
+            return [data]
+
+        if isinstance(value, (list, tuple)):
+            return list(value)
+
+        return [value]
+
     # ------------------------------------------------------------------
     # Market
     # ------------------------------------------------------------------
@@ -490,15 +614,13 @@ class DesktopEvidenceNormalizer:
         self,
         symbols: Any,
     ) -> list[Any]:
-
-        return list(symbols or [])
+        return self._normalize_collection(symbols)
 
     def normalize_prices(
         self,
         prices: Any,
     ) -> list[Any]:
-
-        return list(prices or [])
+        return self._normalize_collection(prices)
 
     # ------------------------------------------------------------------
     # Trading
@@ -508,50 +630,43 @@ class DesktopEvidenceNormalizer:
         self,
         orders: Any,
     ) -> list[Any]:
-
-        return list(orders or [])
+        return self._normalize_collection(orders)
 
     def normalize_executions(
         self,
         executions: Any,
     ) -> list[Any]:
-
-        return list(executions or [])
+        return self._normalize_collection(executions)
 
     def normalize_deals(
         self,
         deals: Any,
     ) -> list[Any]:
-
-        return list(deals or [])
+        return self._normalize_collection(deals)
 
     def normalize_trades(
         self,
         trades: Any,
     ) -> list[Any]:
-
-        return list(trades or [])
+        return self._normalize_collection(trades)
 
     def normalize_positions(
         self,
         positions: Any,
     ) -> list[Any]:
-
-        return list(positions or [])
+        return self._normalize_collection(positions)
 
     def normalize_history(
         self,
         history: Any,
     ) -> list[Any]:
-
-        return list(history or [])
+        return self._normalize_collection(history)
 
     def normalize_activity(
         self,
         activity: Any,
     ) -> list[Any]:
-
-        return list(activity or [])
+        return self._normalize_collection(activity)
 
 
 # ============================================================================
